@@ -95,14 +95,6 @@ def test_a_provider_owning_the_wire_name_is_refused_by_the_kernel_s_mount_check(
         check_seeds(_spec({}, owns="tenant", value="srv"))
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "validate_mutation_view_spec does not run the kernel's check_seeds on a "
-        "kernel spec at as_view(), so an authoring error the kernel refuses there "
-        "is found by the first request"
-    ),
-)
 def test_a_provider_owning_the_wire_name_is_refused_at_as_view() -> None:
     with pytest.raises(ImproperlyConfigured, match="Only ServiceSpec.input_data fills"):
         _view(_spec({}, owns="tenant", value="srv"))

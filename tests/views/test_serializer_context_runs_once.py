@@ -6,8 +6,8 @@ query, and a run per row is N of them. Each path is driven over HTTP with a
 counting callable. A list is presented with the whole set under one context,
 never row by row, so a list of two rows still counts one.
 
-The selector views and the viewsets do not present a kernel spec through its
-presenter yet; each is a strict xfail naming the file that owes it.
+A kernel spec's presenter asks its context once per row, and the viewsets refuse
+a kernel spec in their actions yet; each is a strict xfail naming what owes it.
 """
 
 from __future__ import annotations
@@ -185,8 +185,11 @@ def test_a_collection_update_presents_its_set_under_one_context(
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "A kernel SelectorListView renders through serializer_class (views/query/**), "
-        "so the spec's SerializerPresenter and its serializer_context never run."
+        "The view presents the page's rows through the spec's presenter, but "
+        "SerializerPresenter (service_specs/serializer_presenter.py) inherits the kernel's "
+        "Presenter.presented_rows, which asks presented() once per row, so its "
+        "serializer_context callable runs once per row (two rows, two runs) rather than once "
+        "for the list."
     ),
 )
 def test_a_selector_list_view_presents_under_one_context(two_authors: list[Author]) -> None:

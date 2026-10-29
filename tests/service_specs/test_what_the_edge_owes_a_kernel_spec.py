@@ -1,20 +1,20 @@
-"""What a live view owes a kernel spec that the kernel route does not do yet, each a strict xfail.
+"""What a live view owes a kernel spec, three of them done and one still a strict xfail.
 
 Each case is written against the public surface, a view over a kernel spec
-driven through ``as_view()``, and names the edge's gap in its reason. The
-source each needs is the kernel route's edge (``dispatch/kernel_edge.py``) and
-the views that call it, which this module's directory does not own.
+driven through ``as_view()``. The last, a nested selector's ``permissions``
+refused at ``as_view()``, is still a strict xfail naming the edge's gap.
 
 - **A description of the input serializer is handed the call's request and
   view.** drfs described the serializer the call validates with in the call's
   own context, so a ``get_fields`` scoped by ``self.context["request"]``
-  declares the fields the call validates. The kernel route describes it with
-  DRF's no-request context, and asks for the description - ``parameters()`` -
-  before the edge's state is set, so a request-scoped serializer raises.
+  declares the fields the call validates. The kernel route describes it in
+  the call's own context too, so a request-scoped serializer builds its fields
+  for the caller (``test_a_request_scoped_serializer_describes_the_fields_the_call_validates``).
 - **A view's ``get_*_kwargs`` hooks and its ``get_input_serializer_context``
-  layer reach the call.** The edge carries no view hooks onto the kernel route,
-  so a hook value for a service keyword, and the view's input context layer,
-  never arrive.
+  layer reach the call.** A hook value for a service keyword arrives at the
+  service, and the view's input context layer at the input serializer
+  (``test_a_service_kwargs_hook_value_reaches_the_service``,
+  ``test_the_view_s_input_context_layer_reaches_the_input_serializer``).
 - **A nested selector's ``permissions`` are refused at ``as_view()``.** The
   kernel asks the spec being dispatched, never the selector resolving its
   target, so checks declared there guard nothing. drfs refused a nested
@@ -76,15 +76,6 @@ class _ScopedToTheCaller(serializers.Serializer):
         return fields
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AttributeError,
-    reason=(
-        "dispatch_kernel_spec sets no describe_context, and kernel_arguments reads "
-        "spec.parameters() before the edge's state is set, so the input serializer is "
-        "described with no request"
-    ),
-)
 def test_a_request_scoped_serializer_describes_the_fields_the_call_validates() -> None:
     received: dict[str, Any] = {}
     spec = ServiceSpec(
@@ -104,9 +95,6 @@ def _hooked(method: str, answer: dict[str, Any]) -> dict[str, Any]:
     return {method: lambda self, *args, **kwargs: dict(answer)}
 
 
-@pytest.mark.xfail(
-    strict=True, reason="the kernel route carries no view hooks: get_service_kwargs is never asked"
-)
 def test_a_service_kwargs_hook_value_reaches_the_service() -> None:
     received: list[Any] = []
     spec = ServiceSpec(service=lambda *, tenant="none": received.append(tenant), permissions=_OPEN)
@@ -116,10 +104,6 @@ def test_a_service_kwargs_hook_value_reaches_the_service() -> None:
     assert received == ["from the view"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="the kernel route carries no view hooks: get_input_serializer_context is never asked",
-)
 def test_the_view_s_input_context_layer_reaches_the_input_serializer() -> None:
     seen: list[Any] = []
 

@@ -53,14 +53,6 @@ def test_a_read_named_like_a_field_s_source_is_no_collision() -> None:
     assert spec.parameters().names() == frozenset({"heading", "title"})
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=pytest.fail.Exception,
-    reason=(
-        "views/spec_validation.py: a view's mount checks return before asking a kernel "
-        "spec for its parameters(), so the collision is refused per request instead"
-    ),
-)
 def test_a_view_refuses_the_collision_at_as_view() -> None:
     view = type("_View", (_CreateView,), {"spec": _spec(_TitleIn, "title")})
 

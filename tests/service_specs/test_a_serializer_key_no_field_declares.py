@@ -84,7 +84,8 @@ def test_a_selector_callers_serializer_key_is_unknown(policy: UnknownArguments) 
     spec = SelectorSpec(
         kind=SelectorKind.LIST,
         selector=titles,
-        reads=Parameters.of(Parameter("title", "string")),
+        # Required, since the mount check refuses an optional read over a keyword with no default.
+        reads=Parameters.of(Parameter("title", "string", required=True)),
         permissions=_OPEN,
     )
     view = type("_View", (SelectorListView,), {"spec": spec, "serializer_class": _TitleIn})
@@ -93,7 +94,8 @@ def test_a_selector_callers_serializer_key_is_unknown(policy: UnknownArguments) 
 
     if policy is UnknownArguments.REJECT:
         assert response.status_code == 400
-        assert _messages(response.data["serializer"]) == _UNKNOWN
+        # The whole body: the key is the wire name the caller sent, and nothing else is refused.
+        assert response.data == {"serializer": _UNKNOWN}
         assert seen == []
     else:
         assert response.status_code == 200, response.data

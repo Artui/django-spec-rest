@@ -51,7 +51,9 @@ def _any_instance(*, instance: Any) -> str:
     return "ran"
 
 
-_TENANT = Parameters.of(Parameter("tenant", "string"))
+# Required: the mount check refuses an optional read over a keyword with no default, and a
+# missing optional one would not be "missing" anyway.
+_TENANT = Parameters.of(Parameter("tenant", "string", required=True))
 _SERVICE = ServiceSpec(service=_tag, permissions=_OPEN, reads=_TENANT, atomic=False)
 _SELECTOR = SelectorSpec(
     kind=SelectorKind.LIST, selector=_unfilled, permissions=_OPEN, reads=_TENANT

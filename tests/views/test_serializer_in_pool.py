@@ -168,7 +168,8 @@ def test_a_body_key_named_serializer_never_stands_in_for_it(
 
     if policy is UnknownArguments.REJECT:
         assert response.status_code == 400
-        assert "serializer" in response.data
+        # The whole body: the unknown key under its wire name, nothing else refused.
+        assert response.data == {"serializer": ["Unknown argument."]}
         assert captured == {}
     else:
         assert response.status_code == 204

@@ -132,14 +132,6 @@ def test_a_row_condition_on_a_create_view_is_refused_at_as_view() -> None:
         type("_View", (ServiceCreateView,), {"spec": spec}).as_view()
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="a kernel spec on the mutation views never asks the view's own DRF object "
-    "permission before its affordances, so the denied caller is answered 409 on an "
-    "unavailable row and served 200 with the row written on an available one; an ask on "
-    "views/mutation/utils.py (selectors.utils' _viewed twin is the query views' answer)",
-)
 @pytest.mark.parametrize("published", [True, False], ids=["unavailable", "available"])
 def test_a_caller_the_view_denies_the_row_learns_nothing_about_its_state(published: bool) -> None:
     """The drfs subject: the view's own DRF ``has_object_permission``.
@@ -154,3 +146,18 @@ def test_a_caller_the_view_denies_the_row_learns_nothing_about_its_state(publish
     assert json.loads(response.content) == {"detail": "You may not touch this post."}
     post.refresh_from_db()
     assert (post.title, post.published) == ("t", published)
+    assert "already_published" not in response.content.decode()
+
+
+def test_the_view_s_denial_answers_alike_for_an_available_and_an_unavailable_row() -> None:
+    """Nothing about the row's state leaks to a caller the view denies: the status and
+    the whole body are the same for the row an affordance would refuse and the one it
+    would let through, so the denial cannot be used to probe whether a row is published."""
+    answers = []
+    for published in (True, False):
+        post = Post.objects.create(title="t", published=published)
+        response = _patch(_view(permission_classes=[_DenyObject]), post.pk)
+        answers.append((response.status_code, response.content))
+
+    assert answers[0] == answers[1]
+    assert answers[0][0] == 403
