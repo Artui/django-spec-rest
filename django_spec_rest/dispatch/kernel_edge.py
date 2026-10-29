@@ -63,13 +63,18 @@ and ``service_specs/recording_spec.py``, since both read the
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+import dataclasses
+from collections.abc import Callable, Mapping
+from types import MappingProxyType
 from typing import Any
 
+from asgiref.sync import sync_to_async
 from django.utils.datastructures import MultiValueDict
 from django_service_specs.dispatch.adispatch import adispatch
 from django_service_specs.dispatch.dispatch import dispatch
 from django_service_specs.dispatch.dispatch_result import DispatchResult
+from django_service_specs.dispatch.grant import Grant
+from django_service_specs.dispatch.resolve_target import resolve_target
 from django_service_specs.flat.flat_arguments import flat_arguments
 from django_service_specs.parameters.coerce_flat import coerce_flat
 from django_service_specs.parameters.parameters import Parameters
@@ -83,11 +88,14 @@ from rest_framework.request import Request
 from typing_extensions import TypeIs
 
 from django_spec_rest.dispatch.kernel_refusals import answering_refusals
-from django_spec_rest.service_specs.recording_spec import recording_spec
+from django_spec_rest.service_specs.recording_spec import KernelSpec, recording_spec
 from django_spec_rest.service_specs.seed_named_fields import seed_named_fields
-from django_spec_rest.service_specs.utils import EDGE_CALL, EdgeCallState
-
-KernelSpec = KernelServiceSpec | KernelSelectorSpec
+from django_spec_rest.service_specs.utils import (
+    EDGE_CALL,
+    SERIALIZER_CONTEXT_SEED,
+    EdgeCallState,
+)
+from django_spec_rest.types.view_hooks import ViewHooks
 
 UNKNOWN_ARGUMENTS = UnknownArguments.REJECT
 """What the kernel route does with an argument the spec declares no parameter for.
@@ -116,7 +124,11 @@ def runs_on_kernel(spec: object) -> TypeIs[KernelSpec]:
 
 
 def kernel_arguments(
-    spec: KernelSpec, *, view: Any, request: Request
+    spec: KernelSpec,
+    *,
+    view: Any,
+    request: Request,
+    input_data: Mapping[str, Any] | None = None,
 ) -> tuple[dict[str, Any], tuple[Any, Any] | None]:
     """The arguments a request makes for ``spec``, and the body its serializer binds, if any.
 
@@ -132,6 +144,14 @@ def kernel_arguments(
       object is refused as a whole.
     - **The route captures the spec declares** go over either, since the
       route scopes the call and a client's value must not move it.
+    - **The view's ``input_data`` hooks' values**, ``input_data`` here, go
+      over the body's, and over each row that is an object for a ``many``
+      spec, since a server's key beats the client's; the kernel has no
+      overlay for a Validator's input, so they are arguments, beneath the
+      spec's own ``input_data`` provider, which the kernel merges over them
+      (test_service_create_view's test_input_data_three_tier_chain). A key
+      naming no field is the closed argument set's to refuse, as the
+      client's would be.
 
     Flat values, the form body's, the query string's and the captures', go
     through ``coerce_flat``, so ``?published=true`` reaches the shape check as
@@ -159,7 +179,12 @@ def kernel_arguments(
             parameters, {**flat_arguments(parameters, request.query_params), **route}
         ), None
     body: Any = request.data
+    server = dict(input_data or {})
     if spec.many:
+        # A row that is no object is left as sent, for the Validator to refuse
+        # (test_bulk_rows_over_http's test_a_row_that_is_no_object_is_refused_beside_view_input_data).
+        if server and isinstance(body, list):
+            body = [{**row, **server} if isinstance(row, Mapping) else row for row in body]
         return {spec.many_argument: body, **coerce_flat(parameters, route)}, None
     if isinstance(body, MultiValueDict):
         sent = coerce_flat(parameters, {**flat_arguments(parameters, body), **route})
@@ -167,6 +192,7 @@ def kernel_arguments(
         sent = {**body, **coerce_flat(parameters, route)}
     else:
         raise DispatchError(f"The body must be an object; got {type(body).__name__}.")
+    sent.update(server)
     fields = seed_named_fields(spec.validator)
     names = fields.intersection(sent)
     # Skips a hold that would bind nothing: with no provider or no seed-named
@@ -193,26 +219,64 @@ def dispatch_kernel_spec(
     request: Request,
     call_context: dict[str, Any],
     target: Any = UNSET,
+    view_hooks: ViewHooks | None = None,
+    on_target: Callable[[Any], None] | None = None,
 ) -> DispatchResult:
     """Run a kernel ``spec`` for ``request`` through the kernel's ``dispatch``.
 
     ``call_context`` is the request's one dict, handed to ``dispatch`` as the
     very object; ``target`` the row the view resolved, or ``UNSET`` for the
-    spec's own lookup to find it. Every refusal leaves as its DRF answer
-    (``KERNEL_REFUSALS``). ``adispatch_kernel_spec`` is the async twin.
+    spec's own lookup to find it.
+
+    ``view_hooks`` is the view's hook chains, its own layers only, never the
+    spec's providers, which the kernel calls itself: its ``extra_kwargs`` go
+    to ``dispatch``'s overlay of that name, beneath the spec's ``kwargs``
+    provider; its ``input_data`` into the arguments (``kernel_arguments``); its
+    ``progress`` to ``dispatch``'s; and its serializer context layers to the
+    spec's ``SerializerValidator`` and ``SerializerPresenter``, the input half
+    through the call's state and the output half on the result's presentation
+    context (``_with_output_layers``).
+
+    ``on_target`` is asked of what the spec's own lookup finds before anything
+    runs on it, where ``target`` is ``UNSET``: the view's DRF object
+    permissions, which ``get_object()`` asks of a row it finds and the kernel's
+    lookup never would (``_resolved``).
+
+    Every refusal leaves as its DRF answer (``KERNEL_REFUSALS``).
+    ``adispatch_kernel_spec`` is the async twin.
     """
+    hooks = view_hooks if view_hooks is not None else ViewHooks()
     with answering_refusals():
-        arguments, held = kernel_arguments(spec, view=view, request=request)
-        token = EDGE_CALL.set(EdgeCallState(validator_input=held, input_beneath=True))
+        dispatched = recording_spec(spec)
+        arguments, held = kernel_arguments(
+            spec, view=view, request=request, input_data=hooks.input_data
+        )
+        token = EDGE_CALL.set(
+            EdgeCallState(validator_input=held, input_beneath=True, view_hooks=hooks)
+        )
         try:
-            return dispatch(
-                recording_spec(spec),
+            found = _resolved(
+                dispatched,
                 principal=request.user,
                 arguments=arguments,
-                unknown_arguments=UNKNOWN_ARGUMENTS,
+                call_context=call_context,
                 target=target,
+                on_target=on_target,
+            )
+            if isinstance(found, DispatchResult):
+                return found
+            result = dispatch(
+                dispatched,
+                principal=request.user,
+                arguments=arguments,
+                grant=found[1],
+                unknown_arguments=UNKNOWN_ARGUMENTS,
+                progress=hooks.progress,
+                target=found[0],
+                extra_kwargs=hooks.extra_kwargs,
                 call_context=call_context,
             )
+            return _with_output_layers(result, hooks)
         finally:
             EDGE_CALL.reset(token)
 
@@ -224,23 +288,116 @@ async def adispatch_kernel_spec(
     request: Request,
     call_context: dict[str, Any],
     target: Any = UNSET,
+    view_hooks: ViewHooks | None = None,
+    on_target: Callable[[Any], None] | None = None,
 ) -> DispatchResult:
     """``dispatch_kernel_spec`` from async code, awaiting the kernel's ``adispatch``.
 
     The same arguments, the same state and the same answers; the kernel's
     thread hops run in a copy of this context, which holds the same state.
+    Reading the arguments parses the request's body, which reads its stream,
+    and the spec's own lookup queries, so each runs in Django's
+    thread-sensitive executor rather than on the event loop
+    (test_kernel_edge's test_the_async_core_reads_the_body_off_the_loop).
     """
+    hooks = view_hooks if view_hooks is not None else ViewHooks()
     with answering_refusals():
-        arguments, held = kernel_arguments(spec, view=view, request=request)
-        token = EDGE_CALL.set(EdgeCallState(validator_input=held, input_beneath=True))
+        dispatched = recording_spec(spec)
+        arguments, held = await sync_to_async(kernel_arguments, thread_sensitive=True)(
+            spec, view=view, request=request, input_data=hooks.input_data
+        )
+        token = EDGE_CALL.set(
+            EdgeCallState(validator_input=held, input_beneath=True, view_hooks=hooks)
+        )
         try:
-            return await adispatch(
-                recording_spec(spec),
+            found = await sync_to_async(_resolved, thread_sensitive=True)(
+                dispatched,
                 principal=request.user,
                 arguments=arguments,
-                unknown_arguments=UNKNOWN_ARGUMENTS,
+                call_context=call_context,
                 target=target,
+                on_target=on_target,
+            )
+            if isinstance(found, DispatchResult):
+                return found
+            result = await adispatch(
+                dispatched,
+                principal=request.user,
+                arguments=arguments,
+                grant=found[1],
+                unknown_arguments=UNKNOWN_ARGUMENTS,
+                progress=hooks.progress,
+                target=found[0],
+                extra_kwargs=hooks.extra_kwargs,
                 call_context=call_context,
             )
+            return _with_output_layers(result, hooks)
         finally:
             EDGE_CALL.reset(token)
+
+
+def _resolved(
+    spec: KernelSpec,
+    *,
+    principal: Any,
+    arguments: Mapping[str, Any],
+    call_context: dict[str, Any],
+    target: Any,
+    on_target: Callable[[Any], None] | None,
+) -> tuple[Any, Grant | None] | DispatchResult:
+    """The target and grant ``dispatch`` takes for ``spec``, or a missing row's answer.
+
+    Where ``on_target`` asks of what the spec's own lookup finds, the kernel's
+    ``resolve_target`` finds it as ``dispatch`` would, refused where it would
+    refuse, and ``on_target`` is asked of it before ``dispatch`` runs anything
+    on it; the ``target_checked`` grant it returns, minted for the spec
+    dispatched, so ``dispatch`` neither looks the target up again nor asks its
+    object-level check twice. Otherwise ``target`` as given and no grant,
+    ``dispatch``'s own lookup finding it where that is ``UNSET``.
+
+    One arc to coverage, so each condition is named:
+    test_service_update_view's test_a_put_s_own_row_is_asked_of_the_view_once
+    (``on_target``), test_kernel_edge's
+    test_with_no_on_target_the_kernel_s_own_lookup_finds_the_row (its absence:
+    a caller handing none would have ``None`` called), test_a_row_the_view_resolved_is_looked_up_once (``target``:
+    without it a row the caller handed over is looked up again), and
+    test_service_create_view's test_a_create_is_handed_no_target (the target
+    selector: a create has none, and ``resolve_target`` would resolve
+    ``None`` and hand it on as a target the kernel refuses a create). The type
+    is a selector spec's, which takes no target and has no target selector
+    to ask; ``ty`` holds it. A ``many`` spec declares no target selector,
+    which the kernel refuses when the spec is built.
+    """
+    if (
+        on_target is None
+        or target is not UNSET
+        or not isinstance(spec, KernelServiceSpec)
+        or spec.target_selector_spec() is None
+    ):
+        return target, None
+    found = resolve_target(
+        spec, principal=principal, arguments=arguments, call_context=call_context
+    )
+    if isinstance(found, DispatchResult):
+        return found
+    on_target(found[0])
+    return found
+
+
+def _with_output_layers(result: DispatchResult, hooks: ViewHooks) -> DispatchResult:
+    """``result`` carrying the view's output serializer context layers, for its presenter.
+
+    The presenter runs when the view presents, after the call, so the view's
+    lazy ``output_serializer_context`` hook travels on the result's
+    presentation context under ``SERIALIZER_CONTEXT_SEED``, where
+    ``SerializerPresenter`` reads it (``output_view_layers``), rather than
+    through the call's pool. A result with no context, a missing row, is
+    presented by no one, and one with no output layer has nothing to carry.
+    One arc to coverage: the context by test_kernel_views'
+    test_a_missing_row_the_spec_s_lookup_finds_is_404 under its view's hooks,
+    the layer by every call through a view with no output hook.
+    """
+    if result.context is None or hooks.output_serializer_context is None:
+        return result
+    ambient = MappingProxyType({**result.context.ambient, SERIALIZER_CONTEXT_SEED: hooks})
+    return dataclasses.replace(result, context=dataclasses.replace(result.context, ambient=ambient))

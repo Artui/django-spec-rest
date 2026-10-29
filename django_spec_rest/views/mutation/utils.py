@@ -11,10 +11,14 @@ defined here, so ``call_service`` can map errors without importing this one.
 
 from __future__ import annotations
 
+import dataclasses
+import threading
+import weakref
 from collections.abc import Callable, Mapping
 from dataclasses import is_dataclass
 from typing import Any, Literal, cast
 
+from django.db.models import Model
 from django_service_specs.dispatch.present import present
 from django_service_specs.specs.kernel_spec import kernel_spec
 from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
@@ -51,6 +55,7 @@ from django_spec_rest.views.mutation.map_service_error import (
 from django_spec_rest.views.mutation.resolve_success_status import resolve_success_status
 from django_spec_rest.views.utils import (
     add_affordances,
+    get_class_attr,
     resolve_serializer_context,
     resolve_view_hooks,
     view_call_context,
@@ -428,26 +433,15 @@ def dispatch_mutation_for_spec(
     """
 
     if runs_on_kernel(spec):
-        result = dispatch_kernel_spec(
-            spec,
-            view=view,
-            request=request,
-            call_context=view_call_context(view, request),
-            # A view hands ``None`` for a create and ``UNSET`` for the spec's
-            # own lookup; to the kernel, ``None`` is a missing row, refused on
-            # a ``many`` spec, so a create is handed no target at all
-            # (test_a_list_body_is_its_rows_and_its_output_selector_s_re_read_is_presented).
-            target=UNSET if instance is None else instance,
+        return _dispatch_kernel_mutation(
+            view,
+            request,
+            cast(KernelServiceSpec, spec),
+            instance=instance,
+            default_status=default_status,
+            render_instance_on_none=render_instance_on_none,
+            partial=partial,
         )
-        if result.kind == "not_found":
-            raise NotFound()
-        # Inside the map too: a presenter may refuse what it was asked to
-        # present (test_a_presenter_s_refusal_is_answered_by_the_map_too).
-        with answering_refusals():
-            presented = present(spec, result)
-        if presented is None:
-            return Response(status=drf_status.HTTP_204_NO_CONTENT)
-        return Response(presented, status=status_for_a_body(default_status))
 
     if spec.partial is not None:
         partial = spec.partial
@@ -520,6 +514,142 @@ def dispatch_mutation_for_spec(
     )
 
 
+def _dispatch_kernel_mutation(
+    view: Any,
+    request: Request,
+    spec: KernelServiceSpec,
+    *,
+    instance: Any,
+    default_status: int,
+    render_instance_on_none: bool,
+    partial: bool,
+) -> Response:
+    """``dispatch_mutation_for_spec`` for a kernel spec: the kernel's ``dispatch``, then DRF's response.
+
+    - **The target.** A row the view resolved (``get_object()``, which asks
+      the view's object permissions) is handed over as ``target``; ``UNSET``
+      leaves the lookup to the spec's own target selector, and the view's
+      object permissions are asked of what it finds before the service runs,
+      as ``get_object()`` asks them (``_object_permissions``). A create hands
+      ``None`` and a bulk call ``None``: to the kernel ``None`` is a missing
+      row, refused on a ``many`` spec, so either is handed no target at all
+      (test_kernel_views'
+      test_a_list_body_is_its_rows_and_its_output_selector_s_re_read_is_presented).
+    - **The view's hook chains**, its own layers only, through the edge
+      (``dispatch_kernel_spec``'s ``view_hooks``).
+    - **A ``PATCH``** dispatches the spec's partial twin (``_partial``).
+    - **The response.** The spec's presenter presents the result through the
+      kernel's ``present``. An update whose service returned ``None`` presents
+      its target, as DRF's ``UpdateAPIView`` does (``render_instance_on_none``).
+      The status is the view's ``success_status`` over ``default_status``, a
+      body never going out under ``204``; then the view's
+      ``response_finalizer`` (``MutationFlowMixin``).
+    """
+    resolved: Any = None if instance is UNSET else instance
+    result = dispatch_kernel_spec(
+        _partial(spec) if partial else spec,
+        view=view,
+        request=request,
+        call_context=view_call_context(view, request),
+        target=UNSET if instance is None else instance,
+        view_hooks=resolve_view_hooks(view, request, instance=resolved),
+        on_target=lambda found: _object_permissions(view, request, found),
+    )
+    if result.kind == "not_found":
+        raise NotFound()
+    # One arc to coverage, so each condition is named:
+    # test_service_update_view's test_a_service_s_own_row_outranks_its_target
+    # (the value), test_service_delete_view's test_a_delete_returning_nothing_answers_204
+    # (the caller's intent), test_service_update_view's
+    # test_an_update_with_no_presenter_returning_nothing_answers_204 (the
+    # presenter) and test_an_output_selector_s_none_is_its_own (the re-read,
+    # which owns its ``None``). The target's is a saving: with none,
+    # ``value`` stays ``None``.
+    if (
+        result.value is None
+        and result.instance is not None
+        and render_instance_on_none
+        and spec.presenter is not None
+        and spec.output_selector_spec is None
+    ):
+        result = dataclasses.replace(result, value=result.instance)
+    # Inside the map too: a presenter may refuse what it was asked to
+    # present (test_a_presenter_s_refusal_is_answered_by_the_map_too).
+    with answering_refusals():
+        presented = present(spec, result)
+    success_status = get_class_attr(view, "success_status")
+    pool: dict[str, Any] = {"request": request, "view": view, "result": result.service_result}
+    if result.instance is not None:
+        pool["instance"] = result.instance
+    status = resolve_success_status(success_status, default=default_status, pool=pool)
+    if presented is None:
+        # Nothing to present is ``204`` unless the view set a status, which then
+        # applies to every answer alike (test_callable_success_status's
+        # test_a_callable_status_applies_to_an_empty_answer).
+        response = Response(
+            status=drf_status.HTTP_204_NO_CONTENT if success_status is None else status
+        )
+    else:
+        response = Response(presented, status=status_for_a_body(status))
+    return apply_response_finalizer(
+        get_class_attr(view, "response_finalizer"),
+        response,
+        request=request,
+        view=view,
+        result=result.service_result,
+        instance=result.instance,
+        data=result.data,
+    )
+
+
+def _object_permissions(view: Any, request: Request, found: Any) -> None:
+    """The view's DRF object permissions, asked of the row a spec's own lookup found.
+
+    Per row, as ``get_object()`` asks them, so a collection target's set and
+    a missing row's ``None`` are asked nothing
+    (test_bulk_mutations' test_a_queryset_collection_target_is_untouched_by_the_guard),
+    while a single row a collection selector returns is
+    (test_a_single_row_collection_target_is_object_checked).
+    """
+    if isinstance(found, Model):
+        view.check_object_permissions(request, found)
+
+
+_PARTIAL: dict[int, tuple[weakref.ref[KernelServiceSpec], KernelServiceSpec]] = {}
+_PARTIAL_LOCK = threading.Lock()
+
+
+def _partial(spec: KernelServiceSpec) -> KernelServiceSpec:
+    """``spec``'s twin under ``partial``, for a ``PATCH``, built once per spec.
+
+    A kernel spec's ``partial`` is a plain flag, so a ``PATCH`` asks for a
+    partial call wherever the spec is not one already, and ``partial=True``
+    forces one on a ``PUT`` too; a spec cannot force a ``PATCH`` whole, as a
+    drfs spec's ``partial=False`` did. A Validator that cannot take a partial
+    call (a dataclass serializer's, built from every field) or no Validator at
+    all keeps the spec as it is, and the ``PATCH`` is validated whole, as a
+    ``PUT`` is: the kernel refuses a partial spec over the first when it is
+    built. Each condition is named: the flag is a saving (the twin of a
+    partial spec is the spec), the Validator's absence by
+    test_service_update_view's test_a_patch_with_no_validator_runs, and its
+    ``supports_partial`` by test_a_patch_over_a_dataclass_validates_every_field.
+
+    Keyed by identity and dropped with the spec, as ``recording_spec``'s
+    twins are, since ``derive`` re-runs the spec's checks.
+    """
+    validator = spec.validator
+    if spec.partial or validator is None or not validator.supports_partial:
+        return spec
+    key = id(spec)
+    with _PARTIAL_LOCK:
+        cached = _PARTIAL.get(key)
+        if cached is not None and cached[0]() is spec:
+            return cached[1]
+        twin = spec.derive(partial=True)
+        _PARTIAL[key] = (weakref.ref(spec, lambda _dead: _PARTIAL.pop(key, None)), twin)
+        return twin
+
+
 def _takes_a_partial_call(spec: ServiceSpec[Any, Any, Any]) -> bool:
     """Whether a request's ``partial`` flag can reach ``spec``'s input as one.
 
@@ -548,6 +678,9 @@ def resolve_mutation_instance(
 ) -> Any:
     """Resolve the mutation target, or defer to the core.
 
+    A kernel spec's target is its own target selector's, or none: the view's
+    ``get_object()`` is never asked for one.
+
     Returns: ``None`` for a **bulk** spec (``many=True`` or a
         ``collection_selector_spec``): there is no single instance, and the
         ``get_object()`` lookup would 404 a body-only bulk endpoint. ``UNSET`` when the
@@ -575,6 +708,13 @@ def resolve_mutation_instance(
         return None
     if source == "instance_selector":
         return UNSET
+    # The kernel takes a target only where the spec declares the selector that
+    # would find it, and refuses one handed to a spec declaring none, so a
+    # kernel spec's target is its own lookup's or there is none: the view's
+    # ``get_object()`` never runs for it, and the call acts on no row
+    # (test_service_update_view's test_a_spec_with_no_target_selector_acts_on_no_row).
+    if runs_on_kernel(spec):
+        return None
     return view.get_object()
 
 

@@ -1,52 +1,41 @@
-"""End-to-end integration test: a ``create_model`` factory wired into a
-``ServiceCreateView`` and round-tripped over a real HTTP request.
+"""A ``create_model`` factory as a kernel spec's service, over a real HTTP request.
 
-Protects against view-layer regressions that would break the closure
-shape (``is_async`` detection, kwargs filtering, response rendering).
+Protects against view-layer regressions that would break the closure's shape
+(``is_async`` detection, keyword filtering, response rendering).
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 import pytest
+from django_service_specs import ServiceSpec, Unrestricted, create_model
+from rest_framework import serializers
 from rest_framework.test import APIRequestFactory
 
-from django_spec_rest import (
-    SelectorKind,
-    SelectorSpec,
-    ServiceCreateView,
-    ServiceSpec,
-    create_model,
-)
+from django_spec_rest import ServiceCreateView
+from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
+from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from tests.testapp.models import Author
 from tests.testapp.serializers import AuthorSerializer
 
 
-@dataclass
-class _CreateAuthorInput:
-    name: str
+class _CreateAuthorInput(serializers.Serializer):
+    name = serializers.CharField()
 
 
 class _CreateAuthorView(ServiceCreateView):
     spec = ServiceSpec(
         service=create_model(Author),
-        input_serializer=_CreateAuthorInput,
-        output_selector_spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE, output_serializer=AuthorSerializer
-        ),
+        permissions=(Unrestricted(),),
+        validator=SerializerValidator(_CreateAuthorInput),
+        presenter=SerializerPresenter(AuthorSerializer),
     )
 
 
 @pytest.mark.django_db
 class TestCreateModelFactoryRoundTrip:
     def test_post_returns_201_and_persists(self) -> None:
-        factory = APIRequestFactory()
-        request = factory.post("/authors/", {"name": "Ada"}, format="json")
+        request = APIRequestFactory().post("/authors/", {"name": "Ada"}, format="json")
         response = _CreateAuthorView.as_view()(request)
         assert response.status_code == 201
         response.render()
-        data = response.data
-        assert data is not None
-        assert data["name"] == "Ada"
-        assert Author.objects.filter(name="Ada").exists()
+        assert response.data == {"id": Author.objects.get().pk, "name": "Ada"}

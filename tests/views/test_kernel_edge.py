@@ -8,6 +8,7 @@ expected, and the two signatures compared.
 
 from __future__ import annotations
 
+import asyncio
 import gc
 import inspect
 import weakref
@@ -20,8 +21,18 @@ import pytest
 from asgiref.sync import async_to_sync
 from django.contrib.auth.models import User
 from django.core.exceptions import ImproperlyConfigured
-from django_service_specs import DataclassValidator, DispatchError, ServiceSpec, Unrestricted
+from django_service_specs import (
+    DataclassValidator,
+    DispatchError,
+    Parameter,
+    Parameters,
+    SelectorKind,
+    ServiceSpec,
+    Unrestricted,
+)
+from django_service_specs import SelectorSpec as KernelSelectorSpec
 from rest_framework import serializers
+from rest_framework.parsers import JSONParser
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from django_spec_rest import SelectorKind, SelectorSpec
@@ -38,6 +49,7 @@ from django_spec_rest.service_specs.seed_named_fields import seed_named_fields
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from django_spec_rest.service_specs.utils import EDGE_CALL
 from django_spec_rest.views.utils import view_call_context
+from tests.testapp.models import Author
 from tests.views.test_kernel_views import _CREATE, _ONE, _AuthorInput, _CreateView
 
 pytestmark = pytest.mark.django_db
@@ -285,3 +297,71 @@ def test_the_two_cores_take_the_same_arguments() -> None:
         ]
 
     assert shape(dispatch_kernel_spec) == shape(adispatch_kernel_spec)
+
+
+_PK = Parameters.of(Parameter("pk", "integer"))
+
+
+def _rename_spec() -> ServiceSpec:
+    return ServiceSpec(
+        service=lambda *, instance: instance.name,
+        permissions=_OPEN,
+        instance_selector_spec=KernelSelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=lambda *, pk: Author.objects.filter(pk=pk).first(),
+            reads=_PK,
+            permissions=_OPEN,
+        ),
+    )
+
+
+def _with_route(parts: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
+    parts["view"].kwargs = kwargs
+    return parts
+
+
+@CORES
+def test_with_no_on_target_the_kernel_s_own_lookup_finds_the_row(
+    core: Callable[..., Any],
+) -> None:
+    author = Author.objects.create(name="Ada")
+    result = core(_rename_spec(), **_with_route(_parts({}), pk=author.pk))
+    assert result.value == "Ada"
+
+
+@CORES
+def test_on_target_is_asked_of_the_row_before_the_service(core: Callable[..., Any]) -> None:
+    author = Author.objects.create(name="Ada")
+    asked: list[Any] = []
+    result = core(_rename_spec(), on_target=asked.append, **_with_route(_parts({}), pk=author.pk))
+    assert (asked, result.value) == ([author], "Ada")
+
+
+@CORES
+def test_a_row_the_lookup_misses_is_not_found_and_asks_nothing(
+    core: Callable[..., Any],
+) -> None:
+    asked: list[Any] = []
+    result = core(_rename_spec(), on_target=asked.append, **_with_route(_parts({}), pk=999))
+    assert (result.kind, asked) == ("not_found", [])
+
+
+def test_the_async_core_reads_the_body_off_the_loop() -> None:
+    """Parsing ``request.data`` reads the request's stream, which may block, so
+    the async core reads it in a worker thread rather than on the event loop."""
+    on_loop: list[bool] = []
+
+    class _Recording(JSONParser):
+        def parse(self, *args: Any, **kwargs: Any) -> Any:
+            try:
+                asyncio.get_running_loop()
+                on_loop.append(True)
+            except RuntimeError:
+                on_loop.append(False)
+            return super().parse(*args, **kwargs)
+
+    parts = _parts({"name": "Ada"})
+    parts["request"].parsers = [_Recording()]
+    result = _async(_CREATE, **parts)
+    assert result.value.name == "Ada"
+    assert on_loop == [False]
