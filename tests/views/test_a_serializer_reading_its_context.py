@@ -117,13 +117,14 @@ def _create(spec: ServiceSpec, body: dict[str, Any], user: User, url: str = "/")
     return type("_View", (_KernelCreateView,), {"spec": spec}).as_view()(request)
 
 
-_WHOLE_POOL_NOT_ASKED_AT_DESCRIPTION = pytest.mark.xfail(
+_DESCRIBED_WITH_NO_CALL = pytest.mark.xfail(
     strict=True,
     reason=(
-        "The serializer is described with the call's request and view, but a seat's "
-        "serializer_context that declares the whole pool is not asked at description "
-        "(describe_context returns None for it in dispatch/kernel_edge.py), so a serializer "
-        "that cannot be built without that callable's keys raises KeyError."
+        "The kernel route describes the serializer with no request or view: kernel_arguments "
+        "(dispatch/kernel_edge.py) asks spec.parameters() before EDGE_CALL is set and with no "
+        "DescribeBinding, so SerializerValidator.parameters() reaches describe_serializer "
+        "(service_specs/utils.py) bound with no context, and neither the seat's "
+        "serializer_context."
     ),
 )
 
@@ -195,7 +196,7 @@ def _whole_pool(asked: list[None], **answer: str) -> Any:
     return provider
 
 
-@_WHOLE_POOL_NOT_ASKED_AT_DESCRIPTION
+@_DESCRIBED_WITH_NO_CALL
 def test_a_live_view_describes_a_serializer_needing_a_whole_pool_callable(owner: User) -> None:
     """A serializer that cannot be built without the callable's keys is described with them."""
     seen: dict[str, Any] = {}
@@ -230,10 +231,10 @@ class _ReadsItsContext(serializers.Serializer):
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "Every serializer of the call shares one dict, but it is the call context the view "
-        "builds with fill_call_context (view_call_context, views/utils.py), with "
-        "get_serializer_context()'s answer laid beneath it, not the object "
-        "get_serializer_context() returned, so the final identity assertion fails."
+        "Each serializer is handed its own copy of the context (call_base_context and "
+        "base_serializer_context, service_specs/), and the view's call context is built "
+        "by fill_call_context rather than as get_serializer_context() answers it "
+        "(view_call_context, views/utils.py): the two halves land together."
     ),
 )
 def test_the_call_s_context_is_every_serializer_s_context(owner: User) -> None:

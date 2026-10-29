@@ -6,9 +6,10 @@ view pushing to a websocket) supplies its own reporter through the view's
 
 ``progress`` is a pool seed. drfs dropped a ``get_service_kwargs`` value of that
 name silently and the service reported into the no-op. The kernel refuses it
-instead, as ``ImproperlyConfigured``, because a provider's value must never
-outrank a seeded one; that is a change by design, and the reporter comes only
-through the progress hook.
+instead, as ``ImproperlyConfigured`` raised per request, because a provider's
+value must never outrank a seeded one (the kernel's rule for any key a call
+seeds itself, ``view`` among them). The reporter comes only through the progress
+hook.
 """
 
 from __future__ import annotations
