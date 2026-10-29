@@ -299,7 +299,7 @@ def test_the_two_cores_take_the_same_arguments() -> None:
     assert shape(dispatch_kernel_spec) == shape(adispatch_kernel_spec)
 
 
-_PK = Parameters.of(Parameter("pk", "integer"))
+_PK = Parameters.of(Parameter("pk", "integer", required=True))
 
 
 def _rename_spec() -> ServiceSpec:

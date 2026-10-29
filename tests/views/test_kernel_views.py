@@ -102,8 +102,8 @@ class TestACreateView:
         assert not Author.objects.exists()
 
     def test_a_kernel_spec_passes_as_view(self) -> None:
-        """``as_view()`` checks a drfs spec's fields, none of which a kernel spec
-        has; the kernel checked its own when it was built."""
+        """``as_view()`` checks no drfs field on a kernel spec, which has none of
+        them; a kernel spec well declared passes the checks it does run."""
         assert callable(_CreateView.as_view())
 
     def test_a_kernel_selector_spec_on_a_mutation_view_is_refused_at_as_view(self) -> None:
@@ -518,7 +518,7 @@ class TestTheArgumentsAreReadAsTheKernelReadsAWire:
         spec = ServiceSpec(
             service=lambda *, author: received.update(author=author),
             permissions=_OPEN,
-            reads=Parameters.of(Parameter("author", "integer")),
+            reads=Parameters.of(Parameter("author", "integer", required=True)),
         )
         response = _post(_view(spec), {"author": 9}, author="4")
         assert response.status_code == 204, response.data
@@ -529,7 +529,7 @@ class TestTheArgumentsAreReadAsTheKernelReadsAWire:
         spec = ServiceSpec(
             service=lambda *, draft: received.update(draft=draft),
             permissions=_OPEN,
-            reads=Parameters.of(Parameter("draft", "boolean")),
+            reads=Parameters.of(Parameter("draft", "boolean", required=True)),
         )
         response = _post(_view(spec), {}, draft="true")
         assert response.status_code == 204, response.data
@@ -540,7 +540,7 @@ class TestTheArgumentsAreReadAsTheKernelReadsAWire:
         spec = ServiceSpec(
             service=lambda *, author: received.update(author=author),
             permissions=_OPEN,
-            reads=Parameters.of(Parameter("author", "integer")),
+            reads=Parameters.of(Parameter("author", "integer", required=True)),
         )
         response = _post(_view(spec), {"author": "9"}, format="multipart", author="4")
         assert response.status_code == 204, response.data
@@ -605,7 +605,7 @@ class TestATargetTheViewHandsOver:
             instance_selector_spec=SelectorSpec(
                 kind=SelectorKind.RETRIEVE,
                 selector=lambda *, pk: Author.objects.filter(pk=pk).first(),
-                reads=Parameters.of(Parameter("pk", "integer")),
+                reads=Parameters.of(Parameter("pk", "integer", required=True)),
                 permissions=_OPEN,
             ),
         )
@@ -640,7 +640,7 @@ def _get(view: type, spec: SelectorSpec, path: str = "/", **kwargs: Any) -> Resp
 _ONE = SelectorSpec(
     kind=SelectorKind.RETRIEVE,
     selector=lambda *, pk: Author.objects.filter(pk=pk).first(),
-    reads=Parameters.of(Parameter("pk", "integer")),
+    reads=Parameters.of(Parameter("pk", "integer", required=True)),
     permissions=_OPEN,
 )
 
@@ -675,7 +675,7 @@ class TestARetrieveView:
         spec = SelectorSpec(
             kind=SelectorKind.RETRIEVE,
             selector=one,
-            reads=Parameters.of(Parameter("pk", "integer")),
+            reads=Parameters.of(Parameter("pk", "integer", required=True)),
             permissions=_OPEN,
         )
         assert _get(_OneAuthor, spec, pk=str(author.pk)).status_code == 200
@@ -711,7 +711,7 @@ class TestAListView:
             kind=SelectorKind.LIST,
             selector=authors,
             reads=Parameters.of(
-                Parameter("ids", "array", items="integer"),
+                Parameter("ids", "array", items="integer", required=True),
                 Parameter("named", "string", required=False),
             ),
             permissions=_OPEN,
@@ -744,7 +744,7 @@ class TestAListView:
         spec = SelectorSpec(
             kind=SelectorKind.LIST,
             selector=authors,
-            reads=Parameters.of(Parameter("published", "boolean")),
+            reads=Parameters.of(Parameter("published", "boolean", required=True)),
             permissions=_OPEN,
         )
         response = _get(_AuthorsByName, spec, "/?published=true")

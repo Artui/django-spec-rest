@@ -231,7 +231,8 @@ def dispatch_kernel_spec(
     ``view_hooks`` is the view's hook chains, its own layers only, never the
     spec's providers, which the kernel calls itself: its ``extra_kwargs`` go
     to ``dispatch``'s overlay of that name, beneath the spec's ``kwargs``
-    provider; its ``input_data`` into the arguments (``kernel_arguments``); its
+    provider, but for a key naming a field, which pins it (``_overlay``); its
+    ``input_data`` into the arguments (``kernel_arguments``); its
     ``progress`` to ``dispatch``'s; and its serializer context layers to the
     spec's ``SerializerValidator`` and ``SerializerPresenter``, the input half
     through the call's state and the output half on the result's presentation
@@ -248,9 +249,8 @@ def dispatch_kernel_spec(
     hooks = view_hooks if view_hooks is not None else ViewHooks()
     with answering_refusals():
         dispatched = recording_spec(spec)
-        arguments, held = kernel_arguments(
-            spec, view=view, request=request, input_data=hooks.input_data
-        )
+        extra_kwargs, server = _overlay(spec, hooks)
+        arguments, held = kernel_arguments(spec, view=view, request=request, input_data=server)
         token = EDGE_CALL.set(
             EdgeCallState(validator_input=held, input_beneath=True, view_hooks=hooks)
         )
@@ -273,7 +273,7 @@ def dispatch_kernel_spec(
                 unknown_arguments=UNKNOWN_ARGUMENTS,
                 progress=hooks.progress,
                 target=found[0],
-                extra_kwargs=hooks.extra_kwargs,
+                extra_kwargs=extra_kwargs,
                 call_context=call_context,
             )
             return _with_output_layers(result, hooks)
@@ -303,8 +303,9 @@ async def adispatch_kernel_spec(
     hooks = view_hooks if view_hooks is not None else ViewHooks()
     with answering_refusals():
         dispatched = recording_spec(spec)
+        extra_kwargs, server = _overlay(spec, hooks)
         arguments, held = await sync_to_async(kernel_arguments, thread_sensitive=True)(
-            spec, view=view, request=request, input_data=hooks.input_data
+            spec, view=view, request=request, input_data=server
         )
         token = EDGE_CALL.set(
             EdgeCallState(validator_input=held, input_beneath=True, view_hooks=hooks)
@@ -328,12 +329,38 @@ async def adispatch_kernel_spec(
                 unknown_arguments=UNKNOWN_ARGUMENTS,
                 progress=hooks.progress,
                 target=found[0],
-                extra_kwargs=hooks.extra_kwargs,
+                extra_kwargs=extra_kwargs,
                 call_context=call_context,
             )
             return _with_output_layers(result, hooks)
         finally:
             EDGE_CALL.reset(token)
+
+
+def _overlay(spec: KernelSpec, hooks: ViewHooks) -> tuple[dict[str, Any], dict[str, Any]]:
+    """The view's ``extra_kwargs`` for ``dispatch``'s overlay, and the server's input for the arguments.
+
+    A ``get_service_kwargs`` value named like one of the spec's parameters or
+    seed-named fields pinned that field on drfs: the serializer validated the
+    server's value, never the client's. The kernel refuses an overlay key
+    naming a parameter, so the edge moves such a key into the arguments over
+    the client's value, where the shape check, the permission checks and the
+    Validator all read the one value, beneath the view's ``input_data``, which
+    names the serializer's input on purpose
+    (test_service_create_view's test_a_get_service_kwargs_value_named_like_a_field_pins_it,
+    test_a_get_service_kwargs_value_named_like_a_seed_field_pins_it). For a
+    ``many`` spec the pinned keys go over each row, as ``input_data``'s do,
+    which is why a row's fields, the Validator's parameters, are named
+    besides the spec's own (test_bulk_mutations'
+    test_a_get_service_kwargs_value_pins_each_row). Every other key stays the
+    overlay's.
+    """
+    overlay = dict(hooks.extra_kwargs or {})
+    names = spec.parameters().names()
+    if isinstance(spec, KernelServiceSpec) and spec.validator is not None:
+        names = names | spec.validator.parameters().names() | seed_named_fields(spec.validator)
+    pinned = {key: overlay.pop(key) for key in names.intersection(overlay)}
+    return overlay, {**pinned, **(hooks.input_data or {})}
 
 
 def _resolved(

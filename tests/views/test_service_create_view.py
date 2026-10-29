@@ -162,7 +162,7 @@ class TestServiceCreateView:
         assert response.status_code == 202
 
     def test_the_spec_s_kwargs_provider_reaches_the_service(self) -> None:
-        def fn(*, data: dict[str, Any], tenant_id: int) -> dict[str, int]:
+        def fn(*, data: dict[str, Any], tenant_id: int = 0) -> dict[str, int]:
             return {"tenant_id": tenant_id}
 
         spec = _spec(fn, kwargs=lambda *, view: {"tenant_id": view.kwargs["tenant"]})
@@ -182,7 +182,7 @@ class TestServiceCreateView:
 
 class TestTheViewsHookChains:
     def test_get_service_kwargs_reaches_the_service(self) -> None:
-        def fn(*, tenant: str) -> dict[str, str]:
+        def fn(*, tenant: str = "unset") -> dict[str, str]:
             return {"tenant": tenant}
 
         spec = ServiceSpec(service=fn, permissions=_OPEN, atomic=False)
@@ -190,7 +190,7 @@ class TestTheViewsHookChains:
         assert _post(view, {}).data == {"tenant": "acme"}
 
     def test_the_spec_s_kwargs_provider_outranks_get_service_kwargs(self) -> None:
-        def fn(*, tenant: str) -> dict[str, str]:
+        def fn(*, tenant: str = "unset") -> dict[str, str]:
             return {"tenant": tenant}
 
         spec = ServiceSpec(
@@ -198,6 +198,36 @@ class TestTheViewsHookChains:
         )
         view = _view(spec, get_service_kwargs=lambda self: {"tenant": "view"})
         assert _post(view, {}).data == {"tenant": "spec"}
+
+    def test_a_get_service_kwargs_value_named_like_a_field_pins_it(self) -> None:
+        """The serializer validates the server's value, never the client's, as
+        it did on drfs, and the service is handed the validated one."""
+
+        def fn(*, data: dict[str, Any], name: str) -> dict[str, Any]:
+            return {"data": dict(data), "name": name}
+
+        view = _view(_spec(fn), get_service_kwargs=lambda self: {"name": "pinned"})
+        response = _post(view, {"name": "client"})
+        assert response.status_code == 201
+        assert response.data == {"data": {"name": "pinned"}, "name": "pinned"}
+
+    def test_a_get_service_kwargs_value_named_like_a_seed_field_pins_it(self) -> None:
+        class _Owned(serializers.Serializer):
+            user = serializers.IntegerField()
+
+        view = _view(
+            _spec(lambda *, data: dict(data), validator=SerializerValidator(_Owned)),
+            get_service_kwargs=lambda self: {"user": 7},
+        )
+        assert _post(view, {"user": 1}).data == {"user": 7}
+
+    def test_get_input_data_outranks_a_pinning_get_service_kwargs(self) -> None:
+        view = _view(
+            _spec(lambda *, data: dict(data)),
+            get_service_kwargs=lambda self: {"name": "kwargs"},
+            get_input_data=lambda self, request: {"name": "input"},
+        )
+        assert _post(view, {"name": "client"}).data == {"name": "input"}
 
     def test_get_input_data_reaches_the_validator_over_the_body(self) -> None:
         def fn(*, data: dict[str, Any]) -> dict[str, Any]:

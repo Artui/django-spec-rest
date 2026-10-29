@@ -93,7 +93,7 @@ def _author(*, pk: int) -> Author | None:
 _AUTHOR = SelectorSpec(
     kind=SelectorKind.RETRIEVE,
     selector=_author,
-    reads=Parameters.of(Parameter("pk", "integer")),
+    reads=Parameters.of(Parameter("pk", "integer", required=True)),
     permissions=_OPEN,
 )
 
