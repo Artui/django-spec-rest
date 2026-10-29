@@ -337,10 +337,11 @@ class TestOverALiveView:
 class TestAnUpdateOverALiveViewIsDescribedForItsRow:
     """The one case of the description the kernel route already gets right.
 
-    The row the spec's own lookup finds is known when the description is read, so a
+    The row the spec's own lookup finds is the one the shape check's description sees, so a
     field that is read-only on an update is not required of the body. It stays
-    unmarked beside the cases that still fail: it holds only if the description sees
-    the row (without it ``title`` is required and the call is a ``400``)."""
+    unmarked beside the cases that still fail: it holds only if the description the
+    shape check reads sees the row (without it ``title`` is required and the call is
+    a ``400``)."""
 
     def test_a_field_an_update_never_writes_is_not_required(self, post: Post) -> None:
         response = _lookup_update(_by_lookup(InstanceMakesReadOnly), {"body": "b"}, post)
@@ -430,11 +431,20 @@ class TestThroughTheKernelsDispatch:
 
 @_BUILT_AGAIN
 class TestBuiltOnceOverALiveView:
-    def test_a_create_and_an_update(self, post: Post) -> None:
-        _create(_spec(InitialDataKind), {"kind": "k"})
-        _lookup_update(_by_lookup(InstancePk), {"title": "n"}, post)
+    # ``Row`` reads neither the body nor the row as it is built, so each of these
+    # counts builds and nothing else: the description gap the live-view cases above
+    # name would fail a serializer that reads either before the count was reached.
+    def test_a_create(self, db: Any) -> None:
+        response = _create(_spec(Row), {"kind": "k"})
 
-        assert BUILT == {"InitialDataKind": 1, "InstancePk": 1}
+        assert response.status_code == 201, response.data
+        assert BUILT == {"Row": 1}
+
+    def test_an_update(self, post: Post) -> None:
+        response = _lookup_update(_by_lookup(Row), {"kind": "n"}, post)
+
+        assert response.status_code == 200, response.data
+        assert BUILT == {"Row": 1}
 
     def test_a_many_call(self, db: Any) -> None:
         spec = _many_spec()
