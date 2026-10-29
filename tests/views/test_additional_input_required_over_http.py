@@ -14,6 +14,11 @@ alone (the exception type), a handler answering with a ``str`` body is left alon
 dict), a handler whose body has no ``schema`` key of its own is left alone (the key),
 and a body of ``None`` or a Django response with no ``.data`` is left alone.
 
+One difference is a strict ``xfail``: an update or delete view that loads its row with
+``get_object()`` over a kernel spec naming no selector is a 500 on the kernel route,
+where the drfs one answered 422 with the schema. The update and delete cases above
+declare ``instance_selector_spec`` instead.
+
 Viewsets are not here: a viewset does not route a kernel spec yet, so the cases that
 reach the restore through ``@service_action``, a viewset's own ``handle_exception``
 or base order have no kernel counterpart.
@@ -71,6 +76,8 @@ _PURGE_SPEC = ServiceSpec(service=_purge, permissions=_OPEN, atomic=False)
 
 # A detail route's spec names the row it acts on: the kernel refuses a target for a
 # spec that declares none, so the lookup is the spec's own, read from the route's ``pk``.
+# The view-resolved shape (``queryset`` and ``get_object()`` over a spec with no
+# selector) is the xfail below.
 _PURGE_ONE_SPEC = ServiceSpec(
     service=_purge,
     permissions=_OPEN,
@@ -118,6 +125,18 @@ _VIEWS: dict[str, tuple[type, str, bool]] = {
 }
 
 
+# The shape a drfs update or delete view was written in: the view loads the row with
+# ``get_object()`` and the spec names no selector. It answered 422 with the schema.
+class _PurgeUpdateByGetObject(_KernelSpecView, ServiceUpdateView):
+    queryset = Author.objects.all()
+    spec = _PURGE_SPEC
+
+
+class _PurgeDeleteByGetObject(_KernelSpecView, ServiceDeleteView):
+    queryset = Author.objects.all()
+    spec = _PURGE_SPEC
+
+
 def _respond(view: type, method: str, detail: bool) -> Any:
     kwargs = {"pk": Author.objects.create(name="a").pk} if detail else {}
     response = view.as_view()(getattr(_factory, method)("/", {}, format="json"), **kwargs)  # ty: ignore[unresolved-attribute]
@@ -136,6 +155,30 @@ def test_the_http_body_carries_the_schema_as_it_was_raised(entry: str) -> None:
     """Read off the rendered bytes, which is what a client parses: a boolean default
     arrives as ``false`` and a bound as ``3``, not as the strings DRF's detail holds."""
     response = _respond(*_VIEWS[entry])
+
+    assert response.status_code == 422
+    assert json.loads(response.content) == {"detail": "Confirm the purge.", "schema": _PURGE_SCHEMA}
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=TypeError,
+    reason=(
+        "a kernel spec with no target selector on an update or delete view that loads its row "
+        "with get_object(): the view hands that row to the kernel as target=, which the kernel "
+        "refuses with a TypeError (a 500) where the drfs path answered 422 with the schema; the "
+        "fault is in views/mutation/utils.py, dispatch_mutation_for_spec"
+    ),
+)
+@pytest.mark.parametrize(
+    ("view", "method"),
+    [(_PurgeUpdateByGetObject, "put"), (_PurgeDeleteByGetObject, "delete")],
+    ids=["ServiceUpdateView", "ServiceDeleteView"],
+)
+def test_a_view_that_loads_its_row_with_get_object_serves_the_schema(
+    view: type, method: str
+) -> None:
+    response = _respond(view, method, True)
 
     assert response.status_code == 422
     assert json.loads(response.content) == {"detail": "Confirm the purge.", "schema": _PURGE_SCHEMA}
