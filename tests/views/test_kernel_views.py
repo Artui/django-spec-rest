@@ -382,6 +382,27 @@ class TestInputDataOverASeedNamedField:
         assert response.status_code == 204, response.data
         assert received == {"title": "t", "user": principal.pk}
 
+    def test_the_view_s_spec_presents_what_its_twin_returned(self) -> None:
+        """The edge dispatches the spec's recording twin, and the view presents
+        the result through its own spec, whose presenter the twin shares."""
+        principal = User.objects.create(username="ada")
+
+        def create(*, data: dict[str, Any]) -> Author:
+            return Author.objects.create(name=f"{data['title']}-{data['user']}")
+
+        spec = ServiceSpec(
+            service=create,
+            permissions=_OPEN,
+            validator=SerializerValidator(_UserPk),
+            input_data=_user_pk,
+            presenter=SerializerPresenter(AuthorSerializer),
+        )
+        request = factory.post("/", {"title": "t", "user": 7}, format="json")
+        force_authenticate(request, user=principal)
+        response = _view(spec)(request)
+        assert response.status_code == 201, response.data
+        assert response.data == {"id": Author.objects.get().pk, "name": f"t-{principal.pk}"}
+
     def test_an_owned_field_it_declines_is_absent_not_the_client_s(self) -> None:
         principal = User.objects.create(username="ada")
         response, received = _post_as(
