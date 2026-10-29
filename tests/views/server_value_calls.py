@@ -13,6 +13,12 @@ the edge, never a helper the kernel route added.
   a live view's request, in either body format, so the async core is held to
   the same answers; ``tests/views/test_kernel_edge.py`` holds the two cores'
   parity in general.
+
+Both ask the kernel's ``check_seeds`` of the spec first, the check a mount
+makes of a kernel spec, so every spec these modules dispatch is one a view
+would take: an optional read has a default on its keyword, and no keyword is
+left for nothing to fill. The edge's cores never pass through ``as_view()``,
+so without it a spec no view could mount would still answer here.
 """
 
 from __future__ import annotations
@@ -24,6 +30,7 @@ import pytest
 from asgiref.sync import async_to_sync
 from django.contrib.auth.models import User
 from django_service_specs import ServiceSpec, Unrestricted
+from django_service_specs.dispatch.check_seeds import check_seeds
 from rest_framework.response import Response
 from rest_framework.test import APIRequestFactory, force_authenticate
 
@@ -45,6 +52,7 @@ def post(
     view: type[_CreateView] = _CreateView,
 ) -> Response:
     """POST ``body`` to a create view serving ``spec``, as ``user`` where one is given."""
+    check_seeds(spec)
     request = factory.post("/", body, format=fmt)
     if user is not None:
         force_authenticate(request, user=user)
@@ -64,10 +72,12 @@ def _live(body: Any, fmt: str, user: User | None) -> dict[str, Any]:
 
 
 def _sync(spec: ServiceSpec, body: Any, *, fmt: str = "json", user: User | None = None) -> Any:
+    check_seeds(spec)
     return dispatch_kernel_spec(spec, **_live(body, fmt, user))
 
 
 def _async(spec: ServiceSpec, body: Any, *, fmt: str = "json", user: User | None = None) -> Any:
+    check_seeds(spec)
     return async_to_sync(adispatch_kernel_spec)(spec, **_live(body, fmt, user))
 
 

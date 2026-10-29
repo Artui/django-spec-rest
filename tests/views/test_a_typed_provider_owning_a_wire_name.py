@@ -27,6 +27,7 @@ from typing import Any, TypedDict
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import ServiceSpec
+from django_service_specs.dispatch.check_seeds import check_seeds
 from rest_framework import serializers
 
 from django_spec_rest import UNSET
@@ -87,18 +88,17 @@ def test_a_provider_owning_the_wire_name_is_refused_with_the_seat_that_fills_it(
         spec.parameters()
 
 
-def test_a_provider_owning_the_wire_name_is_refused_on_the_first_request() -> None:
-    """``as_view()`` asks a kernel spec nothing it assembles per call, so the
-    refusal is the request's, raised past the view rather than answered."""
+def test_a_provider_owning_the_wire_name_is_refused_by_the_kernel_s_mount_check() -> None:
+    """``check_seeds``, which a mount asks of a kernel spec, refuses it in the same words."""
     with pytest.raises(ImproperlyConfigured, match="Only ServiceSpec.input_data fills"):
-        post(_spec({}, owns="tenant", value="srv"), {"tenant": "evil"})
+        check_seeds(_spec({}, owns="tenant", value="srv"))
 
 
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "validate_mutation_view_spec checks nothing of a kernel spec's assembled "
-        "parameters at as_view(), so an authoring error the kernel refuses there "
+        "validate_mutation_view_spec does not run the kernel's check_seeds on a "
+        "kernel spec at as_view(), so an authoring error the kernel refuses there "
         "is found by the first request"
     ),
 )
@@ -146,6 +146,9 @@ def test_a_declined_owned_source_hands_its_parameter_none_of_the_clients_value_o
 )
 @FORMATS
 def test_a_filled_owned_source_is_the_providers_value_in_data_too(fmt: str) -> None:
+    """A typed provider owning a ``source`` no field is named for: a key named
+    like a field is ``test_a_kwargs_value_named_like_a_field_is_the_service_s_alone``'s
+    (``tests/service_specs/``), and this case waits on the same decision."""
     seen: dict[str, Any] = {}
 
     response = post(_spec(seen, owns="org", value="srv"), {"tenant": "evil"}, fmt=fmt)

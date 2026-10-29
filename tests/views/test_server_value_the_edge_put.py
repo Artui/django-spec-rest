@@ -15,8 +15,12 @@ A field named like a seed of the call is the serializer's alone, and
 that name stays the seed's.
 
 The spec's untyped ``kwargs`` provider fills a service keyword and never the
-Validator, so its value for a field's name reaches the parameter alone; where
-drfs put it into the body too, the case is a strict xfail.
+Validator, so its value for a field's name reaches the parameter alone, the
+client's value validating into ``data``. That answer is held by
+``test_a_kwargs_value_named_like_a_field_is_the_service_s_alone`` in
+``tests/service_specs/``, and drfs' answer, the provider's value laid into the
+body too, waits on where the view's hooks map; only the wire-name half, which
+parameter the provider's value reaches, is asserted here.
 
 Two answers part from drfs because of how the kernel route reads a body. A
 form body's prefixed keys (``v.tenant``) are no parameter to the kernel's flat
@@ -43,17 +47,6 @@ from django_spec_rest.service_specs.serializer_validator import SerializerValida
 from tests.views.server_value_calls import CORES, FORMATS, OPEN, Core, post
 
 pytestmark = pytest.mark.django_db
-
-# The kernel's ``kwargs`` provider answers into the service's pool after the
-# Validator, so a value it gives for a field's name is the parameter's and
-# never reaches ``data`` or ``validated_data``.
-_KWARGS_GAP = pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "the kernel route's edge puts none of the kwargs provider's answer into "
-        "the serializer's body, so data and validated_data keep the client's value"
-    ),
-)
 
 
 def _spec(service: Callable[..., Any], serializer: Any, **fields: Any) -> ServiceSpec:
@@ -273,20 +266,6 @@ def test_input_data_is_the_value_put_over_a_prefixed_form_key_under_ignore(
     assert seen == {"v": server, "data": server, "validated": server}
 
 
-@_KWARGS_GAP
-@_READ
-def test_the_providers_value_is_the_one_put_however_the_field_reads_a_json_body(
-    serializer: Any, server: Any, form: dict[str, Any], body: dict[str, Any]
-) -> None:
-    seen: dict[str, Any] = {}
-    spec = _spec(_reads(seen), serializer, kwargs=lambda: {"v": server})
-
-    response = post(spec, body)
-
-    assert response.status_code == 204, response.data
-    assert seen == {"v": server, "data": server, "validated": server}
-
-
 # A field whose own ``get_value`` reads another key of the body.
 
 
@@ -409,8 +388,8 @@ def test_the_providers_value_by_wire_name_reaches_the_parameter_of_that_name(
     fmt: str, service_for: Callable[..., Any]
 ) -> None:
     """The author named the parameter, so the provider's ``tenant`` is the
-    service's ``tenant``, defaulted or not; the half of drfs' answer the kernel
-    route gives (``data`` is the case below)."""
+    service's ``tenant``, defaulted or not. What ``data`` holds is
+    ``test_a_kwargs_value_named_like_a_field_is_the_service_s_alone``'s."""
     seen: dict[str, Any] = {}
     spec = _spec(service_for(seen), _Sourced, kwargs=lambda: {"tenant": "srv"})
 
@@ -418,21 +397,6 @@ def test_the_providers_value_by_wire_name_reaches_the_parameter_of_that_name(
 
     assert response.status_code == 204, response.data
     assert seen["tenant"] == "srv"
-
-
-@_KWARGS_GAP
-@FORMATS
-@_DEFAULTED
-def test_the_providers_value_by_wire_name_is_the_fields_value_in_data(
-    fmt: str, service_for: Callable[..., Any]
-) -> None:
-    seen: dict[str, Any] = {}
-    spec = _spec(service_for(seen), _Sourced, kwargs=lambda: {"tenant": "srv"})
-
-    response = post(spec, {"tenant": "evil"}, fmt=fmt)
-
-    assert response.status_code == 204, response.data
-    assert seen == {"tenant": "srv", "data": "srv"}
 
 
 @FORMATS

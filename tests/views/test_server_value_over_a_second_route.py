@@ -27,7 +27,9 @@ kernel route does not ask (``test_author_values_outrank_the_validator``); and
 the query counts of validating a related field's server value twice, which
 measure drfs' second validation and have no counterpart while the gap stands.
 The ``kwargs`` provider's value outranking the Validator's for the service's
-parameter is ``test_author_values_outrank_the_validator``'s.
+parameter is ``test_author_values_outrank_the_validator``'s, and its value never
+reaching ``data`` is ``test_a_kwargs_value_named_like_a_field_is_the_service_s_alone``'s
+(``tests/service_specs/``).
 
 Also not ported, each for the reason beside it:
 
@@ -68,13 +70,6 @@ _SECOND_ROUTE_GAP = pytest.mark.xfail(
         "the kernel route records no server_values for input_data's answer, so "
         "SerializerValidator hands on validated_data as DRF built it, a second "
         "route's client value included"
-    ),
-)
-_KWARGS_GAP = pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "the kernel route's edge puts none of the kwargs provider's answer into "
-        "the serializer's body, so data and validated_data keep the client's value"
     ),
 )
 
@@ -184,19 +179,6 @@ def test_input_data_outranks_a_second_route_on_either_core(
 
     core(_spec(_plain(seen), serializer, input_data=_server), body)
 
-    assert seen == _SERVER
-
-
-@_KWARGS_GAP
-@_SHAPE
-def test_the_providers_value_outranks_a_second_route_in_data_too(
-    serializer: Any, body: dict[str, Any]
-) -> None:
-    seen: dict[str, Any] = {}
-
-    response = post(_spec(_plain(seen), serializer, kwargs=_server), body)
-
-    assert response.status_code == 204, response.data
     assert seen == _SERVER
 
 
