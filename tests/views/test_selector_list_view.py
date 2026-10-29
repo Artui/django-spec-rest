@@ -191,13 +191,6 @@ class TestTheArguments:
         assert received == {"tenant": "acme"}
 
 
-_REFUSED_KEYS = pytest.mark.xfail(
-    strict=True,
-    reason="dispatch_kernel_spec reads request.query_params whole; selectors.utils.kernel_query "
-    "strips DRF's own keys and needs a query= hand-off on dispatch/kernel_edge.py",
-)
-
-
 class TestDRFsOwnQueryKeys:
     """DRF's own keys are no argument of the spec's, under either policy.
 
@@ -209,7 +202,7 @@ class TestDRFsOwnQueryKeys:
 
     @pytest.mark.parametrize(
         "policy",
-        [pytest.param(UnknownArguments.REJECT, marks=_REFUSED_KEYS), UnknownArguments.IGNORE],
+        [UnknownArguments.REJECT, UnknownArguments.IGNORE],
     )
     @pytest.mark.parametrize(
         ("query", "attrs"),

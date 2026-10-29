@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import weakref
 from collections.abc import Callable, Mapping
-from typing import Any
+from typing import Any, cast
 
 from django.db.models import Model
 from django.http import QueryDict
@@ -249,6 +249,13 @@ def dispatch_kernel_selector(view: Any, spec: KernelSpec) -> DispatchResult:
     query views present it through the spec's own presenter, with the context
     dispatch built for it.
 
+    **The query string it reads is the spec's alone**: the keys DRF's own
+    pagination, filter backends, versioning and format suffix read on the view
+    are taken off it first (``kernel_query``), so ``?page=2`` turns the page
+    rather than reaching the kernel's closed argument set as an unknown
+    argument (test_selector_list_view's
+    test_a_drf_key_is_read_by_drf_and_never_by_the_kernel).
+
     **The view's object permission is asked inside the dispatch**, as one of
     the spec's checks (``_viewed``), so it runs where the kernel asks its own
     object-level checks: on the row the selector found, before the spec's
@@ -262,6 +269,7 @@ def dispatch_kernel_selector(view: Any, spec: KernelSpec) -> DispatchResult:
         view=view,
         request=view.request,
         call_context=view_call_context(view, view.request),
+        query=kernel_query(view, cast(KernelSelectorSpec, spec), view.request),
     )
     if found.kind == "not_found":
         raise NotFound()
