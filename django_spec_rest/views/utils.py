@@ -156,8 +156,12 @@ def view_call_context(view: Any, request: Request) -> dict[str, Any]:
     ``**kwargs`` alone never is, so its keys, and a serializer context built
     from them, carry no ``call_context``
     (test_a_catch_all_callable_on_a_live_view_is_never_handed_the_call_context).
-    ``success_status`` and ``response_finalizer`` are not offered it: a view
-    refuses either naming it when the view is built.
+    ``success_status`` and ``response_finalizer`` are not offered it, and one
+    declaring it is refused when the view is built: a drfs spec's fields of
+    those names by ``validate_service_spec``, and a standalone mutation
+    view's attributes of those names over a kernel spec by
+    ``validate_mutation_view_spec``. A viewset's own attributes over a kernel
+    spec are not checked there.
     """
     context: dict[str, Any] | None = getattr(view, "_call_context", None)
     if context is None:

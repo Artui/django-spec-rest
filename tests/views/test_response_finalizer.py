@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import pytest
+from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import (
     Parameter,
     Parameters,
@@ -187,3 +188,22 @@ class TestResponseFinalizerBulk:
         assert response.status_code == 204
         assert response["X-Bulk"] == "done"
         assert not Post.objects.exists()
+
+
+class TestAFinalizerTheViewCannotCall:
+    """Refused when the view is built, as a drfs spec's ``response_finalizer``
+    is, rather than raising ``TypeError`` once the service has committed."""
+
+    def test_a_finalizer_requiring_a_key_the_framework_lacks_is_refused_at_as_view(
+        self,
+    ) -> None:
+        def finalizer(*, call_context: Any) -> None: ...
+
+        spec = ServiceSpec(service=_create_author, permissions=_OPEN)
+        with pytest.raises(ImproperlyConfigured, match=r"\['call_context'\] the framework"):
+            _view(ServiceCreateView, spec, finalizer)
+
+    def test_a_finalizer_that_is_no_callable_is_refused_at_as_view(self) -> None:
+        spec = ServiceSpec(service=_create_author, permissions=_OPEN)
+        with pytest.raises(ImproperlyConfigured, match="`response_finalizer` must be a callable"):
+            _view(ServiceCreateView, spec, "finalize")

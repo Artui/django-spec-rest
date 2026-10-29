@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import pytest
+from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import (
     Parameter,
     Parameters,
@@ -133,3 +134,21 @@ class TestCallableSuccessStatus:
         response = view(factory.post("/", {"name": "Ada"}, format="json"))
         assert response.status_code == 200
         assert response.data["name"] == "Ada"
+
+
+class TestASuccessStatusTheViewCannotResolve:
+    """Refused when the view is built, as a drfs spec's ``success_status`` is,
+    rather than raising ``TypeError`` once the service has committed."""
+
+    def test_a_callable_requiring_a_key_the_pool_lacks_is_refused_at_as_view(self) -> None:
+        def status(*, call_context: Any) -> int:
+            return 202
+
+        view = type("_View", (_UpsertView,), {"success_status": staticmethod(status)})
+        with pytest.raises(ImproperlyConfigured, match=r"\['call_context'\] the framework can't"):
+            view.as_view()
+
+    def test_a_value_that_is_no_int_nor_callable_is_refused_at_as_view(self) -> None:
+        view = type("_View", (_UpsertView,), {"success_status": "201"})
+        with pytest.raises(ImproperlyConfigured, match="`success_status` must be an int"):
+            view.as_view()

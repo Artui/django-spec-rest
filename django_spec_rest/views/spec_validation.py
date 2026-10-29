@@ -956,6 +956,17 @@ def validate_mutation_view_spec(
 
     hooked = is_overridden(view_cls, MutationFlowMixin, "get_service_kwargs")
     if runs_on_kernel(spec):
+        # A kernel spec declares neither HTTP answer, so the view's own
+        # attributes are what ``_dispatch_kernel_mutation`` calls, after the
+        # service has run: refused here as a drfs spec's fields of these names
+        # are, rather than as a ``TypeError`` once the write has committed
+        # (test_callable_success_status' TestASuccessStatusTheViewCannotResolve,
+        # test_response_finalizer's TestAFinalizerTheViewCannotCall). Read off
+        # the class, which a function stored there is returned from unbound.
+        _validate_success_status(getattr(view_cls, "success_status", None), label=view_cls.__name__)
+        _validate_response_finalizer(
+            getattr(view_cls, "response_finalizer", None), label=view_cls.__name__
+        )
         # A view hook's keys reach the service through the edge's overlay,
         # which ``check_seeds`` cannot see and its own docstring says not to
         # be asked beside, so a hooked view is not asked it, as drfs read an
