@@ -21,12 +21,13 @@ gap is held by ``test_author_values_outrank_the_validator``'s strict xfail.
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Callable
 from typing import Any, TypedDict
 
 import pytest
 from django.core.exceptions import ImproperlyConfigured
-from django_service_specs import ServiceSpec
+from django_service_specs import ServiceSpec, UnsetType
 from django_service_specs.dispatch.check_seeds import check_seeds
 from rest_framework import serializers
 
@@ -89,7 +90,7 @@ def test_a_provider_owning_the_wire_name_is_refused_with_the_seat_that_fills_it(
 
 
 def test_a_provider_owning_the_wire_name_is_refused_by_the_kernel_s_mount_check() -> None:
-    """``check_seeds``, which a mount asks of a kernel spec, refuses it in the same words."""
+    """``check_seeds``, which a mount will ask of a kernel spec, refuses it in the same words."""
     with pytest.raises(ImproperlyConfigured, match="Only ServiceSpec.input_data fills"):
         check_seeds(_spec({}, owns="tenant", value="srv"))
 
@@ -139,9 +140,8 @@ def test_a_declined_owned_source_hands_its_parameter_none_of_the_clients_value_o
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "the kernel merges the kwargs provider's answer into the service's pool "
-        "after the Validator, and the kernel route's edge puts none of it into "
-        "the serializer's body, so data keeps the client's value"
+        "open owner decision: kwargs feeds the callable only, so the provider's "
+        "value never reaches data, which keeps the client's"
     ),
 )
 @FORMATS
@@ -177,6 +177,30 @@ class _NestedIn(serializers.Serializer):
 class _BesideItsInnerKey(serializers.Serializer):
     addr = serializers.CharField(source="loc.city", required=False)
     city = serializers.CharField(required=False)
+
+
+def _may_decline_the_source() -> Any:
+    return {"org": UNSET}
+
+
+_may_decline_the_source.__annotations__ = {
+    "return": TypedDict("_MayFillOrg", {"org": str | UnsetType})
+}
+
+
+@FORMATS
+def test_a_declinable_source_the_provider_declines_stays_the_clients(fmt: str) -> None:
+    """A key the provider may decline is not the server's alone: declined, the
+    client's value for it stands, in the parameter and in ``data``, as the
+    kernel answers a declinable key everywhere. The owned key's answer above
+    is the gap; this is the control that keeps a fix from taking both."""
+    seen: dict[str, Any] = {}
+    spec = dataclasses.replace(_spec(seen, owns="org", value=UNSET), kwargs=_may_decline_the_source)
+
+    response = post(spec, {"tenant": "evil"}, fmt=fmt)
+
+    assert response.status_code == 204, response.data
+    assert seen == {"org": "evil", "tenant": "D-tenant", "data": {"org": "evil"}}
 
 
 @_OWNED_GAP

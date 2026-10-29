@@ -14,11 +14,12 @@ the edge, never a helper the kernel route added.
   the same answers; ``tests/views/test_kernel_edge.py`` holds the two cores'
   parity in general.
 
-Both ask the kernel's ``check_seeds`` of the spec first, the check a mount
-makes of a kernel spec, so every spec these modules dispatch is one a view
-would take: an optional read has a default on its keyword, and no keyword is
-left for nothing to fill. The edge's cores never pass through ``as_view()``,
-so without it a spec no view could mount would still answer here.
+Both ask the kernel's ``check_seeds`` of the spec first. ``as_view()`` does
+not run it on a kernel spec yet, but a mount will, so every spec these modules
+dispatch is held to it now: an optional read has a default on its keyword,
+and no keyword is left for nothing to fill. The edge's cores never pass
+through ``as_view()`` at all, so without it a spec no view could mount would
+still answer here.
 """
 
 from __future__ import annotations

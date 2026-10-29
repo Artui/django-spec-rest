@@ -192,28 +192,12 @@ def test_input_data_and_the_provider_naming_one_field_split_its_value(core: Core
     everywhere; the kernel hands each seat its own: ``input_data``'s value is
     what the field validated, in ``data`` and ``validated_data``, and the
     ``kwargs`` provider's, merged into the service's pool after the Validator,
-    is the parameter's. The drfs answer is the xfail below."""
+    is the parameter's."""
     seen: dict[str, Any] = {}
 
     core(_spec(_plain(seen), _Alias, input_data=_server, kwargs=_authored), {})
 
     assert seen == {"tenant": "authored", "data": "server", "validated": "server"}
-
-
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "the kernel merges the kwargs provider's answer into the service's pool "
-        "after the validated values, so it outranks input_data's for the parameter"
-    ),
-)
-@CORES
-def test_input_data_outranks_the_providers_value_for_the_same_field(core: Core) -> None:
-    seen: dict[str, Any] = {}
-
-    core(_spec(_plain(seen), _Alias, input_data=_server, kwargs=_authored), {})
-
-    assert seen == _SERVER
 
 
 class _Shouting(_Alias):

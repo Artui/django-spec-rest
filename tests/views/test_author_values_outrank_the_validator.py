@@ -7,10 +7,16 @@ became: a key a serializer's ``validate()`` derives from the body, or one a
 ``source="*"`` nested serializer flattens into ``validated_data``. The
 client's value stays where it was validated, in ``data``.
 
-Two answers the kernel route does not give yet are strict xfails below: a
-view's ``get_service_kwargs`` hook, the other author, is not asked, and the
-serializer ``SerializerValidator`` binds is replaced by a provider key of its
-name, where drfs kept it bound.
+Whether a view's ``get_service_kwargs`` hook, the other author, outranks the
+Validator is an open owner decision, and its drfs answer is a strict xfail
+below.
+
+Not ported: drfs kept the bound serializer over an author's value named
+``serializer``. On the kernel route the ``kwargs`` provider's answer is merged
+after what the Validator binds, so a provider key of that name replaces the
+bound serializer. Only the author's own values meet there, never a client's,
+so it is no server-value gap; the kernel could refuse such a key as it refuses
+one named like a seed, and that is a kernel ask rather than a test here.
 """
 
 from __future__ import annotations
@@ -127,8 +133,9 @@ def test_the_specs_provider_outranks_the_validators_on_either_core(
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "the kernel route asks no view hook: dispatch_mutation_for_spec hands "
-        "dispatch_kernel_spec nothing of get_service_kwargs"
+        "open owner decision: get_service_kwargs reaches the kernel as its "
+        "extra_kwargs overlay, which sits beneath what the Validator computed by "
+        "the kernel's design, so the validated key outranks the hook's value"
     ),
 )
 @_SHAPE
@@ -145,40 +152,6 @@ def test_a_view_hooks_value_outranks_the_validators_over_http(
 
     assert response.status_code == 204, response.data
     assert seen == _OUTRANKED
-
-
-class _TitleIn(serializers.Serializer):
-    title = serializers.CharField()
-
-
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "the kernel merges the spec's kwargs provider over what the Validator "
-        "binds for the call (Validated.pool), so a provider key named serializer "
-        "replaces the bound serializer"
-    ),
-)
-@CORES
-def test_the_bound_serializer_outranks_an_authors_value_of_its_name(core: Core) -> None:
-    """The bound serializer is the Validator's for the call, and the service
-    naming it is handed that serializer, whatever an author's value of its name."""
-    seen: dict[str, Any] = {}
-
-    def service(*, data: Any, serializer: Any) -> None:
-        seen["serializer"] = serializer
-
-    spec = ServiceSpec(
-        service=service,
-        permissions=OPEN,
-        validator=SerializerValidator(_TitleIn),
-        kwargs=lambda: {"serializer": "provider"},
-        atomic=False,
-    )
-
-    core(spec, {"title": "t"})
-
-    assert isinstance(seen["serializer"], _TitleIn)
 
 
 @CORES

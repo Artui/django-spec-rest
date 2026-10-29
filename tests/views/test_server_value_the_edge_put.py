@@ -315,7 +315,12 @@ def test_a_field_reading_another_key_validates_the_value_put_under_ignore(
 
 # On a form body drfs wrote the server's value into the form, so the field
 # read it as it reads a form: one value for a list a list of one, an empty
-# string for an optional field the field left out.
+# string for an optional field the field left out. The kernel route binds
+# ``input_data``'s value as the author returned it, so a server value means
+# the same whatever the client's content type, and one its field refuses is
+# DRF's 400 keyed by the field, as
+# test_a_server_value_its_field_refuses_is_a_400_keyed_by_the_field holds on
+# a JSON body. The answer changes from drfs' by that choice.
 
 
 class _Optional(serializers.Serializer):
@@ -326,34 +331,30 @@ class _Nullable(serializers.Serializer):
     v = serializers.CharField(required=False, allow_null=True)
 
 
+_NOT_A_LIST = {"v": ['Expected a list of items but got type "str".']}
+_BLANK = {"v": ["This field may not be blank."]}
 _FORM_READS = {
-    "scalar-for-a-list": (_List, "x", ["x"], ["x"]),
-    "empty-string": (_Optional, "", "default", None),
-    "empty-string-nullable": (_Nullable, "", None, None),
+    "scalar-for-a-list": (_List, "x", _NOT_A_LIST, "not_a_list"),
+    "empty-string": (_Optional, "", _BLANK, "blank"),
+    "empty-string-nullable": (_Nullable, "", _BLANK, "blank"),
 }
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "the kernel merges input_data's answer into its checked arguments, a "
-        "dict, which the serializer binds, so the server's value is read as a "
-        "JSON body's value whatever the client's content type"
-    ),
-)
 @pytest.mark.parametrize(
-    ("serializer", "server", "handed", "kept"), _FORM_READS.values(), ids=_FORM_READS.keys()
+    ("serializer", "server", "refusal", "code"), _FORM_READS.values(), ids=_FORM_READS.keys()
 )
-def test_input_data_on_a_form_body_is_read_as_a_form_reads_it(
-    serializer: Any, server: Any, handed: Any, kept: Any
+def test_input_data_on_a_form_body_is_taken_as_the_author_returned_it(
+    serializer: Any, server: Any, refusal: dict[str, Any], code: str
 ) -> None:
     seen: dict[str, Any] = {}
     spec = _spec(_reads(seen), serializer, input_data=lambda: {"v": server})
 
     response = post(spec, {"v": "evil"}, fmt="multipart")
 
-    assert response.status_code == 204, response.data
-    assert seen == {"v": handed, "data": kept, "validated": kept}
+    assert response.status_code == 400
+    assert response.data == refusal
+    assert response.data["v"][0].code == code
+    assert seen == {}
 
 
 # A field whose wire name and ``source`` differ.
