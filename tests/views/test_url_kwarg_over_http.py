@@ -1,11 +1,11 @@
-"""A declared ``UrlKwarg`` on a live view is its route's, never the body's.
+"""The route-capture rule on a kernel selector spec, over HTTP.
 
-Off HTTP, a transport's offline view carries no route, so the value a caller
-sends for a declared ``UrlKwarg`` is put onto ``view.kwargs``, where a provider
-reading the route finds it. A live DRF view's ``kwargs`` are its URLconf's, which
-permission classes read as the author's: a body value written there, or handed to
-the service as the argument, would reach ``has_object_permission`` and the service
-as though the route had captured it, after ``has_permission`` was asked without it.
+A capture the spec declares as a read is its argument, coerced to the read's
+type and over whatever the query string sends under the same name. A capture
+it does not declare is no argument: the selector is not handed it, it stays on
+``view.kwargs`` for DRF's own machinery (a permission class, a queryset), and
+nothing refuses it, under either unknown-argument policy. drfs' ``UrlKwarg``
+declaration drops with its spec types; a kernel read is the declaration.
 """
 
 from __future__ import annotations
@@ -13,202 +13,116 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from asgiref.sync import sync_to_async
-from django.db.models import QuerySet
-from rest_framework.permissions import BasePermission
-from rest_framework.request import Request
-from rest_framework.test import APIRequestFactory
-
-from django_spec_rest import (
+from django.urls import path
+from django_service_specs import (
+    Parameter,
+    Parameters,
     SelectorKind,
-    SelectorListView,
     SelectorSpec,
-    ServiceSpec,
-    ServiceUpdateView,
-    UrlKwarg,
-    adispatch_spec,
-    dispatch_spec,
+    UnknownArguments,
+    Unrestricted,
 )
-from django_spec_rest.types.offline_service_view import OfflineServiceView
-from tests.testapp.models import Post
-from tests.testapp.serializers import PostSerializer
+from rest_framework import serializers
+from rest_framework.permissions import BasePermission
+from rest_framework.test import APIClient
 
-_factory = APIRequestFactory()
-SEEN: dict[str, Any] = {}
+from django_spec_rest import SelectorListView
+from django_spec_rest.dispatch import kernel_edge
+from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
+from tests.testapp.models import Author, Post
+
+pytestmark = pytest.mark.django_db
+
+_OPEN = (Unrestricted(),)
+_SEEN: dict[str, Any] = {}
 
 
-class _RecordsTheRoute(BasePermission):
-    def has_object_permission(self, request: Any, view: Any, obj: Any) -> bool:
-        SEEN["route"] = dict(view.kwargs)
+class _PostOut(serializers.Serializer):
+    title = serializers.CharField()
+
+
+class _ReadsTheRoute(BasePermission):
+    """DRF's own machinery reads every capture off ``view.kwargs``."""
+
+    def has_permission(self, request: Any, view: Any) -> bool:
+        _SEEN["permission"] = dict(view.kwargs)
         return True
 
 
-def _post_by_pk(*, pk: int) -> QuerySet[Post]:
-    return Post.objects.filter(pk=pk)
+def _posts_of(**kwargs: Any) -> Any:
+    _SEEN["selector"] = kwargs
+    return Post.objects.filter(author_id=kwargs["author_pk"]).order_by("id")
 
 
-def _post_by_pk_in_org(*, pk: int, org: str = "none") -> QuerySet[Post]:
-    SEEN["lookup_org"] = org
-    return Post.objects.filter(pk=pk)
+class _NestedPosts(SelectorListView):
+    """``/authors/<author_pk>/tags/<tag>/posts/``: one capture declared, one not."""
+
+    permission_classes = [_ReadsTheRoute]
+    spec = SelectorSpec(
+        kind=SelectorKind.LIST,
+        selector=_posts_of,
+        reads=Parameters.of(Parameter("author_pk", "integer", required=True)),
+        permissions=_OPEN,
+        presenter=SerializerPresenter(_PostOut),
+    )
 
 
-def _touch(*, instance: Post, org: str = "none") -> Post:
-    SEEN["org"] = org
-    return instance
+urlpatterns = [
+    path("authors/<str:author_pk>/tags/<str:tag>/posts/", _NestedPosts.as_view()),
+]
 
 
-_SPEC = ServiceSpec(
-    service=_touch,
-    reads=(UrlKwarg("org"),),
-    instance_selector_spec=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_post_by_pk),
-    output_selector_spec=SelectorSpec(kind=SelectorKind.RETRIEVE, output_serializer=PostSerializer),
-    atomic=False,
-)
+@pytest.fixture
+def authors() -> tuple[Author, Author]:
+    a1, a2 = Author.objects.create(name="a1"), Author.objects.create(name="a2")
+    Post.objects.create(title="a1-post", author=a1)
+    Post.objects.create(title="a2-post", author=a2)
+    _SEEN.clear()
+    return a1, a2
 
 
-class _View(ServiceUpdateView):
-    queryset = Post.objects.all()
-    permission_classes = [_RecordsTheRoute]
-    spec = _SPEC
+@pytest.mark.urls(__name__)
+class TestTheRouteCaptureRule:
+    @pytest.mark.parametrize("policy", [UnknownArguments.REJECT, UnknownArguments.IGNORE])
+    def test_an_undeclared_capture_is_no_argument_and_stays_on_view_kwargs(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        authors: tuple[Author, Author],
+        policy: UnknownArguments,
+    ) -> None:
+        monkeypatch.setattr(kernel_edge, "UNKNOWN_ARGUMENTS", policy)
+        response = APIClient().get(f"/authors/{authors[0].pk}/tags/news/posts/")
+        # Not refused, under either policy, and no ``ImproperlyConfigured``.
+        assert response.status_code == 200, response.data
+        # The declared capture and the call's seeds, never the undeclared one.
+        assert _SEEN["selector"]["author_pk"] == authors[0].pk
+        assert "tag" not in _SEEN["selector"]
+        assert _SEEN["permission"] == {"author_pk": str(authors[0].pk), "tag": "news"}
 
+    def test_a_declared_capture_arrives_coerced_to_its_read_s_type(
+        self, authors: tuple[Author, Author]
+    ) -> None:
+        """The ``str`` converter hands ``"1"``; the integer read makes it ``1``."""
+        APIClient().get(f"/authors/{authors[0].pk}/tags/news/posts/")
+        assert _SEEN["selector"]["author_pk"] == authors[0].pk
+        assert isinstance(_SEEN["selector"]["author_pk"], int)
 
-@pytest.fixture(autouse=True)
-def _reset() -> None:
-    SEEN.clear()
+    def test_the_route_scopes_the_selector(self, authors: tuple[Author, Author]) -> None:
+        response = APIClient().get(f"/authors/{authors[1].pk}/tags/news/posts/")
+        assert response.data == [{"title": "a2-post"}]
 
-
-@pytest.mark.django_db
-def test_a_body_value_never_reaches_a_live_views_kwargs() -> None:
-    post = Post.objects.create(title="p")
-
-    response = _View.as_view()(_factory.put("/", {"org": "acme"}, format="json"), pk=post.pk)
-
-    assert response.status_code == 200, response.data
-    assert SEEN["route"] == {"pk": post.pk}
-    assert SEEN["org"] == "none"
-
-
-def _lookup_view(*reads: UrlKwarg) -> type[ServiceUpdateView]:
-    """A view whose target lookup, not its service, takes ``org``."""
-
-    class Lookup(ServiceUpdateView):
-        queryset = Post.objects.all()
-        spec = ServiceSpec(
-            service=_touch,
-            reads=reads,
-            instance_selector_spec=SelectorSpec(
-                kind=SelectorKind.RETRIEVE, selector=_post_by_pk_in_org
-            ),
-            output_selector_spec=_SPEC.output_selector_spec,
-            atomic=False,
+    def test_the_route_outranks_the_query_string(self, authors: tuple[Author, Author]) -> None:
+        """A client naming the declared capture in the query string cannot
+        move the scope the route sets."""
+        response = APIClient().get(
+            f"/authors/{authors[0].pk}/tags/news/posts/?author_pk={authors[1].pk}"
         )
+        assert response.data == [{"title": "a1-post"}]
 
-    return Lookup
-
-
-@pytest.mark.django_db
-def test_a_body_value_never_reaches_a_live_views_lookup_parameter_it_declares() -> None:
-    post = Post.objects.create(title="p")
-
-    response = _lookup_view(UrlKwarg("org")).as_view()(
-        _factory.put("/", {"org": "acme"}, format="json"), pk=post.pk
-    )
-
-    assert response.status_code == 200, response.data
-    assert SEEN["lookup_org"] == "none"
-
-
-@pytest.mark.django_db
-def test_a_name_no_reads_declares_is_still_the_clients_to_the_lookup() -> None:
-    """Only a declared ``UrlKwarg`` is dropped: a lookup's own parameter is an ordinary read."""
-    post = Post.objects.create(title="p")
-
-    response = _lookup_view().as_view()(
-        _factory.put("/", {"org": "acme"}, format="json"), pk=post.pk
-    )
-
-    assert response.status_code == 200, response.data
-    assert SEEN["lookup_org"] == "acme"
-
-
-@pytest.mark.django_db
-def test_the_route_is_the_argument_on_a_live_view() -> None:
-    post = Post.objects.create(title="p")
-
-    response = _View.as_view()(
-        _factory.put("/", {"org": "evil"}, format="json"), pk=post.pk, org="acme"
-    )
-
-    assert response.status_code == 200, response.data
-    assert SEEN["route"] == {"pk": post.pk, "org": "acme"}
-    assert SEEN["org"] == "acme"
-
-
-def _live_view(**kwargs: Any) -> _View:
-    view = _View()
-    view.request = Request(_factory.put("/"))
-    view.kwargs = kwargs
-    return view
-
-
-@pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("route", [{}, {"org": "acme"}], ids=["no-capture", "captured"])
-async def test_a_body_value_never_reaches_a_live_views_argument_on_either_core(
-    route: dict[str, Any],
-) -> None:
-    post = await Post.objects.acreate(title="p")
-    seen: list[dict[str, Any]] = []
-    for core in ("sync", "async"):
-        view = _live_view(**route)
-        kwargs: dict[str, Any] = {
-            "user": None,
-            "params": {"pk": post.pk, "org": "evil"},
-            "request": view.request,
-            "view": view,
-        }
-        SEEN.clear()
-        if core == "sync":
-            await sync_to_async(dispatch_spec, thread_sensitive=True)(_SPEC, **kwargs)
-        else:
-            await adispatch_spec(_SPEC, **kwargs)
-        seen.append({**SEEN, "kwargs": dict(view.kwargs)})
-
-    expected = route.get("org", "none")
-    assert seen[0] == seen[1] == {"org": expected, "kwargs": route}
-
-
-@pytest.mark.django_db
-def test_off_http_a_body_value_goes_onto_the_offline_views_kwargs() -> None:
-    post = Post.objects.create(title="p")
-    view = OfflineServiceView(request=Request(_factory.put("/")), kwargs={"pk": post.pk})
-
-    dispatch_spec(_SPEC, user=None, params={"org": "acme"}, view=view)
-
-    assert view.kwargs == {"pk": post.pk, "org": "acme"}
-    assert SEEN["org"] == "acme"
-
-
-def _posts_in_org(*, org: str = "none") -> QuerySet[Post]:
-    SEEN["selector_org"] = org
-    return Post.objects.all()
-
-
-@pytest.mark.django_db
-def test_a_query_value_never_reaches_a_live_selectors_declared_url_kwarg() -> None:
-    class Listing(SelectorListView):
-        queryset = Post.objects.all()
-        spec = SelectorSpec(
-            kind=SelectorKind.LIST,
-            selector=_posts_in_org,
-            output_serializer=PostSerializer,
-            reads=(UrlKwarg("org"),),
-        )
-
-    response = Listing.as_view()(_factory.get("/?org=acme"))
-    assert response.status_code == 200, response.data
-    assert SEEN["selector_org"] == "none"
-    SEEN.clear()
-
-    response = Listing.as_view()(_factory.get("/?org=acme"), org="route")
-    assert response.status_code == 200, response.data
-    assert SEEN["selector_org"] == "route"
+    def test_an_uncoercible_capture_is_refused_under_its_name(
+        self, authors: tuple[Author, Author]
+    ) -> None:
+        response = APIClient().get("/authors/nope/tags/news/posts/")
+        assert response.status_code == 400
+        assert list(response.data) == ["author_pk"]
+        assert "selector" not in _SEEN

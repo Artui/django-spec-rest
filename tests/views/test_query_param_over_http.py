@@ -1,13 +1,9 @@
-"""A declared ``QueryParam`` on a live view is its query string's, never the body's.
+"""A kernel selector spec's declared read is read off the query string, over HTTP.
 
-Off HTTP, a transport's offline request carries no query string of the caller's,
-so the value a caller sends for a declared ``QueryParam`` is put onto
-``request.query_params``, where a serializer or a permission reading it finds it.
-A live DRF view's query string is the client's URL, which its permission classes
-have already read by the time the call is dispatched: a body value written there,
-or handed to the service as the parameter, would reach ``has_object_permission``
-and the service as though the URL had carried it, after ``has_permission`` was
-asked without it.
+drfs' ``QueryParam`` declaration drops with its spec types; a kernel read is
+the declaration, read through ``flat_arguments`` and coerced to its type. The
+query string is the request's own: a permission class reads it before the
+dispatch, and the dispatch writes nothing back onto it.
 """
 
 from __future__ import annotations
@@ -15,157 +11,96 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from asgiref.sync import sync_to_async
-from django.db.models import QuerySet
-from rest_framework.permissions import BasePermission
-from rest_framework.request import Request
-from rest_framework.test import APIRequestFactory
-
-from django_spec_rest import (
-    QueryParam,
+from django_service_specs import (
+    Parameter,
+    Parameters,
     SelectorKind,
     SelectorSpec,
-    ServiceSpec,
-    ServiceUpdateView,
-    adispatch_spec,
-    dispatch_spec,
+    UnknownArguments,
+    Unrestricted,
 )
-from django_spec_rest.types.offline_service_view import OfflineServiceView
+from rest_framework import serializers
+from rest_framework.permissions import BasePermission
+from rest_framework.test import APIRequestFactory
+
+from django_spec_rest import SelectorListView, SelectorRetrieveView
+from django_spec_rest.dispatch import kernel_edge
+from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from tests.testapp.models import Post
 
-_factory = APIRequestFactory()
-SEEN: dict[str, Any] = {}
+pytestmark = pytest.mark.django_db
+
+_OPEN = (Unrestricted(),)
+factory = APIRequestFactory()
 
 
-class _NotAllUnlessQueried(BasePermission):
-    """Refuses ``?scope=all``: everyone else is scoped to what they own."""
+class _PostOut(serializers.Serializer):
+    title = serializers.CharField()
 
+
+class _NotUnpublished(BasePermission):
     def has_permission(self, request: Any, view: Any) -> bool:
-        SEEN["permission"] = request.query_params.get("scope")
-        return request.query_params.get("scope") != "all"
-
-    def has_object_permission(self, request: Any, view: Any, obj: Any) -> bool:
-        SEEN["object_permission"] = request.query_params.get("scope")
-        return True
+        return request.query_params.get("published") != "false"
 
 
-def _post_by_pk(*, pk: int) -> QuerySet[Post]:
-    return Post.objects.filter(pk=pk)
+def _posts(*, published: bool) -> Any:
+    return Post.objects.filter(published=published).order_by("id")
 
 
-def _touch(*, instance: Post, request: Any, scope: str = "unset") -> None:
-    SEEN["query"] = request.query_params.get("scope")
-    SEEN["scope"] = scope
-
-
-_SPEC = ServiceSpec(
-    service=_touch,
-    reads=(QueryParam("scope"),),
-    instance_selector_spec=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_post_by_pk),
-    atomic=False,
-)
-
-
-class _View(ServiceUpdateView):
-    queryset = Post.objects.all()
-    permission_classes = [_NotAllUnlessQueried]
-    spec = _SPEC
-
-
-@pytest.fixture(autouse=True)
-def _reset() -> None:
-    SEEN.clear()
-
-
-@pytest.mark.django_db
-def test_a_body_value_never_reaches_a_live_requests_query_string() -> None:
-    post = Post.objects.create(title="p")
-
-    response = _View.as_view()(_factory.put("/", {"scope": "all"}, format="json"), pk=post.pk)
-
-    assert response.status_code == 204, response.data
-    assert SEEN == {
-        "permission": None,
-        "object_permission": None,
-        "query": None,
-        "scope": "unset",
-    }
-
-
-@pytest.mark.django_db
-def test_the_query_string_is_still_refused_where_the_permission_refuses_it() -> None:
-    post = Post.objects.create(title="p")
-
-    response = _View.as_view()(_factory.put("/?scope=all", {}, format="json"), pk=post.pk)
-
-    assert response.status_code == 403
-    assert "query" not in SEEN
-
-
-@pytest.mark.django_db
-def test_the_query_string_is_the_parameter_on_a_live_view() -> None:
-    post = Post.objects.create(title="p")
-
-    response = _View.as_view()(
-        _factory.put("/?scope=mine", {"scope": "all"}, format="json"), pk=post.pk
+def _view(**attrs: Any) -> Any:
+    spec = SelectorSpec(
+        kind=SelectorKind.LIST,
+        selector=_posts,
+        reads=Parameters.of(Parameter("published", "boolean", required=True)),
+        permissions=_OPEN,
+        presenter=SerializerPresenter(_PostOut),
     )
-
-    assert response.status_code == 204, response.data
-    assert SEEN == {
-        "permission": "mine",
-        "object_permission": "mine",
-        "query": "mine",
-        "scope": "mine",
-    }
+    return type("_View", (SelectorListView,), {"spec": spec, **attrs}).as_view()
 
 
-def _live_view(path: str) -> _View:
-    view = _View()
-    view.request = Request(_factory.put(path))
-    view.kwargs = {}
-    return view
+@pytest.fixture
+def posts() -> None:
+    Post.objects.create(title="draft")
+    Post.objects.create(title="out", published=True)
 
 
-@pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("path", ["/", "/?scope=mine"], ids=["body-only", "both"])
-async def test_a_body_value_never_reaches_a_live_requests_query_string_on_either_core(
-    path: str,
+def test_the_query_string_is_the_read_on_a_live_view(posts: None) -> None:
+    assert _view()(factory.get("/?published=true")).data == [{"title": "out"}]
+    assert _view()(factory.get("/?published=false")).data == [{"title": "draft"}]
+
+
+def test_the_permission_reads_the_request_s_own_query_string(posts: None) -> None:
+    view = _view(permission_classes=[_NotUnpublished])
+    assert view(factory.get("/?published=false")).status_code == 403
+    assert view(factory.get("/?published=true")).status_code == 200
+
+
+def test_a_missing_required_read_is_refused_under_its_name(posts: None) -> None:
+    response = _view()(factory.get("/"))
+    assert response.status_code == 400
+    assert list(response.data) == ["published"]
+
+
+@pytest.mark.parametrize("policy", [UnknownArguments.REJECT, UnknownArguments.IGNORE])
+def test_a_missing_row_beside_an_unknown_key(
+    monkeypatch: pytest.MonkeyPatch, policy: UnknownArguments
 ) -> None:
-    post = await Post.objects.acreate(title="p")
-    seen: list[dict[str, Any]] = []
-    for core in ("sync", "async"):
-        view = _live_view(path)
-        kwargs: dict[str, Any] = {
-            "user": None,
-            "params": {"pk": post.pk, "scope": "all"},
-            "request": view.request,
-            "view": view,
-        }
-        SEEN.clear()
-        if core == "sync":
-            await sync_to_async(dispatch_spec, thread_sensitive=True)(_SPEC, **kwargs)
-        else:
-            await adispatch_spec(_SPEC, **kwargs)
-        seen.append({**SEEN, "url": view.request.query_params.get("scope")})
-
-    expected = "mine" if "scope" in path else None
-    assert (
-        seen[0]
-        == seen[1]
-        == {
-            "query": expected,
-            "scope": expected or "unset",
-            "url": expected,
-        }
+    """Under ``REJECT`` the kernel checks the arguments before it looks the row
+    up, so an unknown key beside a missing row answers 400, where drfs
+    answered the miss first, 404. Under ``IGNORE`` the key is dropped and the
+    miss is the answer."""
+    monkeypatch.setattr(kernel_edge, "UNKNOWN_ARGUMENTS", policy)
+    spec = SelectorSpec(
+        kind=SelectorKind.RETRIEVE,
+        selector=lambda *, pk: Post.objects.filter(pk=pk).first(),
+        reads=Parameters.of(Parameter("pk", "integer", required=True)),
+        permissions=_OPEN,
+        presenter=SerializerPresenter(_PostOut),
     )
-
-
-@pytest.mark.django_db
-def test_off_http_a_body_value_goes_onto_the_offline_request() -> None:
-    post = Post.objects.create(title="p")
-    view = OfflineServiceView(request=Request(_factory.put("/")), kwargs={"pk": post.pk})
-
-    dispatch_spec(_SPEC, user=None, params={"scope": "all"}, request=view.request, view=view)
-
-    assert SEEN == {"query": "all", "scope": "all"}
-    assert view.request.query_params.get("scope") == "all"
+    view = type("_View", (SelectorRetrieveView,), {"spec": spec}).as_view()
+    response = view(factory.get("/?nope=1"), pk="999")
+    if policy is UnknownArguments.REJECT:
+        assert response.status_code == 400
+        assert list(response.data) == ["nope"]
+    else:
+        assert response.status_code == 404

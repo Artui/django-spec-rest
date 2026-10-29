@@ -1,21 +1,20 @@
-"""Tests for the lenient shape of the unified list / retrieve selector Protocols."""
+"""The list and retrieve selector Protocols are the kernel's, and type a kernel spec's selector.
+
+The root still re-exports them at drfs' paths until the deletion; a kernel
+``SelectorSpec`` takes a callable each one accepts.
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
 
-from django_service_specs.selectors.list_selector import ListSelector as KernelListSelector
-from django_service_specs.selectors.retrieve_selector import (
-    RetrieveSelector as KernelRetrieveSelector,
-)
+from django_service_specs import SelectorKind, SelectorSpec, Unrestricted
+from django_service_specs.selectors.list_selector import ListSelector
+from django_service_specs.selectors.retrieve_selector import RetrieveSelector
 
-from django_spec_rest import (
-    ListSelector,
-    RetrieveSelector,
-    SelectorKind,
-    SelectorSpec,
-)
+from django_spec_rest import ListSelector as RootListSelector
+from django_spec_rest import RetrieveSelector as RootRetrieveSelector
 
 
 @dataclass
@@ -32,24 +31,18 @@ def _retrieve(*, pk: int, **kwargs: Any) -> _Author | None:
     return _Author(id=pk, name="A")
 
 
-def test_the_query_protocols_are_the_kernel_s() -> None:
-    assert ListSelector is KernelListSelector
-    assert RetrieveSelector is KernelRetrieveSelector
+def test_the_root_s_protocols_are_the_kernel_s() -> None:
+    assert RootListSelector is ListSelector
+    assert RootRetrieveSelector is RetrieveSelector
 
 
-def test_list_selector_protocol_accepts_matching_callable() -> None:
+def test_a_list_selector_types_a_kernel_spec_s_selector() -> None:
     fn: ListSelector[_Author] = _list
-    spec: SelectorSpec[list[_Author]] = SelectorSpec(kind=SelectorKind.LIST, selector=fn)
+    spec = SelectorSpec(kind=SelectorKind.LIST, selector=fn, permissions=(Unrestricted(),))
     assert spec.selector is _list
 
 
-def test_retrieve_selector_protocol_accepts_matching_callable() -> None:
+def test_a_retrieve_selector_types_a_kernel_spec_s_selector() -> None:
     fn: RetrieveSelector[_Author] = _retrieve
-    spec: SelectorSpec[_Author | None] = SelectorSpec(kind=SelectorKind.RETRIEVE, selector=fn)
+    spec = SelectorSpec(kind=SelectorKind.RETRIEVE, selector=fn, permissions=(Unrestricted(),))
     assert spec.selector is _retrieve
-
-
-def test_selector_spec_unparameterized_still_works() -> None:
-    spec = SelectorSpec(kind=SelectorKind.LIST, selector=_list)
-    assert spec.selector is _list
-    assert spec.output_serializer is None
