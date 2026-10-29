@@ -11,9 +11,11 @@ kernel's default seeds and no overlay of its own, so ``check_seeds`` sees every
 keyword the call can fill. Every refusal here is asserted in the kernel's own
 words, so a change of wording there is seen here.
 
-Where drfs answered differently, by design, the test says so: the view's
-``get_*_kwargs`` hooks never reach a kernel spec, only the spec's own providers
-do, and the kernel hands every service ``data``.
+Where drfs answered differently the test says so, and whether a plan
+decision names the change: the view's ``get_*_kwargs`` hooks never reach a
+kernel spec, only the spec's own providers do (the carry-over list rewrites
+``resolve_extra_kwargs`` onto them), an undeclared route capture is no argument
+(D2), and the kernel hands every service ``data``, which no decision names.
 """
 
 from __future__ import annotations
@@ -148,7 +150,8 @@ class TestAMutationView:
         assert callable(_build(ServiceCreateView, spec))
 
     def test_a_view_hook_fills_nothing_for_a_kernel_spec(self) -> None:
-        """Changed by design: drfs passed this, reading an overridden
+        """Changed by design (the carry-over list rewrites ``resolve_extra_kwargs``
+        onto the spec's providers): drfs passed this, reading an overridden
         ``get_service_kwargs`` as a source of keys it could not see. A kernel
         spec's call is handed its own providers' values and never a view
         hook's, so the keyword is unfilled on every call and refused here."""
@@ -176,7 +179,7 @@ class TestAMutationView:
         assert callable(_build(ServiceCreateView, spec))
 
     def test_data_is_handed_to_every_service(self) -> None:
-        """Changed by design: drfs refused ``data`` on a spec with no
+        """The kernel route's answer today, which no plan decision names yet: drfs refused ``data`` on a spec with no
         ``input_serializer``. The kernel hands every service ``data``, the
         caller's checked arguments, Validator or not."""
 
@@ -237,7 +240,8 @@ class TestASelectorView:
             _build(SelectorRetrieveView, spec)
 
     def test_a_route_capture_the_spec_does_not_declare_is_refused(self) -> None:
-        """Changed by design: drfs let a retrieve selector require any
+        """Changed by design (D2: a route capture nothing declares is no
+        argument): drfs let a retrieve selector require any
         keyword, because a route capture might fill it. The kernel route reads
         only a capture the spec declares, so an undeclared one fills nothing
         (``kernel_arguments``) and the selector is refused here."""

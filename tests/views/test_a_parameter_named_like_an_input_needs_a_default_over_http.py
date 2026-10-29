@@ -10,7 +10,7 @@ missing value is a 400 naming it, a sent one is handed over. A parameter with a
 default is handed the value the call sends. A selector takes its arguments
 from its reads, so a required read is a required argument.
 
-Changed by design: a service spec's reads are the body's on the kernel route
+The kernel route's answer today, which no plan decision names yet: a service spec's reads are the body's on the kernel route
 (``kernel_arguments``), where drfs read a ``QueryParam`` off the query string,
 so each value here is sent in the body.
 

@@ -8,7 +8,7 @@ parameter of the spec like any other, so it is read the same way, and nothing
 the body sends is written onto ``view.kwargs`` or ``request.query_params``,
 which the view's permission classes have already read.
 
-Changed by design: drfs read a lookup's ``QueryParam`` from the query string
+The kernel route's answer today, which no plan decision names yet: drfs read a lookup's ``QueryParam`` from the query string
 alone and never from the body. A service spec's query string is no argument on
 the kernel route, so a value there is never read, and the body's is. Off HTTP a
 kernel spec is the kernel's own ``dispatch``, which has no view to read, so

@@ -5,12 +5,14 @@ an argument like any a caller sends, so it is checked against the type its read
 declares: a value that does not convert is refused with a 400 before the
 selector runs, and a string that converts reaches it as the declared type.
 
-Changed by design, in three ways. drfs checked the value against the
-selector's annotation, which a kernel spec never reads: its reads declare the
-type. It checked the spec's ``kwargs`` provider's value too, where the kernel
-hands a provider's value to the callable as given, since a provider is the
-author's code and not a caller. And it checked a ``get_selector_kwargs()``
-value, which never reaches a kernel spec.
+Three answers differ from drfs'. Two by design: drfs checked the value
+against the selector's annotation, which a kernel spec never reads, since the
+signature reflection drops (S3) and its reads declare the type; and it checked
+a ``get_selector_kwargs()`` value, which never reaches a kernel spec (the
+carry-over list rewrites ``resolve_extra_kwargs`` onto the spec's providers).
+The third is the kernel route's answer today, which no plan decision names
+yet: drfs checked the spec's ``kwargs`` provider's value too, where the kernel
+hands a provider's value to the callable as given.
 """
 
 from __future__ import annotations
@@ -92,6 +94,8 @@ def test_a_route_string_that_converts_reaches_the_selector_as_the_declared_type(
 
 @pytest.mark.parametrize("value", ["abc", "7", None])
 def test_a_provider_s_value_reaches_the_selector_as_given(value: Any) -> None:
+    """Pinned as today's answer, not a decided one: whether a provider's value
+    is checked against the read it fills is a question for the owner."""
     response = _respond("provider", value)
 
     assert response.status_code == 200

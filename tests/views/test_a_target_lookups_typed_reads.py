@@ -8,7 +8,7 @@ a value of either that does not convert is a 400 naming it. A ``reads``
 entry on the target lookup is a parameter of the spec, so its type is the one
 the value is read against.
 
-Changed by design: drfs read a lookup's typed ``QueryParam`` off the query
+The kernel route's answer today, which no plan decision names yet: drfs read a lookup's typed ``QueryParam`` off the query
 string. On the kernel route a service spec's arguments are its body and its
 declared captures, so the values here are sent there; and a name both the spec
 and its lookup read, which drfs gave to the spec, is refused, since a kernel

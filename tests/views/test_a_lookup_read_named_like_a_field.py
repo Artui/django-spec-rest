@@ -4,7 +4,7 @@ drfs dispatched this shape, a lookup by ``title`` and a body ``title``: the
 route's capture scoped the lookup and the body's value was the serializer's
 field. A kernel spec declares one source per name, and this one has two, so its
 ``parameters()`` is refused in the kernel's words, and with it ``as_view()``:
-changed by design, from a spec that dispatched to one refused when the view is
+the kernel route's answer today, which no plan decision names yet, from a spec that dispatched to one refused when the view is
 built. The lookup reads a name of its own instead, which the route captures
 and the client's body never moves.
 """
@@ -136,7 +136,9 @@ def test_a_lookup_read_the_route_does_not_capture_is_the_caller_s_argument() -> 
     body, and a declared read the route does not capture is an argument like
     any other, so the body sends it (``kernel_arguments``). drfs never let a
     client's value scope a lookup; on the kernel route only the URL
-    configuration's capture does that."""
+    configuration's capture does that. Pinned as today's answer, not a
+    decided one: whether a client's body may choose the row an update
+    touches is a question for the owner."""
     seen: dict[str, Any] = {}
     post = Post.objects.create(title="old")
 

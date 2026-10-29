@@ -7,7 +7,7 @@ caller; drfs refused it at dispatch and at registration, so a kernel spec is
 refused before a view or a route ever holds it. The lookup's own ``kwargs``
 provider is the one that fills its reads, and over HTTP its key picks the row.
 
-Changed by design: drfs let an untyped spec-level provider's ``pk`` pick the
+The kernel route's answer today, which no plan decision names yet: drfs let an untyped spec-level provider's ``pk`` pick the
 row. On the kernel route the spec's provider never reaches the lookup, typed
 or not, so a lookup requiring ``pk`` that nothing of its own fills is refused at
 ``as_view()``.

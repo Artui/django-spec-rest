@@ -940,7 +940,7 @@ def validate_mutation_view_spec(
     # so without this a mutation view would run a read for a write
     # (test_kernel_views' test_a_kernel_selector_spec_on_a_mutation_view_is_refused_at_as_view).
     # One arc to coverage, so each conjunct is named: without the first every
-    # drfs spec is refused (test_spec_validation_e2e), and without the second
+    # drfs spec is refused (test_spec_validation_e2e_drfs), and without the second
     # every kernel service spec (test_a_kernel_spec_passes_as_view).
     if runs_on_kernel(spec) and not isinstance(spec, KernelServiceSpec):
         raise ImproperlyConfigured(_serves_the_other_kind(view_cls, spec, KernelServiceSpec))
