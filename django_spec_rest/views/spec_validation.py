@@ -897,7 +897,9 @@ def validate_mutation_view_spec(
     # fields - ``success_status``, ``input_serializer``, ``permission_classes``
     # and the signatures over them - none of which a kernel spec has; the
     # kernel's ``__post_init__`` checks its own signatures against its seats
-    # when the spec is built, and no check here is the view's alone. One arc
+    # when the spec is built. What a kernel spec still owes this view at
+    # mount - a target selector where the view hands over a row - is not
+    # checked here yet, and fails per request. One arc
     # to coverage, so each disjunct is named: the ``None`` is held by
     # test_spec_validation_e2e's test_no_spec_does_not_raise, and the kernel
     # spec by test_kernel_views' test_a_kernel_spec_passes_as_view.

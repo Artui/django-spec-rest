@@ -209,6 +209,24 @@ class TestASeedNamedFieldValidatesFromTheBody:
         # The seed keeps its own value: the principal, never the body's.
         assert received["user"] == principal
 
+    def test_a_seed_named_field_validates_from_a_form_body(self) -> None:
+        """A form body's seed-named field is handed to the serializer as its one
+        value, as DRF reads a form, so the serializer coerces it."""
+
+        class _Input(serializers.Serializer):
+            title = serializers.CharField()
+            user = serializers.IntegerField()
+
+        received: dict[str, Any] = {}
+        spec = ServiceSpec(
+            service=lambda *, data: received.update(data),
+            permissions=_OPEN,
+            validator=SerializerValidator(_Input),
+        )
+        response = _post(_view(spec), {"title": "t", "user": "7"}, format="multipart")
+        assert response.status_code == 204, response.data
+        assert received == {"title": "t", "user": 7}
+
     def test_a_seed_named_field_the_serializer_refuses_is_drf_s_400(self) -> None:
         class _Input(serializers.Serializer):
             title = serializers.CharField()

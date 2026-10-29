@@ -38,7 +38,7 @@ kernel's own unless stated:
   (``user``, ``result``, ``instance``, ...) or ``serializer`` is no parameter,
   because the kernel refuses a parameter a seed occupies, while a DRF
   serializer was always free to declare one. So the edge takes the field's
-  value off the kernel's arguments and hands it to the serializer beneath what
+  value off the kernel's arguments and hands it to the serializer beside what
   the kernel hands it, the caller's checked values, the declared captures and
   ``input_data``'s, so it validates into ``data`` while every value the kernel
   checked keeps its own (``seed_named_fields``). For a single object only: a
@@ -262,7 +262,7 @@ def kernel_arguments(
 
     The second value is ``(validator, held)`` where the body sends a field
     ``seed_named_fields`` names: each such field's value is taken off the
-    arguments and held, and the serializer binds it beneath what the kernel
+    arguments and held, and the serializer binds it beside what the kernel
     hands it (see the module docstring). Otherwise ``None``, and the serializer
     binds what the kernel hands it, its ``input_data`` provider's values merged
     in. A ``many`` spec is never held for.
@@ -289,8 +289,8 @@ def kernel_arguments(
     names = seed_named_fields(spec.validator).intersection(sent)
     if not names:
         return sent, None
-    # Only the held fields' values, beneath the kernel's checked arguments
-    # (``EdgeCallState.input_beneath``), so a declared capture and
+    # Only the held fields' values, bound with the kernel's checked arguments
+    # rather than in their place (``EdgeCallState.input_beneath``), so a declared capture and
     # ``input_data`` outrank the client's value here as on every other call
     # (test_a_declared_capture_outranks_the_body_beside_a_seed_named_field,
     # test_input_data_outranks_the_body_beside_a_seed_named_field).

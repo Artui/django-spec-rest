@@ -539,12 +539,13 @@ class EdgeCallState:
       binds rather than the kernel's checked arguments (``validator_input``):
       the caller's own, a ``QueryDict`` kept one, with what the edge put over
       it, as DRF's serializer has always been handed the request's data.
-    - ``input_beneath``: whether that body goes beneath the kernel's checked
-      arguments rather than in their place, so their values - the caller's,
-      the route's and ``input_data``'s - win over it. The kernel route's edge
-      holds only the values of the fields it took off the arguments, a field
-      named like a seed, and sets it; drfs' edge holds the whole body and does
-      not (``validator_input``).
+    - ``input_beneath``: whether that body is bound together with the
+      kernel's checked arguments rather than in their place, so their values -
+      the caller's, the route's and ``input_data``'s - are the ones bound. The
+      kernel route's edge sets it and holds only the values of the fields it
+      took off the arguments, each named like a seed and so no parameter, so
+      the two never share a key; drfs' edge holds the whole body and does not
+      (``validator_input``).
     - ``server_values``: the server's value for each field of that
       Validator's body the edge put one into - a view hook's or the spec's
       ``kwargs`` provider's value naming the field, and ``input_data``, a field
@@ -693,10 +694,12 @@ def validator_input(validator: Any, arguments: Any) -> Any:
     held = state.validator_input
     if held is None or held[0] is not validator:
         return arguments
-    # Beneath the arguments the kernel hands this Validator, where the edge
-    # holds only what it took off them
-    # (test_input_data_outranks_the_body_beside_a_seed_named_field). Never set
-    # for a ``many`` call, whose ``validated_many`` asks with no arguments.
+    # With the arguments the kernel hands this Validator, where the edge holds
+    # only what it took off them
+    # (test_input_data_outranks_the_body_beside_a_seed_named_field). The keys
+    # are disjoint, so the order only keeps the checked values should they
+    # ever meet. Never set for a ``many`` call, whose ``validated_many`` asks
+    # with no arguments.
     return {**held[1], **arguments} if state.input_beneath else held[1]
 
 
