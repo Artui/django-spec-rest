@@ -6,7 +6,9 @@ row out fails a named test even where the map stays total:
 
 - ``APIException`` (falls to the ``InvalidArguments`` row, which would rebuild
   the dual-base refusal as a new one):
-  ``test_a_refusal_that_is_drf_s_already_leaves_as_raised``;
+  ``test_a_refusal_that_is_drf_s_already_leaves_as_raised``, and the author's
+  own exception where the refusal was translated from one
+  (``tests/views/test_drf_refusals_restored_on_the_edge.py``);
 - ``InvalidArguments`` (falls to ``DispatchError``, a ``detail`` sentence):
   ``test_a_missing_argument_is_drf_s_400_by_field``;
 - ``NotPermitted`` / ``PrincipalUnavailable`` (fall to ``DispatchError``, a
@@ -15,7 +17,11 @@ row out fails a named test even where the map stays total:
 - ``DispatchError`` (unanswered without it, with the totality test):
   ``test_a_bare_dispatch_error_is_400_with_its_sentence``;
 - ``ServiceError`` (unanswered without it, with the totality test):
-  ``test_a_service_s_refusal_is_answered_as_on_the_drfs_path``.
+  ``test_a_service_s_refusal_is_answered_as_on_the_drfs_path``, one case per
+  subclass. The subclasses are one row on purpose: ``map_service_error`` is
+  the answer for all of them and a row each pointing at it could not be told
+  from the base row it falls to, so each subclass's answer is held by its
+  case here and by its branch in ``test_map_service_error.py``.
 """
 
 from __future__ import annotations
