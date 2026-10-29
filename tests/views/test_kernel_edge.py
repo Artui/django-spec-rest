@@ -31,7 +31,7 @@ from django_spec_rest.dispatch.kernel_edge import (
 from django_spec_rest.service_specs.invalid_arguments import InvalidArguments
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from django_spec_rest.views.utils import view_call_context
-from tests.views.test_kernel_views import _CREATE, _CreateView
+from tests.views.test_kernel_views import _CREATE, _ONE, _CreateView
 
 pytestmark = pytest.mark.django_db
 
@@ -39,8 +39,15 @@ factory = APIRequestFactory()
 _OPEN = (Unrestricted(),)
 
 
-def test_a_drfs_spec_does_not_run_on_the_kernel() -> None:
+def test_a_kernel_service_spec_runs_on_the_kernel() -> None:
     assert runs_on_kernel(_CREATE)
+
+
+def test_a_kernel_selector_spec_runs_on_the_kernel() -> None:
+    assert runs_on_kernel(_ONE)
+
+
+def test_a_drfs_spec_does_not_run_on_the_kernel() -> None:
     assert not runs_on_kernel(DrfsServiceSpec(service=lambda: None))
     assert not runs_on_kernel(SelectorSpec(kind=SelectorKind.LIST, selector=lambda: []))
     assert not runs_on_kernel(None)

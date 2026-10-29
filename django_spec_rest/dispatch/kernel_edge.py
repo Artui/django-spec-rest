@@ -37,8 +37,9 @@ kernel's own unless stated:
   (``user``, ``result``, ``instance``, ...) or ``serializer`` is no parameter,
   because the kernel refuses a parameter a seed occupies, while a DRF
   serializer was always free to declare one. So the edge takes the field's
-  value off the kernel's arguments and hands the serializer the body as sent,
-  where it validates into ``data`` (``seed_named_fields``).
+  value off the kernel's arguments and hands the serializer what the request
+  sent, the declared captures over it, where it validates into ``data``
+  (``seed_named_fields``).
 
 Every refusal the kernel raises leaves as a DRF exception, by
 ``KERNEL_REFUSALS``, so DRF's exception handler answers it as it answers its
@@ -100,7 +101,10 @@ def runs_on_kernel(spec: object) -> TypeIs[KernelSpec]:
     Asked of the spec's class, so every caller - the two dispatch functions and
     ``as_view()``'s checks - decides by the one fact. A drfs spec is no subclass
     of the kernel's, so no drfs spec answers ``True``
-    (test_a_drfs_spec_does_not_run_on_the_kernel).
+    (test_a_drfs_spec_does_not_run_on_the_kernel). The union is one arc to
+    coverage, so each member is named: the service spec by
+    test_a_kernel_service_spec_runs_on_the_kernel, the selector spec by
+    test_a_kernel_selector_spec_runs_on_the_kernel.
     """
     return isinstance(spec, KernelServiceSpec | KernelSelectorSpec)
 
@@ -239,11 +243,12 @@ def kernel_arguments(
     ``"true"`` is a string there, as on every typed transport
     (test_a_json_body_is_not_read_as_flat_strings).
 
-    The second value is ``(validator, body)`` where the body sends a field
-    ``seed_named_fields`` names: that field is taken off the arguments and the
-    serializer binds the body as sent, where it validates (see the module
-    docstring). Otherwise ``None``, and the serializer binds what the kernel
-    hands it, its ``input_data`` provider's values merged in.
+    The second value is ``(validator, sent)`` where the body sends a field
+    ``seed_named_fields`` names: that field is taken off the arguments, and the
+    serializer binds what the request sent, with the captures over it and
+    nothing taken off, where the field validates (see the module docstring).
+    Otherwise ``None``, and the serializer binds what the kernel hands it, its
+    ``input_data`` provider's values merged in.
     """
     parameters: Parameters = spec.parameters()
     route = {
@@ -267,7 +272,10 @@ def kernel_arguments(
     held = seed_named_fields(spec.validator).intersection(sent)
     if not held:
         return sent, None
-    return {name: value for name, value in sent.items() if name not in held}, (spec.validator, body)
+    # The serializer binds ``sent`` rather than the raw body, so a declared
+    # capture outranks the client's value here as it does on every other call
+    # (test_a_declared_capture_outranks_the_body_beside_a_seed_named_field).
+    return {name: value for name, value in sent.items() if name not in held}, (spec.validator, sent)
 
 
 def dispatch_kernel_spec(

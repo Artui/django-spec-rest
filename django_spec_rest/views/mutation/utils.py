@@ -27,7 +27,11 @@ from rest_framework_dataclasses.serializers import DataclassSerializer
 
 from django_spec_rest.dispatch.apply_input_data import apply_input_data
 from django_spec_rest.dispatch.dispatch_spec import dispatch_spec
-from django_spec_rest.dispatch.kernel_edge import dispatch_kernel_spec, runs_on_kernel
+from django_spec_rest.dispatch.kernel_edge import (
+    answering_refusals,
+    dispatch_kernel_spec,
+    runs_on_kernel,
+)
 from django_spec_rest.dispatch.render_spec_output import render_spec_output
 from django_spec_rest.dispatch.renderable_serializer_class import renderable_serializer_class
 from django_spec_rest.exceptions.service_error import ServiceError
@@ -437,7 +441,10 @@ def dispatch_mutation_for_spec(
         )
         if result.kind == "not_found":
             raise NotFound()
-        presented = present(spec, result)
+        # Inside the map too: a presenter may refuse what it was asked to
+        # present (test_a_presenter_s_refusal_is_answered_by_the_map_too).
+        with answering_refusals():
+            presented = present(spec, result)
         if presented is None:
             return Response(status=drf_status.HTTP_204_NO_CONTENT)
         return Response(presented, status=status_for_a_body(default_status))

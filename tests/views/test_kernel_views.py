@@ -218,6 +218,25 @@ class TestASeedNamedFieldValidatesFromTheBody:
         assert response.status_code == 400
         assert response.data["user"][0].code == "invalid"
 
+    def test_a_declared_capture_outranks_the_body_beside_a_seed_named_field(self) -> None:
+        """Where the serializer is handed what the request sent, for a field the
+        kernel cannot take, a declared capture still goes over the body, as it
+        does on a body with no such field: the client never moves the route."""
+
+        class _Input(serializers.Serializer):
+            author = serializers.IntegerField()
+            user = serializers.IntegerField()
+
+        received: dict[str, Any] = {}
+        spec = ServiceSpec(
+            service=lambda *, data: received.update(data),
+            permissions=_OPEN,
+            validator=SerializerValidator(_Input),
+        )
+        response = _post(_view(spec), {"author": 9, "user": 7}, author="4")
+        assert response.status_code == 204, response.data
+        assert received == {"author": 4, "user": 7}
+
     def test_a_body_with_no_seed_named_field_keeps_the_input_data_provider(self) -> None:
         """The body is handed to the serializer only where it sends a field the
         kernel cannot take; anywhere else the serializer binds what the kernel

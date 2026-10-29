@@ -28,7 +28,9 @@ from django_service_specs import (
     ActionUnavailable,
     AdditionalInputRequired,
     DispatchError,
+    Output,
     PermissionCheck,
+    Presenter,
     ServiceConflict,
     ServiceError,
     ServiceNotFound,
@@ -164,3 +166,21 @@ def test_a_service_s_refusal_is_answered_as_on_the_drfs_path(
     response = _call(ServiceSpec(service=_raising(raised), permissions=(Unrestricted(),)))
     assert response.status_code == status
     assert response.data == body
+
+
+def test_a_presenter_s_refusal_is_answered_by_the_map_too() -> None:
+    """``present`` runs after the kernel's ``dispatch`` and inside the map, so
+    a kernel presenter refusing what it was asked to present is DRF's ``400``,
+    not a fault."""
+
+    class _Refusing(Presenter):
+        def output(self) -> Output:
+            return Output()
+
+        def present(self, value: Any) -> Any:
+            raise KernelInvalidArguments({"fields": ["No such field."]})
+
+    spec = ServiceSpec(service=lambda: 1, permissions=(Unrestricted(),), presenter=_Refusing())
+    response = _call(spec)
+    assert response.status_code == 400
+    assert response.data == {"fields": ["No such field."]}
