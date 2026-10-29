@@ -8,8 +8,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from django.utils import timezone
 
-from rest_framework_services.mutations import aupdate_from_input
-from rest_framework_services.types import UNSET
+from django_spec_rest.mutations import aupdate_from_input
+from django_spec_rest.types import UNSET
 from tests.testapp.models import Author, Post, Tag, Timestamped
 
 

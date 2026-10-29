@@ -6,7 +6,7 @@ from typing import Any, get_args, get_origin
 
 from typing_extensions import NotRequired, Required
 
-from rest_framework_services.types.utils import annotation_hints
+from django_spec_rest.types.utils import annotation_hints
 
 
 def typed_dict_input(td: type) -> tuple[dict[str, Any], frozenset[str]]:

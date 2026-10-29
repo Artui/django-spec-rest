@@ -27,16 +27,16 @@ from asgiref.sync import async_to_sync
 from django.db.models import QuerySet
 from rest_framework.exceptions import ValidationError
 
-from rest_framework_services import (
+from django_spec_rest import (
     ArgumentBinding,
     InputRequired,
     SelectorKind,
     SelectorSpec,
     ServiceSpec,
 )
-from rest_framework_services.dispatch import build_offline_context
-from rest_framework_services.dispatch.adispatch_spec import adispatch_spec
-from rest_framework_services.dispatch.dispatch_spec import dispatch_spec
+from django_spec_rest.dispatch import build_offline_context
+from django_spec_rest.dispatch.adispatch_spec import adispatch_spec
+from django_spec_rest.dispatch.dispatch_spec import dispatch_spec
 from tests.testapp.models import Post
 
 pytestmark = pytest.mark.django_db

@@ -4,7 +4,7 @@
 and a non-HTTP caller (an MCP handler, an agent toolset, a management command, a
 worker) runs it with no request and no view. That claim is only as true as the
 imports behind it: every module outside the HTTP transport that imports
-``rest_framework`` or ``rest_framework_services.views`` is a place the neutral core
+``rest_framework`` or ``django_spec_rest.views`` is a place the neutral core
 still depends on the transport it is meant to be independent of.
 
 These are not bans. Most entries below are legitimate today — the spec
@@ -32,9 +32,9 @@ from collections.abc import Iterator
 from functools import cache
 from pathlib import Path
 
-import rest_framework_services
+import django_spec_rest
 
-PACKAGE_ROOT = Path(rest_framework_services.__file__).parent
+PACKAGE_ROOT = Path(django_spec_rest.__file__).parent
 
 # The HTTP transport. Importing DRF, or each other, is what these are for.
 # ``openapi`` is the drf-spectacular integration, which exists only over HTTP.
@@ -51,7 +51,7 @@ EDGE_PACKAGES = frozenset({"service_specs"})
 # so its imports say nothing about which layer depends on which.
 EXEMPT_MODULES = frozenset({"__init__.py"})
 
-VIEWS_PREFIXES = ("rest_framework_services.views", "rest_framework_services.viewsets")
+VIEWS_PREFIXES = ("django_spec_rest.views", "django_spec_rest.viewsets")
 DRF_PREFIXES = ("rest_framework",)
 
 # Modules outside the transport that import the HTTP views, and what they import.
@@ -59,19 +59,19 @@ DRF_PREFIXES = ("rest_framework",)
 # keyword-pool resolver, the most transport-neutral code in the package, filed in
 # ``views/utils.py`` beside the view helpers that share its module.
 ALLOWED_VIEWS_IMPORTS: dict[str, frozenset[str]] = {
-    "selectors/acall_selector.py": frozenset({"rest_framework_services.views.utils"}),
-    "selectors/call_selector.py": frozenset({"rest_framework_services.views.utils"}),
-    "selectors/utils.py": frozenset({"rest_framework_services.views.utils"}),
+    "selectors/acall_selector.py": frozenset({"django_spec_rest.views.utils"}),
+    "selectors/call_selector.py": frozenset({"django_spec_rest.views.utils"}),
+    "selectors/utils.py": frozenset({"django_spec_rest.views.utils"}),
     "services/acall_service.py": frozenset(
         {
-            "rest_framework_services.views.mutation.map_service_error",
-            "rest_framework_services.views.utils",
+            "django_spec_rest.views.mutation.map_service_error",
+            "django_spec_rest.views.utils",
         }
     ),
     "services/call_service.py": frozenset(
         {
-            "rest_framework_services.views.mutation.map_service_error",
-            "rest_framework_services.views.utils",
+            "django_spec_rest.views.mutation.map_service_error",
+            "django_spec_rest.views.utils",
         }
     ),
 }
@@ -296,7 +296,7 @@ def test_every_allowed_adapter_drf_import_still_exists() -> None:
 
 # Who may import the adapter. The spec classes compile through it, and dispatch is the
 # DRF edge over the kernel's; nothing else in the neutral core has a reason to.
-ADAPTER_PREFIX = ("rest_framework_services.service_specs",)
+ADAPTER_PREFIX = ("django_spec_rest.service_specs",)
 ALLOWED_ADAPTER_IMPORTERS = frozenset(
     {
         "dispatch/adispatch_spec.py",
@@ -321,7 +321,7 @@ def test_only_the_edge_and_the_spec_classes_import_the_adapter() -> None:
 
 
 def test_the_adapter_never_imports_dispatch() -> None:
-    found = _imports_matching(("rest_framework_services.dispatch",), edge=True)
+    found = _imports_matching(("django_spec_rest.dispatch",), edge=True)
     assert not found, (
         f"The adapter imports the dispatch edge: {found}. dispatch calls the adapter, "
         "never the reverse."

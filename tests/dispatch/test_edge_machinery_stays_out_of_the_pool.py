@@ -24,7 +24,7 @@ from django_service_specs.dispatch.grant import Grant
 from rest_framework import serializers
 from rest_framework.test import APIRequestFactory
 
-from rest_framework_services import (
+from django_spec_rest import (
     DispatchResult,
     SelectorKind,
     SelectorSpec,
@@ -34,8 +34,8 @@ from rest_framework_services import (
     adispatch_spec,
     dispatch_spec,
 )
-from rest_framework_services.dispatch.utils import guarded_selector
-from rest_framework_services.service_specs.kernel_spec_variant import kernel_spec_variant
+from django_spec_rest.dispatch.utils import guarded_selector
+from django_spec_rest.service_specs.kernel_spec_variant import kernel_spec_variant
 from tests.testapp.models import Post
 
 _factory = APIRequestFactory()

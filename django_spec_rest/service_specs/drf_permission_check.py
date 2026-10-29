@@ -10,14 +10,14 @@ from django.http import HttpRequest
 from django_service_specs.authorization.permission_check import PermissionCheck
 from rest_framework.permissions import BasePermission
 
-from rest_framework_services.service_specs.build_offline_context import build_offline_context
-from rest_framework_services.service_specs.not_permitted import NotPermitted
-from rest_framework_services.service_specs.translate_drf_refusals import translate_drf_refusals
-from rest_framework_services.service_specs.utils import carried, offline_action
-from rest_framework_services.types.offline_context import OfflineContext
-from rest_framework_services.types.query_param import QueryParam
-from rest_framework_services.types.unset import UNSET
-from rest_framework_services.types.url_kwarg import UrlKwarg
+from django_spec_rest.service_specs.build_offline_context import build_offline_context
+from django_spec_rest.service_specs.not_permitted import NotPermitted
+from django_spec_rest.service_specs.translate_drf_refusals import translate_drf_refusals
+from django_spec_rest.service_specs.utils import carried, offline_action
+from django_spec_rest.types.offline_context import OfflineContext
+from django_spec_rest.types.query_param import QueryParam
+from django_spec_rest.types.unset import UNSET
+from django_spec_rest.types.url_kwarg import UrlKwarg
 
 
 class DRFPermissionCheck(PermissionCheck):
@@ -27,18 +27,18 @@ class DRFPermissionCheck(PermissionCheck):
     request and a view. So each question asks every class in order, a fresh
     instance each time, as a DRF view's ``get_permissions`` does, against the
     request and view the call carries, else the offline pair
-    [`build_offline_context`][rest_framework_services.service_specs.build_offline_context.build_offline_context]
+    [`build_offline_context`][django_spec_rest.service_specs.build_offline_context.build_offline_context]
     builds for the principal. The first refusal
     raises the dual-base
-    [`NotPermitted`][rest_framework_services.service_specs.not_permitted.NotPermitted]
+    [`NotPermitted`][django_spec_rest.service_specs.not_permitted.NotPermitted]
     with that class's own ``message`` and ``code``, so a client is told what
     a DRF view would have told it; returning ``False`` instead would leave the
     kernel to raise its own class with the generic wording. A class that
     raises its own refusal is asked inside
-    [`translate_drf_refusals`][rest_framework_services.service_specs.translate_drf_refusals.translate_drf_refusals],
+    [`translate_drf_refusals`][django_spec_rest.service_specs.translate_drf_refusals.translate_drf_refusals],
     so DRF's ``PermissionDenied`` leaves as that ``NotPermitted`` with the
     class's message and code, and ``NotAuthenticated`` as
-    [`DRFNotAuthenticated`][rest_framework_services.service_specs.drf_not_authenticated.DRFNotAuthenticated],
+    [`DRFNotAuthenticated`][django_spec_rest.service_specs.drf_not_authenticated.DRFNotAuthenticated],
     which DRF still answers 401
     (``tests/service_specs/test_drf_refusals_on_the_kernel_route.py``).
 
@@ -51,7 +51,7 @@ class DRFPermissionCheck(PermissionCheck):
     ``view.kwargs`` are the ones a route would have captured: every declared
     ``UrlKwarg``, and ``route_reads``, the arguments the spec's row lookup
     reads (``pk`` of an update's instance lookup, or of a retrieve), which
-    [`as_kernel_spec`][rest_framework_services.service_specs.as_kernel_spec.as_kernel_spec]
+    [`as_kernel_spec`][django_spec_rest.service_specs.as_kernel_spec.as_kernel_spec]
     passes in. Each declared ``QueryParam`` goes onto ``request.query_params``
     instead, where a query string would have put it. A ``UrlKwarg`` or
     ``QueryParam`` the call left out, or sent as ``null``, takes its declared
@@ -84,7 +84,7 @@ class DRFPermissionCheck(PermissionCheck):
     under the ``Grant`` its view's permission classes produced.
 
     **``has_object_permission`` asks only about a model instance**, as
-    [`enforce_permissions`][rest_framework_services.dispatch.enforce_permissions.enforce_permissions]
+    [`enforce_permissions`][django_spec_rest.dispatch.enforce_permissions.enforce_permissions]
     always has off HTTP; any other target is allowed here, because a DRF class
     written for a row reads attributes off it.
 

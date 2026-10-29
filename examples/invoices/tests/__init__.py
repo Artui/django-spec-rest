@@ -22,6 +22,20 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import AllowAny, BasePermission
 from rest_framework.test import APIClient, APITestCase
 
+from django_spec_rest import (
+    DEFAULT_JSON_SCHEMA_REGISTRY,
+    FieldAudience,
+    FieldMarking,
+    OfflineServiceView,
+    QueryParam,
+    SelectorKind,
+    SelectorSpec,
+    ServiceSpec,
+    build_audience_projection,
+    build_offline_context,
+    dispatch_spec,
+    spec_to_json_schema,
+)
 from invoices.models import Invoice
 from invoices.selectors import list_invoices
 from invoices.serializers import InvoiceSerializer
@@ -35,20 +49,6 @@ from invoices.views import (
     VOID_DRAFTS_SUMMARY_SPEC,
     InvoiceViewSet,
     operation_from_context,
-)
-from rest_framework_services import (
-    DEFAULT_JSON_SCHEMA_REGISTRY,
-    FieldAudience,
-    FieldMarking,
-    OfflineServiceView,
-    QueryParam,
-    SelectorKind,
-    SelectorSpec,
-    ServiceSpec,
-    build_audience_projection,
-    build_offline_context,
-    dispatch_spec,
-    spec_to_json_schema,
 )
 
 

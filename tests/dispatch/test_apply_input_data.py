@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from django.http import QueryDict
 
-from rest_framework_services.dispatch.apply_input_data import apply_input_data
+from django_spec_rest.dispatch.apply_input_data import apply_input_data
 
 
 def test_nothing_to_merge_returns_the_payload_itself() -> None:

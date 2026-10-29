@@ -25,8 +25,8 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
 
-import rest_framework_services
-from rest_framework_services.selectors import utils
+import django_spec_rest
+from django_spec_rest.selectors import utils
 from tests.testapp.models import Author, Post
 
 
@@ -44,7 +44,7 @@ def test_the_selector_runners_are_the_kernel_s(name: str, kernel_object: Any) ->
     # The kernel owns their behaviour and tests it; drfs keeps this module's path
     # and the root name.
     assert getattr(utils, name) is kernel_object
-    assert getattr(rest_framework_services, name) is kernel_object
+    assert getattr(django_spec_rest, name) is kernel_object
 
 
 @pytest.mark.django_db

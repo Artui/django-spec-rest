@@ -24,14 +24,14 @@ from django_service_specs.affordances.unmet_operation_affordance import (
     unmet_operation_affordance as kernel_unmet_operation_affordance,
 )
 
-from rest_framework_services import (
+from django_spec_rest import (
     ServiceSpec,
     aenforce_affordances,
     aunmet_operation_affordance,
     enforce_affordances,
     unmet_operation_affordance,
 )
-from rest_framework_services.types.affordance import Affordance
+from django_spec_rest.types.affordance import Affordance
 
 
 def _parameters(fn: Any) -> list[tuple[str, Any]]:

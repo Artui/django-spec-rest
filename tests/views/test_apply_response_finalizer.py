@@ -6,7 +6,7 @@ from typing import Any
 
 from rest_framework.response import Response
 
-from rest_framework_services.views.mutation.apply_response_finalizer import (
+from django_spec_rest.views.mutation.apply_response_finalizer import (
     apply_response_finalizer,
 )
 

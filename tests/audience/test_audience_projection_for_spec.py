@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
-from rest_framework_services.audience.audience_projection_for_spec import (
+from django_spec_rest.audience.audience_projection_for_spec import (
     audience_projection_for_spec,
 )
-from rest_framework_services.types.field_audience import FieldAudience
-from rest_framework_services.types.field_marking import MARKING, FieldMarking
-from rest_framework_services.types.selector_kind import SelectorKind
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_spec_rest.types.field_audience import FieldAudience
+from django_spec_rest.types.field_marking import MARKING, FieldMarking
+from django_spec_rest.types.selector_kind import SelectorKind
+from django_spec_rest.types.selector_spec import SelectorSpec
+from django_spec_rest.types.service_spec import ServiceSpec
 
 
 class _Marked(serializers.Serializer):

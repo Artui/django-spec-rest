@@ -19,12 +19,12 @@ from django_service_specs.types.unset import UNSET as KERNEL_UNSET
 from rest_framework import ISO_8601, serializers
 from rest_framework_dataclasses.serializers import DataclassSerializer
 
-from rest_framework_services.service_specs.utils import (
+from django_spec_rest.service_specs.utils import (
     describe_serializer,
     input_parameters,
     serializer_context,
 )
-from rest_framework_services.types.unset import UNSET
+from django_spec_rest.types.unset import UNSET
 from tests.testapp.models import Post, Tag
 
 

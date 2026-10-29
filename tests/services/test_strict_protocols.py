@@ -20,7 +20,7 @@ from dataclasses import dataclass
 
 from typing_extensions import NotRequired, TypedDict, Unpack
 
-from rest_framework_services import (
+from django_spec_rest import (
     CreateService,
     DeleteService,
     HttpExtras,

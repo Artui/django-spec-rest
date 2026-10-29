@@ -17,7 +17,7 @@ from typing import Any
 
 from rest_framework import serializers
 
-from rest_framework_services import (
+from django_spec_rest import (
     FieldMarking,
     OfflineContract,
     QueryParam,

@@ -13,16 +13,16 @@ from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelec
 from rest_framework.permissions import BasePermission
 from rest_framework.request import Request
 
-from rest_framework_services.service_specs.as_kernel_spec import as_kernel_spec
-from rest_framework_services.types.affordance_declarer import AffordanceDeclarer
-from rest_framework_services.types.field_marking import FieldMarking
-from rest_framework_services.types.json_schema_registry import JsonSchemaRegistry
-from rest_framework_services.types.offline_contract import OfflineContract
-from rest_framework_services.types.query_param import QueryParam
-from rest_framework_services.types.selector_kind import SelectorKind
-from rest_framework_services.types.service_view import ServiceView
-from rest_framework_services.types.url_kwarg import UrlKwarg
-from rest_framework_services.types.utils import (
+from django_spec_rest.service_specs.as_kernel_spec import as_kernel_spec
+from django_spec_rest.types.affordance_declarer import AffordanceDeclarer
+from django_spec_rest.types.field_marking import FieldMarking
+from django_spec_rest.types.json_schema_registry import JsonSchemaRegistry
+from django_spec_rest.types.offline_contract import OfflineContract
+from django_spec_rest.types.query_param import QueryParam
+from django_spec_rest.types.selector_kind import SelectorKind
+from django_spec_rest.types.service_view import ServiceView
+from django_spec_rest.types.url_kwarg import UrlKwarg
+from django_spec_rest.types.utils import (
     affordance_alias,
     agent_contract_for,
     validate_metadata,
@@ -38,11 +38,11 @@ class SelectorSpec(Generic[ResultT, ExtraT]):
     """All wiring for a single read action in one record.
 
     Used as a value in ``action_specs`` on viewsets, as the ``spec=`` argument to
-    [`SelectorListView`][rest_framework_services.views.query.selector_list_view.SelectorListView]
+    [`SelectorListView`][django_spec_rest.views.query.selector_list_view.SelectorListView]
     /
-    [`SelectorRetrieveView`][rest_framework_services.views.query.selector_retrieve_view.SelectorRetrieveView],
+    [`SelectorRetrieveView`][django_spec_rest.views.query.selector_retrieve_view.SelectorRetrieveView],
     and as the ``output_selector_spec`` field on
-    [`ServiceSpec`][rest_framework_services.types.service_spec.ServiceSpec] (where it
+    [`ServiceSpec`][django_spec_rest.types.service_spec.ServiceSpec] (where it
     describes the post-mutation re-fetch).
 
     All fields are keyword-only: ``SelectorSpec(kind=SelectorKind.LIST,
@@ -64,13 +64,13 @@ class SelectorSpec(Generic[ResultT, ExtraT]):
     raises at request time.
 
     Attributes:
-        kind: Required [`SelectorKind`][rest_framework_services.types.selector_kind.SelectorKind] discriminator. ``RETRIEVE``
+        kind: Required [`SelectorKind`][django_spec_rest.types.selector_kind.SelectorKind] discriminator. ``RETRIEVE``
             materializes a QuerySet via ``.first()`` and raises
             ``NotFound`` on a ``None`` /
             missing object; ``LIST`` returns whatever the selector returns
             unchanged. It also drives the fail-fast check that the spec is
             mounted on a compatible view — a ``LIST`` spec on
-            [`SelectorRetrieveView`][rest_framework_services.views.query.selector_retrieve_view.SelectorRetrieveView] raises at ``as_view()``. Being
+            [`SelectorRetrieveView`][django_spec_rest.views.query.selector_retrieve_view.SelectorRetrieveView] raises at ``as_view()``. Being
             explicit rather than inferred from the call site, it also carries
             the semantics outside a request, to a management command or any
             other non-DRF caller.
@@ -155,7 +155,7 @@ class SelectorSpec(Generic[ResultT, ExtraT]):
             ``get_selector_kwargs()`` instead.
         affordances: What can be done to each row right now, answered inside
             the list query itself. A mapping from a name to the
-            [`ServiceSpec`][rest_framework_services.types.service_spec.ServiceSpec]
+            [`ServiceSpec`][django_spec_rest.types.service_spec.ServiceSpec]
             whose ``affordances`` are being asked about -- the spec objects, not
             registry names, so the read path takes no registry dependency and the
             declaration stays the one the mutation enforces. Every condition on
@@ -191,7 +191,7 @@ class SelectorSpec(Generic[ResultT, ExtraT]):
             for the viewset mixins and standalone views. Ignored when the spec
             is nested under ``ServiceSpec.output_selector_spec`` — the
             surrounding mutation action's permissions apply.
-        progress_reporter: Provider returning a [`ProgressReporter`][rest_framework_services.types.progress_reporter.ProgressReporter] sink,
+        progress_reporter: Provider returning a [`ProgressReporter`][django_spec_rest.types.progress_reporter.ProgressReporter] sink,
             fanned together with whatever reporter the transport supplied. For
             sinks that do not care which transport carries the run — a task
             record, an audit trail, metrics.
@@ -200,11 +200,11 @@ class SelectorSpec(Generic[ResultT, ExtraT]):
             has no validation step, so that is the one position available, and
             pool binding does the discrimination — a precondition declaring
             ``instance`` cannot be written against a LIST spec. Raise-to-abort:
-            the return value is ignored. See [`ServiceSpec`][rest_framework_services.types.service_spec.ServiceSpec] for the raise
+            the return value is ignored. See [`ServiceSpec`][django_spec_rest.types.service_spec.ServiceSpec] for the raise
             contract.
         metadata: Consumer-owned, framework-opaque mapping with **exactly one
             reserved key**: ``"json_schema"``, which
-            [`spec_to_json_schema`][rest_framework_services.jsonschema.spec_to_json_schema.spec_to_json_schema]
+            [`spec_to_json_schema`][django_spec_rest.jsonschema.spec_to_json_schema.spec_to_json_schema]
             merges onto the schema it derives — see that function for the shape,
             the phase keys and the precedence. Every other key is carried and
             never read: no defaulting, no per-key validation, no effect on the
@@ -219,9 +219,9 @@ class SelectorSpec(Generic[ResultT, ExtraT]):
             ``view.action_specs[view.action].metadata`` inside a permission
             class (which receives ``(request, view)``, so it has the spec but
             knows no registry or name), or ``entry.spec.metadata`` from a
-            [`RegisteredSpec`][rest_framework_services.types.registered_spec.RegisteredSpec],
+            [`RegisteredSpec`][django_spec_rest.types.registered_spec.RegisteredSpec],
             whose ``tags`` handles the boolean-ish labels this is *not* for. It
-            never merges or inherits — a [`ServiceSpec`][rest_framework_services.types.service_spec.ServiceSpec] and its
+            never merges or inherits — a [`ServiceSpec`][django_spec_rest.types.service_spec.ServiceSpec] and its
             ``output_selector_spec`` carry independent metadata — and it is
             stored exactly as given: the spec is frozen, the mapping is not,
             and the library neither copies nor deep-freezes it, so pass
@@ -229,7 +229,7 @@ class SelectorSpec(Generic[ResultT, ExtraT]):
             stays distinguishable from a declared empty mapping.
         reads: The arguments a caller with no HTTP request sends in place of
             one, as on
-            [`ServiceSpec`][rest_framework_services.types.service_spec.ServiceSpec]:
+            [`ServiceSpec`][django_spec_rest.types.service_spec.ServiceSpec]:
             each ``UrlKwarg`` a route would have captured and each
             ``QueryParam`` a query string would have carried, compiled into the
             kernel spec's ``reads`` beside the parameters the selector's
@@ -245,7 +245,7 @@ class SelectorSpec(Generic[ResultT, ExtraT]):
             layered over this one.
         json_schema_registry: The project's ``JsonSchemaRegistry``, which
             describes this spec's schemas. drfs'
-            [`spec_to_json_schema`][rest_framework_services.jsonschema.spec_to_json_schema.spec_to_json_schema]
+            [`spec_to_json_schema`][django_spec_rest.jsonschema.spec_to_json_schema.spec_to_json_schema]
             reads it when no ``registry=`` is passed, and a passed one wins.
             The compile reads its ``fields`` rules where it walks the input
             and output serializers, and its ``python_types`` rules where it
@@ -337,7 +337,7 @@ class SelectorSpec(Generic[ResultT, ExtraT]):
         """This spec compiled to django-service-specs' ``SelectorSpec``.
 
         What makes it a kernel ``SpecSource``; see
-        [`as_kernel_spec`][rest_framework_services.service_specs.as_kernel_spec.as_kernel_spec].
+        [`as_kernel_spec`][django_spec_rest.service_specs.as_kernel_spec.as_kernel_spec].
         """
         # Typed for both kinds; a ``SelectorSpec`` always compiles to the kernel's.
         return cast(KernelSelectorSpec, as_kernel_spec(self))

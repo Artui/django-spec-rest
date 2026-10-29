@@ -19,10 +19,10 @@ from asgiref.sync import async_to_sync
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
-from rest_framework_services import SelectorKind, SelectorSpec, ServiceSpec
-from rest_framework_services.dispatch.adispatch_spec import adispatch_spec
-from rest_framework_services.dispatch.dispatch_spec import dispatch_spec
-from rest_framework_services.service_specs.invalid_arguments import InvalidArguments
+from django_spec_rest import SelectorKind, SelectorSpec, ServiceSpec
+from django_spec_rest.dispatch.adispatch_spec import adispatch_spec
+from django_spec_rest.dispatch.dispatch_spec import dispatch_spec
+from django_spec_rest.service_specs.invalid_arguments import InvalidArguments
 
 
 class _TitleIn(serializers.Serializer):

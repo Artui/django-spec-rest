@@ -21,7 +21,7 @@ from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 from typing_extensions import TypedDict
 
-from rest_framework_services import (
+from django_spec_rest import (
     DispatchResult,
     SelectorKind,
     SelectorSpec,
@@ -30,10 +30,10 @@ from rest_framework_services import (
     adispatch_spec,
     dispatch_spec,
 )
-from rest_framework_services.types.not_client_input import NotClientInput
-from rest_framework_services.types.pool_seeds import DEFAULT_POOL_SEEDS
-from rest_framework_services.types.unknown_arguments import UnknownArguments
-from rest_framework_services.types.unset import UNSET
+from django_spec_rest.types.not_client_input import NotClientInput
+from django_spec_rest.types.pool_seeds import DEFAULT_POOL_SEEDS
+from django_spec_rest.types.unknown_arguments import UnknownArguments
+from django_spec_rest.types.unset import UNSET
 from tests.testapp.models import Post
 
 

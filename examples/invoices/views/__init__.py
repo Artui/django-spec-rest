@@ -6,6 +6,16 @@ from typing import Any
 
 from rest_framework.permissions import AllowAny
 
+from django_spec_rest import (
+    DEFAULT_JSON_SCHEMA_REGISTRY,
+    FieldMarking,
+    QueryParam,
+    SelectorKind,
+    SelectorSpec,
+    ServiceSpec,
+    ServiceViewSet,
+    service_action,
+)
 from invoices.models import Invoice
 from invoices.selectors import get_invoice, list_invoices
 from invoices.serializers import (
@@ -30,16 +40,6 @@ from invoices.services import (
     update_invoice,
     void_drafts,
     void_drafts_summary,
-)
-from rest_framework_services import (
-    DEFAULT_JSON_SCHEMA_REGISTRY,
-    FieldMarking,
-    QueryParam,
-    SelectorKind,
-    SelectorSpec,
-    ServiceSpec,
-    ServiceViewSet,
-    service_action,
 )
 
 

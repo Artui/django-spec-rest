@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from rest_framework_services.types.json_schema_registry import (
+from django_spec_rest.types.json_schema_registry import (
     DEFAULT_JSON_SCHEMA_REGISTRY,
     JsonSchemaRegistry,
 )
@@ -19,7 +19,7 @@ def filterset_to_json_schema(
 
     Returns a dict shaped like the ``"properties"`` key of a JSON Schema object, ready
     to merge into a spec's input schema — which is what
-    [`spec_to_json_schema`][rest_framework_services.jsonschema.spec_to_json_schema.spec_to_json_schema]
+    [`spec_to_json_schema`][django_spec_rest.jsonschema.spec_to_json_schema.spec_to_json_schema]
     does for a ``SelectorSpec`` carrying a ``filter_set``. Every filter is optional: a
     filter narrows the queryset but is never required to call the operation, so no name
     is added to a ``required`` array.
@@ -91,7 +91,7 @@ def _import_django_filters() -> Any:
     except ImportError as exc:
         raise ImportError(
             "filterset_to_json_schema requires the `django-filter` package. "
-            'Install it with `pip install "djangorestframework-services[filter]"`.'
+            'Install it with `pip install "django-spec-rest[filter]"`.'
         ) from exc
     return django_filters
 
@@ -152,7 +152,7 @@ def _choice_schema(filter_obj: Any) -> dict[str, Any]:
     """``enum`` when the labels add nothing, ``oneOf`` + ``title`` when they do.
 
     The rule, and the reasoning, are the serializer path's — see
-    [`_choice_schema`][rest_framework_services.jsonschema.utils] there. This
+    [`_choice_schema`][django_spec_rest.jsonschema.utils] there. This
     path kept only the values, so one package described the same constants two
     ways depending on which side of a spec they arrived on: a status called
     ``"r"`` came with ``"Red"`` from a serializer and bare from a FilterSet, and

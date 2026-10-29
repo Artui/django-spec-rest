@@ -7,7 +7,7 @@ from typing import Any
 from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
 
-from rest_framework_services import ServiceView
+from django_spec_rest import ServiceView
 
 
 class _Stand:

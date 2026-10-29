@@ -10,9 +10,9 @@ from django.core.exceptions import ImproperlyConfigured
 from django.db.models import Model
 from rest_framework.exceptions import PermissionDenied
 
-from rest_framework_services.types.offline_context import OfflineContext
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_spec_rest.types.offline_context import OfflineContext
+from django_spec_rest.types.selector_spec import SelectorSpec
+from django_spec_rest.types.service_spec import ServiceSpec
 
 
 def enforce_permissions(
@@ -26,7 +26,7 @@ def enforce_permissions(
     Mirrors what a DRF view does on the HTTP path — ``[perm() for perm in
     spec.permission_classes]`` then ``perm.has_permission(request, view)`` — but against
     the synthetic request and view from
-    [`build_offline_context`][rest_framework_services.dispatch.build_offline_context.build_offline_context].
+    [`build_offline_context`][django_spec_rest.dispatch.build_offline_context.build_offline_context].
     ``dispatch_spec`` deliberately does **not** consult ``permission_classes``
     (authorization is the view's job on HTTP), so an off-HTTP transport must call this
     itself before dispatching, or it would skip authorization entirely.

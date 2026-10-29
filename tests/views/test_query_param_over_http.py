@@ -21,7 +21,7 @@ from rest_framework.permissions import BasePermission
 from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
 
-from rest_framework_services import (
+from django_spec_rest import (
     QueryParam,
     SelectorKind,
     SelectorSpec,
@@ -30,7 +30,7 @@ from rest_framework_services import (
     adispatch_spec,
     dispatch_spec,
 )
-from rest_framework_services.types.offline_service_view import OfflineServiceView
+from django_spec_rest.types.offline_service_view import OfflineServiceView
 from tests.testapp.models import Post
 
 _factory = APIRequestFactory()

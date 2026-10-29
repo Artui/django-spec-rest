@@ -12,7 +12,7 @@ class ServiceView(Protocol):
 
     Per-spec kwargs providers (``ServiceSpec.kwargs`` / ``SelectorSpec.kwargs``) receive
     the calling view typed as
-    [`ServiceView`][rest_framework_services.types.service_view.ServiceView]. The
+    [`ServiceView`][django_spec_rest.types.service_view.ServiceView]. The
     Protocol pins only the attributes a provider can rely on across both the standalone
     ``Service*View`` classes and the viewset mixins:
 

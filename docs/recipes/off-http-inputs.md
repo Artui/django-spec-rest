@@ -29,7 +29,7 @@ missing where it has none. A view hook's or `kwargs` provider's value for the
 name does both.
 
 ```python
-from rest_framework_services import build_offline_context, dispatch_spec
+from django_spec_rest import build_offline_context, dispatch_spec
 
 context = build_offline_context(user, {"status": "active"}, kwargs={"project_pk": 7})
 result = dispatch_spec(
@@ -46,7 +46,7 @@ per key, no registration anywhere:
 ```python
 from typing import Annotated
 from typing_extensions import Unpack
-from rest_framework_services import HttpExtras, implements, ListSelector
+from django_spec_rest import HttpExtras, implements, ListSelector
 
 
 class WidgetExtras(HttpExtras[MyUser], total=False):
@@ -91,7 +91,7 @@ The obvious fix — making the key required in the `TypedDict` — **does not wo
 and the reason is worth knowing. Under [PEP 692][pep692], a required key in
 `Unpack[...]` makes the function reject callers that omit it, so it stops being
 assignable to `ListSelector` / `RetrieveSelector` / the service Protocols. That is
-also why [`HttpExtras`][rest_framework_services.types.http_extras.HttpExtras] mandates `total=False`.
+also why [`HttpExtras`][django_spec_rest.types.http_extras.HttpExtras] mandates `total=False`.
 Protocol conformance and an honest schema are mutually exclusive through the
 `TypedDict`'s own totality.
 
@@ -436,11 +436,11 @@ appears in no signature at all — nor a closed-surface spec whose route capture
 must still be caller-suppliable.
 
 For those, the spec declares a
-[`UrlKwarg`][rest_framework_services.types.url_kwarg.UrlKwarg] in its own
+[`UrlKwarg`][django_spec_rest.types.url_kwarg.UrlKwarg] in its own
 `reads`:
 
 ```python
-from rest_framework_services import UrlKwarg
+from django_spec_rest import UrlKwarg
 
 list_widgets_spec = SelectorSpec(
     kind=SelectorKind.LIST,
@@ -485,7 +485,7 @@ selector's parameter is not refused: a selector takes its arguments from its
 signature, so a required one makes the read a required argument, and a request
 without it is answered `400`.
 
-The [example project](https://github.com/Artui/djangorestframework-services/tree/main/examples) declares `reads=[QueryParam("status")]` on its list
+The [example project](https://github.com/Artui/django-spec-rest/tree/main/examples) declares `reads=[QueryParam("status")]` on its list
 spec and asserts the selector is handed it both ways, beside an off-HTTP
 `dispatch_spec(partial=True)` call that validates only the fields it sends.
 
@@ -560,7 +560,7 @@ as it is on the kernel's route: it has a query string of its own.
 
 Both types live here rather than in each adapter so the same declaration means the
 same thing on every transport. Adapters validate a registration set with
-[`validate_channel_names`][rest_framework_services.types.validate_channel_names.validate_channel_names], which
+[`validate_channel_names`][django_spec_rest.types.validate_channel_names.validate_channel_names], which
 always includes `RESERVED_POOL_SEEDS` and takes the transport's own reserved
 pagination names on top.
 

@@ -6,12 +6,12 @@ from django.utils import timezone
 from django_service_specs.output.project_payload import project_payload as kernel_project_payload
 from rest_framework import serializers
 
-import rest_framework_services
-from rest_framework_services.audience.build_audience_projection import build_audience_projection
-from rest_framework_services.audience.project_payload import project_payload
-from rest_framework_services.types.field_audience import FieldAudience
-from rest_framework_services.types.field_marking import MARKING, FieldMarking
-from rest_framework_services.types.value_formatter import ValueFormatter
+import django_spec_rest
+from django_spec_rest.audience.build_audience_projection import build_audience_projection
+from django_spec_rest.audience.project_payload import project_payload
+from django_spec_rest.types.field_audience import FieldAudience
+from django_spec_rest.types.field_marking import MARKING, FieldMarking
+from django_spec_rest.types.value_formatter import ValueFormatter
 
 STATUSES = [("PENDING_REVIEW", "Awaiting review"), ("PAID", "Paid")]
 
@@ -155,4 +155,4 @@ def test_a_formatter_on_a_nested_field_is_still_the_one_transform_that_applies()
 def test_project_payload_is_the_kernel_s_object_at_drfs_path_and_root() -> None:
     """The kernel owns the walk; what this file keeps is drfs' serializers feeding it."""
     assert project_payload is kernel_project_payload
-    assert rest_framework_services.project_payload is kernel_project_payload
+    assert django_spec_rest.project_payload is kernel_project_payload

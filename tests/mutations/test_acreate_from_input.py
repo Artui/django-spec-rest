@@ -6,9 +6,9 @@ from dataclasses import dataclass
 
 import pytest
 
-from rest_framework_services.mutations import acreate_from_input
-from rest_framework_services.types import UNSET
-from rest_framework_services.types.unset import UnsetType
+from django_spec_rest.mutations import acreate_from_input
+from django_spec_rest.types import UNSET
+from django_spec_rest.types.unset import UnsetType
 from tests.testapp.models import Author, Post, Tag
 
 

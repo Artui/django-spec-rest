@@ -8,56 +8,56 @@ through without the service having to declare each key. Strict-typed
 extras live on the user's function signature via `**extras: Unpack[YourKw]`
 — see [Typing services and selectors](../typing.md) for the full pattern.
 
-::: rest_framework_services.services.create_service.CreateService
+::: django_spec_rest.services.create_service.CreateService
 
-::: rest_framework_services.services.update_service.UpdateService
+::: django_spec_rest.services.update_service.UpdateService
 
-::: rest_framework_services.services.delete_service.DeleteService
+::: django_spec_rest.services.delete_service.DeleteService
 
 ## Default model service factories
 
 ### `create_model`
 
-::: rest_framework_services.services.create_model.create_model
+::: django_spec_rest.services.create_model.create_model
 
 ### `update_model`
 
-::: rest_framework_services.services.update_model.update_model
+::: django_spec_rest.services.update_model.update_model
 
 ### `delete_model`
 
-::: rest_framework_services.services.delete_model.delete_model
+::: django_spec_rest.services.delete_model.delete_model
 
 ### `acreate_model`
 
-::: rest_framework_services.services.acreate_model.acreate_model
+::: django_spec_rest.services.acreate_model.acreate_model
 
 ### `aupdate_model`
 
-::: rest_framework_services.services.aupdate_model.aupdate_model
+::: django_spec_rest.services.aupdate_model.aupdate_model
 
 ### `adelete_model`
 
-::: rest_framework_services.services.adelete_model.adelete_model
+::: django_spec_rest.services.adelete_model.adelete_model
 
 ### `delete_collection`
 
-::: rest_framework_services.services.delete_collection.delete_collection
+::: django_spec_rest.services.delete_collection.delete_collection
 
 ### `adelete_collection`
 
-::: rest_framework_services.services.adelete_collection.adelete_collection
+::: django_spec_rest.services.adelete_collection.adelete_collection
 
 ## Decorators
 
-::: rest_framework_services.implements.implements
+::: django_spec_rest.implements.implements
 
 ## Helpers
 
 ### `call_service`
 
-::: rest_framework_services.services.call_service.call_service
+::: django_spec_rest.services.call_service.call_service
 
 ### `acall_service`
 
-::: rest_framework_services.services.acall_service.acall_service
+::: django_spec_rest.services.acall_service.acall_service

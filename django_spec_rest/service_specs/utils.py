@@ -48,11 +48,11 @@ from rest_framework import ISO_8601, relations, serializers
 from rest_framework.settings import api_settings
 from rest_framework_dataclasses.serializers import DataclassSerializer
 
-from rest_framework_services.service_specs.base_serializer_context import base_serializer_context
-from rest_framework_services.service_specs.build_offline_context import build_offline_context
-from rest_framework_services.types.json_schema_registry import JsonSchemaRegistry
-from rest_framework_services.types.unset import UNSET
-from rest_framework_services.types.view_hooks import ViewHooks
+from django_spec_rest.service_specs.base_serializer_context import base_serializer_context
+from django_spec_rest.service_specs.build_offline_context import build_offline_context
+from django_spec_rest.types.json_schema_registry import JsonSchemaRegistry
+from django_spec_rest.types.unset import UNSET
+from django_spec_rest.types.view_hooks import ViewHooks
 
 # What building or reading an input serializer with no call may raise and
 # still be a serializer a call can describe: a request or view read unguarded
@@ -632,9 +632,7 @@ class EdgeCallState:
     filter_data: Mapping[str, Any] | None = None
 
 
-EDGE_CALL: ContextVar[EdgeCallState | None] = ContextVar(
-    "rest_framework_services_edge_call", default=None
-)
+EDGE_CALL: ContextVar[EdgeCallState | None] = ContextVar("django_spec_rest_edge_call", default=None)
 """The DRF edge's state for the call in progress, or ``None`` outside one.
 
 A context variable rather than a pool seed, so nothing the edge carries for

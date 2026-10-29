@@ -13,7 +13,7 @@ from typing import Any
 
 from django.db.models import Q, QuerySet
 
-from rest_framework_services import (
+from django_spec_rest import (
     Affordance,
     SelectorKind,
     SelectorSpec,

@@ -8,7 +8,7 @@ import pytest
 from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
 
-from rest_framework_services import acall_selector
+from django_spec_rest import acall_selector
 
 
 def _build_request(*, user: Any) -> Any:

@@ -1,20 +1,20 @@
-# djangorestframework-services
+# django-spec-rest
 
-[![CI](https://github.com/Artui/djangorestframework-services/workflows/tests/badge.svg)](https://github.com/Artui/djangorestframework-services/actions/workflows/tests.yml)
-[![PyPI](https://img.shields.io/pypi/v/djangorestframework-services.svg)](https://pypi.org/project/djangorestframework-services/)
-[![Python versions](https://img.shields.io/pypi/pyversions/djangorestframework-services.svg)](https://pypi.org/project/djangorestframework-services/)
-[![Django versions](https://img.shields.io/pypi/djversions/djangorestframework-services.svg)](https://pypi.org/project/djangorestframework-services/)
-[![Docs](https://img.shields.io/badge/docs-artui.github.io-blue.svg)](https://artui.github.io/djangorestframework-services/)
-[![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Artui/djangorestframework-services/gh-pages/coverage.json)](https://github.com/Artui/djangorestframework-services/actions/workflows/tests.yml)
+[![CI](https://github.com/Artui/django-spec-rest/workflows/tests/badge.svg)](https://github.com/Artui/django-spec-rest/actions/workflows/tests.yml)
+[![PyPI](https://img.shields.io/pypi/v/django-spec-rest.svg)](https://pypi.org/project/django-spec-rest/)
+[![Python versions](https://img.shields.io/pypi/pyversions/django-spec-rest.svg)](https://pypi.org/project/django-spec-rest/)
+[![Django versions](https://img.shields.io/pypi/djversions/django-spec-rest.svg)](https://pypi.org/project/django-spec-rest/)
+[![Docs](https://img.shields.io/badge/docs-artui.github.io-blue.svg)](https://artui.github.io/django-spec-rest/)
+[![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Artui/django-spec-rest/gh-pages/coverage.json)](https://github.com/Artui/django-spec-rest/actions/workflows/tests.yml)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
-[![License](https://img.shields.io/pypi/l/djangorestframework-services.svg)](LICENSE)
+[![License](https://img.shields.io/pypi/l/django-spec-rest.svg)](LICENSE)
 
 A service / selector layer for Django REST Framework.
 
 DRF's default mode for mutating endpoints is "the serializer is the business
 logic". That's fine for thin CRUD, but it falls apart the moment you need
 to compose with an external system, fan out side effects, or write logic
-that doesn't belong on a model. `djangorestframework-services` keeps DRF's
+that doesn't belong on a model. `django-spec-rest` keeps DRF's
 routing, validation, and serialization for what they're good at, and gives
 you a precise, well-typed seam for the bits in the middle.
 
@@ -44,12 +44,12 @@ same objects, so one import path serves both.
   time, with fail-fast validation at `as_view()`.
 - **100% test coverage**, type-checked, Python 3.10–3.14, Django 4.2–6.0.
 
-**Full documentation:** <https://artui.github.io/djangorestframework-services/>
+**Full documentation:** <https://artui.github.io/django-spec-rest/>
 
 ```bash
-pip install djangorestframework-services
+pip install django-spec-rest
 # or, with uv:
-uv add djangorestframework-services
+uv add django-spec-rest
 ```
 
 ---
@@ -67,7 +67,7 @@ which the library already depends on.
 from dataclasses import dataclass
 
 from rest_framework_dataclasses.serializers import DataclassSerializer
-from rest_framework_services import (
+from django_spec_rest import (
     SelectorKind,
     SelectorSpec,
     ServiceCreateView,
@@ -222,7 +222,7 @@ that DRF's `serializer.save()` quietly performs — minus the surprises and
 plus a typed change record.
 
 ```python
-from rest_framework_services import update_from_input, UNSET
+from django_spec_rest import update_from_input, UNSET
 
 
 def update_author(*, instance, data):
@@ -294,7 +294,7 @@ framework's kwargs pool flows through transparently, and your callable
 declares only the parameters it actually uses:
 
 ```python
-from rest_framework_services import CreateService, ListSelector
+from django_spec_rest import CreateService, ListSelector
 
 
 def create_author(*, data: CreateAuthorInput, **kwargs) -> Author: ...
@@ -318,7 +318,7 @@ portable across `ty`, `mypy`, and `pyright`:
 ```python
 from typing_extensions import TypedDict, Unpack
 
-from rest_framework_services import (
+from django_spec_rest import (
     CreateService,
     ListSelector,
     ServiceSpec,
@@ -386,7 +386,7 @@ When the entire body of your service is a one-line wrapper over
 framework ships ready-made factories:
 
 ```python
-from rest_framework_services import (
+from django_spec_rest import (
     SelectorKind,
     SelectorSpec,
     ServiceSpec,
@@ -431,7 +431,7 @@ Keep writing custom services the moment you need anything else
 (side-effects, `request.user` stamping, cross-table updates) — the
 factories cover the boilerplate case, not the framework itself.
 
-See [Typing services and selectors](https://artui.github.io/djangorestframework-services/typing/)
+See [Typing services and selectors](https://artui.github.io/django-spec-rest/typing/)
 for the full Protocol catalogue and per-spec `kwargs=` resolution
 rules.
 
@@ -515,7 +515,7 @@ mutations reuse the detail one:
 from dataclasses import dataclass
 
 from rest_framework_dataclasses.serializers import DataclassSerializer
-from rest_framework_services import SelectorSpec, ServiceSpec, ServiceViewSet
+from django_spec_rest import SelectorSpec, ServiceSpec, ServiceViewSet
 
 
 @dataclass
@@ -603,7 +603,7 @@ Per-action mixins (`ServiceCreateMixin`, `ServiceUpdateMixin`,
 you need:
 
 ```python
-from rest_framework_services import (
+from django_spec_rest import (
     ActionSerializerResolver,
     SelectorKind,
     SelectorListMixin,
@@ -661,7 +661,7 @@ mutation flow:
 from dataclasses import dataclass
 
 from rest_framework_dataclasses.serializers import DataclassSerializer
-from rest_framework_services import ServiceSpec, service_action
+from django_spec_rest import ServiceSpec, service_action
 
 
 @dataclass
@@ -711,7 +711,7 @@ Services raise framework-agnostic exceptions. The view boundary translates
 them to DRF responses.
 
 ```python
-from rest_framework_services import ServiceError, ServiceValidationError
+from django_spec_rest import ServiceError, ServiceValidationError
 
 
 def withdraw(*, instance, data):
@@ -766,59 +766,6 @@ class FetchView(ServiceCreateView):
 
 ---
 
-## `startserviceapp`
-
-A management command that scaffolds a service-oriented Django app:
-
-```bash
-python manage.py startserviceapp billing
-```
-
-Produces:
-
-```
-billing/
-├── __init__.py
-├── apps.py
-├── admin.py
-├── urls.py
-├── models/__init__.py
-├── views/__init__.py
-├── services/__init__.py
-├── selectors/__init__.py
-├── specs/__init__.py
-├── validators/__init__.py
-├── serializers/__init__.py
-├── utils/__init__.py
-├── migrations/__init__.py
-└── tests/__init__.py
-```
-
-Add `"rest_framework_services"` to `INSTALLED_APPS` to make the command
-discoverable.
-
-### A note on `validators/`
-
-The `validators/` package is a stylistic convention, not a library
-feature. The library doesn't import from it or look it up by name. It
-exists to give business-level validation a home of its own — rules like
-*"a draft invoice can only be sent if the customer has a verified email"*
-or *"refunds beyond 30 days require manager approval"*. These belong
-neither in the model nor in the serializer.
-
-The split this layout suggests:
-
-| Concern | Lives in |
-|---|---|
-| Type validation, required fields, format checks | DRF serializers (`serializers/`), including `DataclassSerializer` for service inputs |
-| Business rules / cross-record invariants / external-state checks | Functions in `validators/`, called from services |
-| Side effects, persistence, orchestration | `services/` |
-
-Use it, ignore it, or rename it — the scaffolding is a starting point,
-not a contract.
-
----
-
 ## Beyond HTTP
 
 The same specs that drive HTTP views can be invoked with no view and no
@@ -829,7 +776,7 @@ builds on:
 - **`dispatch_spec` / `adispatch_spec`** — call a `ServiceSpec` /
   `SelectorSpec` with just the acting `user` and a flat `params` mapping;
   get back a `DispatchResult` to format for your wire. See
-  [Dispatch reference](https://artui.github.io/djangorestframework-services/reference/dispatch/).
+  [Dispatch reference](https://artui.github.io/django-spec-rest/reference/dispatch/).
 - **`filter_set` on selectors** — declare a django-filter `FilterSet` on a
   `SelectorSpec` once and it applies transport-neutrally, off the HTTP
   query-string path. On a selector view the query string feeds the filter; a
@@ -846,13 +793,13 @@ builds on:
   name, its tags); per-transport knobs stay at the binding. `registry.specs()`
   returns the `dict[str, spec]` adapters already accept, so adoption needs no
   support from them. See
-  [Declare specs once, project them to many transports](https://artui.github.io/djangorestframework-services/recipes/spec-registry/).
+  [Declare specs once, project them to many transports](https://artui.github.io/django-spec-rest/recipes/spec-registry/).
 - **JSON-schema helpers** — `serializer_to_json_schema`,
   `output_to_json_schema`, `filterset_to_json_schema` and
   `spec_to_json_schema` turn a spec (or bare serializer / dataclass) into a
   JSON Schema dict with no `drf-spectacular` dependency, for building tool
   definitions. See
-  [JSON Schema reference](https://artui.github.io/djangorestframework-services/reference/jsonschema/).
+  [JSON Schema reference](https://artui.github.io/django-spec-rest/reference/jsonschema/).
 
 ---
 

@@ -8,12 +8,12 @@ from typing import Annotated, Any
 from django_service_specs.parameters.parameters import Parameter
 from django_service_specs.specs.kernel_spec import kernel_spec
 
-from rest_framework_services.service_specs.kernel_spec_variant import kernel_spec_variant
-from rest_framework_services.types.input_description import InputDescription
-from rest_framework_services.types.json_schema_registry import JsonSchemaRegistry
-from rest_framework_services.types.selector_kind import SelectorKind
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_spec_rest.service_specs.kernel_spec_variant import kernel_spec_variant
+from django_spec_rest.types.input_description import InputDescription
+from django_spec_rest.types.json_schema_registry import JsonSchemaRegistry
+from django_spec_rest.types.selector_kind import SelectorKind
+from django_spec_rest.types.selector_spec import SelectorSpec
+from django_spec_rest.types.service_spec import ServiceSpec
 
 
 class Money: ...

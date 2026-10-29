@@ -25,7 +25,7 @@ from django_service_specs.services.create_service import CreateService as Kernel
 from django_service_specs.services.delete_service import DeleteService as KernelDeleteService
 from django_service_specs.services.update_service import UpdateService as KernelUpdateService
 
-from rest_framework_services import (
+from django_spec_rest import (
     CreateService,
     DeleteService,
     NoInput,

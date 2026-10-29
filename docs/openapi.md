@@ -1,6 +1,6 @@
 # OpenAPI / Swagger schemas
 
-`djangorestframework-services` ships an opt-in
+`django-spec-rest` ships an opt-in
 [`drf-spectacular`](https://drf-spectacular.readthedocs.io/) integration that
 makes the generated OpenAPI document line up with what your `ServiceSpec`
 actually does — without scattering `@extend_schema` annotations across
@@ -9,9 +9,9 @@ every view.
 ## Install
 
 ```bash
-pip install "djangorestframework-services[spectacular]"
+pip install "django-spec-rest[spectacular]"
 # or, with uv:
-uv add "djangorestframework-services[spectacular]"
+uv add "django-spec-rest[spectacular]"
 ```
 
 ## Wire it up
@@ -23,9 +23,7 @@ Two settings, one call:
 REST_FRAMEWORK = {
     # Required for spectacular to inspect every view, including plain
     # ``GenericViewSet`` classes that use ``@service_action``.
-    "DEFAULT_SCHEMA_CLASS": (
-        "rest_framework_services.openapi.service_auto_schema.ServiceAutoSchema"
-    ),
+    "DEFAULT_SCHEMA_CLASS": ("django_spec_rest.openapi.service_auto_schema.ServiceAutoSchema"),
     # ... your usual REST_FRAMEWORK config
 }
 ```
@@ -39,7 +37,7 @@ class MyAppConfig(AppConfig):
     name = "myapp"
 
     def ready(self) -> None:
-        from rest_framework_services.openapi import enable_openapi
+        from django_spec_rest.openapi import enable_openapi
 
         enable_openapi()
 ```
@@ -94,7 +92,7 @@ a destroy presenting a value, single-row or bulk, at its default `204` or one
 set explicitly, is served and documented as `200`.
 
 A declared body is not always sent. Where dispatch may present `None`, as
-[`can_present_nothing`][rest_framework_services.can_present_nothing.can_present_nothing]
+[`can_present_nothing`][django_spec_rest.can_present_nothing.can_present_nothing]
 answers (a single-row re-read that finds no row, or a service declaring
 `allow_none=True`), the renderers answer with an empty body rather than a row
 of blank fields, so the schema documents an empty `204`, with no content,
@@ -135,7 +133,7 @@ documents it.
 `ServiceAutoSchema` attaches a `422` response with a single `detail`
 field documenting the contract that `ServiceError` produces at runtime.
 The component is exposed as
-`rest_framework_services.openapi.ServiceErrorSerializer` if you want to
+`django_spec_rest.openapi.ServiceErrorSerializer` if you want to
 re-use it elsewhere.
 
 By default the 422 is attached only to operations that **validate input**

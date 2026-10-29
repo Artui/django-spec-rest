@@ -24,7 +24,7 @@ class JsonSchemaRegistry:
 
     Immutable: ``extend`` returns a *new* registry rather than mutating, so
     there is no shared global state to leak across callers or tests. Start from
-    [`DEFAULT_JSON_SCHEMA_REGISTRY`][rest_framework_services.types.json_schema_registry.DEFAULT_JSON_SCHEMA_REGISTRY], the empty base every
+    [`DEFAULT_JSON_SCHEMA_REGISTRY`][django_spec_rest.types.json_schema_registry.DEFAULT_JSON_SCHEMA_REGISTRY], the empty base every
     ``*_to_json_schema`` helper falls back to, layer rules on, and pass the
     result via the helpers' ``registry=`` argument:
 

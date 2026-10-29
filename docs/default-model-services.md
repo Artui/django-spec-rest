@@ -31,7 +31,7 @@ from a real function name in a stack trace.
 Before — hand-written stubs:
 
 ```python
-from rest_framework_services import (
+from django_spec_rest import (
     SelectorKind,
     SelectorSpec,
     ServiceSpec,
@@ -81,7 +81,7 @@ class AuthorViewSet(ServiceViewSet):
 After — factories:
 
 ```python
-from rest_framework_services import (
+from django_spec_rest import (
     SelectorKind,
     SelectorSpec,
     ServiceSpec,

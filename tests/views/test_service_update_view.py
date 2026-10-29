@@ -12,13 +12,13 @@ import pytest
 from rest_framework import serializers
 from rest_framework.test import APIRequestFactory
 
-from rest_framework_services import SelectorKind, SelectorSpec, ServiceSpec, ServiceUpdateView
+from django_spec_rest import SelectorKind, SelectorSpec, ServiceSpec, ServiceUpdateView
 from tests.testapp.models import Author, Post
 from tests.testapp.serializers import AuthorSerializer
 
 # The module, not the function the package's ``__init__`` re-exports under its name.
-dispatch_spec_module = importlib.import_module("rest_framework_services.dispatch.dispatch_spec")
-mutation_utils_module = importlib.import_module("rest_framework_services.views.mutation.utils")
+dispatch_spec_module = importlib.import_module("django_spec_rest.dispatch.dispatch_spec")
+mutation_utils_module = importlib.import_module("django_spec_rest.views.mutation.utils")
 
 
 @dataclass
@@ -168,7 +168,7 @@ class TestServiceUpdateView:
         assert response.data == {"latest_name": "fresh"}
 
     def test_service_error_maps_to_422(self) -> None:
-        from rest_framework_services import ServiceError
+        from django_spec_rest import ServiceError
 
         def boom(*, instance: Author, data: _UpdateAuthorInput) -> None:
             raise ServiceError("nope")

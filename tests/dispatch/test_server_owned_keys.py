@@ -6,9 +6,9 @@ from typing import Annotated, Any
 
 from typing_extensions import TypedDict, Unpack
 
-import rest_framework_services
-from rest_framework_services import NotClientInput, SelectorKind, SelectorSpec, ServiceSpec
-from rest_framework_services.dispatch.utils import server_owned_keys
+import django_spec_rest
+from django_spec_rest import NotClientInput, SelectorKind, SelectorSpec, ServiceSpec
+from django_spec_rest.dispatch.utils import server_owned_keys
 
 
 def _unmarked(*, team: str = "own-team") -> str:
@@ -74,11 +74,11 @@ def test_a_transport_asks_with_the_spec_it_dispatches() -> None:
     lookup = SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_lookup)
     spec = ServiceSpec(service=_update, preconditions=[_gate], instance_selector_spec=lookup)
 
-    owned = rest_framework_services.server_owned_keys(spec)
+    owned = django_spec_rest.server_owned_keys(spec)
 
     assert type(owned) is frozenset
     assert owned == {"team", "region", "tenant", "view"}
-    assert rest_framework_services.server_owned_keys(lookup) == {"tenant", "view"}
+    assert django_spec_rest.server_owned_keys(lookup) == {"tenant", "view"}
 
 
 def test_a_selector_owns_what_its_preconditions_hide() -> None:

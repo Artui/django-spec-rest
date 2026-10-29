@@ -27,7 +27,7 @@ from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
 from typing_extensions import TypedDict
 
-from rest_framework_services import (
+from django_spec_rest import (
     NotClientInput,
     QueryParam,
     SelectorKind,
@@ -40,9 +40,9 @@ from rest_framework_services import (
     build_offline_context,
     dispatch_spec,
 )
-from rest_framework_services.types.offline_service_view import OfflineServiceView
-from rest_framework_services.types.pool_seeds import DEFAULT_POOL_SEEDS
-from rest_framework_services.types.unknown_arguments import UnknownArguments
+from django_spec_rest.types.offline_service_view import OfflineServiceView
+from django_spec_rest.types.pool_seeds import DEFAULT_POOL_SEEDS
+from django_spec_rest.types.unknown_arguments import UnknownArguments
 from tests.testapp.models import Post
 from tests.testapp.serializers import PostSerializer
 

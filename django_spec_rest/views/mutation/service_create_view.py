@@ -9,16 +9,16 @@ from rest_framework.generics import GenericAPIView
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from rest_framework_services.types.service_spec import ServiceSpec
-from rest_framework_services.views.mutation.mutation_flow_mixin import MutationFlowMixin
-from rest_framework_services.views.spec_validation import validate_mutation_view_spec
+from django_spec_rest.types.service_spec import ServiceSpec
+from django_spec_rest.views.mutation.mutation_flow_mixin import MutationFlowMixin
+from django_spec_rest.views.spec_validation import validate_mutation_view_spec
 
 
 class ServiceCreateView(MutationFlowMixin, GenericAPIView):
     """``POST`` endpoint that runs a service callable to create a resource.
 
     Configure by setting ``spec`` to a
-    [`ServiceSpec`][rest_framework_services.types.service_spec.ServiceSpec]. The spec's
+    [`ServiceSpec`][django_spec_rest.types.service_spec.ServiceSpec]. The spec's
     ``success_status`` defaults to ``201 Created`` when unset."""
 
     spec: ClassVar[ServiceSpec | None] = None

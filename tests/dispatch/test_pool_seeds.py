@@ -12,13 +12,13 @@ from typing import Annotated, Any
 
 import pytest
 
-from rest_framework_services.dispatch.adispatch_spec import adispatch_spec
-from rest_framework_services.dispatch.dispatch_spec import dispatch_spec
-from rest_framework_services.types.not_client_input import NotClientInput
-from rest_framework_services.types.pool_seeds import DEFAULT_POOL_SEEDS
-from rest_framework_services.types.selector_kind import SelectorKind
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.unknown_arguments import UnknownArguments
+from django_spec_rest.dispatch.adispatch_spec import adispatch_spec
+from django_spec_rest.dispatch.dispatch_spec import dispatch_spec
+from django_spec_rest.types.not_client_input import NotClientInput
+from django_spec_rest.types.pool_seeds import DEFAULT_POOL_SEEDS
+from django_spec_rest.types.selector_kind import SelectorKind
+from django_spec_rest.types.selector_spec import SelectorSpec
+from django_spec_rest.types.unknown_arguments import UnknownArguments
 from tests.testapp.models import Post
 
 TENANT_SEEDS = DEFAULT_POOL_SEEDS.extend(tenant=lambda *, user: f"tenant-of-{user}")

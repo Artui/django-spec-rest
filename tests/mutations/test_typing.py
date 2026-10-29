@@ -14,11 +14,11 @@ from __future__ import annotations
 
 from typing import get_args, get_origin, get_type_hints
 
-from rest_framework_services.mutations.acreate_from_input import acreate_from_input
-from rest_framework_services.mutations.aupdate_from_input import aupdate_from_input
-from rest_framework_services.mutations.create_from_input import create_from_input
-from rest_framework_services.mutations.update_from_input import update_from_input
-from rest_framework_services.types.change_result import ChangeResult, ModelT
+from django_spec_rest.mutations.acreate_from_input import acreate_from_input
+from django_spec_rest.mutations.aupdate_from_input import aupdate_from_input
+from django_spec_rest.mutations.create_from_input import create_from_input
+from django_spec_rest.mutations.update_from_input import update_from_input
+from django_spec_rest.types.change_result import ChangeResult, ModelT
 from tests.testapp.models import Author
 
 

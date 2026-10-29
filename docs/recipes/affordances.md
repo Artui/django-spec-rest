@@ -11,7 +11,7 @@ declaration decides whether the call is refused and what the refusal says.
 
 ```python
 from django.db.models import Exists, OuterRef, Q
-from rest_framework_services import Affordance, ServiceSpec
+from django_spec_rest import Affordance, ServiceSpec
 
 cancel_order = ServiceSpec(
     service=cancel,
@@ -33,7 +33,7 @@ cancel_order = ServiceSpec(
 
 `when` is true when the action **is** available. A caller whose call fails a
 condition gets
-[`ActionUnavailable`][rest_framework_services.exceptions.action_unavailable.ActionUnavailable]
+[`ActionUnavailable`][django_spec_rest.exceptions.action_unavailable.ActionUnavailable]
 — over HTTP a `409` whose body names the rule:
 
 ```json
@@ -214,17 +214,17 @@ Reading the answers costs nothing: they are the annotations the list query
 already computed, or the answers attached to rows a selector returned directly.
 
 **An agent reads the same answers a browser does.**
-[`render_for_audience`][rest_framework_services.dispatch.render_for_audience.render_for_audience]
+[`render_for_audience`][django_spec_rest.dispatch.render_for_audience.render_for_audience]
 passes them through whole. A model speaks human language, so the `reason` is
 what it relays when it explains why an action is not possible, and the `code` is
 still there for the transport — or the model — to branch on. That is why the
 reason is written for people and models alike and keeps internal state out.
 
 The output schema declares the object too:
-[`spec_to_json_schema`][rest_framework_services.jsonschema.spec_to_json_schema.spec_to_json_schema]
+[`spec_to_json_schema`][django_spec_rest.jsonschema.spec_to_json_schema.spec_to_json_schema]
 adds it, with `code` enumerated from the declaration so a client can switch on it
 exhaustively, and
-[`output_to_json_schema`][rest_framework_services.jsonschema.output_to_json_schema.output_to_json_schema]
+[`output_to_json_schema`][django_spec_rest.jsonschema.output_to_json_schema.output_to_json_schema]
 takes the mapping as `affordances=` for a transport that builds its schema from
 the serializer. With or without a `projection` the object it declares is the
 same, `reason` included, because the payload is.
@@ -242,7 +242,7 @@ operations, such as an MCP server's tool list or an agent's toolset for its next
 step, can leave out one that no argument could make succeed:
 
 ```python
-from rest_framework_services import base_pool, unmet_operation_affordance
+from django_spec_rest import base_pool, unmet_operation_affordance
 
 pool = base_pool(user=user, request=request, seeds=seeds)
 offered = {
@@ -252,7 +252,7 @@ offered = {
 }
 ```
 
-[`unmet_operation_affordance`][rest_framework_services.dispatch.unmet_operation_affordance.unmet_operation_affordance]
+[`unmet_operation_affordance`][django_spec_rest.dispatch.unmet_operation_affordance.unmet_operation_affordance]
 returns the first unmet callable condition in declaration order, or `None`. A
 condition on the row is skipped without a query, because there is no row yet,
 and is still answered for each object: on a selector's rows and at the call. A

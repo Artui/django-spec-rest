@@ -20,8 +20,8 @@ from django_service_specs.parameters.invalid_arguments import (
 from django_service_specs.relations.child_spec import ChildSpec
 from rest_framework.exceptions import ErrorDetail, ValidationError
 
-from rest_framework_services.service_specs.invalid_arguments import InvalidArguments
-from rest_framework_services.service_specs.register_drf_row_errors import (
+from django_spec_rest.service_specs.invalid_arguments import InvalidArguments
+from django_spec_rest.service_specs.register_drf_row_errors import (
     register_drf_row_errors,
 )
 from tests.testapp.models import Catalog, Section

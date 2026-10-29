@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from rest_framework_services.types.registered_spec import RegisteredSpec
+from django_spec_rest.types.registered_spec import RegisteredSpec
 
 
 class _DeclaresAContract:

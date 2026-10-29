@@ -21,16 +21,16 @@ from typing import Any
 import pytest
 from asgiref.sync import sync_to_async
 
-from rest_framework_services.exceptions.service_validation_error import (
+from django_spec_rest.exceptions.service_validation_error import (
     ServiceValidationError,
 )
-from rest_framework_services.mutations.acreate_from_input import acreate_from_input
-from rest_framework_services.mutations.aupdate_from_input import aupdate_from_input
-from rest_framework_services.mutations.create_from_input import create_from_input
-from rest_framework_services.mutations.update_from_input import update_from_input
-from rest_framework_services.types.child_spec import ChildSpec
-from rest_framework_services.types.forward_relation_spec import ForwardRelationSpec
-from rest_framework_services.types.reverse_one_to_one_spec import ReverseOneToOneSpec
+from django_spec_rest.mutations.acreate_from_input import acreate_from_input
+from django_spec_rest.mutations.aupdate_from_input import aupdate_from_input
+from django_spec_rest.mutations.create_from_input import create_from_input
+from django_spec_rest.mutations.update_from_input import update_from_input
+from django_spec_rest.types.child_spec import ChildSpec
+from django_spec_rest.types.forward_relation_spec import ForwardRelationSpec
+from django_spec_rest.types.reverse_one_to_one_spec import ReverseOneToOneSpec
 from tests.testapp.models import Author, Post, Profile
 
 POSTS = {"posts": ChildSpec(model=Post, fk="author", match_key="id")}

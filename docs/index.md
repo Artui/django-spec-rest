@@ -1,11 +1,11 @@
-# djangorestframework-services
+# django-spec-rest
 
 A **service / selector layer** for Django REST Framework.
 
 DRF's default mode for mutating endpoints is "the serializer is the business
 logic". That's fine for thin CRUD, but it falls apart the moment you need
 to compose with an external system, fan out side effects, or write logic
-that doesn't belong on a model. `djangorestframework-services` keeps DRF's
+that doesn't belong on a model. `django-spec-rest` keeps DRF's
 routing, validation, and serialization for what they're good at, and gives
 you a precise, well-typed seam for the bits in the middle.
 
@@ -45,9 +45,9 @@ where it doesn't.
 ## Install
 
 ```bash
-pip install djangorestframework-services
+pip install django-spec-rest
 # or, with uv:
-uv add djangorestframework-services
+uv add django-spec-rest
 ```
 
 That brings in `djangorestframework-dataclasses` automatically — it's

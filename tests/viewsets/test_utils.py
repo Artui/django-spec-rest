@@ -12,8 +12,8 @@ from typing import Any
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 
-from rest_framework_services import SelectorKind, SelectorSpec, ServiceSpec
-from rest_framework_services.viewsets.utils import (
+from django_spec_rest import SelectorKind, SelectorSpec, ServiceSpec
+from django_spec_rest.viewsets.utils import (
     resolve_action_selector_spec,
     resolve_action_service_spec,
 )

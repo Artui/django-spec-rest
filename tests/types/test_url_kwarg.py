@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from rest_framework_services.types.query_param import QueryParam
-from rest_framework_services.types.unset import UNSET
-from rest_framework_services.types.url_kwarg import UrlKwarg
+from django_spec_rest.types.query_param import QueryParam
+from django_spec_rest.types.unset import UNSET
+from django_spec_rest.types.url_kwarg import UrlKwarg
 
 
 def test_url_kwarg_defaults_to_an_optional_string() -> None:

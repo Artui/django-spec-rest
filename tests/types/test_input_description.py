@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 
-from rest_framework_services import InputDescription
+from django_spec_rest import InputDescription
 
 
 def test_carries_its_text() -> None:

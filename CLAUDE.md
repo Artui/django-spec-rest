@@ -2,8 +2,8 @@
 
 Conventions for writing code in this repo. For *what* the library does, see [`README.md`](README.md).
 
-- Package on PyPI: `djangorestframework-services`
-- Importable name: `rest_framework_services`
+- Package on PyPI: `django-spec-rest`
+- Importable name: `django_spec_rest`
 - Build backend: hatchling
 - A DRF adapter over [`django-service-specs`](https://github.com/Artui/django-service-specs) (the kernel): a spec declared here compiles to the kernel's and the kernel's `dispatch` runs it. 77 of the root `__all__` names are the kernel's own objects re-exported at drfs' paths (`tests/test_kernel_reexports.py` pins all 77 by identity in `KERNEL_OWNED_ROOT_NAMES`, and 39 of them at the kernel's leaf module), so a behaviour of one of those belongs to the kernel and is changed there, not here.
 
@@ -15,13 +15,13 @@ Use the Makefile targets for everything; CI and pre-commit both call them.
 
 ```bash
 make init           # uv sync --all-groups + pre-commit install (first-checkout setup)
-make test           # uv run pytest (with --cov=rest_framework_services --cov-fail-under=100)
+make test           # uv run pytest (with --cov=django_spec_rest --cov-fail-under=100)
 make examples       # the example project's suite: cd examples && uv run python manage.py test invoices
-make lint           # ruff check + ty check rest_framework_services
+make lint           # ruff check + ty check django_spec_rest
 make lint-fix       # ruff check --fix
 make format         # ruff format
 make format-check   # ruff format --check --diff
-make type-check     # ty check rest_framework_services
+make type-check     # ty check django_spec_rest
 make docs-serve     # live-reload docs at http://localhost:8000 (needs mkdocs.yml)
 make docs-build     # mkdocs build --strict (fails on broken links)
 ```
@@ -37,9 +37,9 @@ These are non-negotiable. They are what keep the package navigable.
 1. **One exported class or function per file.** The file is named after the exported symbol in `snake_case`. `MyClass` lives in `my_class.py`; `do_thing` lives in `do_thing.py`.
 2. **Private helpers used only in one file** stay in that file with a `_name` prefix.
 3. **Non-exported helpers shared across files in a package** go in that package's `utils.py`. Classes are allowed in `utils.py` if they're internal infrastructure (e.g. `MutationFlowMixin` lived there before being promoted to its own file when it became public).
-4. **Top-level imports only.** Lazy / function-local imports are forbidden unless a circular import is diagnosed and proven, *or* the import targets a proven optional dependency (declared in `[project.optional-dependencies]` and gated behind an explicit `enable_*()` opt-in helper). In either case document the reason inline. Canonical optional-dep example: `rest_framework_services/openapi/enable_openapi.py`.
+4. **Top-level imports only.** Lazy / function-local imports are forbidden unless a circular import is diagnosed and proven, *or* the import targets a proven optional dependency (declared in `[project.optional-dependencies]` and gated behind an explicit `enable_*()` opt-in helper). In either case document the reason inline. Canonical optional-dep example: `django_spec_rest/openapi/enable_openapi.py`.
 5. **Full type annotations on every function and method signature.** `Any` is allowed at integration boundaries (DRF serializers, Django ORM); avoid it inside the package.
-6. **Re-exports go in `__init__.py`.** Each package's `__init__.py` lists its public surface in `__all__`. The top-level `rest_framework_services/__init__.py` re-exports the user-facing API. `service_specs/` is the one package whose `__init__.py` carries no `__all__` today: its names are imported from their leaf modules, and `dispatch/` re-exports the three a transport uses (`build_offline_context`, `base_serializer_context`, `renderable_serializer_class`).
+6. **Re-exports go in `__init__.py`.** Each package's `__init__.py` lists its public surface in `__all__`. The top-level `django_spec_rest/__init__.py` re-exports the user-facing API. `service_specs/` is the one package whose `__init__.py` carries no `__all__` today: its names are imported from their leaf modules, and `dispatch/` re-exports the three a transport uses (`build_offline_context`, `base_serializer_context`, `renderable_serializer_class`).
 7. **`service_specs/` is the adapter over the kernel.** It compiles a spec here to the kernel's (`as_kernel_spec`, `kernel_spec_variant`), supplies the kernel's extension points from DRF (`SerializerValidator`, `SerializerPresenter`, `DRFPermissionCheck`), and translates the kernel's refusals back into DRF's (`translate_dispatch_errors`, the dual-base `InvalidArguments` / `NotPermitted` / `PrincipalUnavailable`, `register_drf_row_errors`). It imports DRF by design and must never import the HTTP views or `dispatch/`: `dispatch/` calls the adapter, never the reverse. Outside the transport, only `dispatch/` and the two spec classes import it: `types/service_spec.py` and `types/selector_spec.py` import `as_kernel_spec` for the specs' `as_kernel_spec()` method, so the compiler reads a spec by attribute and imports only `types/` leaf modules, never the spec classes themselves. All three directions are held by tests (see *Imports inside the package*).
 
 ---
@@ -75,7 +75,7 @@ A typical change touches three places:
 
 1. The source file (one new `.py` per new class/function).
 2. The package's `__init__.py` (add to imports + `__all__`).
-3. A test file under `tests/` mirroring the source path (`rest_framework_services/foo/bar.py` → `tests/foo/test_bar.py`).
+3. A test file under `tests/` mirroring the source path (`django_spec_rest/foo/bar.py` → `tests/foo/test_bar.py`).
 
 Then verify:
 
@@ -87,13 +87,13 @@ make test
 
 `make test` enforces 100% line + branch coverage. New branches must be exercised, not annotated away.
 
-If the new symbol is part of the public API, also add it to the top-level `rest_framework_services/__init__.py` and to `CHANGELOG.md` under `[Unreleased]`.
+If the new symbol is part of the public API, also add it to the top-level `django_spec_rest/__init__.py` and to `CHANGELOG.md` under `[Unreleased]`.
 
 ---
 
 ## Tests
 
-- Live in `tests/`, mirroring the source tree. `tests/mutations/test_apply_input.py` tests `rest_framework_services/mutations/apply_input.py`.
+- Live in `tests/`, mirroring the source tree. `tests/mutations/test_apply_input.py` tests `django_spec_rest/mutations/apply_input.py`.
 - Each test file is named `test_<module_name>.py`.
 - Async tests rely on `pytest-asyncio` (`asyncio_mode = "auto"` in `pyproject.toml`); just write `async def test_...`.
 - DB-touching tests use `@pytest.mark.django_db`; async DB tests use `@pytest.mark.django_db(transaction=True)`.
@@ -104,7 +104,7 @@ If the new symbol is part of the public API, also add it to the top-level `rest_
 
 ## Type checking
 
-`ty` is scoped to `rest_framework_services/` only — Django's dynamic descriptors (`Model.objects` in particular) trip the checker when it walks `tests/`. If `ty` complains about a piece of source code, fix the source rather than scoping the checker more narrowly.
+`ty` is scoped to `django_spec_rest/` only — Django's dynamic descriptors (`Model.objects` in particular) trip the checker when it walks `tests/`. If `ty` complains about a piece of source code, fix the source rather than scoping the checker more narrowly.
 
 Dev deps include `django-stubs` and `djangorestframework-stubs`, so DRF and Django types are known to `ty`.
 
@@ -127,19 +127,19 @@ Common patches you'll still need inside the package:
 
 **Four of the rules above are now enforced, not remembered.** `ruff` carries the future-annotations import (`isort.required-imports`, with `__init__.py` and `migrations/` exempt) and the ban on every relative form including single-dot (`ban-relative-imports = "all"` — `TID` alone defaults to `parents`, so `from .foo import x` slipped through). Two pygrep pre-commit hooks carry the rest: no mypy-style `# type: ignore` inside the package, and no `rest_framework` import inside `exceptions/`. The ban on `if TYPE_CHECKING:` under *Imports inside the package* is enforced too, by `TID251`. Change the rule here and change the config with it, or they drift apart again.
 
-  The mypy-pragma hook is scoped to `rest_framework_services/` on purpose, because that is exactly what `ty` checks. Under `tests/` and `examples/` no checker reads either pragma, while an editor running mypy or pyright does honour `# type: ignore` — rewriting those would turn something that still works into a no-op everywhere.
+  The mypy-pragma hook is scoped to `django_spec_rest/` on purpose, because that is exactly what `ty` checks. Under `tests/` and `examples/` no checker reads either pragma, while an editor running mypy or pyright does honour `# type: ignore` — rewriting those would turn something that still works into a no-op everywhere.
 
 ---
 
 ## Imports inside the package
 
-- Always absolute, fully qualified: `from rest_framework_services.exceptions.service_error import ServiceError`. **Never** relative imports — no `from . import x`, no `from .foo import Bar`, no `from ..pkg import baz`. This applies inside the package and inside `tests/` (use `from tests.testapp.models import …`).
-- isort is wired through ruff (`I` rules). Order: stdlib → third-party → first-party. `rest_framework_services` and the test app are first-party.
+- Always absolute, fully qualified: `from django_spec_rest.exceptions.service_error import ServiceError`. **Never** relative imports — no `from . import x`, no `from .foo import Bar`, no `from ..pkg import baz`. This applies inside the package and inside `tests/` (use `from tests.testapp.models import …`).
+- isort is wired through ruff (`I` rules). Order: stdlib → third-party → first-party. `django_spec_rest` and the test app are first-party.
 - A package's `__init__.py` is the only file that re-exports; downstream files import from the leaf module, not from the package's `__init__`.
 - **`types/` is the dependency sink.** Value-shape carriers (dataclasses, generic specs, sentinels) live there. `views/`, `selectors/`, `services/`, `viewsets/` may import *from* `types/`; `types/` must **not** import from any of them. The one edge out of `types/` is `types/service_spec.py` and `types/selector_spec.py` importing `service_specs.as_kernel_spec` for the specs' `as_kernel_spec()` method (listed in `ALLOWED_ADAPTER_IMPORTERS`, below); the compiler imports only `types/` leaf modules in return, never the spec classes, which is what keeps that edge from being a cycle. If a `types/` member needs to reference a Protocol or other shape currently living elsewhere — e.g. a spec field annotation — move that shape into `types/` first (this is why `ServiceView` lives in `types/` rather than `views/`). Behavioural Protocols *not* referenced from `types/` (e.g. `CreateService`, `ListSelector`) stay in their behavioural package — that is their natural home, and putting everything in `types/` would muddle the boundary between value shapes and callable contracts.
-- **Imports of DRF and of the HTTP views from outside the transport are ratcheted.** `tests/test_import_boundaries.py` lists every module outside `views/`, `viewsets/`, `openapi/` and the adapter `service_specs/` that imports `rest_framework` or `rest_framework_services.views`, and what it imports. An unlisted import fails, and so does a listed one that no longer exists, so both lists can only shrink. The adapter is walled separately: `EDGE_PACKAGES` (`service_specs`) takes it out of the neutral core's lists and gives it ratchets of its own. `ALLOWED_EDGE_DRF_IMPORTS` lists each of its modules' DRF imports with the reason beside it, and both directions ratchet as above. `test_the_adapter_never_imports_the_http_views` refuses any import of `views/` or `viewsets/` from it, and `test_the_adapter_never_imports_dispatch` any import of `dispatch/`. Who imports the adapter is pinned exactly by `ALLOWED_ADAPTER_IMPORTERS`: six `dispatch/` modules (the two cores, their shared `utils.py`, and the three re-exports `dispatch/` keeps at its old paths), and `types/service_spec.py` / `types/selector_spec.py` for `as_kernel_spec()`. A new importer, or one that no longer imports it, fails `test_only_the_edge_and_the_spec_classes_import_the_adapter`; the package root and the transport packages are outside that walk. Most entries are legitimate — the keyword-pool resolver still lives in `views/utils.py` — but the dispatch core's transport neutrality is only as true as these imports, so a new one is a decision to write down beside the entry, never a side effect. When you move something *out* of `views/`, delete its entries in the same change.
+- **Imports of DRF and of the HTTP views from outside the transport are ratcheted.** `tests/test_import_boundaries.py` lists every module outside `views/`, `viewsets/`, `openapi/` and the adapter `service_specs/` that imports `rest_framework` or `django_spec_rest.views`, and what it imports. An unlisted import fails, and so does a listed one that no longer exists, so both lists can only shrink. The adapter is walled separately: `EDGE_PACKAGES` (`service_specs`) takes it out of the neutral core's lists and gives it ratchets of its own. `ALLOWED_EDGE_DRF_IMPORTS` lists each of its modules' DRF imports with the reason beside it, and both directions ratchet as above. `test_the_adapter_never_imports_the_http_views` refuses any import of `views/` or `viewsets/` from it, and `test_the_adapter_never_imports_dispatch` any import of `dispatch/`. Who imports the adapter is pinned exactly by `ALLOWED_ADAPTER_IMPORTERS`: six `dispatch/` modules (the two cores, their shared `utils.py`, and the three re-exports `dispatch/` keeps at its old paths), and `types/service_spec.py` / `types/selector_spec.py` for `as_kernel_spec()`. A new importer, or one that no longer imports it, fails `test_only_the_edge_and_the_spec_classes_import_the_adapter`; the package root and the transport packages are outside that walk. Most entries are legitimate — the keyword-pool resolver still lives in `views/utils.py` — but the dispatch core's transport neutrality is only as true as these imports, so a new one is a decision to write down beside the entry, never a side effect. When you move something *out* of `views/`, delete its entries in the same change.
 - **No `if TYPE_CHECKING:` guard in the package.** A guard hides an import cycle from the interpreter while the type checker still sees it, so every guard is a cycle waiting to be broken, and a function-local import is no substitute for breaking it (the older function-local imports that name a cycle stay until each is broken the same way). The ban is ruff's `TID251` (`[tool.ruff.lint.flake8-tidy-imports.banned-api]`, so `make lint` and CI run it). Break the cycle by structure: put the shared name in a leaf module of `types/` (`AffordanceDeclarer` is the base `SelectorSpec` names for the `ServiceSpec`s in its `affordances`, because `service_spec` imports `selector_spec`), type the parameter with a base class or `Any`, or reverse an edge. The nine test files that guard an import on purpose are listed by path in `per-file-ignores`, each because its subject is an annotation naming a name imported only for type checking; a new one is a decision, not a side effect.
-- **Don't eagerly import Django models** (`django.contrib.auth.models`, `django.db.models.<concrete>`, etc.) at package-import time. `rest_framework_services` ships in `INSTALLED_APPS`, so the package gets imported during `apps.populate()`, before app models are loaded — eager imports raise `AppRegistryNotReady`. If you need a precise type, prefer `Any` for that field (the framework treats `request.user` as an integration boundary; see `types/http_extras.py:UserT`), or move the import into a non-eagerly-loaded module.
+- **Don't eagerly import Django models** (`django.contrib.auth.models`, `django.db.models.<concrete>`, etc.) at package-import time. An installed app's models module may import the package during `apps.populate()`, before app models are loaded — eager imports raise `AppRegistryNotReady`. If you need a precise type, prefer `Any` for that field (the framework treats `request.user` as an integration boundary; see `types/http_extras.py:UserT`), or move the import into a non-eagerly-loaded module.
 
 ---
 
@@ -162,7 +162,7 @@ Python 3.10 syntax / stdlib features are fair game (`match` statements, PEP 604 
 
 `.github/workflows/tests.yml` runs on every push to `main` and every PR:
 
-- `lint` job — `ruff check`, `ruff format --check --diff`, `ty check rest_framework_services`.
+- `lint` job — `ruff check`, `ruff format --check --diff`, `ty check django_spec_rest`.
 - `docs` job — `mkdocs build --strict` (with `DJANGO_SETTINGS_MODULE` pointed at
   `tests.conftest_settings`, since `mkdocstrings` imports the package and DRF
   reads settings at import time). Broken links / missing pages fail fast.
@@ -191,7 +191,7 @@ If a hook fails, fix the underlying issue and create a **new** commit. Don't `--
 - **`DataclassSerializer` can't deduce a field type from `Any`.** Use proper types (`str | None = None` for partial-update fields). For the strict "omitted vs. None" distinction, use the `UNSET` sentinel and test with `is UNSET`.
 - **`get_object()` is shared between retrieve and update/destroy.** When configuring a viewset that mixes a `retrieve_selector` with mutation actions, the selector applies to all of them — that's intentional. For an action-specific lookup, set `instance_selector_spec` on that action's `ServiceSpec` (it takes precedence over the `get_object()` chain); overriding `get_object` yourself remains the catch-all escape hatch.
 - **Don't invent a new filtering DSL.** For list endpoints DRF's `filter_backends` are the default. The one blessed spec-level hook is `SelectorSpec.filter_set` — a real `django-filter` `FilterSet`, applied through the kernel's `shape_queryset` (its `base_filters` are the selector's filter arguments, so an object duck-typed on `(data, queryset) -> .qs` is refused with `ImproperlyConfigured` at compile time; the package still imports nothing from `django-filter`), there for *retrieve* selectors and transport-neutral declaration; it **replaces** `DjangoFilterBackend` on the list path (guarded at `as_view()` in `views.spec_validation.validate_filter_set_no_backend_conflict`). When a selector returns an aggregate / computed object rather than a queryset, those `?param` values are computation inputs — use `kwargs` / `get_selector_kwargs()`. See `docs/recipes/selector-filtering.md`.
-- **Don't import from `rest_framework` inside `rest_framework_services.exceptions/`.** That module is the framework-agnostic boundary, and every exception in it is now the kernel's own, re-exported; the view layer maps exceptions to DRF responses. The exceptions that are DRF's as well (`InvalidArguments`, `NotPermitted`, `PrincipalUnavailable`) live in `service_specs/`, not here.
+- **Don't import from `rest_framework` inside `django_spec_rest.exceptions/`.** That module is the framework-agnostic boundary, and every exception in it is now the kernel's own, re-exported; the view layer maps exceptions to DRF responses. The exceptions that are DRF's as well (`InvalidArguments`, `NotPermitted`, `PrincipalUnavailable`) live in `service_specs/`, not here.
 - **Adding a view that dispatches a `ServiceSpec`?** Don't reassemble the kwargs pool or call `dispatch_spec` directly — go through `views.mutation.utils.dispatch_mutation_for_spec` (mutations) or `selectors.utils.dispatch_selector_for_spec` (selectors). Both resolve the view's hook chains into a `ViewHooks` carrier and hand off to `dispatch_spec`, the edge over the kernel's `dispatch`, so the kwargs-resolution chain stays consistent (the spec's `kwargs` provider outranks `get_<action>_*_kwargs`, which outranks `get_*_kwargs`; a value from any of them naming an input-serializer field is that field's value, over the client's) and the spec's own providers resolve exactly once. **A behaviour that belongs to the spec belongs in the core** — put it in the view layer and it is honoured over HTTP and silently skipped over MCP; `tests/test_transport_parity.py` is the standing check. Its sibling `tests/test_sync_async_parity.py` guards the other axis — the sync core against `adispatch_spec` — by driving one case through both and comparing outcomes, including the signatures of every sync/async pair. Anything you change in one core belongs in a case there. Also hook fail-fast validation into `as_view()` via `views.spec_validation.validate_mutation_view_spec` / `validate_selector_view_spec`.
 - **Over HTTP DRF's serializer validates alone; off HTTP the kernel checks types first.** `dispatch.utils.over_http(view)` is `view is not None and not isinstance(view, OfflineServiceView)`. Such a call (a live DRF view, or any transport's own view object) compiles the lenient variant (`kernel_spec_variant(lenient=True)`, a Validator declaring its fields by name alone), binds the body the request parsed, a `QueryDict` kept one, and answers in DRF's words (`edge_errors`): `"true"`, `1` and `"on"` for a boolean, form bodies, every field's refusal at once, a bulk body bounded by its `ListSerializer` alone and refused with its errors in the installed DRF's shape. It also reads a declared `UrlKwarg` from the route and a `QueryParam` from the query string alone, and writes no body value onto `view.kwargs` or `request.query_params`, which the view's permission classes have already read. A call with no view or an `OfflineServiceView` keeps the kernel's typed check, including its 1000-row cap on a bulk list, and takes those values from the caller. A change that makes a live view answer differently from a bare DRF serializer is a regression (`tests/views/test_drf_validation_over_http.py`); branch on `over_http`, never on an `isinstance` against DRF's views, which the dispatch core does not import.
 - **A serializer-less service's own parameters are not caller input under `AUTO` or `BUNDLE`.** The default compile declares none of its signature (`kernel_spec(spec).parameters()` is its lookup's keys and its `reads`), and only `kernel_spec_variant(spread=True)`, for an explicit `SPREAD_AUTHOR_WINS`, declares it. Reflecting the signature into the default compile is a mass assignment: `DELETE {"hard": true}` would set `hard=True`.
@@ -207,7 +207,7 @@ The release pipeline is **merge-to-main triggered**, not tag-triggered.
 [`scripts/release-publish.sh`](scripts/release-publish.sh) is the single source
 of truth for the flow and behaves as follows:
 
-1. Extract the version from `rest_framework_services/version.py` (the
+1. Extract the version from `django_spec_rest/version.py` (the
    single source of truth; `pyproject.toml` declares `dynamic = ["version"]`
    and hatchling reads the value from `version.py` at build time).
 2. Check whether `vX.Y.Z` already exists locally or on origin. **If yes →
@@ -241,7 +241,7 @@ configuration lives in `[tool.bumpversion]` in `pyproject.toml`.
 # 1. On a release branch, make sure CHANGELOG.md has the entries you want
 #    to ship under ## [Unreleased]. Then bump:
 make release-bump VERSION=0.4.1
-# This rewrites rest_framework_services/version.py (the single source of
+# This rewrites django_spec_rest/version.py (the single source of
 # truth — pyproject.toml is dynamic and reads from it at build time),
 # promotes the [Unreleased] block under a dated [0.4.1] section, and
 # rewrites the link footer — all driven by the [[tool.bumpversion.files]]
@@ -271,7 +271,7 @@ pushing.
 These steps need to happen once before the first tag push will succeed:
 
 1. **PyPI Trusted Publisher** — sign in to PyPI, open the project settings,
-   add a publisher pointing at `Artui/djangorestframework-services`, workflow
+   add a publisher pointing at `Artui/django-spec-rest`, workflow
    `release.yml`, environment `pypi`. (Use a "Pending" publisher if the project
    does not yet exist on PyPI; promote it after the first release.)
 2. **GitHub Environment** — create a `pypi` environment under

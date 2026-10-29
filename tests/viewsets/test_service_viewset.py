@@ -9,7 +9,7 @@ import pytest
 from django.core.exceptions import ImproperlyConfigured
 from rest_framework.test import APIRequestFactory
 
-from rest_framework_services import (
+from django_spec_rest import (
     PolymorphicServiceSpec,
     SelectorKind,
     SelectorSpec,
@@ -442,7 +442,7 @@ class TestServiceViewSetEdgeCases:
         assert response.status_code == 404
 
     def test_create_service_error_maps_to_422(self) -> None:
-        from rest_framework_services import ServiceError
+        from django_spec_rest import ServiceError
 
         def boom(*, data: _AuthorIn) -> None:
             raise ServiceError("nope")
@@ -471,9 +471,9 @@ class TestServiceViewSetEdgeCases:
         The mapper is unit-tested next door; this is the half that proves nothing
         between the service and the response flattens it back to 422.
         """
-        import rest_framework_services
+        import django_spec_rest
 
-        raised = getattr(rest_framework_services, error)
+        raised = getattr(django_spec_rest, error)
 
         def boom(*, data: _AuthorIn) -> None:
             raise raised(detail)

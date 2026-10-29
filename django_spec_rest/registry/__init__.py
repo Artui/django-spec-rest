@@ -6,7 +6,7 @@ here rather than in ``types/`` — where its value type, ``RegisteredSpec``,
 does.
 """
 
-from rest_framework_services.registry.capability_manifest import capability_manifest
-from rest_framework_services.registry.spec_registry import SpecRegistry
+from django_spec_rest.registry.capability_manifest import capability_manifest
+from django_spec_rest.registry.spec_registry import SpecRegistry
 
 __all__ = ["SpecRegistry", "capability_manifest"]

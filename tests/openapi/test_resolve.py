@@ -8,7 +8,7 @@ from typing import Any
 from rest_framework.test import APIRequestFactory
 from rest_framework.viewsets import GenericViewSet
 
-from rest_framework_services import (
+from django_spec_rest import (
     SelectorKind,
     SelectorListView,
     SelectorRetrieveView,
@@ -19,7 +19,7 @@ from rest_framework_services import (
     selector_action,
     service_action,
 )
-from rest_framework_services.openapi._resolve import (
+from django_spec_rest.openapi._resolve import (
     resolve_selector_spec,
     resolve_service_spec,
 )

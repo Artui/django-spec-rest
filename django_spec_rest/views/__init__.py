@@ -5,12 +5,12 @@ The mutation views (``ServiceCreateView``, ``ServiceUpdateView``,
 ``SelectorRetrieveView``) are re-exported here for convenience.
 """
 
-from rest_framework_services.views.mutation import (
+from django_spec_rest.views.mutation import (
     ServiceCreateView,
     ServiceDeleteView,
     ServiceUpdateView,
 )
-from rest_framework_services.views.query import (
+from django_spec_rest.views.query import (
     SelectorListView,
     SelectorRetrieveView,
 )

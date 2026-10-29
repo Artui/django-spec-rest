@@ -102,7 +102,7 @@ def list_posts(*, user) -> QuerySet[Post]:
 Wire it on the spec:
 
 ```python
-from rest_framework_services import SelectorKind, SelectorSpec, SelectorViewSet
+from django_spec_rest import SelectorKind, SelectorSpec, SelectorViewSet
 
 from blog.filters import PostFilterSet
 from blog.selectors import list_posts

@@ -60,7 +60,7 @@ also take:
 ## `apply_input` — set attributes, don't save
 
 ```python
-from rest_framework_services import apply_input
+from django_spec_rest import apply_input
 
 
 def update_author(*, instance, data):
@@ -77,7 +77,7 @@ call time.
 ## `create_from_input`
 
 ```python
-from rest_framework_services import create_from_input
+from django_spec_rest import create_from_input
 
 from myapp.models import Author
 
@@ -93,7 +93,7 @@ assignments. `result.created` is `True`.
 ## `update_from_input`
 
 ```python
-from rest_framework_services import update_from_input
+from django_spec_rest import update_from_input
 
 
 def update_author(*, instance, data):
@@ -160,7 +160,7 @@ for change in result.changes:
 ```python
 from dataclasses import dataclass
 
-from rest_framework_services import UNSET, UnsetType
+from django_spec_rest import UNSET, UnsetType
 
 
 @dataclass
@@ -199,7 +199,7 @@ update_from_input(instance, data)  # bio==UNSET is skipped automatically
 async ORM calls. The contract is identical:
 
 ```python
-from rest_framework_services import aupdate_from_input
+from django_spec_rest import aupdate_from_input
 
 
 async def update_author(*, instance, data):

@@ -16,8 +16,8 @@ from rest_framework import serializers
 from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
 
-from rest_framework_services import ServiceSpec, ServiceViewSet
-from rest_framework_services.views.utils import (
+from django_spec_rest import ServiceSpec, ServiceViewSet
+from django_spec_rest.views.utils import (
     resolve_extra_kwargs,
     resolve_input_extras,
     resolve_serializer_context,

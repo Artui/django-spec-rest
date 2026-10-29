@@ -9,8 +9,8 @@ from unittest.mock import patch
 import pytest
 from django.utils import timezone
 
-from rest_framework_services.mutations import update_from_input
-from rest_framework_services.types import UNSET
+from django_spec_rest.mutations import update_from_input
+from django_spec_rest.types import UNSET
 from tests.testapp.models import Author, Post, Tag, Timestamped
 
 

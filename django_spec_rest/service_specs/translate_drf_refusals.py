@@ -15,11 +15,11 @@ from rest_framework.exceptions import (
     ValidationError,
 )
 
-from rest_framework_services.service_specs.drf_not_authenticated import DRFNotAuthenticated
-from rest_framework_services.service_specs.drf_service_validation_error import (
+from django_spec_rest.service_specs.drf_not_authenticated import DRFNotAuthenticated
+from django_spec_rest.service_specs.drf_service_validation_error import (
     DRFServiceValidationError,
 )
-from rest_framework_services.service_specs.not_permitted import NotPermitted
+from django_spec_rest.service_specs.not_permitted import NotPermitted
 
 TRANSLATED_FROM: Final = "_translated_from"
 """The attribute a translated refusal carries the exception it was translated from under.
@@ -35,22 +35,22 @@ def translate_drf_refusals() -> Generator[None]:
     """Re-raise the DRF refusals raised inside the block as the kernel's classes, still DRF's.
 
     The reverse of
-    [`translate_dispatch_errors`][rest_framework_services.service_specs.translate_dispatch_errors.translate_dispatch_errors]:
+    [`translate_dispatch_errors`][django_spec_rest.service_specs.translate_dispatch_errors.translate_dispatch_errors]:
     an author writes a service, a selector, a precondition or a permission
     class against DRF and refuses with DRF's exceptions, which a transport
     over the kernel's ``dispatch`` reads as nothing it knows. So the compile
     runs each author callable it hands the kernel inside this block, and
-    [`DRFPermissionCheck`][rest_framework_services.service_specs.drf_permission_check.DRFPermissionCheck]
+    [`DRFPermissionCheck`][django_spec_rest.service_specs.drf_permission_check.DRFPermissionCheck]
     asks each permission class inside it:
 
     - ``ValidationError`` leaves as
-      [`DRFServiceValidationError`][rest_framework_services.service_specs.drf_service_validation_error.DRFServiceValidationError],
+      [`DRFServiceValidationError`][django_spec_rest.service_specs.drf_service_validation_error.DRFServiceValidationError],
       with the same detail and codes;
     - ``PermissionDenied`` as
-      [`NotPermitted`][rest_framework_services.service_specs.not_permitted.NotPermitted],
+      [`NotPermitted`][django_spec_rest.service_specs.not_permitted.NotPermitted],
       with its message and code;
     - ``NotAuthenticated`` as
-      [`DRFNotAuthenticated`][rest_framework_services.service_specs.drf_not_authenticated.DRFNotAuthenticated],
+      [`DRFNotAuthenticated`][django_spec_rest.service_specs.drf_not_authenticated.DRFNotAuthenticated],
       which DRF still answers 401;
     - a subclass of any of the three as that class's twin, with the subclass's
       detail and ``status_code``.

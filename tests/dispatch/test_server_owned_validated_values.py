@@ -25,7 +25,7 @@ from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 from rest_framework.test import APIRequestFactory
 
-from rest_framework_services import (
+from django_spec_rest import (
     DispatchResult,
     NotClientInput,
     SelectorListView,
@@ -36,11 +36,11 @@ from rest_framework_services import (
     adispatch_spec,
     dispatch_spec,
 )
-from rest_framework_services.types.argument_binding import ArgumentBinding
-from rest_framework_services.types.offline_service_view import OfflineServiceView
-from rest_framework_services.types.selector_kind import SelectorKind
-from rest_framework_services.types.unknown_arguments import UnknownArguments
-from rest_framework_services.types.view_hooks import ViewHooks
+from django_spec_rest.types.argument_binding import ArgumentBinding
+from django_spec_rest.types.offline_service_view import OfflineServiceView
+from django_spec_rest.types.selector_kind import SelectorKind
+from django_spec_rest.types.unknown_arguments import UnknownArguments
+from django_spec_rest.types.view_hooks import ViewHooks
 from tests.testapp.models import Post
 
 _factory = APIRequestFactory()

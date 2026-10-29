@@ -9,8 +9,8 @@ from django_service_specs.affordances.unmet_operation_affordance import (
 )
 from django_service_specs.types.affordance import Affordance
 
-from rest_framework_services.dispatch.utils import EDGE_SEEDS
-from rest_framework_services.types.reserved_pool_seeds import RESERVED_POOL_SEEDS
+from django_spec_rest.dispatch.utils import EDGE_SEEDS
+from django_spec_rest.types.reserved_pool_seeds import RESERVED_POOL_SEEDS
 
 # Drift risk: this mirrors the kernel's signature by hand. A parameter the
 # kernel adds is not reachable through this name until it is added here, which

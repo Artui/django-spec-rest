@@ -7,7 +7,7 @@ from typing import Any
 
 from django_service_specs.dispatch.dispatch import dispatch
 
-from rest_framework_services.dispatch.utils import (
+from django_spec_rest.dispatch.utils import (
     edge_call,
     edge_errors,
     listed_output,
@@ -15,20 +15,20 @@ from rest_framework_services.dispatch.utils import (
     prepare_edge_call,
     with_output_layers,
 )
-from rest_framework_services.service_specs.register_drf_row_errors import (
+from django_spec_rest.service_specs.register_drf_row_errors import (
     register_drf_row_errors,
 )
-from rest_framework_services.service_specs.utils import EdgeCallState
-from rest_framework_services.types.argument_binding import ArgumentBinding
-from rest_framework_services.types.dispatch_result import DispatchResult
-from rest_framework_services.types.pool_seeds import DEFAULT_POOL_SEEDS, PoolSeeds
-from rest_framework_services.types.progress_reporter import ProgressReporter
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
-from rest_framework_services.types.target_guard import TargetGuard
-from rest_framework_services.types.unknown_arguments import UnknownArguments
-from rest_framework_services.types.unset import UNSET
-from rest_framework_services.types.view_hooks import ViewHooks
+from django_spec_rest.service_specs.utils import EdgeCallState
+from django_spec_rest.types.argument_binding import ArgumentBinding
+from django_spec_rest.types.dispatch_result import DispatchResult
+from django_spec_rest.types.pool_seeds import DEFAULT_POOL_SEEDS, PoolSeeds
+from django_spec_rest.types.progress_reporter import ProgressReporter
+from django_spec_rest.types.selector_spec import SelectorSpec
+from django_spec_rest.types.service_spec import ServiceSpec
+from django_spec_rest.types.target_guard import TargetGuard
+from django_spec_rest.types.unknown_arguments import UnknownArguments
+from django_spec_rest.types.unset import UNSET
+from django_spec_rest.types.view_hooks import ViewHooks
 
 # This package has no ``AppConfig`` to register from, and the edge is where a
 # nested write's DRF row refusals first need the kernel to know them. Idempotent.
@@ -56,29 +56,29 @@ def dispatch_spec(
     call_context: dict[str, Any] | None = None,
 ) -> DispatchResult:
     """Run ``spec`` through the kernel's ``dispatch``, as DRF would, returning its
-    [`DispatchResult`][rest_framework_services.types.dispatch_result.DispatchResult].
+    [`DispatchResult`][django_spec_rest.types.dispatch_result.DispatchResult].
 
     The edge compiles the spec once per variant
-    ([`kernel_spec_variant`][rest_framework_services.service_specs.kernel_spec_variant.kernel_spec_variant]),
+    ([`kernel_spec_variant`][django_spec_rest.service_specs.kernel_spec_variant.kernel_spec_variant]),
     hands ``dispatch`` the arguments, the principal and a ``Grant``, and
     translates what the kernel refuses into DRF's exceptions
-    ([`translate_dispatch_errors`][rest_framework_services.service_specs.translate_dispatch_errors.translate_dispatch_errors]).
+    ([`translate_dispatch_errors`][django_spec_rest.service_specs.translate_dispatch_errors.translate_dispatch_errors]).
     The order of a call, the closed argument set, the Validator, affordances,
     preconditions, the run and the output re-read are the kernel's, documented
     on its ``dispatch``. Nothing is rendered here; render the result with
-    [`render_spec_output`][rest_framework_services.dispatch.render_spec_output.render_spec_output].
+    [`render_spec_output`][django_spec_rest.dispatch.render_spec_output.render_spec_output].
 
     **Authorization is the caller's**, as it always was: the spec's
     ``permission_classes`` are never asked here. Over HTTP the view has run
     them; off HTTP the caller runs
-    [`enforce_permissions`][rest_framework_services.dispatch.enforce_permissions.enforce_permissions]
+    [`enforce_permissions`][django_spec_rest.dispatch.enforce_permissions.enforce_permissions]
     first and passes it as ``on_target_resolved``. So the dispatched variant
     carries no permissions and the call goes in under a ``Grant``.
 
     Args:
         spec: The
-            [`ServiceSpec`][rest_framework_services.types.service_spec.ServiceSpec] or
-            [`SelectorSpec`][rest_framework_services.types.selector_spec.SelectorSpec]
+            [`ServiceSpec`][django_spec_rest.types.service_spec.ServiceSpec] or
+            [`SelectorSpec`][django_spec_rest.types.selector_spec.SelectorSpec]
             to run.
         user: The acting user, the kernel's principal. ``None`` acts as DRF's
             unauthenticated user (``UNAUTHENTICATED_USER``), which is what every

@@ -15,13 +15,13 @@ import pytest
 from rest_framework.exceptions import ValidationError
 from typing_extensions import TypedDict, Unpack
 
-from rest_framework_services.dispatch.adispatch_spec import adispatch_spec
-from rest_framework_services.dispatch.build_offline_context import build_offline_context
-from rest_framework_services.dispatch.dispatch_spec import dispatch_spec
-from rest_framework_services.types.http_extras import HttpExtras
-from rest_framework_services.types.input_required import InputRequired
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.unset import UNSET
+from django_spec_rest.dispatch.adispatch_spec import adispatch_spec
+from django_spec_rest.dispatch.build_offline_context import build_offline_context
+from django_spec_rest.dispatch.dispatch_spec import dispatch_spec
+from django_spec_rest.types.http_extras import HttpExtras
+from django_spec_rest.types.input_required import InputRequired
+from django_spec_rest.types.selector_spec import SelectorSpec
+from django_spec_rest.types.unset import UNSET
 
 
 class _WidgetExtras(HttpExtras[Any], total=False):

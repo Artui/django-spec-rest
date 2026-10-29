@@ -21,16 +21,16 @@ documented under [Types](types.md); the render entry points
 
 ## `audience_projection_for_spec`
 
-::: rest_framework_services.audience.audience_projection_for_spec.audience_projection_for_spec
+::: django_spec_rest.audience.audience_projection_for_spec.audience_projection_for_spec
 
 ## `build_audience_projection`
 
-::: rest_framework_services.audience.build_audience_projection.build_audience_projection
+::: django_spec_rest.audience.build_audience_projection.build_audience_projection
 
 ## `project_payload`
 
-::: rest_framework_services.audience.project_payload.project_payload
+::: django_spec_rest.audience.project_payload.project_payload
 
 ## `annotate_output_schema`
 
-::: rest_framework_services.audience.annotate_output_schema.annotate_output_schema
+::: django_spec_rest.audience.annotate_output_schema.annotate_output_schema

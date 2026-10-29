@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from rest_framework_services import (
+from django_spec_rest import (
     ArgumentBinding,
     SelectorKind,
     SelectorSpec,
@@ -22,8 +22,8 @@ from rest_framework_services import (
     dispatch_spec,
     null_progress,
 )
-from rest_framework_services.types.progress_reporter import ProgressReporter
-from rest_framework_services.types.reserved_pool_seeds import RESERVED_POOL_SEEDS
+from django_spec_rest.types.progress_reporter import ProgressReporter
+from django_spec_rest.types.reserved_pool_seeds import RESERVED_POOL_SEEDS
 
 
 class _Recorder:
@@ -157,7 +157,7 @@ def test_an_http_view_supplies_a_reporter_through_its_progress_hook() -> None:
     """
     from rest_framework.test import APIRequestFactory
 
-    from rest_framework_services import ServiceViewSet
+    from django_spec_rest import ServiceViewSet
 
     seen: list[tuple[float, float | None, str | None]] = []
     shadowed: list[Any] = []
@@ -194,7 +194,7 @@ def test_a_reporter_returned_by_get_service_kwargs_never_reaches_the_service() -
     """
     from rest_framework.test import APIRequestFactory
 
-    from rest_framework_services import ServiceViewSet
+    from django_spec_rest import ServiceViewSet
 
     handed: list[Any] = []
     shadowed: list[Any] = []

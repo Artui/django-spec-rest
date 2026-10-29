@@ -11,8 +11,8 @@ from django_service_specs.services.service_validation_error import (
 from django_service_specs.types.dispatch_error import DispatchError
 from rest_framework.exceptions import ErrorDetail, ValidationError
 
-from rest_framework_services import ServiceValidationError
-from rest_framework_services.service_specs.drf_service_validation_error import (
+from django_spec_rest import ServiceValidationError
+from django_spec_rest.service_specs.drf_service_validation_error import (
     DRFServiceValidationError,
 )
 from tests.service_specs.served_status import served_status

@@ -13,7 +13,7 @@ from typing import Any
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 
-from rest_framework_services.types.affordance import Affordance
+from django_spec_rest.types.affordance import Affordance
 
 
 def _reads_result(result: Any) -> bool:

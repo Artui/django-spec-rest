@@ -15,7 +15,7 @@ out).
 from dataclasses import dataclass
 
 from rest_framework_dataclasses.serializers import DataclassSerializer
-from rest_framework_services import (
+from django_spec_rest import (
     SelectorKind,
     SelectorSpec,
     ServiceSpec,

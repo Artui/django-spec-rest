@@ -12,7 +12,7 @@ from rest_framework.routers import SimpleRouter
 from rest_framework.test import APIClient, APIRequestFactory
 from rest_framework.viewsets import GenericViewSet
 
-from rest_framework_services import SelectorKind, SelectorSpec, selector_action
+from django_spec_rest import SelectorKind, SelectorSpec, selector_action
 from tests.testapp.models import Author
 from tests.testapp.serializers import AuthorSerializer
 

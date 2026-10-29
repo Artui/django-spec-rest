@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from rest_framework_services import delete_model
+from django_spec_rest import delete_model
 from tests.testapp.models import Author
 
 

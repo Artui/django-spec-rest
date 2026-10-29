@@ -71,7 +71,7 @@ Each Protocol is parameterised on input / instance / result types only.
 services declare only the parameters they read:
 
 ```python
-from rest_framework_services import CreateService
+from django_spec_rest import CreateService
 
 
 def create_author(
@@ -96,7 +96,7 @@ decorator to attach the structural assertion at the def site:
 ```python
 from typing_extensions import TypedDict, Unpack
 
-from rest_framework_services import CreateService, implements
+from django_spec_rest import CreateService, implements
 
 
 class CreateAuthorKwargs(TypedDict, total=False):
@@ -130,7 +130,7 @@ unpack a `HttpExtras[YourUser]` subclass (a `total=False` `TypedDict`)
 for typed access:
 
 ```python
-from rest_framework_services import CreateService, HttpExtras, implements
+from django_spec_rest import CreateService, HttpExtras, implements
 from typing_extensions import Unpack
 
 
@@ -209,7 +209,7 @@ historically had only one hook (`get_service_kwargs`), forcing branches like
 `if self.action == "create": ...`. Move the contract onto the spec instead:
 
 ```python
-from rest_framework_services import ServiceSpec, ServiceViewSet
+from django_spec_rest import ServiceSpec, ServiceViewSet
 from typing import TypedDict
 
 
@@ -261,7 +261,7 @@ Use whichever level matches the granularity of your contract.
 ### Attaching the Protocol to the function: `@implements`
 
 The recommended way to assert that a callable matches a strict Protocol is
-the [`implements`](reference/services.md#rest_framework_services.implements.implements)
+the [`implements`](reference/services.md#django_spec_rest.implements.implements)
 decorator — it returns the function unchanged at runtime and triggers the
 structural-subtyping check at the decorator line:
 

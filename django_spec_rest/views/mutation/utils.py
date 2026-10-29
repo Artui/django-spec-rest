@@ -24,26 +24,26 @@ from rest_framework.response import Response
 from rest_framework.serializers import BaseSerializer, Serializer
 from rest_framework_dataclasses.serializers import DataclassSerializer
 
-from rest_framework_services.dispatch.apply_input_data import apply_input_data
-from rest_framework_services.dispatch.dispatch_spec import dispatch_spec
-from rest_framework_services.dispatch.render_spec_output import render_spec_output
-from rest_framework_services.dispatch.renderable_serializer_class import renderable_serializer_class
-from rest_framework_services.exceptions.service_error import ServiceError
-from rest_framework_services.selectors.utils import (
+from django_spec_rest.dispatch.apply_input_data import apply_input_data
+from django_spec_rest.dispatch.dispatch_spec import dispatch_spec
+from django_spec_rest.dispatch.render_spec_output import render_spec_output
+from django_spec_rest.dispatch.renderable_serializer_class import renderable_serializer_class
+from django_spec_rest.exceptions.service_error import ServiceError
+from django_spec_rest.selectors.utils import (
     check_view_object_permissions,
 )
-from rest_framework_services.types.dispatch_result import DispatchResult
-from rest_framework_services.types.service_spec import ServiceSpec
-from rest_framework_services.types.unset import UNSET
-from rest_framework_services.views.mutation.apply_response_finalizer import (
+from django_spec_rest.types.dispatch_result import DispatchResult
+from django_spec_rest.types.service_spec import ServiceSpec
+from django_spec_rest.types.unset import UNSET
+from django_spec_rest.views.mutation.apply_response_finalizer import (
     apply_response_finalizer,
 )
-from rest_framework_services.views.mutation.map_service_error import (
+from django_spec_rest.views.mutation.map_service_error import (
     _AdditionalInputAPIException,
     map_service_error,
 )
-from rest_framework_services.views.mutation.resolve_success_status import resolve_success_status
-from rest_framework_services.views.utils import (
+from django_spec_rest.views.mutation.resolve_success_status import resolve_success_status
+from django_spec_rest.views.utils import (
     add_affordances,
     resolve_serializer_context,
     resolve_view_hooks,
@@ -120,11 +120,11 @@ def build_input_serializer_from_data(
     """Construct + validate the bound input serializer from a raw ``data`` dict.
 
     The transport-neutral core of
-    [`build_input_serializer`][rest_framework_services.views.mutation.utils.build_input_serializer]:
+    [`build_input_serializer`][django_spec_rest.views.mutation.utils.build_input_serializer]:
     it takes the input ``data`` directly instead of reaching into a DRF
     ``request.data``, so a non-HTTP caller (``dispatch_spec``) and the HTTP view path
     share one validation implementation. See
-    [`build_input_serializer`][rest_framework_services.views.mutation.utils.build_input_serializer]
+    [`build_input_serializer`][django_spec_rest.views.mutation.utils.build_input_serializer]
     for the remaining parameter semantics."""
     if input_serializer is None:
         return None
@@ -163,7 +163,7 @@ def validate_input(
     """Validate ``request.data`` against ``input_serializer``; ``None`` if absent.
 
     Thin wrapper over
-    [`build_input_serializer`][rest_framework_services.views.mutation.utils.build_input_serializer]
+    [`build_input_serializer`][django_spec_rest.views.mutation.utils.build_input_serializer]
     (see there for the parameter semantics) returning only ``validated_data``, for
     callers that don't need the bound serializer itself."""
     serializer = build_input_serializer(
@@ -209,7 +209,7 @@ def render_mutation_response(
     output_context: Callable[[Any], dict[str, Any]],
 ) -> Response:
     """Turn a
-    [`DispatchResult`][rest_framework_services.types.dispatch_result.DispatchResult]
+    [`DispatchResult`][django_spec_rest.types.dispatch_result.DispatchResult]
     into the HTTP ``Response`` for a mutation.
 
     Everything downstream of the dispatch that is genuinely transport-shaped, and
@@ -312,7 +312,7 @@ def _dispatch_bulk_via_spec(
 
     The list body / collection target, validation, and per-set scoping all live in the
     transport-neutral path; here we only map its
-    [`DispatchResult`][rest_framework_services.types.dispatch_result.DispatchResult] to
+    [`DispatchResult`][django_spec_rest.types.dispatch_result.DispatchResult] to
     a DRF ``Response`` and translate a ``ServiceError`` the same way the single-instance
     flow does. The status and finalizer pools carry no ``instance`` / ``data`` on a bulk
     path.
@@ -395,10 +395,10 @@ def dispatch_mutation_for_spec(
     """End-to-end dispatch for one ``ServiceSpec`` call over HTTP.
 
     Used by
-    [`MutationFlowMixin`][rest_framework_services.views.mutation.mutation_flow_mixin.MutationFlowMixin],
+    [`MutationFlowMixin`][django_spec_rest.views.mutation.mutation_flow_mixin.MutationFlowMixin],
     the standalone mutation views, and ``@service_action`` so the call shape lives in
     one place: resolve the view's hook chains (``resolve_view_hooks``), dispatch through
-    [`dispatch_spec`][rest_framework_services.dispatch.dispatch_spec.dispatch_spec],
+    [`dispatch_spec`][django_spec_rest.dispatch.dispatch_spec.dispatch_spec],
     render (``render_mutation_response``). Only the first and last steps are HTTP's. The
     target is passed in rather than resolved in the core, because HTTP's
     ``get_object()`` chain has no off-HTTP meaning; a bulk spec takes the same route
@@ -521,7 +521,7 @@ def resolve_mutation_instance(
         run: the core fires ``on_target_resolved`` against the resolved target and the
         HTTP caller passes ``check_view_object_permissions``. Otherwise the view's
         ``get_object()`` chain (an ``action_specs["retrieve"]`` selector via
-        [`SelectorRetrieveMixin`][rest_framework_services.viewsets.selector_retrieve_mixin.SelectorRetrieveMixin],
+        [`SelectorRetrieveMixin`][django_spec_rest.viewsets.selector_retrieve_mixin.SelectorRetrieveMixin],
         else DRF's ``queryset`` / ``lookup_field`` lookup, else a user override) — the
         one branch that is genuinely HTTP-only and so cannot move.
 
@@ -547,7 +547,7 @@ def mutation_target_source(
     spec: ServiceSpec[Any, Any, Any],
 ) -> Literal["bulk", "instance_selector", "get_object"]:
     """Where a mutation's target comes from, as
-    [`resolve_mutation_instance`][rest_framework_services.views.mutation.utils.resolve_mutation_instance]
+    [`resolve_mutation_instance`][django_spec_rest.views.mutation.utils.resolve_mutation_instance]
     decides it.
 
     Its own function so a caller that must not *perform* the lookup can still

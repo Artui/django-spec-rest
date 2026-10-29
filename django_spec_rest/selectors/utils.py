@@ -28,11 +28,11 @@ from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelec
 from rest_framework.exceptions import NotFound
 from rest_framework.request import Request
 
-from rest_framework_services.dispatch.dispatch_spec import dispatch_spec
-from rest_framework_services.types.argument_binding import ArgumentBinding
-from rest_framework_services.types.selector_kind import SelectorKind
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.views.utils import resolve_view_hooks, view_call_context
+from django_spec_rest.dispatch.dispatch_spec import dispatch_spec
+from django_spec_rest.types.argument_binding import ArgumentBinding
+from django_spec_rest.types.selector_kind import SelectorKind
+from django_spec_rest.types.selector_spec import SelectorSpec
+from django_spec_rest.views.utils import resolve_view_hooks, view_call_context
 
 
 def apply_queryset_shaping(
@@ -150,11 +150,11 @@ def check_view_object_permissions(
     *,
     instance: Any = None,
 ) -> None:
-    """[`TargetGuard`][rest_framework_services.types.target_guard.TargetGuard] running
+    """[`TargetGuard`][django_spec_rest.types.target_guard.TargetGuard] running
     DRF's object-permission check for an HTTP view.
 
     The HTTP counterpart of
-    [`enforce_permissions`][rest_framework_services.dispatch.enforce_permissions.enforce_permissions]:
+    [`enforce_permissions`][django_spec_rest.dispatch.enforce_permissions.enforce_permissions]:
     off HTTP a transport enforces ``spec.permission_classes`` itself, while a DRF view
     has already instantiated them and exposes ``check_object_permissions``. Both plug
     into the same ``on_target_resolved`` seam, so the core stays authz-agnostic on every
@@ -172,11 +172,11 @@ def dispatch_selector_for_spec(view: Any, spec: SelectorSpec[Any, Any]) -> Any:
     """End-to-end dispatch for one ``SelectorSpec`` call from a DRF view.
 
     Resolves the view's ``get_selector_kwargs`` / ``get_<action>_selector_kwargs`` chain
-    into a [`ViewHooks`][rest_framework_services.types.view_hooks.ViewHooks] carrier,
+    into a [`ViewHooks`][django_spec_rest.types.view_hooks.ViewHooks] carrier,
     hands off to the one
-    [`dispatch_spec`][rest_framework_services.dispatch.dispatch_spec.dispatch_spec]
+    [`dispatch_spec`][django_spec_rest.dispatch.dispatch_spec.dispatch_spec]
     core, and translates the neutral
-    [`DispatchResult`][rest_framework_services.types.dispatch_result.DispatchResult]
+    [`DispatchResult`][django_spec_rest.types.dispatch_result.DispatchResult]
     into the view-layer contract: a RETRIEVE that resolved nothing raises ``NotFound``,
     unless the spec sets ``allow_none=True`` (then ``None``, and the retrieve views
     render 200 + JSON ``null``). ``SelectorKind.LIST`` returns the shaped queryset.

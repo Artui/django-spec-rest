@@ -25,10 +25,10 @@ from rest_framework.request import Request
 from rest_framework.validators import UniqueValidator
 from rest_framework_dataclasses.serializers import DataclassSerializer
 
-from rest_framework_services.service_specs.build_offline_context import build_offline_context
-from rest_framework_services.service_specs.invalid_arguments import InvalidArguments
-from rest_framework_services.service_specs.serializer_validator import SerializerValidator
-from rest_framework_services.service_specs.translate_dispatch_errors import (
+from django_spec_rest.service_specs.build_offline_context import build_offline_context
+from django_spec_rest.service_specs.invalid_arguments import InvalidArguments
+from django_spec_rest.service_specs.serializer_validator import SerializerValidator
+from django_spec_rest.service_specs.translate_dispatch_errors import (
     translate_dispatch_errors,
 )
 from tests.testapp.models import Post

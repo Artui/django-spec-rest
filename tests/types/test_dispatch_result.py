@@ -11,7 +11,7 @@ from dataclasses import fields
 
 import pytest
 
-from rest_framework_services.types.dispatch_result import DispatchResult
+from django_spec_rest.types.dispatch_result import DispatchResult
 
 
 def test_there_is_no_status() -> None:

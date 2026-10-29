@@ -19,7 +19,7 @@ Reach for async when the service does I/O outside the database:
 ```python
 import httpx
 
-from rest_framework_services import ServiceCreateView, ServiceSpec
+from django_spec_rest import ServiceCreateView, ServiceSpec
 
 
 async def fetch_remote(*, request):
@@ -39,7 +39,7 @@ Use the `a*` mutation helpers (`acreate_from_input`,
 `afilter`, etc.):
 
 ```python
-from rest_framework_services import aupdate_from_input
+from django_spec_rest import aupdate_from_input
 
 
 async def update_author(*, instance, data):

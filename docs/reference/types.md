@@ -31,93 +31,93 @@ Being the kernel's changes what a few of them refuse, each where it is built:
 
 ## `SelectorKind`
 
-::: rest_framework_services.types.selector_kind.SelectorKind
+::: django_spec_rest.types.selector_kind.SelectorKind
 
 ## `SelectorSpec`
 
-::: rest_framework_services.types.selector_spec.SelectorSpec
+::: django_spec_rest.types.selector_spec.SelectorSpec
 
 ## `ServiceSpec`
 
-::: rest_framework_services.types.service_spec.ServiceSpec
+::: django_spec_rest.types.service_spec.ServiceSpec
 
 ## `Affordance`
 
-::: rest_framework_services.types.affordance.Affordance
+::: django_spec_rest.types.affordance.Affordance
 
 ## `AffordanceDeclarer`
 
-::: rest_framework_services.types.affordance_declarer.AffordanceDeclarer
+::: django_spec_rest.types.affordance_declarer.AffordanceDeclarer
 
 ## `PolymorphicServiceSpec`
 
-::: rest_framework_services.types.polymorphic_service_spec.PolymorphicServiceSpec
+::: django_spec_rest.types.polymorphic_service_spec.PolymorphicServiceSpec
 
 ## `ChangeResult`
 
-::: rest_framework_services.types.change_result.ChangeResult
+::: django_spec_rest.types.change_result.ChangeResult
 
 ## `FieldChange`
 
-::: rest_framework_services.types.field_change.FieldChange
+::: django_spec_rest.types.field_change.FieldChange
 
 ## `ChildSpec`
 
-::: rest_framework_services.types.child_spec.ChildSpec
+::: django_spec_rest.types.child_spec.ChildSpec
 
 ## `ChildCollectionChange`
 
-::: rest_framework_services.types.child_collection_change.ChildCollectionChange
+::: django_spec_rest.types.child_collection_change.ChildCollectionChange
 
 ## `RelationSpec`
 
-::: rest_framework_services.types.relation_spec.RelationSpec
+::: django_spec_rest.types.relation_spec.RelationSpec
 
 ## `RelationPhase`
 
-::: rest_framework_services.types.relation_phase.RelationPhase
+::: django_spec_rest.types.relation_phase.RelationPhase
 
 ## `RelationOrphan`
 
-::: rest_framework_services.types.relation_orphan.RelationOrphan
+::: django_spec_rest.types.relation_orphan.RelationOrphan
 
 ## `ForwardRelationSpec`
 
-::: rest_framework_services.types.forward_relation_spec.ForwardRelationSpec
+::: django_spec_rest.types.forward_relation_spec.ForwardRelationSpec
 
 ## `ReverseOneToOneSpec`
 
-::: rest_framework_services.types.reverse_one_to_one_spec.ReverseOneToOneSpec
+::: django_spec_rest.types.reverse_one_to_one_spec.ReverseOneToOneSpec
 
 ## `GenericRelationSpec`
 
-::: rest_framework_services.types.generic_relation_spec.GenericRelationSpec
+::: django_spec_rest.types.generic_relation_spec.GenericRelationSpec
 
 ## `ManyToManySpec`
 
-::: rest_framework_services.types.many_to_many_spec.ManyToManySpec
+::: django_spec_rest.types.many_to_many_spec.ManyToManySpec
 
 ## `RelatedObjectChange`
 
-::: rest_framework_services.types.related_object_change.RelatedObjectChange
+::: django_spec_rest.types.related_object_change.RelatedObjectChange
 
 ## `UNSET`
 
-::: rest_framework_services.types.unset.UNSET
+::: django_spec_rest.types.unset.UNSET
 
-::: rest_framework_services.types.unset.UnsetType
+::: django_spec_rest.types.unset.UnsetType
 
 ## `NoInput`
 
-::: rest_framework_services.types.no_input.NoInput
+::: django_spec_rest.types.no_input.NoInput
 
 ## `HttpExtras`
 
-::: rest_framework_services.types.http_extras.HttpExtras
+::: django_spec_rest.types.http_extras.HttpExtras
 
 ## `OfflineContext`
 
-::: rest_framework_services.types.offline_context.OfflineContext
+::: django_spec_rest.types.offline_context.OfflineContext
 
 ## `InputRequired`
 
@@ -131,23 +131,23 @@ marker on one is not enforced: a parameter nothing fills is the callable's own
 `TypeError`. A declared `reads=` entry is caller input under every binding. See
 [what a caller could fill](../recipes/off-http-inputs.md#requiredness-inputrequired).
 
-::: rest_framework_services.types.input_required
+::: django_spec_rest.types.input_required
 
 ## `NotClientInput`
 
-::: rest_framework_services.types.not_client_input
+::: django_spec_rest.types.not_client_input
 
 ## `InputDescription`
 
-::: rest_framework_services.types.input_description
+::: django_spec_rest.types.input_description
 
 ## `read_input_description`
 
-::: rest_framework_services.types.read_input_description.read_input_description
+::: django_spec_rest.types.read_input_description.read_input_description
 
 ## `UrlKwarg`
 
-::: rest_framework_services.types.url_kwarg.UrlKwarg
+::: django_spec_rest.types.url_kwarg.UrlKwarg
 
 ## `QueryParam`
 
@@ -183,45 +183,45 @@ declares no field present under every value a caller may send: the
 `SerializerPresenter` a spec with shapes compiles is built with `shaped=True`,
 which marks no output field `always_present` at any depth. The flag is the
 presenter's own, with the default unchanged (see
-[`SerializerPresenter`][rest_framework_services.service_specs.serializer_presenter.SerializerPresenter]),
+[`SerializerPresenter`][django_spec_rest.service_specs.serializer_presenter.SerializerPresenter]),
 and a presenter built by hand for a spec whose output a caller's argument
 shapes passes it itself. A `QueryParam` declares no choices, so no key can be
 named as present under all of them.
 
-::: rest_framework_services.types.query_param.QueryParam
+::: django_spec_rest.types.query_param.QueryParam
 
 ## `validate_channel_names`
 
-::: rest_framework_services.types.validate_channel_names.validate_channel_names
+::: django_spec_rest.types.validate_channel_names.validate_channel_names
 
 ## `ProgressReporter`
 
-::: rest_framework_services.types.progress_reporter.ProgressReporter
+::: django_spec_rest.types.progress_reporter.ProgressReporter
 
 ## `RESERVED_POOL_SEEDS`
 
-::: rest_framework_services.types.reserved_pool_seeds
+::: django_spec_rest.types.reserved_pool_seeds
 
 ## `PoolSeeds`
 
-::: rest_framework_services.types.pool_seeds
+::: django_spec_rest.types.pool_seeds
 
 ## `FieldAudience`
 
-::: rest_framework_services.types.field_audience.FieldAudience
+::: django_spec_rest.types.field_audience.FieldAudience
 
 ## `MARKING`
 
-::: rest_framework_services.types.field_marking.MARKING
+::: django_spec_rest.types.field_marking.MARKING
 
 ## `FieldMarking`
 
-::: rest_framework_services.types.field_marking.FieldMarking
+::: django_spec_rest.types.field_marking.FieldMarking
 
 ## `ValueFormatter`
 
-::: rest_framework_services.types.value_formatter.ValueFormatter
+::: django_spec_rest.types.value_formatter.ValueFormatter
 
 ## `AudienceProjection`
 
-::: rest_framework_services.types.audience_projection.AudienceProjection
+::: django_spec_rest.types.audience_projection.AudienceProjection
