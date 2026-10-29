@@ -270,9 +270,8 @@ def dispatch_kernel_spec(
         )
         token = EDGE_CALL.set(state)
         try:
-            extra_kwargs, server = _overlay(spec, hooks)
-            arguments, state.validator_input = kernel_arguments(
-                spec, view=view, request=request, input_data=server, query=query
+            extra_kwargs, arguments, state.validator_input = _read_call(
+                spec, view=view, request=request, hooks=hooks, query=query
             )
             found = _resolved(
                 dispatched,
@@ -316,9 +315,11 @@ async def adispatch_kernel_spec(
     The same arguments, the same state and the same answers; the kernel's
     thread hops run in a copy of this context, which holds the same state.
     Reading the arguments parses the request's body, which reads its stream,
-    and the spec's own lookup queries, so each runs in Django's
-    thread-sensitive executor rather than on the event loop
-    (test_kernel_edge's test_the_async_core_reads_the_body_off_the_loop).
+    describing the input serializer builds it with the call's request, whose
+    ``get_fields`` may query, and the spec's own lookup queries, so each runs
+    in Django's thread-sensitive executor rather than on the event loop
+    (test_kernel_edge's test_the_async_core_reads_the_body_off_the_loop,
+    test_the_async_core_describes_the_input_serializer_off_the_loop).
     """
     hooks = view_hooks if view_hooks is not None else ViewHooks()
     with answering_refusals():
@@ -328,10 +329,9 @@ async def adispatch_kernel_spec(
         )
         token = EDGE_CALL.set(state)
         try:
-            extra_kwargs, server = _overlay(spec, hooks)
-            arguments, state.validator_input = await sync_to_async(
-                kernel_arguments, thread_sensitive=True
-            )(spec, view=view, request=request, input_data=server, query=query)
+            extra_kwargs, arguments, state.validator_input = await sync_to_async(
+                _read_call, thread_sensitive=True
+            )(spec, view=view, request=request, hooks=hooks, query=query)
             found = await sync_to_async(_resolved, thread_sensitive=True)(
                 dispatched,
                 principal=request.user,
@@ -356,6 +356,25 @@ async def adispatch_kernel_spec(
             return _with_output_layers(result, hooks)
         finally:
             EDGE_CALL.reset(token)
+
+
+def _read_call(
+    spec: KernelSpec,
+    *,
+    view: Any,
+    request: Request,
+    hooks: ViewHooks,
+    query: QueryDict | None,
+) -> tuple[dict[str, Any], dict[str, Any], tuple[Any, Any] | None]:
+    """The overlay, the arguments and the held body of one call: every read that describes.
+
+    One sync step, so the async core hops to a thread once for all of it.
+    """
+    extra_kwargs, server = _overlay(spec, hooks)
+    arguments, held = kernel_arguments(
+        spec, view=view, request=request, input_data=server, query=query
+    )
+    return extra_kwargs, arguments, held
 
 
 def _edge_state(

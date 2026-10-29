@@ -432,3 +432,34 @@ def test_the_async_core_reads_the_body_off_the_loop() -> None:
     result = _async(_CREATE, **parts)
     assert result.value.name == "Ada"
     assert on_loop == [False]
+
+
+def _on_the_loop() -> bool:
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return False
+    return True
+
+
+def test_the_async_core_describes_the_input_serializer_off_the_loop() -> None:
+    """A serializer is described with the call's request, and a ``get_fields``
+    may query through it, so the async core builds every description in a
+    worker thread rather than on the event loop."""
+    on_loop: list[bool] = []
+
+    class _Recording(serializers.Serializer):
+        name = serializers.CharField()
+
+        def get_fields(self) -> dict[str, serializers.Field]:
+            on_loop.append(_on_the_loop())
+            return super().get_fields()
+
+    spec = ServiceSpec(
+        service=lambda *, data: data["name"],
+        permissions=_OPEN,
+        validator=SerializerValidator(_Recording),
+    )
+    assert _async(spec, **_parts({"name": "Ada"})).value == "Ada"
+    assert on_loop
+    assert True not in on_loop
