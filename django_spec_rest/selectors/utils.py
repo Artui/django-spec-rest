@@ -297,7 +297,13 @@ class _ViewObjectPermission(PermissionCheck):
         # (test_the_view_s_check_asked_with_no_call_context_refuses).
         if call_context is None:
             return False
-        call_context["view"].check_object_permissions(call_context["request"], target)
+        # Per-row, as DRF's ``get_object()`` and the drfs path's target hook
+        # ask it: a value that is no model row, a dataclass or a mapping a
+        # selector built, is handed to no DRF class's ``has_object_permission``,
+        # which would read ``obj._meta`` off it
+        # (test_a_row_that_is_no_model_is_not_asked_of_the_view).
+        if isinstance(target, Model):
+            call_context["view"].check_object_permissions(call_context["request"], target)
         return True
 
 
@@ -338,8 +344,13 @@ def drf_query_keys(view: Any) -> frozenset[str]:
     classes: ``page_query_param``, ``page_size_query_param``,
     ``limit_query_param``, ``offset_query_param`` and ``cursor_query_param``
     on DRF's three paginators, ``search_param`` and ``ordering_param`` on its
-    two filters, and the same spelling on a project's own. A ``None``, a
-    paginator's way of reading no such key, names none. Read off the classes
+    two filters, ``version_param`` on its query-parameter versioning, and the
+    same spelling on a project's own. A ``None`` or a blank, a reader's way of
+    reading no such key, names none (test_drf_query_keys, its ``_OwnFilter``
+    row holding the blank). A view-level ``DjangoFilterBackend`` reading a
+    ``filterset_fields`` of the view's own is not read here: its keys are its
+    filter set's, which only its ``get_filterset_class(view, queryset)``
+    knows. Read off the classes
     and the configured paginator alone, never through a backend's schema
     method, since django-filter's calls ``view.get_queryset()``, which is the
     dispatch these keys are read for.
@@ -347,7 +358,11 @@ def drf_query_keys(view: Any) -> frozenset[str]:
     keys: set[str] = set()
     if api_settings.URL_FORMAT_OVERRIDE:
         keys.add(api_settings.URL_FORMAT_OVERRIDE)
-    readers = [getattr(view, "paginator", None), *getattr(view, "filter_backends", ())]
+    readers = [
+        getattr(view, "paginator", None),
+        getattr(view, "versioning_class", None),
+        *getattr(view, "filter_backends", ()),
+    ]
     for reader in readers:
         for name in dir(reader):
             value = getattr(reader, name, None) if name.endswith("_param") else None

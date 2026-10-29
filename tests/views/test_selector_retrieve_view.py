@@ -8,6 +8,7 @@ preconditions and before anything is presented.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from typing import Any
 
@@ -27,6 +28,7 @@ from django_service_specs import (
 from rest_framework import serializers
 from rest_framework.authentication import BasicAuthentication
 from rest_framework.permissions import BasePermission
+from rest_framework.renderers import BaseRenderer, BrowsableAPIRenderer, JSONRenderer
 from rest_framework.response import Response
 from rest_framework.test import APIRequestFactory, force_authenticate
 
@@ -186,6 +188,19 @@ class TestTheViewsObjectPermission:
         assert _viewed(spec) is not spec
         assert _viewed(spec).permissions[1:] == spec.permissions
 
+    def test_a_row_that_is_no_model_is_not_asked_of_the_view(self) -> None:
+        @dataclasses.dataclass
+        class _Row:
+            name: str
+
+        class _ReadsMeta(BasePermission):
+            def has_object_permission(self, request: Any, view: Any, obj: Any) -> bool:
+                return obj._meta is not None
+
+        spec = _detail(lambda *, pk: _Row(name="Ada"), presenter=SerializerPresenter(_NameOnly))
+        response = _get(spec, 1, attrs={"permission_classes": [_ReadsMeta]})
+        assert (response.status_code, json.loads(response.content)) == (200, {"name": "Ada"})
+
     def test_the_view_s_check_asked_with_no_call_context_refuses(self) -> None:
         check = _viewed(_detail()).permissions[0]
         assert check.has_permission(None, None) is True
@@ -255,3 +270,78 @@ class TestAffordances:
         spec = _detail(_post, affordances={"publish": PUBLISH})
         with pytest.raises(ImproperlyConfigured, match="Declare a presenter"):
             _get(spec, post.pk, attrs={"serializer_class": _PostOut})
+
+
+class _VendorJSON(JSONRenderer):
+    media_type = "application/vnd.example+json"
+
+
+class _EnvelopeJSON(JSONRenderer):
+    """A JSON renderer wrapping every payload, ``None`` included."""
+
+    def render(
+        self, data: Any, accepted_media_type: Any = None, renderer_context: Any = None
+    ) -> bytes:
+        return super().render({"data": data}, accepted_media_type, renderer_context)
+
+
+class _CharsetJSON(JSONRenderer):
+    charset = "utf-8"
+
+
+class _SilentNone(BaseRenderer):
+    """A non-JSON renderer that, like ``JSONRenderer``, renders ``None`` as nothing."""
+
+    media_type = "text/plain"
+    format = "txt"
+
+    def render(
+        self, data: Any, accepted_media_type: Any = None, renderer_context: Any = None
+    ) -> bytes:
+        return b"" if data is None else repr(data).encode()
+
+
+class TestAMissOnTheWire:
+    """What a client receives for ``allow_none``'s miss, read from the rendered bytes."""
+
+    def _get(self, renderers: list[Any], pk: Any = 999, **headers: Any) -> Response:
+        spec = _detail(presenter=SerializerPresenter(_NameOnly), allow_none=True)
+        view = type("_View", (SelectorRetrieveView,), {"spec": spec, "renderer_classes": renderers})
+        response = view.as_view()(factory.get("/", **headers), pk=str(pk))
+        response.render()
+        return response
+
+    def test_an_indented_json_request_is_still_null(self) -> None:
+        response = self._get([JSONRenderer], HTTP_ACCEPT="application/json; indent=4")
+        assert (response.content, response["Content-Type"]) == (b"null", "application/json")
+
+    def test_a_json_renderer_subclass_serves_null_under_its_own_media_type(self) -> None:
+        response = self._get([_VendorJSON])
+        assert response.content == b"null"
+        assert response["Content-Type"] == "application/vnd.example+json"
+
+    def test_a_json_renderer_that_wraps_none_keeps_its_wrapper(self, ada: Author) -> None:
+        found, miss = self._get([_EnvelopeJSON], ada.pk), self._get([_EnvelopeJSON])
+        assert found.content == b'{"data":{"name":"Ada"}}'
+        assert miss.content == b'{"data":null}'
+        assert miss["Content-Type"] == found["Content-Type"] == "application/json"
+
+    def test_a_charset_renderer_serves_a_miss_under_the_header_of_a_found_row(
+        self, ada: Author
+    ) -> None:
+        found, miss = self._get([_CharsetJSON], ada.pk), self._get([_CharsetJSON])
+        assert found["Content-Type"] == "application/json; charset=utf-8"
+        assert (miss.content, miss["Content-Type"]) == (b"null", found["Content-Type"])
+
+    def test_a_non_json_renderer_that_renders_none_as_nothing_still_does(self) -> None:
+        response = self._get([_SilentNone])
+        assert response.content == b""
+        assert "Content-Type" not in response
+
+    def test_the_browsable_api_still_renders_a_miss(self, settings: Any) -> None:
+        settings.TEMPLATES = [
+            {"BACKEND": "django.template.backends.django.DjangoTemplates", "APP_DIRS": True}
+        ]
+        response = self._get([JSONRenderer, BrowsableAPIRenderer], HTTP_ACCEPT="text/html")
+        assert response["Content-Type"] == "text/html; charset=utf-8"
+        assert b"<html" in response.content

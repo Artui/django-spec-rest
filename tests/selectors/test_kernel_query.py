@@ -15,14 +15,21 @@ from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.pagination import CursorPagination, LimitOffsetPagination, PageNumberPagination
 from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory, override_settings
+from rest_framework.versioning import QueryParameterVersioning
 
 from django_spec_rest.selectors.utils import drf_query_keys, kernel_query
 
 
 class _View:
-    def __init__(self, paginator: Any = None, filter_backends: tuple[Any, ...] = ()) -> None:
+    def __init__(
+        self,
+        paginator: Any = None,
+        filter_backends: tuple[Any, ...] = (),
+        versioning_class: Any = None,
+    ) -> None:
         self.paginator = paginator
         self.filter_backends = filter_backends
+        self.versioning_class = versioning_class
 
 
 class _SizedPages(PageNumberPagination):
@@ -33,6 +40,7 @@ class _OwnFilter:
     """A project's backend, spelling its key DRF's way."""
 
     tenant_param = "tenant"
+    blank_param = ""
     unrelated = "not a key"
 
 
@@ -46,6 +54,7 @@ class _OwnFilter:
         (_View(CursorPagination()), {"format", "cursor"}),
         (_View(filter_backends=(OrderingFilter, SearchFilter)), {"format", "ordering", "search"}),
         (_View(filter_backends=(_OwnFilter,)), {"format", "tenant"}),
+        (_View(versioning_class=QueryParameterVersioning), {"format", "version"}),
     ],
 )
 def test_drf_query_keys(view: _View, keys: set[str]) -> None:

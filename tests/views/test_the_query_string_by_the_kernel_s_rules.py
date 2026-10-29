@@ -156,3 +156,24 @@ def test_an_uncoercible_read_is_refused(pks: list[int]) -> None:
     status, body = _answer("limit=x")
     assert status == 400
     assert list(body) == ["limit"]
+
+
+def _served(query: str) -> tuple[int, Any]:
+    response = _View.as_view()(APIRequestFactory().get("/?" + query))
+    response.render()
+    return response.status_code, json.loads(response.content)
+
+
+@pytest.mark.parametrize(
+    ("query", "name", "value"), [("o=bogus", "o", "bogus"), ("st=dan", "st", "dan")]
+)
+def test_a_refused_choice_is_keyed_at_its_index(
+    pks: list[int], query: str, name: str, value: str
+) -> None:
+    """The answer served today, and a change the flat reader decision does
+    not list: an ordering or multiple-choice filter is an array to the
+    kernel, so a refused value is keyed by its index under the filter's name,
+    where drfs served a flat list under the name
+    (``{"ordering": ["Select a valid choice. ..."]}``)."""
+    message = f"Select a valid choice. {value} is not one of the available choices."
+    assert _served(query) == (400, {name: {"0": [message]}})

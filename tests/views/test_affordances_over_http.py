@@ -21,6 +21,7 @@ from django_service_specs import (
     ServiceSpec,
     Unrestricted,
 )
+from rest_framework.permissions import BasePermission
 from rest_framework.test import APIRequestFactory
 
 from django_spec_rest import ServiceCreateView, ServiceUpdateView
@@ -53,7 +54,14 @@ def _publish(*, instance: Post) -> Post:
     return instance
 
 
-def _view(permissions: Any = _OPEN) -> Any:
+class _DenyObject(BasePermission):
+    message = "You may not touch this post."
+
+    def has_object_permission(self, request: Any, view: Any, obj: Any) -> bool:
+        return False
+
+
+def _view(permissions: Any = _OPEN, permission_classes: Any = None) -> Any:
     spec = ServiceSpec(
         service=_publish,
         permissions=permissions,
@@ -74,7 +82,10 @@ def _view(permissions: Any = _OPEN) -> Any:
         def get_permissions(self) -> list[Any]:
             return [permission() for permission in self.permission_classes]
 
-    return type("_View", (_Publish,), {"spec": spec}).as_view()
+    attrs: dict[str, Any] = {"spec": spec}
+    if permission_classes is not None:
+        attrs["permission_classes"] = permission_classes
+    return type("_View", (_Publish,), attrs).as_view()
 
 
 def _patch(view: Any, pk: int) -> Any:
@@ -100,9 +111,9 @@ def test_an_available_row_is_served() -> None:
     assert json.loads(response.content)["published"] is True
 
 
-def test_a_caller_denied_the_row_learns_nothing_about_its_state() -> None:
-    """The object-level refusal comes before the affordance, so a caller
-    refused the row is answered 403, never told it is already published."""
+def test_a_caller_the_spec_denies_the_row_learns_nothing_about_its_state() -> None:
+    """The spec's own object-level refusal comes before the affordance, so a
+    caller refused the row is answered 403, never told it is published."""
     post = Post.objects.create(title="t", published=True)
     response = _patch(_view(permissions=(_NotThisPost(),)), post.pk)
     assert response.status_code == 403
@@ -119,3 +130,17 @@ def test_a_row_condition_on_a_create_view_is_refused_at_as_view() -> None:
     spec = ServiceSpec(service=lambda: None, permissions=_OPEN, affordances=[UNPUBLISHED])
     with pytest.raises(ImproperlyConfigured):
         type("_View", (ServiceCreateView,), {"spec": spec}).as_view()
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="a kernel spec on the mutation views never asks the view's own DRF object "
+    "permission before its affordances, so the denied caller is answered 409; an ask on "
+    "views/mutation/utils.py (selectors.utils' _viewed twin is the query views' answer)",
+)
+def test_a_caller_the_view_denies_the_row_learns_nothing_about_its_state() -> None:
+    """The drfs subject: the view's own DRF ``has_object_permission``."""
+    post = Post.objects.create(title="t", published=True)
+    response = _patch(_view(permission_classes=[_DenyObject]), post.pk)
+    assert response.status_code == 403
+    assert json.loads(response.content) == {"detail": "You may not touch this post."}
