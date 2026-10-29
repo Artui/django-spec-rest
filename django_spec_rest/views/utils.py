@@ -129,8 +129,8 @@ def view_call_context(view: Any, request: Request) -> dict[str, Any]:
     """The call's context of the request ``view`` is serving: one dict per request.
 
     Built on first use with the edge's four standard entries (``request``,
-    ``view``, ``format`` ``None`` and the view's ``action`` or ``None``) and kept
-    on the view, which DRF builds afresh for every request, so a second request
+    ``view``, ``format``, the route's suffix or ``None``, and the view's
+    ``action`` or ``None``) and kept on the view, which DRF builds afresh for every request, so a second request
     is a second dict (test_each_request_is_a_call_of_its_own). Kept rather than
     rebuilt: a dict per caller fails the identity assertions of
     test_a_create_hands_every_provider_the_request_s_context. Two dispatches in
@@ -161,7 +161,14 @@ def view_call_context(view: Any, request: Request) -> dict[str, Any]:
     """
     context: dict[str, Any] | None = getattr(view, "_call_context", None)
     if context is None:
-        context = fill_call_context(None, request=request, view=view)
+        # ``format`` is the route's suffix, which DRF's view keeps as
+        # ``format_kwarg`` (none on a route with no suffix, or a view that never ran
+        # DRF's ``initial``): the answer ``get_serializer_context`` gives for it, so a
+        # hyperlink a serializer builds from this dict carries the suffix
+        # (test_a_suffix_route_s_format_is_in_the_one_dict_the_validator_reads).
+        context = fill_call_context(
+            {"format": getattr(view, "format_kwarg", None)}, request=request, view=view
+        )
         view._call_context = context
     return context
 

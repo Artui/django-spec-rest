@@ -38,7 +38,9 @@ def build_offline_context(
 
     Args:
         user: Set as ``request.user``, so callables and permissions that read it behave
-            as on HTTP.
+            as on HTTP. ``request.auth`` is ``None``, set without running DRF's
+            authenticators, so reading it never replaces this user: a scope
+            check off DRF is the transport's to make.
         params: Seeds ``request.data``, straight into DRF's parsed-data cache (a
             synthetic request has no stream to parse). It is *not* validated here — that
             is
@@ -106,6 +108,19 @@ def build_offline_context(
     raw: Any = Request(base)
     drf_request: Request = cast(Request, raw)
     drf_request.user = user
+    # Set rather than left to DRF: ``request.auth`` and
+    # ``request.successful_authenticator`` each authenticate on their first
+    # read, and this request has no authenticator, so that read would replace
+    # ``user`` with ``AnonymousUser`` and a class reading either before ``user``
+    # - a token scope check - would refuse a signed-in principal
+    # (test_a_class_reading_auth_first_still_sees_the_principal and
+    # test_reading_the_successful_authenticator_first_keeps_the_user). A
+    # credential off DRF is the transport's to check, so there is none to report
+    # here.
+    # The setter writes through to ``base``, a copy or a synthesized request,
+    # never the caller's (test_on_a_wrapped_django_request_too).
+    drf_request.auth = None
+    drf_request._authenticator = None  # ty: ignore[unresolved-attribute]
     # ``_full_data`` is the cache DRF's ``request.data`` property returns; seeding
     # it bypasses parsing entirely (there is no stream on a synthetic request).
     drf_request._full_data = params if params is not None else {}  # ty: ignore[unresolved-attribute]
@@ -118,17 +133,17 @@ def build_offline_context(
 def _copy_request(http_request: HttpRequest) -> HttpRequest:
     """Shallow-copy the caller's request so the derived one owns its own attributes.
 
-    Three attributes are assigned to the wrapped request downstream — ``method``,
-    ``GET``, and ``user`` (DRF's ``Request.user`` setter writes through to the object
-    it wraps). Assigning them to a live request would leak an off-HTTP dispatch into
-    the surrounding HTTP cycle: a later ``request.method == "GET"`` branch, a
+    Four attributes are assigned to the wrapped request downstream — ``method``,
+    ``GET``, ``user`` and ``auth`` (DRF's ``Request`` setters for the last two write
+    through to the object it wraps). Assigning them to a live request would leak an
+    off-HTTP dispatch into the surrounding HTTP cycle: a later ``request.method == "GET"`` branch, a
     permission class or audit hook reading ``request.user``, or a request-scoped
     ``FilterSet`` reading ``query_params`` would all see values chosen by the
     dispatched call rather than by the client.
 
     The copy is deliberately *shallow*: ``META``, the session, the upload handlers and
     any already-read body stay the same objects, so headers, session writes and body
-    access behave exactly as on the original, while the three assignments above land
+    access behave exactly as on the original, while the assignments above land
     on the copy's own ``__dict__``.
     """
     # The ``__dict__`` is transplanted directly rather than via ``copy.copy``, which

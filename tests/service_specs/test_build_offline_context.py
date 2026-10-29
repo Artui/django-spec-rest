@@ -1,26 +1,19 @@
-"""Tests for ``build_offline_context``."""
+"""``build_offline_context``: the request and view a kernel spec's DRF seats use off HTTP."""
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import Any
 
-import django_filters
 import pytest
-from asgiref.sync import async_to_sync
-from django.db.models import QuerySet
+from django.contrib.auth.models import AnonymousUser, User
 from django.http import HttpRequest, QueryDict
+from django_service_specs import Parameter, Parameters, SelectorKind, SelectorSpec, Unrestricted
+from django_service_specs.dispatch.dispatch import dispatch
+from django_service_specs.dispatch.present import present
 from rest_framework import serializers
 
-from django_spec_rest import (
-    DispatchResult,
-    SelectorKind,
-    SelectorSpec,
-    adispatch_spec,
-    dispatch_spec,
-    render_spec_output,
-)
 from django_spec_rest.service_specs.build_offline_context import build_offline_context
+from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from django_spec_rest.types.offline_context import OfflineContext
 from django_spec_rest.types.offline_service_view import OfflineServiceView
 from tests.testapp.models import Post
@@ -160,102 +153,43 @@ def test_query_params_replace_a_wrapped_requests_get() -> None:
     assert "b" not in base.GET
 
 
+# --- the request's auth -------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_auth_is_none_and_reading_it_keeps_the_user() -> None:
+    # DRF authenticates on the first read of ``auth``; with no authenticator
+    # that read would replace the user with ``AnonymousUser``.
+    principal = User.objects.create(username="signed-in")
+    ctx = build_offline_context(principal)
+
+    assert ctx.request.auth is None
+    assert ctx.request.user is principal
+
+
+@pytest.mark.django_db
+def test_reading_the_successful_authenticator_first_keeps_the_user() -> None:
+    # ``successful_authenticator`` authenticates on first read just as ``auth``
+    # does, and a request with no authenticator answers that by replacing the
+    # user with ``AnonymousUser``; a class asking which authenticator vouched
+    # for the call before it reads the user must still see the principal.
+    principal = User.objects.create(username="signed-in")
+    ctx = build_offline_context(principal)
+
+    assert ctx.request.successful_authenticator is None
+    assert ctx.request.user is principal
+
+
+def test_a_wrapped_request_s_auth_is_set_on_the_copy_alone() -> None:
+    base = HttpRequest()
+    ctx = build_offline_context(_USER, http_request=base)
+
+    assert ctx.request.auth is None
+    assert ctx.request.user is _USER
+    assert not hasattr(base, "auth")
+
+
 # --- what the synthetic query string reaches ------------------------------------
-#
-# It reaches whatever reads ``request.query_params`` itself: a serializer, or a
-# request-scoped FilterSet. It is not what dispatch binds a ``filter_set`` to, so
-# a caller wanting the query string to filter passes it as ``filter_data``.
-
-
-def _sync(spec: Any, **kwargs: Any) -> DispatchResult:
-    return dispatch_spec(spec, user=None, **kwargs)
-
-
-def _async(spec: Any, **kwargs: Any) -> DispatchResult:
-    return async_to_sync(adispatch_spec)(spec, user=None, **kwargs)
-
-
-Dispatch = Callable[..., DispatchResult]
-_CORES = pytest.mark.parametrize("dispatch", [_sync, _async], ids=["sync", "async"])
-
-
-class _ReadsItsData(django_filters.FilterSet):
-    """Narrows by ``published`` in the data it is bound to."""
-
-    published = django_filters.BooleanFilter()
-
-    class Meta:
-        model = Post
-        fields = ["published"]
-
-
-class _ReadsTheRequest(_ReadsItsData):
-    """A request-scoped FilterSet: it ignores its data and reads the query string,
-    as one does that scopes itself behind ``DjangoFilterBackend``."""
-
-    def filter_queryset(self, queryset: QuerySet[Post]) -> QuerySet[Post]:
-        raw = self.request.query_params.get("published")
-        return queryset if raw is None else queryset.filter(published=raw == "true")
-
-
-def _all_posts() -> QuerySet[Post]:
-    return Post.objects.order_by("id")
-
-
-def _titles(result: DispatchResult) -> list[str]:
-    return [post.title for post in result.value]
-
-
-@pytest.fixture
-def unpublished_requested() -> OfflineContext:
-    Post.objects.create(title="shipped", published=True)
-    Post.objects.create(title="draft", published=False)
-    return build_offline_context(None, query_params={"published": "false"})
-
-
-@pytest.mark.django_db
-@_CORES
-def test_a_request_scoped_filter_set_reads_the_synthetic_query_string(
-    dispatch: Dispatch, unpublished_requested: OfflineContext
-) -> None:
-    spec = SelectorSpec(kind=SelectorKind.LIST, selector=_all_posts, filter_set=_ReadsTheRequest)
-    context = unpublished_requested
-
-    result = dispatch(spec, params={}, request=context.request, view=context.view)
-
-    assert _titles(result) == ["draft"]
-
-
-@pytest.mark.django_db
-@_CORES
-def test_a_filter_set_is_bound_to_params_not_the_synthetic_query_string(
-    dispatch: Dispatch, unpublished_requested: OfflineContext
-) -> None:
-    spec = SelectorSpec(kind=SelectorKind.LIST, selector=_all_posts, filter_set=_ReadsItsData)
-    context = unpublished_requested
-
-    result = dispatch(spec, params={}, request=context.request, view=context.view)
-
-    assert _titles(result) == ["shipped", "draft"]
-
-
-@pytest.mark.django_db
-@_CORES
-def test_passing_the_query_string_as_filter_data_filters_on_it(
-    dispatch: Dispatch, unpublished_requested: OfflineContext
-) -> None:
-    spec = SelectorSpec(kind=SelectorKind.LIST, selector=_all_posts, filter_set=_ReadsItsData)
-    context = unpublished_requested
-
-    result = dispatch(
-        spec,
-        params={},
-        request=context.request,
-        view=context.view,
-        filter_data=context.request.query_params,
-    )
-
-    assert _titles(result) == ["draft"]
 
 
 class _FieldsFromTheQueryString(serializers.Serializer):
@@ -271,11 +205,19 @@ class _FieldsFromTheQueryString(serializers.Serializer):
 
 
 @pytest.mark.django_db
-def test_a_serializer_branching_on_query_params_reads_the_synthetic_query_string() -> None:
+def test_a_serializer_branching_on_query_params_reads_the_spec_s_shapes() -> None:
+    # Off HTTP the offline request's query string is the call's read-shaping
+    # arguments, so a serializer reading ``request.query_params`` finds the
+    # ``fields`` the caller sent.
     post = Post.objects.create(title="shipped", published=True)
-    spec = SelectorSpec(kind=SelectorKind.RETRIEVE, output_serializer=_FieldsFromTheQueryString)
-    context = build_offline_context(None, query_params={"fields": "title"})
+    spec = SelectorSpec(
+        kind=SelectorKind.RETRIEVE,
+        selector=lambda: post,
+        permissions=(Unrestricted(),),
+        shapes=Parameters.of(Parameter("fields", "string", required=False)),
+        presenter=SerializerPresenter(_FieldsFromTheQueryString),
+    )
 
-    rendered = render_spec_output(spec, post, request=context.request, view=context.view)
+    result = dispatch(spec, principal=AnonymousUser(), arguments={"fields": "title"})
 
-    assert rendered == {"title": "shipped"}
+    assert present(spec, result) == {"title": "shipped"}

@@ -1,11 +1,11 @@
-"""The per-spec serializer context callables, carried onto the compiled spec's adapters.
+"""The serializer context callables of a kernel spec's ``SerializerValidator`` and ``SerializerPresenter``.
 
-A drfs spec's ``input_serializer_context`` and ``output_serializer_context`` are
-the fourth layer of the serializer context: merged over DRF's own context (the
-first), and over the view hooks the DRF edge registers (the second and third),
-with the final say on any key they share. These tests dispatch the compiled
-spec through the kernel directly, with no edge and so none of the view-hook
-layers, which is how a transport speaking the kernel's language reaches it.
+Each seat's ``serializer_context`` is the fourth layer of its serializer's
+context: merged over DRF's own context (the first), and over the view hooks a
+DRF edge carries (the second and third), with the final say on any key they
+share. These tests dispatch kernel specs through the kernel directly, with no
+edge and so none of the view-hook layers, which is how a transport speaking
+the kernel's language reaches them.
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ from typing import Any
 import pytest
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
+from django_service_specs import SelectorKind, SelectorSpec, ServiceSpec, Unrestricted
 from django_service_specs.dispatch.adispatch import adispatch
 from django_service_specs.dispatch.apresent import apresent
 from django_service_specs.dispatch.dispatch import dispatch
@@ -25,13 +26,12 @@ from django_service_specs.output.presentation_context import PresentationContext
 from django_service_specs.pool.pool_seeds import DEFAULT_POOL_SEEDS
 from rest_framework import serializers
 
-from django_spec_rest.dispatch.dispatch_spec import dispatch_spec
-from django_spec_rest.service_specs.as_kernel_spec import as_kernel_spec
-from django_spec_rest.types.selector_kind import SelectorKind
-from django_spec_rest.types.selector_spec import SelectorSpec
-from django_spec_rest.types.service_spec import ServiceSpec
+from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
+from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from django_spec_rest.types.unset import UNSET
 from tests.testapp.models import Post
+
+_OPEN = (Unrestricted(),)
 
 
 def _capturing(seen: list[dict[str, Any]]) -> type[serializers.Serializer]:
@@ -63,16 +63,23 @@ def _fixed() -> SimpleNamespace:
     return SimpleNamespace(title="hi")
 
 
-def _service(**fields: Any) -> ServiceSpec[Any, Any, Any]:
-    output = fields.pop("output", None)
+def _service(
+    seen: list[dict[str, Any]] | None = None,
+    *,
+    input_context: Any = None,
+    output_context: Any = None,
+    **fields: Any,
+) -> ServiceSpec:
+    validator = (
+        None
+        if seen is None
+        else SerializerValidator(_capturing(seen), serializer_context=input_context)
+    )
     return ServiceSpec(
-        service=fields.pop("service", _create if "input_serializer" in fields else _fixed),
-        permission_classes=[],
-        output_selector_spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE,
-            output_serializer=_Out,
-            output_serializer_context=output,
-        ),
+        service=fields.pop("service", _fixed if seen is None else _create),
+        permissions=_OPEN,
+        validator=validator,
+        presenter=SerializerPresenter(_Out, serializer_context=output_context),
         **fields,
     )
 
@@ -101,10 +108,7 @@ class _View:
 @pytest.mark.django_db
 def test_the_input_callable_reaches_the_input_serializer() -> None:
     seen: list[dict[str, Any]] = []
-    spec = _service(
-        input_serializer=_capturing(seen),
-        input_serializer_context=lambda: {"tenant": "acme"},
-    )
+    spec = _service(seen, input_context=lambda: {"tenant": "acme"})
 
     dispatch(spec, principal=None, arguments={"title": "hi"})
 
@@ -117,10 +121,7 @@ def test_the_input_callable_reaches_the_input_serializer() -> None:
 def test_the_input_callable_wins_over_the_view_s_own_context_on_a_shared_key() -> None:
     seen: list[dict[str, Any]] = []
     view = _View()
-    spec = _service(
-        input_serializer=_capturing(seen),
-        input_serializer_context=lambda: {"shared": "spec"},
-    )
+    spec = _service(seen, input_context=lambda: {"shared": "spec"})
 
     dispatch(
         spec,
@@ -136,7 +137,7 @@ def test_the_input_callable_wins_over_the_view_s_own_context_on_a_shared_key() -
 
 @pytest.mark.django_db
 def test_the_input_callable_declares_request_view_and_user() -> None:
-    """With no seed registered, the callable is handed the offline pair the serializer gets."""
+    """With no request in the call, the callable is handed the offline pair the serializer gets."""
     principal = get_user_model().objects.create(username="ada")
     seen: list[dict[str, Any]] = []
     received: dict[str, Any] = {}
@@ -145,9 +146,7 @@ def test_the_input_callable_declares_request_view_and_user() -> None:
         received.update(request=request, view=view, user=user)
         return {}
 
-    spec = _service(input_serializer=_capturing(seen), input_serializer_context=provider)
-
-    dispatch(spec, principal=principal, arguments={"title": "hi"})
+    dispatch(_service(seen, input_context=provider), principal=principal, arguments={"title": "hi"})
 
     assert received["user"] is principal
     assert received["request"] is seen[0]["request"]
@@ -173,7 +172,11 @@ def test_an_argument_never_stands_in_for_the_request_the_callable_declares() -> 
         received.update(request=request, title=title)
         return {}
 
-    spec = _service(input_serializer=_WithRequest, input_serializer_context=provider)
+    spec = ServiceSpec(
+        service=_create,
+        permissions=_OPEN,
+        validator=SerializerValidator(_WithRequest, serializer_context=provider),
+    )
 
     dispatch(spec, principal=None, arguments={"title": "hi", "request": "mallory"})
 
@@ -183,10 +186,7 @@ def test_an_argument_never_stands_in_for_the_request_the_callable_declares() -> 
 @pytest.mark.django_db
 def test_an_unset_value_declines_the_key_and_keeps_the_layer_beneath() -> None:
     seen: list[dict[str, Any]] = []
-    spec = _service(
-        input_serializer=_capturing(seen),
-        input_serializer_context=lambda: {"format": UNSET, "tenant": "acme"},
-    )
+    spec = _service(seen, input_context=lambda: {"format": UNSET, "tenant": "acme"})
 
     dispatch(spec, principal=None, arguments={"title": "hi"})
 
@@ -198,10 +198,9 @@ def test_an_unset_value_declines_the_key_and_keeps_the_layer_beneath() -> None:
 def test_no_input_callable_leaves_the_view_s_context_as_it_is() -> None:
     seen: list[dict[str, Any]] = []
     view = _View()
-    spec = _service(input_serializer=_capturing(seen))
 
     dispatch(
-        spec,
+        _service(seen),
         principal=None,
         arguments={"title": "hi"},
         pool_seeds=DEFAULT_POOL_SEEDS.extend(view=lambda: view),
@@ -221,10 +220,9 @@ def test_a_many_spec_s_rows_validate_under_the_input_callable_once() -> None:
 
     spec = ServiceSpec(
         service=lambda *, data: data,
-        permission_classes=[],
+        permissions=_OPEN,
         many=True,
-        input_serializer=_capturing(seen),
-        input_serializer_context=provider,
+        validator=SerializerValidator(_capturing(seen), serializer_context=provider),
     )
 
     dispatch(spec, principal=None, arguments={"items": [{"title": "a"}, {"title": "b"}]})
@@ -236,10 +234,7 @@ def test_a_many_spec_s_rows_validate_under_the_input_callable_once() -> None:
 @pytest.mark.django_db
 def test_a_registered_seed_reaches_the_input_callable() -> None:
     seen: list[dict[str, Any]] = []
-    spec = _service(
-        input_serializer=_capturing(seen),
-        input_serializer_context=lambda tenant: {"tenant": tenant},
-    )
+    spec = _service(seen, input_context=lambda tenant: {"tenant": tenant})
 
     dispatch(
         spec,
@@ -254,10 +249,7 @@ def test_a_registered_seed_reaches_the_input_callable() -> None:
 @pytest.mark.django_db(transaction=True)
 async def test_an_input_callable_that_queries_runs_off_the_event_loop() -> None:
     seen: list[dict[str, Any]] = []
-    spec = _service(
-        input_serializer=_capturing(seen),
-        input_serializer_context=lambda: {"tenant": Post.objects.count()},
-    )
+    spec = _service(seen, input_context=lambda: {"tenant": Post.objects.count()})
 
     await adispatch(spec, principal=AnonymousUser(), arguments={"title": "hi"})
 
@@ -269,7 +261,7 @@ async def test_an_input_callable_that_queries_runs_off_the_event_loop() -> None:
 
 @pytest.mark.django_db
 def test_the_output_callable_reaches_the_output_serializer() -> None:
-    spec = _service(output=lambda: {"tenant": "acme"})
+    spec = _service(output_context=lambda: {"tenant": "acme"})
 
     result = dispatch(spec, principal=None, arguments={})
 
@@ -284,7 +276,7 @@ def test_the_output_callable_declares_result_and_user() -> None:
         received.update(result=result, user=user)
         return {"who": result.title}
 
-    spec = _service(output=provider)
+    spec = _service(output_context=provider)
     value = SimpleNamespace(title="hi")
     context = PresentationContext(
         principal=principal, ambient=MappingProxyType({"user": principal})
@@ -298,7 +290,7 @@ def test_the_output_callable_declares_result_and_user() -> None:
 
 def test_the_output_callable_wins_over_the_view_s_own_context_on_a_shared_key() -> None:
     view = _View()
-    spec = _service(output=lambda: {"shared": "spec"})
+    spec = _service(output_context=lambda: {"shared": "spec"})
     context = PresentationContext(principal=None, ambient=MappingProxyType({"view": view}))
 
     payload = present(
@@ -309,14 +301,17 @@ def test_the_output_callable_wins_over_the_view_s_own_context_on_a_shared_key() 
 
 
 @pytest.mark.django_db
-def test_a_retrieve_selector_s_output_callable_declares_instance() -> None:
+def test_a_retrieve_presenter_names_the_row_by_its_value_keyword() -> None:
     row = SimpleNamespace(title="hi")
     spec = SelectorSpec(
         kind=SelectorKind.RETRIEVE,
         selector=lambda: row,
-        permission_classes=[],
-        output_serializer=_Out,
-        output_serializer_context=lambda instance: {"tenant": instance.title},
+        permissions=_OPEN,
+        presenter=SerializerPresenter(
+            _Out,
+            serializer_context=lambda instance: {"tenant": instance.title},
+            value_keyword="instance",
+        ),
     )
 
     result = dispatch(spec, principal=None, arguments={})
@@ -326,7 +321,7 @@ def test_a_retrieve_selector_s_output_callable_declares_instance() -> None:
 
 @pytest.mark.django_db
 def test_a_list_s_output_callable_is_asked_per_row_and_offered_no_row_by_name() -> None:
-    """The kernel presents a list row by row, so the whole ``page`` is never in hand."""
+    """The kernel presents a list row by row; a presenter naming no value keyword offers no row."""
     received: list[dict[str, Any]] = []
 
     def provider(**pool: Any) -> dict[str, Any]:
@@ -336,9 +331,8 @@ def test_a_list_s_output_callable_is_asked_per_row_and_offered_no_row_by_name() 
     spec = SelectorSpec(
         kind=SelectorKind.LIST,
         selector=lambda: [SimpleNamespace(title="a"), SimpleNamespace(title="b")],
-        permission_classes=[],
-        output_serializer=_Out,
-        output_serializer_context=provider,
+        permissions=_OPEN,
+        presenter=SerializerPresenter(_Out, serializer_context=provider, value_keyword=None),
     )
 
     payload = present(spec, dispatch(spec, principal=None, arguments={}))
@@ -348,40 +342,12 @@ def test_a_list_s_output_callable_is_asked_per_row_and_offered_no_row_by_name() 
     assert not {"page", "instance", "result"} & set(received[0])
 
 
-@pytest.mark.django_db
-def test_a_many_service_s_output_callable_is_offered_no_row_by_name() -> None:
-    """A ``many`` output's ``result`` is the whole list on drfs' own render; one row is never it."""
-    received: list[dict[str, Any]] = []
-
-    def provider(**pool: Any) -> dict[str, Any]:
-        received.append(pool)
-        return {"tenant": "acme"}
-
-    spec = ServiceSpec(
-        service=lambda *, data: [SimpleNamespace(**row) for row in data],
-        permission_classes=[],
-        many=True,
-        input_serializer=_capturing([]),
-        output_selector_spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE,
-            output_serializer=_Out,
-            output_serializer_context=provider,
-        ),
-    )
-
-    result = dispatch(spec, principal=None, arguments={"items": [{"title": "a"}, {"title": "b"}]})
-    payload = present(spec, result)
-
-    assert [row["context"]["tenant"] for row in payload] == ["acme", "acme"]
-    assert not {"result", "instance", "page"} & set(received[0])
-
-
 def test_present_with_no_call_runs_no_callable() -> None:
     """``present(value)`` has no call to resolve a callable against, so it renders DRF's context."""
     calls: list[None] = []
-    compiled = as_kernel_spec(_service(output=lambda: calls.append(None) or {"tenant": "x"}))
-    presenter = compiled.presenter_for_output()
-    assert presenter is not None
+    presenter = SerializerPresenter(
+        _Out, serializer_context=lambda: calls.append(None) or {"tenant": "x"}
+    )
 
     payload = presenter.present(SimpleNamespace(title="t"))
 
@@ -391,7 +357,7 @@ def test_present_with_no_call_runs_no_callable() -> None:
 
 @pytest.mark.django_db(transaction=True)
 async def test_an_output_callable_that_queries_runs_off_the_event_loop() -> None:
-    spec = _service(output=lambda: {"tenant": Post.objects.count()})
+    spec = _service(output_context=lambda: {"tenant": Post.objects.count()})
     result = await adispatch(spec, principal=AnonymousUser(), arguments={})
 
     payload = await apresent(spec, result)
@@ -410,9 +376,12 @@ def test_the_input_callable_may_name_the_call_s_context() -> None:
     def provider(call_context: Any = None) -> dict[str, Any]:
         return {"held": call_context}
 
-    spec = _service(input_serializer=_capturing(seen), input_serializer_context=provider)
-
-    dispatch(spec, principal=None, arguments={"title": "hi"}, call_context=call_context)
+    dispatch(
+        _service(seen, input_context=provider),
+        principal=None,
+        arguments={"title": "hi"},
+        call_context=call_context,
+    )
 
     assert seen[0]["held"] is call_context
 
@@ -425,7 +394,7 @@ def test_the_output_callable_may_name_the_call_s_context() -> None:
     def provider(call_context: Any = None) -> dict[str, Any]:
         return {"tenant": None if call_context is None else call_context["tenant"]}
 
-    spec = _service(output=provider)
+    spec = _service(output_context=provider)
 
     result = dispatch(spec, principal=None, arguments={}, call_context=call_context)
 
@@ -436,10 +405,9 @@ def test_the_output_callable_may_name_the_call_s_context() -> None:
 def test_the_input_serializer_is_built_with_the_call_context_s_request() -> None:
     seen: list[dict[str, Any]] = []
     request = SimpleNamespace(user=None)
-    spec = _service(input_serializer=_capturing(seen))
 
     dispatch(
-        spec,
+        _service(seen),
         principal=None,
         arguments={"title": "hi"},
         call_context={"request": request, "view": None, "format": None},
@@ -451,9 +419,7 @@ def test_the_input_serializer_is_built_with_the_call_context_s_request() -> None
 
 
 @pytest.mark.django_db
-def test_a_description_without_the_call_s_context_leaves_a_callable_naming_it_to_validation() -> (
-    None
-):
+def test_a_callable_naming_the_call_s_context_with_no_default_is_handed_a_dict() -> None:
     seen: list[dict[str, Any]] = []
     asked: list[Any] = []
 
@@ -461,11 +427,9 @@ def test_a_description_without_the_call_s_context_leaves_a_callable_naming_it_to
         asked.append(call_context)
         return {"tenant": "acme"}
 
-    spec = _service(input_serializer=_capturing(seen), input_serializer_context=provider)
+    dispatch(_service(seen, input_context=provider), principal=None, arguments={"title": "hi"})
 
-    dispatch_spec(spec, user=None, params={"title": "hi"})
-
-    # Asked once, by the serializer that validates, with the call's own dict.
+    # Asked once, by the serializer that validates, with the dict the kernel made.
     assert len(asked) == 1
     assert isinstance(asked[0], dict)
     assert seen[0]["tenant"] == "acme"
