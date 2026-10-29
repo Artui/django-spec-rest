@@ -8,13 +8,11 @@ the service runs the wire name is gone from the payload entirely. The
 ``SerializerValidator`` is the one thing still holding both vocabularies.
 
 These assert, over a kernel spec served by a view, that the rename reaches
-every depth, that it leaves alone what it cannot name, and that a serializer
-field which cannot correspond to an input key is never used as a source of
-names.
+every depth and that it leaves alone what it cannot name.
 
 The kernel route does not rename yet: ``answering_refusals`` is not told which
-serializer the call validated with, and ``wire_named_error`` lives in
-``dispatch/utils.py``, which the deletion removes. Every test that needs the
+serializer the call validated with, and the helper that renames a refusal by a
+serializer's ``source=`` is one the kernel route does not use. Every test that needs the
 rename is a strict ``xfail`` naming that, so the day the edge hands its
 validator's serializer over, they fail as XPASS until the marks come off.
 """
@@ -32,7 +30,6 @@ from rest_framework.test import APIRequestFactory
 
 from django_spec_rest import ChildSpec, create_from_input
 from django_spec_rest.dispatch.kernel_edge import adispatch_kernel_spec
-from django_spec_rest.dispatch.utils import _wire_names
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from tests.testapp.models import Catalog, Section
 from tests.views.test_kernel_edge import _parts
@@ -48,8 +45,8 @@ _NOT_RENAMED = pytest.mark.xfail(
     strict=True,
     reason=(
         "the kernel route answers a service's refusal under the model's names: the edge does "
-        "not hand answering_refusals the validator's serializer, and wire_named_error is in "
-        "dispatch/utils.py, which the deletion removes"
+        "not hand answering_refusals the validator's serializer, and the helper that renames a "
+        "refusal by a serializer's source= is not used on the kernel route"
     ),
 )
 
@@ -239,46 +236,3 @@ class TestTheBulkPath:
         response = _served(spec, [_PAYLOAD, _PAYLOAD])
 
         assert response.data == [{}, {"headline": ["Too long."]}]
-
-
-class TestWhichFieldsAreAsked:
-    """A field that cannot correspond to an input key is not a source of names."""
-
-    def test_a_read_only_field_does_not_shadow_the_writable_one(self) -> None:
-        class _Shadowed(serializers.Serializer):
-            display = serializers.CharField(source="title", read_only=True)
-            headline = serializers.CharField(source="title")
-
-        assert _wire_names(_Shadowed())["title"][0] == "headline"
-
-    def test_a_dotted_source_is_skipped(self) -> None:
-        """``source="author.name"`` is not a key of ``validated_data``."""
-
-        class _Dotted(serializers.Serializer):
-            author_name = serializers.CharField(source="author.name")
-
-        assert _wire_names(_Dotted()) == {}
-
-    def test_a_whole_object_source_is_skipped(self) -> None:
-        class _Star(serializers.Serializer):
-            everything = serializers.CharField(source="*")
-
-        assert _wire_names(_Star()) == {}
-
-    def test_two_writable_fields_on_one_source_take_the_first(self) -> None:
-        """Not a shape DRF can save, so it is settled rather than guessed at."""
-
-        class _Twice(serializers.Serializer):
-            first = serializers.CharField(source="title")
-            second = serializers.CharField(source="title")
-
-        assert _wire_names(_Twice())["title"][0] == "first"
-
-    def test_a_plain_field_contributes_no_nested_map(self) -> None:
-        assert _wire_names(_PostInput())["title"] == ("headline", None)
-
-    def test_a_many_field_is_read_through_its_child(self) -> None:
-        assert _wire_names(_CatalogInput())["sections"] == (
-            "chapters",
-            {"title": ("heading", None)},
-        )

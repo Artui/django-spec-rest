@@ -11,13 +11,23 @@ keys.
 A refusal of a read beside the rows keeps its own key beside the argument's
 rather than being unwrapped into a bare list.
 
-**A client-visible change the inventory does not list.** A drfs ``many`` view
-answered the bare tree, ``{"1": {...}, "3": {...}}``, and a body that was no
-list as ``{"non_field_errors": ["Expected a list of items but got type
-\"dict\"."]}``. The kernel route answers both under the argument,
-``{"items": {"1": {...}}}`` and ``{"items": ["Expected an array."]}``. The
-tests assert the kernel's answer; unwrapping it to the drfs shape would need
-the spec inside ``answering_refusals``.
+**Client-visible changes.** A drfs ``many`` view answered three things differently, and
+the tests assert the kernel's answer for each:
+
+* A refusal of the rows was the bare tree, ``{"1": {...}, "3": {...}}``; the kernel
+  answers it under the argument, ``{"items": {"1": {...}}}``.
+* A body that was no list was ``{"non_field_errors": ["Expected a list of items but
+  got type \"dict\"."]}``; the kernel answers ``{"items": ["Expected an array."]}``.
+* A body that is a list holding a row that is no object was
+  ``{"1": {"non_field_errors": ["Invalid data. Expected a dictionary, but got
+  str."]}}``; the kernel answers ``{"items": {"1": {"non_field_errors": ["Expected an
+  object."]}}}``.
+
+Unwrapping the first two to the drfs shape would need the spec inside
+``answering_refusals``. The third is the kernel's own wording for a row that is no
+object, against DRF's; the bulk body as a whole is awaiting an owner decision
+(the kernel's wording and nesting, or DRF's), and until it is made the tests pin the
+kernel's answer.
 """
 
 from __future__ import annotations
@@ -195,3 +205,10 @@ def test_over_a_view_a_list_body_that_is_no_list_is_refused_under_the_argument()
 
     assert response.status_code == 400
     assert response.data == {"items": ["Expected an array."]}
+
+
+def test_over_a_view_a_row_that_is_no_object_is_refused_at_its_index() -> None:
+    response = _served(_spec(), [_GOOD, "x"])
+
+    assert response.status_code == 400
+    assert response.content == b'{"items":{"1":{"non_field_errors":["Expected an object."]}}}'
