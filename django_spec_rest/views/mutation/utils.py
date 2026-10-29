@@ -15,6 +15,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import is_dataclass
 from typing import Any, Literal, cast
 
+from django_service_specs.dispatch.present import present
 from django_service_specs.specs.kernel_spec import kernel_spec
 from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
 from rest_framework import status as drf_status
@@ -26,6 +27,7 @@ from rest_framework_dataclasses.serializers import DataclassSerializer
 
 from django_spec_rest.dispatch.apply_input_data import apply_input_data
 from django_spec_rest.dispatch.dispatch_spec import dispatch_spec
+from django_spec_rest.dispatch.kernel_edge import dispatch_kernel_spec, runs_on_kernel
 from django_spec_rest.dispatch.render_spec_output import render_spec_output
 from django_spec_rest.dispatch.renderable_serializer_class import renderable_serializer_class
 from django_spec_rest.exceptions.service_error import ServiceError
@@ -412,7 +414,33 @@ def dispatch_mutation_for_spec(
     never on a copy of the spec, which the edge would compile afresh on every
     request. A ``PATCH`` to an input that cannot take a partial call (a
     dataclass) is validated whole, as a ``PUT`` is.
+
+    **A kernel spec parts from the drfs path here**, at ``runs_on_kernel``,
+    before anything reads a drfs-only field: it runs through the kernel's own
+    ``dispatch`` (``dispatch_kernel_spec``) with the request's one dict as its
+    ``call_context``, and its answer is presented by the spec's own presenter,
+    through the kernel's ``present``. A body answers ``default_status``, or
+    ``200`` where that is ``204``; nothing to present answers ``204``.
     """
+
+    if runs_on_kernel(spec):
+        result = dispatch_kernel_spec(
+            spec,
+            view=view,
+            request=request,
+            call_context=view_call_context(view, request),
+            # A view hands ``None`` for a create and ``UNSET`` for the spec's
+            # own lookup; to the kernel, ``None`` is a missing row, refused on
+            # a ``many`` spec, so a create is handed no target at all
+            # (test_a_list_body_is_its_rows_and_its_output_selector_s_re_read_is_presented).
+            target=UNSET if instance is None else instance,
+        )
+        if result.kind == "not_found":
+            raise NotFound()
+        presented = present(spec, result)
+        if presented is None:
+            return Response(status=drf_status.HTTP_204_NO_CONTENT)
+        return Response(presented, status=status_for_a_body(default_status))
 
     if spec.partial is not None:
         partial = spec.partial

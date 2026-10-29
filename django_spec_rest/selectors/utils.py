@@ -29,6 +29,7 @@ from rest_framework.exceptions import NotFound
 from rest_framework.request import Request
 
 from django_spec_rest.dispatch.dispatch_spec import dispatch_spec
+from django_spec_rest.dispatch.kernel_edge import dispatch_kernel_spec, runs_on_kernel
 from django_spec_rest.types.argument_binding import ArgumentBinding
 from django_spec_rest.types.selector_kind import SelectorKind
 from django_spec_rest.types.selector_spec import SelectorSpec
@@ -204,6 +205,24 @@ def dispatch_selector_for_spec(view: Any, spec: SelectorSpec[Any, Any]) -> Any:
 
     assert spec.selector is not None  # noqa: S101 — caller guarantees this
     request = view.request
+    if runs_on_kernel(spec):
+        # A kernel spec parts from the drfs path here: the kernel's own
+        # ``dispatch`` reads the query string and the declared route captures,
+        # and the view still renders what it returns. A row found is asked of
+        # the view's own ``has_object_permission``, as DRF's ``get_object()``
+        # asks it and the drfs path's target hook does
+        # (test_a_kernel_retrieve_asks_the_view_s_object_permission).
+        found = dispatch_kernel_spec(
+            spec,
+            view=view,
+            request=request,
+            call_context=view_call_context(view, request),
+        )
+        if found.kind == "not_found":
+            raise NotFound()
+        if isinstance(found.value, Model):
+            view.check_object_permissions(request, found.value)
+        return found.value
     result = dispatch_spec(
         spec,
         user=getattr(request, "user", None),

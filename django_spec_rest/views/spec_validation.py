@@ -21,6 +21,7 @@ from django_service_specs.adapters.filters.filter_set_parameters import filter_s
 from rest_framework.permissions import BasePermission
 from rest_framework.serializers import Serializer
 
+from django_spec_rest.dispatch.kernel_edge import runs_on_kernel
 from django_spec_rest.service_specs.utils import (
     UNREADABLE_WITHOUT_A_CALL,
     writable_input_names,
@@ -874,7 +875,12 @@ def validate_mutation_view_spec(
     placeholder so ``as_view()`` itself doesn't trip.
     """
     spec: ServiceSpec[Any, Any, Any] | None = getattr(view_cls, "spec", None)
-    if spec is None:
+    # A kernel spec was checked when it was built, by the kernel's own
+    # ``__post_init__``, and every check below reads a drfs-only field. One
+    # arc to coverage, so each disjunct is named: the ``None`` is held by
+    # test_spec_validation_e2e's test_no_spec_does_not_raise, and the kernel
+    # spec by test_kernel_views' test_a_kernel_spec_passes_as_view.
+    if spec is None or runs_on_kernel(spec):
         return
     # Local import to avoid a module-level cycle:
     # ``views.spec_validation`` is imported by ``views.mutation.*``, but the
@@ -905,7 +911,10 @@ def validate_selector_view_spec(
     [`SelectorRetrieveView`][django_spec_rest.views.query.selector_retrieve_view.SelectorRetrieveView]).
     """
     spec: SelectorSpec[Any, Any] | None = getattr(view_cls, "spec", None)
-    if spec is None:
+    # As ``validate_mutation_view_spec`` passes one: the ``None`` is held by
+    # test_selector_list_view's test_falls_back_to_get_queryset_when_spec_missing,
+    # and the kernel spec by test_a_kernel_selector_spec_passes_as_view.
+    if spec is None or runs_on_kernel(spec):
         return
     label = f"{view_cls.__name__}.spec"
     validate_selector_spec(spec, label=label, expected_kind=expected_kind)
