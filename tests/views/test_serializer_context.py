@@ -12,17 +12,8 @@ there for every later serializer of the call, and the drfs path's "does not
 leak into output" answers invert by design; those tests assert the new answer.
 
 What the kernel route does not carry yet is a strict xfail naming the file
-that owes it:
-
-- the view's hook chains (``resolve_view_hooks``) reach no kernel call: the
-  kernel branch of ``dispatch_mutation_for_spec`` resolves none, and
-  ``dispatch_kernel_spec`` sets no ``view_hooks`` on the edge's call state;
-- each serializer is still handed its own copy of the context
-  (``call_base_context`` and ``base_serializer_context``);
-- the kernel selector views render through ``serializer_class``, not the
-  spec's presenter;
-- a viewset's ``action_specs`` and ``@selector_action`` refuse a kernel spec
-  when the view is built.
+that owes it: a viewset's ``action_specs`` and ``@selector_action`` refuse a
+kernel spec when the view is built.
 """
 
 from __future__ import annotations
@@ -61,20 +52,6 @@ pytestmark = pytest.mark.django_db
 factory = APIRequestFactory()
 _OPEN = (Unrestricted(),)
 
-_NO_VIEW_HOOKS = (
-    "The view's hook chains reach no kernel call: the kernel branch of "
-    "dispatch_mutation_for_spec (views/mutation/utils.py) resolves no resolve_view_hooks, "
-    "and dispatch_kernel_spec (dispatch/kernel_edge.py) sets no view_hooks on EdgeCallState."
-)
-_A_COPY_PER_SERIALIZER = (
-    "Each serializer is handed its own copy of the context: call_base_context "
-    "(service_specs/utils.py) returns dict(held[2]) / dict(context), and "
-    "base_serializer_context returns dict(getter())."
-)
-_SELECTOR_VIEWS_SKIP_THE_PRESENTER = (
-    "A kernel SelectorListView / SelectorRetrieveView renders through serializer_class "
-    "(views/query/**), so the spec's SerializerPresenter and its serializer_context never run."
-)
 _VIEWSETS_REFUSE_A_KERNEL_SPEC = (
     "viewsets/utils.py _validate_action_spec and viewsets/decorators read drfs fields, "
     "so a kernel spec in action_specs or @selector_action is refused at as_view(); "
@@ -174,7 +151,6 @@ class TestTheInputSerializer:
         _create(_View)
         assert _CapturingIn.captured["tenant"] == "acme"
 
-    @pytest.mark.xfail(strict=True, reason=_NO_VIEW_HOOKS)
     def test_the_directional_hook_layers_over_drf_s(self) -> None:
         class _View(_KernelCreateView):
             spec = _spec()
@@ -185,7 +161,6 @@ class TestTheInputSerializer:
         _create(_View)
         assert _CapturingIn.captured["origin"] == "input"
 
-    @pytest.mark.xfail(strict=True, reason=f"{_NO_VIEW_HOOKS} {_A_COPY_PER_SERIALIZER}")
     def test_the_directional_hook_s_key_is_there_for_the_output(self) -> None:
         """The context being one dict per request, the input hook's key reaches the
         output serializer after it: the drfs path's "does not leak into output"
@@ -241,7 +216,6 @@ class TestTheOutputSerializer:
         assert {"request", "view", "format"} <= _CapturingOut.captured.keys()
         assert isinstance(_CapturingOut.captured["view"], _View)
 
-    @pytest.mark.xfail(strict=True, reason=_NO_VIEW_HOOKS)
     def test_the_directional_hook_layers_over_drf_s_and_never_reaches_the_input(self) -> None:
         """The output hook runs after validation, so its key is in the one dict
         only once the input serializer has validated."""
@@ -266,7 +240,6 @@ class TestTheOutputSerializer:
 
 
 class TestPerActionHooks:
-    @pytest.mark.xfail(strict=True, reason=_NO_VIEW_HOOKS)
     def test_a_standalone_view_has_no_action_so_only_its_directional_hook_runs(self) -> None:
         author = Author.objects.create(name="orig")
 
@@ -324,7 +297,6 @@ class TestTheSeatsOwnContext:
         _create(_View)
         assert _CapturingIn.captured["spec_key"] == "input"
 
-    @pytest.mark.xfail(strict=True, reason=_A_COPY_PER_SERIALIZER)
     def test_the_validator_s_context_is_there_for_the_output(self) -> None:
         """One dict per request: the input seat's key reaches the output
         serializer, where the drfs path held it to the input."""
@@ -340,7 +312,6 @@ class TestTheSeatsOwnContext:
         assert _CapturingIn.captured["input_only"] is True
         assert _CapturingOut.captured["input_only"] is True
 
-    @pytest.mark.xfail(strict=True, reason=_NO_VIEW_HOOKS)
     def test_the_validator_s_context_wins_over_the_view_s_hook(self) -> None:
         class _View(_KernelCreateView):
             spec = _spec(
@@ -382,7 +353,6 @@ class TestTheSeatsOwnContext:
         assert _CapturingOut.captured["spec_key"] == "output"
         assert "spec_key" not in _CapturingIn.captured
 
-    @pytest.mark.xfail(strict=True, reason=_NO_VIEW_HOOKS)
     def test_the_presenter_s_context_wins_over_the_view_s_hook(self) -> None:
         class _View(_KernelCreateView):
             spec = _spec(
@@ -404,7 +374,6 @@ def _listed() -> Any:
 
 
 class TestASelectorView:
-    @pytest.mark.xfail(strict=True, reason=_SELECTOR_VIEWS_SKIP_THE_PRESENTER)
     def test_a_list_view_presents_under_its_presenter_s_context(self) -> None:
         Author.objects.create(name="x")
 
@@ -422,7 +391,6 @@ class TestASelectorView:
         _View.as_view()(factory.get("/"))
         assert _CapturingOut.captured["spec_key"] == "list"
 
-    @pytest.mark.xfail(strict=True, reason=_SELECTOR_VIEWS_SKIP_THE_PRESENTER)
     def test_a_retrieve_view_presents_under_its_presenter_s_context(self) -> None:
         author = Author.objects.create(name="x")
 

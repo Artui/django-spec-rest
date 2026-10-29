@@ -75,11 +75,6 @@ def test_an_instance_lookup_s_filter_named_like_a_field_is_refused() -> None:
         _spec(_ByName).parameters()
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="validate_mutation_view_spec does not read a kernel spec's parameters at as_view(), "
-    "so the collision surfaces on the first request; an ask on views/spec_validation.py",
-)
 def test_it_is_refused_at_as_view() -> None:
     view = type("_View", (ServiceUpdateView,), {"spec": _spec(_ByName)})
     with pytest.raises(ImproperlyConfigured, match="declared by two sources"):

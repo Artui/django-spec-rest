@@ -144,7 +144,6 @@ def other_post(db: Any) -> Post:
     return Post.objects.create(title="someone-else")
 
 
-@_DESCRIBED_WITH_NO_CALL
 def test_a_live_view_scopes_the_field_to_the_caller(
     owner: User, own_post: Post, other_post: Post
 ) -> None:
@@ -159,7 +158,6 @@ def test_a_live_view_scopes_the_field_to_the_caller(
     assert refused.data["post"][0].code == "does_not_exist"
 
 
-@_DESCRIBED_WITH_NO_CALL
 def test_a_live_view_builds_the_fields_from_its_query_string(owner: User) -> None:
     seen: dict[str, Any] = {}
 
@@ -169,7 +167,6 @@ def test_a_live_view_builds_the_fields_from_its_query_string(owner: User) -> Non
     assert seen == {"data": {"extra": "e"}}
 
 
-@_DESCRIBED_WITH_NO_CALL
 def test_a_live_view_builds_the_fields_from_its_route(owner: User) -> None:
     seen: dict[str, Any] = {}
 
@@ -179,7 +176,6 @@ def test_a_live_view_builds_the_fields_from_its_route(owner: User) -> None:
     assert seen == {"data": {"title": "t"}}
 
 
-@_DESCRIBED_WITH_NO_CALL
 def test_a_live_view_describes_with_the_seat_s_context(owner: User) -> None:
     seen: dict[str, Any] = {}
 

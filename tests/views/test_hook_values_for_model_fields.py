@@ -11,7 +11,8 @@ cases are given there. ``kwargs`` fills the pool: its value reaches the
 service parameter as given, never through the field, which is what a
 read-only field's case asks of it. The drfs path validated a
 ``get_service_kwargs`` value naming a field as well; on the kernel route that
-value is the pool's. The view's hooks reach no kernel call yet, a strict xfail.
+value is the pool's. The view's hooks reach the kernel call, so each case is given
+through the spec and through the view.
 """
 
 from __future__ import annotations
@@ -93,19 +94,9 @@ def _given_by_the_view(seen: dict[str, Any], values: dict[str, Any]) -> Any:
     return _view(seen, hooks={"get_service_kwargs": lambda self: values})
 
 
-_HOOK_NOT_CARRIED = pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "The view's hook chains reach no kernel call: the kernel branch of "
-        "dispatch_mutation_for_spec (views/mutation/utils.py) resolves no resolve_view_hooks, "
-        "and dispatch_kernel_spec (dispatch/kernel_edge.py) sets no view_hooks or "
-        "author_values on EdgeCallState."
-    ),
-)
-
 _BY = pytest.mark.parametrize(
     "given",
-    [_validated_by_the_spec, pytest.param(_validated_by_the_view, marks=_HOOK_NOT_CARRIED)],
+    [_validated_by_the_spec, _validated_by_the_view],
     ids=["spec-input-data", "view-get-input-data"],
 )
 
@@ -157,7 +148,7 @@ def test_a_value_the_fields_validators_refuse_is_the_clients_400(given: Callable
 @pytest.mark.django_db
 @pytest.mark.parametrize(
     "given",
-    [_given_by_the_spec, pytest.param(_given_by_the_view, marks=_HOOK_NOT_CARRIED)],
+    [_given_by_the_spec, _given_by_the_view],
     ids=["spec-kwargs", "view-get-service-kwargs"],
 )
 def test_a_value_for_a_read_only_field_reaches_the_parameter_as_given(
