@@ -54,7 +54,9 @@ class SelectorRetrieveView(RetrieveModelMixin, GenericAPIView):
 
     @classmethod
     def as_view(cls, **initkwargs: Any) -> Any:
-        validate_selector_view_spec(cls, expected_kind=SelectorKind.RETRIEVE)
+        validate_selector_view_spec(
+            cls, expected_kind=SelectorKind.RETRIEVE, hooks_base=SelectorRetrieveView
+        )
         return super().as_view(**initkwargs)
 
     def get_selector_kwargs(self) -> dict[str, Any]:

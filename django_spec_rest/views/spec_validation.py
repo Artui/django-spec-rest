@@ -915,7 +915,10 @@ def _check_kernel_seeds(spec: KernelServiceSpec | KernelSelectorSpec) -> None:
     registers none), and only where nothing fills a keyword it cannot see:
     a mutation view overriding a service-kwargs hook hands the edge's
     overlay keys ``check_seeds`` never reads, so such a view is not asked it
-    (``validate_mutation_view_spec``).
+    (``validate_mutation_view_spec``), and a selector view overriding
+    ``get_selector_kwargs`` is refused beside a kernel spec
+    (``_refuse_selector_hooks``), so a selector view has no overlay to hide
+    a keyword.
     The fields a kernel spec declares are checked when it is built, by its own
     ``__post_init__``, so nothing of a drfs spec's field checks is owed here.
     Held on a mutation view by test_a_keyword_nothing_fills_is_refused and on
@@ -1015,6 +1018,34 @@ def _refuse_a_detail_spec_with_no_target(
         )
 
 
+def _refuse_selector_hooks(view_cls: type, hooks_base: type) -> None:
+    """Refuse a selector view's ``get_selector_kwargs`` hooks beside a kernel spec.
+
+    A kernel selector spec is handed its own ``kwargs`` provider's values and
+    no view hook's: the selector views hand the edge no hooks at all, so an
+    override would be silently unasked, and a keyword it was written to fill
+    a 500 or a default. Refused when the view is built, before
+    ``check_seeds`` would name the unfilled keyword rather than the hook. One
+    arc to coverage, so each disjunct is named: the catch-all hook by
+    test_selector_list_view's
+    test_get_selector_kwargs_beside_a_kernel_spec_is_refused_at_as_view, the
+    per-action one by
+    test_a_per_action_selector_hook_beside_a_kernel_spec_is_refused_at_as_view.
+    """
+    action = getattr(view_cls, "action", None)
+    for hook, overridden in (
+        ("get_selector_kwargs", is_overridden(view_cls, hooks_base, "get_selector_kwargs")),
+        (f"get_{action}_selector_kwargs", _overrides_the_action_hook(view_cls, "selector")),
+    ):
+        if overridden:
+            raise ImproperlyConfigured(
+                f"{view_cls.__name__} overrides {hook}, which never reaches a kernel spec: "
+                "its keywords are its own providers'. Return those keys from the spec's "
+                "kwargs provider (SelectorSpec(kwargs=...)), which may declare the request "
+                "and the view."
+            )
+
+
 def _overrides_the_action_hook(view_cls: type, chain: str) -> bool:
     """Whether ``view_cls`` defines ``get_<action>_<chain>_kwargs`` for the ``action`` it sets.
 
@@ -1032,6 +1063,7 @@ def validate_selector_view_spec(
     view_cls: type,
     *,
     expected_kind: SelectorKind,
+    hooks_base: type,
 ) -> None:
     """Validate ``view_cls.spec`` on a standalone selector view.
 
@@ -1039,7 +1071,10 @@ def validate_selector_view_spec(
     the kind the view is shaped for (``LIST`` for
     [`SelectorListView`][django_spec_rest.views.query.selector_list_view.SelectorListView],
     ``RETRIEVE`` for
-    [`SelectorRetrieveView`][django_spec_rest.views.query.selector_retrieve_view.SelectorRetrieveView]).
+    [`SelectorRetrieveView`][django_spec_rest.views.query.selector_retrieve_view.SelectorRetrieveView]),
+    and ``hooks_base`` the view class declaring the default ``get_selector_kwargs``
+    that an override of is refused beside a kernel spec: each view passes its own,
+    since the two declare one each.
     """
     spec: SelectorSpec[Any, Any] | KernelSelectorSpec | KernelServiceSpec | None = getattr(
         view_cls, "spec", None
@@ -1059,6 +1094,7 @@ def validate_selector_view_spec(
         # and, below, a ``filter_set`` beside DRF's own filter backend
         # (test_a_filter_set_beside_django_filter_s_backend_is_refused_at_as_view).
         _validate_selector_kind(spec, label=label, expected_kind=expected_kind)
+        _refuse_selector_hooks(view_cls, hooks_base)
         _check_kernel_seeds(spec)
     else:
         validate_selector_spec(spec, label=label, expected_kind=expected_kind)

@@ -173,22 +173,32 @@ class TestTheArguments:
         assert _get(spec).status_code == 200
         assert received == {"tenant_id": 12}
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="dispatch_kernel_spec takes no extra_kwargs, so the view's hook chain "
-        "(get_selector_kwargs) never reaches a kernel spec; an ask on dispatch/kernel_edge.py",
-    )
-    def test_get_selector_kwargs_reaches_the_selector(self) -> None:
-        received: dict[str, Any] = {}
+    def test_get_selector_kwargs_beside_a_kernel_spec_is_refused_at_as_view(self) -> None:
+        """Changed by design (the carry-over list rewrites ``resolve_extra_kwargs``
+        onto the spec's providers): drfs handed the selector the hook's keys. A
+        kernel spec is handed its own providers' values and never a selector
+        view's hook, so a hook beside one would be silently unasked; it is
+        refused when the view is built, pointing at the spec's ``kwargs``."""
 
-        def selector(*, tenant: str) -> QuerySet[Author]:
-            received["tenant"] = tenant
+        def selector(*, tenant: str = "none") -> QuerySet[Author]:
             return Author.objects.none()
 
         spec = _listing(selector, presenter=SerializerPresenter(_NameOnly))
         hooks = {"get_selector_kwargs": lambda self: {"tenant": "acme"}}
-        assert _get(spec, attrs=hooks).status_code == 200
-        assert received == {"tenant": "acme"}
+        with pytest.raises(ImproperlyConfigured) as refused:
+            _get(spec, attrs=hooks)
+        message = str(refused.value)
+        assert message.startswith("_View overrides get_selector_kwargs")
+        assert "kwargs provider" in message
+        assert "which nothing fills" not in message
+
+    def test_a_per_action_selector_hook_beside_a_kernel_spec_is_refused_at_as_view(
+        self,
+    ) -> None:
+        spec = _listing(presenter=SerializerPresenter(_NameOnly))
+        hooks = {"action": "list", "get_list_selector_kwargs": lambda self: {"tenant": "acme"}}
+        with pytest.raises(ImproperlyConfigured, match="_View overrides get_list_selector_kwargs"):
+            _get(spec, attrs=hooks)
 
 
 class TestDRFsOwnQueryKeys:

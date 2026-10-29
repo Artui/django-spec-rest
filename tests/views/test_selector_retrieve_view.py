@@ -258,6 +258,16 @@ def _post(*, pk: int) -> QuerySet[Post]:
     return Post.objects.filter(pk=pk)
 
 
+class TestTheViewsHooks:
+    def test_get_selector_kwargs_beside_a_kernel_spec_is_refused_at_as_view(self) -> None:
+        """As on a list view: the hook never reaches a kernel spec, whose
+        keywords are its own providers', so it is refused when the view is
+        built rather than left unasked."""
+        spec = _detail(presenter=SerializerPresenter(_NameOnly))
+        with pytest.raises(ImproperlyConfigured, match="_View overrides get_selector_kwargs"):
+            _get(spec, 1, attrs={"get_selector_kwargs": lambda self: {"tenant": "acme"}})
+
+
 class TestAffordances:
     def test_the_row_carries_its_answers(self) -> None:
         post = Post.objects.create(title="out", published=True)

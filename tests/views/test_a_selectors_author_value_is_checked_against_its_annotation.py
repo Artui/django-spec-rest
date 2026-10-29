@@ -9,7 +9,8 @@ Three answers differ from drfs'. Two by design: drfs checked the value
 against the selector's annotation, which a kernel spec never reads, since the
 signature reflection drops (S3) and its reads declare the type; and it checked
 a ``get_selector_kwargs()`` value, which never reaches a kernel spec (the
-carry-over list rewrites ``resolve_extra_kwargs`` onto the spec's providers).
+carry-over list rewrites ``resolve_extra_kwargs`` onto the spec's providers),
+so a view overriding the hook beside one is refused when it is built.
 The third is the kernel route's answer today, which no plan decision names
 yet: drfs checked the spec's ``kwargs`` provider's value too, where the kernel
 hands a provider's value to the callable as given.
@@ -20,6 +21,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import (
     Parameter,
     Parameters,
@@ -102,8 +104,6 @@ def test_a_provider_s_value_reaches_the_selector_as_given(value: Any) -> None:
     assert [value] == _SEEN
 
 
-def test_a_view_hook_s_value_never_reaches_the_selector() -> None:
-    response = _respond("hook", "abc")
-
-    assert response.status_code == 200
-    assert _SEEN == [0]
+def test_a_view_hook_beside_the_spec_is_refused_when_the_view_is_built() -> None:
+    with pytest.raises(ImproperlyConfigured, match="overrides get_selector_kwargs"):
+        _respond("hook", "abc")

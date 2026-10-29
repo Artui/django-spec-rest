@@ -54,7 +54,9 @@ class SelectorListView(ListModelMixin, GenericAPIView):
 
     @classmethod
     def as_view(cls, **initkwargs: Any) -> Any:
-        validate_selector_view_spec(cls, expected_kind=SelectorKind.LIST)
+        validate_selector_view_spec(
+            cls, expected_kind=SelectorKind.LIST, hooks_base=SelectorListView
+        )
         return super().as_view(**initkwargs)
 
     def get_selector_kwargs(self) -> dict[str, Any]:
