@@ -64,7 +64,7 @@ def translating_drf_refusals(fn: Callable[..., Any] | None) -> Callable[..., Any
     translating.__name__ = getattr(fn, "__name__", "callable")
     translating.__qualname__ = getattr(fn, "__qualname__", translating.__name__)
     translating.__module__ = getattr(fn, "__module__", None) or __name__
-    # One arc to coverage, a disjunct each: test_the_compiled_callable_keeps_the_author_s_docstring
+    # One arc to coverage, a disjunct each: test_the_wrapped_callable_keeps_the_author_s_docstring
     # fails without ``isfunction`` for its function cases and without ``ismethod``
     # for its method cases, and test_a_partial_or_a_callable_object_gets_no_docstring_or_attributes
     # fails with the copy unconditional. Before ``__wrapped__`` and ``__signature__``

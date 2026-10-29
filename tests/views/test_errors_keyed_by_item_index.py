@@ -10,6 +10,14 @@ keys.
 
 A refusal of a read beside the rows keeps its own key beside the argument's
 rather than being unwrapped into a bare list.
+
+**A client-visible change the inventory does not list.** A drfs ``many`` view
+answered the bare tree, ``{"1": {...}, "3": {...}}``, and a body that was no
+list as ``{"non_field_errors": ["Expected a list of items but got type
+\"dict\"."]}``. The kernel route answers both under the argument,
+``{"items": {"1": {...}}}`` and ``{"items": ["Expected an array."]}``. The
+tests assert the kernel's answer; unwrapping it to the drfs shape would need
+the spec inside ``answering_refusals``.
 """
 
 from __future__ import annotations
