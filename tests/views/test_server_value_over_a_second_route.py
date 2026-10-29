@@ -20,11 +20,14 @@ DRF's 400. A ``to_internal_value`` override reading a key no field declares
 meets the kernel's closed argument set first, so what it can do turns on the
 unknown-argument policy, and each policy's answer is asserted.
 
+The view's ``get_service_kwargs`` and ``get_input_data`` reach the arguments
+as ``input_data``'s answer does, and meet the same gap through each of the
+three second routes, held as strict xfails of their own
+(``_HOOK_SECOND_ROUTE_GAP``).
+
 Not ported: the drfs ``NotClientInput`` parameter variant, whose marker has
 no reader on a kernel spec (a typed provider owning a key is its spelling,
-``test_a_typed_provider_owning_a_wire_name``); the view hook routes, which the
-kernel route does not ask (``test_author_values_outrank_the_validator``); and
-the query counts of validating a related field's server value twice, which
+``test_a_typed_provider_owning_a_wire_name``); and the query counts of validating a related field's server value twice, which
 measure drfs' second validation and have no counterpart while the gap stands.
 The ``kwargs`` provider's value outranking the Validator's for the service's
 parameter is ``test_author_values_outrank_the_validator``'s, and its value never
@@ -44,7 +47,8 @@ Also not ported, each for the reason beside it:
 - a server value for a field that skips, and a dotted or flattened field's
   value reaching the parameter named like the field: both are the value drfs
   laid back, the same gap;
-- a hook's ``UNSET`` declining a name: the view hooks are not asked.
+- a hook's ``UNSET`` declining a name: a behaviour of the view's hook chain,
+  not of a second route, so not this file's.
 """
 
 from __future__ import annotations
@@ -61,6 +65,7 @@ from django_spec_rest.dispatch import kernel_edge
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from tests.testapp.models import Author
 from tests.views.server_value_calls import CORES, OPEN, Core, post
+from tests.views.test_kernel_views import _CreateView
 
 pytestmark = pytest.mark.django_db
 
@@ -151,6 +156,36 @@ def test_input_data_outranks_a_second_route_over_http(
     seen: dict[str, Any] = {}
 
     response = post(_spec(_plain(seen), serializer, input_data=_server), body)
+
+    assert response.status_code == 204, response.data
+    assert seen == _SERVER
+
+
+_HOOK_SECOND_ROUTE_GAP = pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason=(
+        "the kernel route records no server_values for the view hooks' answer either "
+        "(get_service_kwargs, get_input_data), so SerializerValidator hands on "
+        "validated_data as DRF built it, a second route's client value included"
+    ),
+)
+
+
+@_HOOK_SECOND_ROUTE_GAP
+@pytest.mark.parametrize("hook", ["get_service_kwargs", "get_input_data"])
+@_SHAPE
+def test_a_view_hook_s_value_outranks_a_second_route_over_http(
+    hook: str, serializer: Any, body: dict[str, Any]
+) -> None:
+    """A view hook's value for a field is the server's as ``input_data``'s is:
+    drfs laid it back over every key, and the kernel route hands the service
+    the client's ``"evil"`` through the second route, for its parameter, its
+    ``data`` and its ``validated_data`` alike."""
+    seen: dict[str, Any] = {}
+    hooked = type("_Hooked", (_CreateView,), {hook: lambda self, *_: _server()})
+
+    response = post(_spec(_plain(seen), serializer), body, view=hooked)
 
     assert response.status_code == 204, response.data
     assert seen == _SERVER
