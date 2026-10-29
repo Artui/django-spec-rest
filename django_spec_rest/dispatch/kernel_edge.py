@@ -62,7 +62,6 @@ against.
 
 from __future__ import annotations
 
-import dataclasses
 import functools
 import weakref
 from collections.abc import Callable, Generator, Mapping
@@ -246,11 +245,14 @@ def seed_named_fields(validator: Any) -> frozenset[str]:
     return frozenset(writable.difference(validator.parameters().names()))
 
 
-_RECORDING: dict[int, KernelServiceSpec] = {}
+_RECORDING: dict[int, tuple[weakref.ref[KernelServiceSpec], KernelServiceSpec]] = {}
 """Each spec's recording twin, by the spec's identity, built once (``recording_spec``).
 
 Keyed by ``id`` because a spec's dataclass hash reads every field, some of
-which need not hash; each entry is dropped when its spec is collected."""
+which need not hash. Each entry holds a weak reference to its spec, whose
+callback drops the entry when the spec dies, and a read serves the twin only
+while that reference still names the spec asked about, as the kernel's own
+``kernel_spec`` cache holds its compiled specs."""
 
 
 def recording_spec(spec: KernelSpec) -> KernelSpec:
@@ -267,12 +269,13 @@ def recording_spec(spec: KernelSpec) -> KernelSpec:
     What it records goes into the body the edge holds for the Validator
     (``_record``).
 
-    Built once per spec, since ``dataclasses.replace`` re-runs the spec's
-    checks. Only a single-object service spec with a provider and a
+    Built once per spec, since ``derive`` re-runs the spec's checks. Only a single-object service spec with a provider and a
     seed-named field has one; the kernel refuses an ``async`` provider when
     the spec is built, so the wrapper is sync alone. The twin shares every
     seat but the provider, so presenting the result through the view's own
-    spec is unchanged.
+    spec is unchanged. A kernel ``Grant`` covers a call only for the spec it
+    was minted for, by identity, so a caller passing one must mint it for, or
+    compare it against, the twin.
     """
     # One arc to coverage, so each disjunct is named: a selector spec and a
     # ``many`` spec by test_kernel_edge's
@@ -283,11 +286,12 @@ def recording_spec(spec: KernelSpec) -> KernelSpec:
     names = seed_named_fields(spec.validator)
     if not names:
         return spec
-    twin = _RECORDING.get(id(spec))
-    if twin is None:
-        twin = dataclasses.replace(spec, input_data=_recording(spec.input_data, names))
-        _RECORDING[id(spec)] = twin
-        weakref.finalize(spec, _RECORDING.pop, id(spec), None)
+    key = id(spec)
+    cached = _RECORDING.get(key)
+    if cached is not None and cached[0]() is spec:
+        return cached[1]
+    twin = spec.derive(input_data=_recording(spec.input_data, names))
+    _RECORDING[key] = (weakref.ref(spec, lambda _dead: _RECORDING.pop(key, None)), twin)
     return twin
 
 
@@ -376,6 +380,9 @@ def kernel_arguments(
         raise DispatchError(f"The body must be an object; got {type(body).__name__}.")
     fields = seed_named_fields(spec.validator)
     names = fields.intersection(sent)
+    # Skips a hold that would bind nothing: with no provider or no seed-named
+    # field the held body is empty, and ``{**{}, **arguments}`` is the
+    # arguments. A saving, not a check, so no test names its disjuncts.
     if not names and (spec.input_data is None or not fields):
         return sent, None
     keys = provider_keys(spec.input_data)
