@@ -323,10 +323,10 @@ class TestOnASelectorView:
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "the serializer context is not yet the call's one dict: call_base_context hands "
-        "each serializer its own copy of the view's get_serializer_context(), so a key "
-        "the input serializer's validate() writes reaches neither the service's "
-        "call_context nor the output serializer"
+        "a key the input serializer's validate() writes reaches the service and the "
+        "output serializer, but the call's one dict is the one fill_call_context builds, "
+        "not the object the view's get_serializer_context() returned, so the final "
+        "identity assertion fails"
     ),
 )
 def test_one_dict_per_request_reaches_both_serializers_and_the_service() -> None:

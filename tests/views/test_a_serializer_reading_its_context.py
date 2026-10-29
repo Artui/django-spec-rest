@@ -120,11 +120,10 @@ def _create(spec: ServiceSpec, body: dict[str, Any], user: User, url: str = "/")
 _DESCRIBED_WITH_NO_CALL = pytest.mark.xfail(
     strict=True,
     reason=(
-        "The kernel route describes the serializer with no request or view: kernel_arguments "
-        "(dispatch/kernel_edge.py) asks spec.parameters() before EDGE_CALL is set and with no "
-        "DescribeBinding, so SerializerValidator.parameters() reaches describe_serializer "
-        "(service_specs/utils.py) bound with no context, and neither the seat's "
-        "serializer_context."
+        "The serializer is described with the call's request and view, but a seat's "
+        "serializer_context that declares the whole pool is not asked at description: "
+        "describe_context (dispatch/kernel_edge.py) answers None for it, so a serializer "
+        "that cannot be built without that callable's keys raises KeyError."
     ),
 )
 
@@ -231,10 +230,9 @@ class _ReadsItsContext(serializers.Serializer):
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "Each serializer is handed its own copy of the context (call_base_context and "
-        "base_serializer_context, service_specs/), and the view's call context is built "
-        "by fill_call_context rather than as get_serializer_context() answers it "
-        "(view_call_context, views/utils.py): the two halves land together."
+        "The serializers and the service share one dict now, but it is the one "
+        "fill_call_context builds (view_call_context, views/utils.py), not the object "
+        "get_serializer_context() returned, so only the final identity assertion fails."
     ),
 )
 def test_the_call_s_context_is_every_serializer_s_context(owner: User) -> None:

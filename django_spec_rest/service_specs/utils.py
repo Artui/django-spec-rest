@@ -690,8 +690,11 @@ def _context_for(call_context: dict[str, Any] | None, *, view: Any, request: Any
     ``None``. Shared, the view's ``get_serializer_context`` answer goes beneath what the
     call's context already holds, so a key the view adds is there while the
     call's own entries, and whatever a stage of the call wrote, keep one value
-    for every stage (test_a_key_the_view_s_get_serializer_context_adds_is_in_the_one_dict,
-    whose ``format`` assertion fails were the view's answer laid over them).
+    for every stage (test_a_key_the_view_s_get_serializer_context_adds_is_in_the_one_dict).
+    A view's input hook, whose default answers ``get_serializer_context()`` whole,
+    is laid over this dict afterwards, so for ``format`` the view's answer wins
+    today; the route's suffix winning is a strict xfail,
+    test_the_route_s_suffix_outranks_an_overriding_get_serializer_context_for_format.
     """
     base = call_base_context(view=view, request=request)
     if call_context is None:
