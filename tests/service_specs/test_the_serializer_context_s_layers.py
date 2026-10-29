@@ -242,17 +242,26 @@ class TestTheViewsHooks:
 def test_one_dict_per_request_reaches_both_serializers_and_the_service() -> None:
     """A key the input serializer's ``validate()`` writes is the output's and the service's.
 
-    The inversion of drfs' per-serializer copy: the context every serializer of
-    the call is built under is the one dict the view created for the request.
+    The inversion of drfs' per-serializer copy: the context the input
+    serializer is built under is the dict the view's ``get_serializer_context()``
+    returned, the one dict of the request.
     """
     written: list[Any] = []
+    contexts: list[Any] = []
 
     class _Writing(serializers.Serializer):
         title = serializers.CharField()
 
         def validate(self, attrs: Any) -> Any:
+            contexts.append(self.context)
             self.context["written"] = "by validate"
             return attrs
+
+    class _Returning(_View):
+        def get_serializer_context(self) -> dict[str, Any]:
+            context = super().get_serializer_context()
+            contexts.append(context)
+            return context
 
     def service(*, data: Any, call_context: dict[str, Any]) -> SimpleNamespace:
         written.append(call_context.get("written"))
@@ -265,8 +274,9 @@ def test_one_dict_per_request_reaches_both_serializers_and_the_service() -> None
         presenter=SerializerPresenter(_Out),
     )
 
-    output, view = _post(spec)
+    output, _ = _post(spec, _Returning)
 
     assert written == ["by validate"]
     assert output["written"] == "by validate"
-    assert view.asked == 1
+    returned, validated = contexts[:2]
+    assert validated is returned

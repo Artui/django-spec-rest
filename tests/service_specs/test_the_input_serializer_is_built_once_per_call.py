@@ -164,7 +164,7 @@ def _updated(*, instance: Post, data: Any) -> dict[str, Any]:
 _LOOKUP = SelectorSpec(
     kind=SelectorKind.RETRIEVE,
     selector=lambda pk: Post.objects.filter(pk=pk),
-    reads=Parameters.of(Parameter("pk", "integer")),
+    reads=Parameters.of(Parameter("pk", "integer", required=True)),
     permissions=_OPEN,
 )
 
@@ -259,17 +259,34 @@ def _counted() -> None:
     BUILT.clear()
 
 
-# The kernel route describes a ``SerializerValidator``'s serializer for
-# ``parameters()`` afresh, with no body, no row and ``partial`` unset, and once
-# per read: the edge sets no ``describe_binding`` for a kernel spec, and the
-# kernel's own ``dispatch`` hands ``parameters()`` nothing of the call.
+# Over a live view the edge could bind the description to the call, and does
+# not: it sets no ``describe_binding`` for a kernel spec, so the Validator
+# describes its serializer for ``parameters()`` afresh, with no body, no row and
+# ``partial`` unset. Closing it takes the edge (``dispatch/kernel_edge.py``)
+# setting the binding and the serializer walk (``describe_serializer``,
+# ``describe_with``) reading it there.
 _UNBOUND = pytest.mark.xfail(
     strict=True,
     reason=(
-        "a kernel spec's SerializerValidator describes its serializer for parameters() "
-        "unbound to the call's body, row and partial flag (no describe_binding on the "
-        "kernel route), so a field the body or the row adds is refused, a field an update "
-        "never writes is required, and a serializer reading either raises"
+        "the kernel route's edge sets no describe_binding for a kernel spec, so its "
+        "SerializerValidator describes the serializer for parameters() with no body, no "
+        "row and partial unset: a field the body or the row adds is refused, a field an "
+        "update never writes is required, and a serializer reading either raises"
+    ),
+)
+# Through the kernel's own ``dispatch`` there is no edge at all: the kernel asks
+# ``Validator.parameters()``, which takes nothing of the call, for its shape
+# check before ``validated()`` is handed the arguments and the target. So no
+# code in this package can describe the serializer for the call's body, row or
+# ``partial`` there; it would take a kernel seat handing the Validator the call
+# before the shape check, or these cases drop.
+_NO_CALL_TO_DESCRIBE_FOR = pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "the kernel's dispatch asks Validator.parameters() for its shape check with "
+        "nothing of the call, before validated() sees the arguments or the target, so "
+        "a serializer whose fields depend on the body, the row or partial cannot be "
+        "described for the call off HTTP"
     ),
 )
 _BUILT_AGAIN = pytest.mark.xfail(
@@ -343,7 +360,7 @@ class TestOverALiveView:
         assert response.data["got"] == {"reason": "why"}
 
 
-@_UNBOUND
+@_NO_CALL_TO_DESCRIBE_FOR
 @_CORES
 class TestThroughTheKernelsDispatch:
     def test_a_field_the_body_adds_validates(self, dispatch: Callable[..., DispatchResult]) -> None:

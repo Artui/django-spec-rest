@@ -15,6 +15,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from django.core.exceptions import ImproperlyConfigured
 from django.db.models import QuerySet
 from django_service_specs import (
     Parameter,
@@ -64,7 +65,7 @@ def _touch(*, instance: Post) -> Post:
 _LOOKUP = SelectorSpec(
     kind=SelectorKind.RETRIEVE,
     selector=_post_for_team,
-    reads=Parameters.of(Parameter("pk", "integer")),
+    reads=Parameters.of(Parameter("pk", "integer", required=True)),
     kwargs=_team_from_the_route,
     permissions=_OPEN,
 )
@@ -146,7 +147,7 @@ class _ViewLookupView(_Open, ServiceUpdateView):
         instance_selector_spec=SelectorSpec(
             kind=SelectorKind.RETRIEVE,
             selector=_post_seen_by_its_view,
-            reads=Parameters.of(Parameter("pk", "integer")),
+            reads=Parameters.of(Parameter("pk", "integer", required=True)),
             permissions=_OPEN,
         ),
         permissions=_OPEN,
@@ -206,3 +207,85 @@ def test_a_query_string_naming_view_never_stands_in_for_it(
         assert response.status_code == 200, response.data
         (view,) = seen
         assert isinstance(view, _SeedView)
+
+
+def test_a_provider_handing_the_selector_the_view_is_refused(seen: list[Any]) -> None:
+    """A provider's key never outranks a seed, so one answering ``view`` is refused."""
+    Post.objects.create(title="p")
+    spec = SelectorSpec(
+        kind=SelectorKind.RETRIEVE,
+        selector=_the_view,
+        permissions=_OPEN,
+        kwargs=lambda: {"view": "forged"},
+    )
+    view = type("_View", (_SeedView,), {"spec": spec}).as_view()
+
+    with pytest.raises(ImproperlyConfigured, match=r"returned the key\(s\) \['view'\]"):
+        view(factory.get("/"))
+    assert seen == []
+
+
+def _team_post(*, team: str = "own-team") -> Post:
+    _SEEN.append(team)
+    return Post.objects.order_by("id").first()
+
+
+class _TeamRetrieveView(_Open, SelectorRetrieveView):
+    serializer_class = PostSerializer
+    spec = SelectorSpec(
+        kind=SelectorKind.RETRIEVE,
+        selector=_team_post,
+        kwargs=_team_from_the_route,
+        permissions=_OPEN,
+    )
+
+
+@pytest.mark.parametrize(
+    ("route", "team"), [({"team": "route-team"}, "route-team"), ({}, "own-team")]
+)
+def test_a_route_capture_fills_a_selector_s_server_owned_key(
+    seen: list[Any], route: dict[str, Any], team: str
+) -> None:
+    Post.objects.create(title="p")
+
+    response = _TeamRetrieveView.as_view()(factory.get("/"), **route)
+
+    assert response.status_code == 200, response.data
+    assert seen == [team]
+
+
+def _posts_for_team(*, team: str = "own-team") -> QuerySet[Post]:
+    _SEEN.append(team)
+    return Post.objects.order_by("id")
+
+
+def _count(*, collection: QuerySet[Post]) -> dict[str, int]:
+    return {"count": collection.count()}
+
+
+class _CollectionView(_Open, ServiceUpdateView):
+    spec = ServiceSpec(
+        service=_count,
+        collection_selector_spec=SelectorSpec(
+            kind=SelectorKind.LIST,
+            selector=_posts_for_team,
+            kwargs=_team_from_the_route,
+            permissions=_OPEN,
+        ),
+        permissions=_OPEN,
+    )
+
+
+@pytest.mark.parametrize(
+    ("route", "team"), [({"team": "route-team"}, "route-team"), ({}, "own-team")]
+)
+def test_a_route_capture_fills_a_collection_lookup_s_server_owned_key(
+    seen: list[Any], route: dict[str, Any], team: str
+) -> None:
+    Post.objects.create(title="p")
+
+    response = _CollectionView.as_view()(factory.put("/", {}, format="json"), **route)
+
+    assert response.status_code == 200, response.data
+    assert response.data == {"count": 1}
+    assert seen == [team]
