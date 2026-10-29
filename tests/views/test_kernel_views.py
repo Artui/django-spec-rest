@@ -24,9 +24,12 @@ from __future__ import annotations
 
 from typing import Any
 
+import django_filters
 import pytest
 from django.contrib.auth.models import User
+from django.core.exceptions import ImproperlyConfigured
 from django.db.models import QuerySet
+from django_filters.rest_framework import DjangoFilterBackend
 from django_service_specs import (
     Parameter,
     Parameters,
@@ -238,9 +241,8 @@ class TestASeedNamedFieldValidatesFromTheBody:
         assert received == {"author": 4, "user": 7}
 
     def test_a_body_with_no_seed_named_field_keeps_the_input_data_provider(self) -> None:
-        """The body is handed to the serializer only where it sends a field the
-        kernel cannot take; anywhere else the serializer binds what the kernel
-        hands it, ``input_data``'s values merged in."""
+        """The serializer binds what the kernel hands it, ``input_data``'s values
+        merged in."""
 
         class _Input(serializers.Serializer):
             title = serializers.CharField()
@@ -256,6 +258,50 @@ class TestASeedNamedFieldValidatesFromTheBody:
         response = _post(_view(spec), {"title": "from the client"})
         assert response.status_code == 204, response.data
         assert received == {"title": "from the server"}
+
+    def test_input_data_outranks_the_body_beside_a_seed_named_field(self) -> None:
+        """A body sending a field the kernel cannot take still has the server's
+        values over the client's: the serializer binds the kernel's checked
+        arguments, ``input_data``'s merged in, over that field's value alone."""
+
+        class _Input(serializers.Serializer):
+            title = serializers.CharField()
+            user = serializers.IntegerField(required=False)
+
+        received: dict[str, Any] = {}
+        spec = ServiceSpec(
+            service=lambda *, data: received.update(data),
+            permissions=_OPEN,
+            validator=SerializerValidator(_Input),
+            input_data=lambda: {"title": "from the server"},
+        )
+        response = _post(_view(spec), {"title": "from the client", "user": 7})
+        assert response.status_code == 204, response.data
+        assert received == {"title": "from the server", "user": 7}
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "The kernel hands a Validator only the input_data keys its parameters() "
+            "declare, and a seed-named field is none of them, so the server's value "
+            "never reaches the serializer; drfs' edge hands it over the client's."
+        ),
+    )
+    def test_input_data_filling_a_seed_named_field_outranks_the_body(self) -> None:
+        class _Input(serializers.Serializer):
+            title = serializers.CharField()
+            user = serializers.IntegerField(required=False)
+
+        received: dict[str, Any] = {}
+        spec = ServiceSpec(
+            service=lambda *, data: received.update(data),
+            permissions=_OPEN,
+            validator=SerializerValidator(_Input),
+            input_data=lambda: {"user": 1},
+        )
+        response = _post(_view(spec), {"title": "t", "user": 7})
+        assert response.status_code == 204, response.data
+        assert received == {"title": "t", "user": 1}
 
 
 class TestTheArgumentsAreReadAsTheKernelReadsAWire:
@@ -281,12 +327,30 @@ class TestTheArgumentsAreReadAsTheKernelReadsAWire:
         # and Django's CSRF field never an argument.
         assert received == {"title": "t", "views": 3}
 
+    def test_a_form_s_true_is_a_boolean(self) -> None:
+        """The kernel's typed check takes an integer's ``"3"`` as sent, so a
+        boolean is what holds the form body's coercion."""
+
+        class _Input(serializers.Serializer):
+            published = serializers.BooleanField()
+
+        received: dict[str, Any] = {}
+        spec = ServiceSpec(
+            service=lambda *, data: received.update(data),
+            permissions=_OPEN,
+            validator=SerializerValidator(_Input),
+        )
+        response = _post(_view(spec), {"published": "true"}, format="multipart")
+        assert response.status_code == 204, response.data
+        assert received == {"published": True}
+
     def test_a_json_body_is_not_read_as_flat_strings(self) -> None:
         """A JSON ``"true"`` is a string, typed by the client, and reaches the
         kernel's typed check as one, where a form's ``"true"`` is coerced.
 
         The kernel's check answers before the serializer does, so DRF, which
-        would read ``"true"`` as ``True``, is never asked."""
+        would read ``"true"`` as ``True``, is never asked. A lenient Validator,
+        whose typed check leaves the serializer's coercion to DRF, reverses this."""
 
         class _Input(serializers.Serializer):
             published = serializers.BooleanField()
@@ -333,6 +397,17 @@ class TestTheArgumentsAreReadAsTheKernelReadsAWire:
         assert response.status_code == 204, response.data
         assert received == {"author": 4}
 
+    def test_a_capture_outranks_a_form_body(self) -> None:
+        received: dict[str, Any] = {}
+        spec = ServiceSpec(
+            service=lambda *, author: received.update(author=author),
+            permissions=_OPEN,
+            reads=Parameters.of(Parameter("author", "integer")),
+        )
+        response = _post(_view(spec), {"author": "9"}, format="multipart", author="4")
+        assert response.status_code == 204, response.data
+        assert received == {"author": 4}
+
 
 class TestAManySpec:
     def test_a_list_body_is_its_rows_and_its_output_selector_s_re_read_is_presented(
@@ -365,6 +440,23 @@ class TestAManySpec:
         assert response.status_code == 201, response.data
         assert [row["name"] for row in response.data] == ["Bo", "Ada"]
         assert [a.name for a in reread["result"]] == ["Ada", "Bo"]
+
+    def test_a_declared_capture_reaches_a_many_spec_beside_its_rows(self) -> None:
+        received: dict[str, Any] = {}
+
+        def create(*, data: list[dict[str, Any]], author: int) -> None:
+            received.update(names=[row["name"] for row in data], author=author)
+
+        spec = ServiceSpec(
+            service=create,
+            permissions=_OPEN,
+            many=True,
+            reads=Parameters.of(Parameter("author", "integer")),
+            validator=SerializerValidator(_AuthorInput),
+        )
+        response = _post(_view(spec), [{"name": "Ada"}], author="4")
+        assert response.status_code == 204, response.data
+        assert received == {"names": ["Ada"], "author": 4}
 
 
 class TestATargetTheViewHandsOver:
@@ -425,6 +517,28 @@ class TestARetrieveView:
     def test_a_kernel_selector_spec_passes_as_view(self) -> None:
         assert callable(type("_View", (_OneAuthor,), {"spec": _ONE}).as_view())
 
+    def test_a_list_spec_on_a_retrieve_view_is_refused_at_as_view(self) -> None:
+        spec = SelectorSpec(kind=SelectorKind.LIST, selector=Author.objects.all, permissions=_OPEN)
+        with pytest.raises(ImproperlyConfigured, match="spec.kind is"):
+            type("_View", (_OneAuthor,), {"spec": spec}).as_view()
+
+    def test_the_selector_s_call_context_is_the_view_s_own(self) -> None:
+        author = Author.objects.create(name="Ada")
+        seen: dict[str, Any] = {}
+
+        def one(*, pk: int, call_context: Any, view: Any) -> Author:
+            seen.update(call_context=call_context, view=view)
+            return Author.objects.get(pk=pk)
+
+        spec = SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=one,
+            reads=Parameters.of(Parameter("pk", "integer")),
+            permissions=_OPEN,
+        )
+        assert _get(_OneAuthor, spec, pk=str(author.pk)).status_code == 200
+        assert seen["call_context"] is seen["view"]._call_context
+
     def test_a_missing_row_is_404(self) -> None:
         assert _get(_OneAuthor, _ONE, pk="1").status_code == 404
 
@@ -477,3 +591,40 @@ class TestAListView:
         response = cls.as_view()(factory.get("/?nope=1"))
         assert response.status_code == 400
         assert "Unknown argument." in str(response.data["nope"])
+
+    def test_a_query_string_s_true_is_a_boolean(self) -> None:
+        received: dict[str, Any] = {}
+
+        def authors(*, published: bool) -> QuerySet[Author]:
+            received.update(published=published)
+            return Author.objects.none()
+
+        spec = SelectorSpec(
+            kind=SelectorKind.LIST,
+            selector=authors,
+            reads=Parameters.of(Parameter("published", "boolean")),
+            permissions=_OPEN,
+        )
+        response = _get(_AuthorsByName, spec, "/?published=true")
+        assert response.status_code == 200, response.data
+        assert received == {"published": True}
+
+    def test_a_filter_set_beside_django_filter_s_backend_is_refused_at_as_view(self) -> None:
+        """Both apply a ``FilterSet`` to the list, so the list would be
+        filtered twice; with no such backend the spec mounts."""
+
+        class _ByName(django_filters.FilterSet):
+            class Meta:
+                model = Author
+                fields = ["name"]
+
+        spec = SelectorSpec(
+            kind=SelectorKind.LIST,
+            selector=Author.objects.all,
+            permissions=_OPEN,
+            filter_set=_ByName,
+        )
+        assert callable(type("_View", (_AuthorsByName,), {"spec": spec}).as_view())
+        backed = {"spec": spec, "filter_backends": [DjangoFilterBackend]}
+        with pytest.raises(ImproperlyConfigured, match="filtered twice"):
+            type("_View", (_AuthorsByName,), backed).as_view()

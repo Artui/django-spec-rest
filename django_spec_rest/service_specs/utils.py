@@ -539,6 +539,12 @@ class EdgeCallState:
       binds rather than the kernel's checked arguments (``validator_input``):
       the caller's own, a ``QueryDict`` kept one, with what the edge put over
       it, as DRF's serializer has always been handed the request's data.
+    - ``input_beneath``: whether that body goes beneath the kernel's checked
+      arguments rather than in their place, so their values - the caller's,
+      the route's and ``input_data``'s - win over it. The kernel route's edge
+      holds only the values of the fields it took off the arguments, a field
+      named like a seed, and sets it; drfs' edge holds the whole body and does
+      not (``validator_input``).
     - ``server_values``: the server's value for each field of that
       Validator's body the edge put one into - a view hook's or the spec's
       ``kwargs`` provider's value naming the field, and ``input_data``, a field
@@ -613,6 +619,7 @@ class EdgeCallState:
     author_values: Mapping[str, Any] = dataclasses.field(default_factory=dict)
     view_hooks: ViewHooks = dataclasses.field(default_factory=ViewHooks)
     validator_input: tuple[Any, Any] | None = None
+    input_beneath: bool = False
     server_values: Mapping[str, Any] = dataclasses.field(default_factory=dict)
     author_keys: Mapping[str, str] = dataclasses.field(default_factory=dict)
     provider_owned: frozenset[str] = frozenset()
@@ -675,12 +682,22 @@ def call_base_context(*, view: Any, request: Any) -> dict[str, Any]:
 def validator_input(validator: Any, arguments: Any) -> Any:
     """What ``validator`` binds for the call: the edge's body for it, else ``arguments``.
 
+    Where the edge set ``input_beneath``, the body goes beneath ``arguments``
+    rather than in their place.
+
     Only the Validator the edge call names reads the edge's body, so a kernel
     call made inside the service, of another spec or of this one, binds its
     own arguments (test_a_kernel_call_inside_the_service_binds_its_own_arguments).
     """
-    held = edge_call_state().validator_input
-    return held[1] if held is not None and held[0] is validator else arguments
+    state = edge_call_state()
+    held = state.validator_input
+    if held is None or held[0] is not validator:
+        return arguments
+    # Beneath the arguments the kernel hands this Validator, where the edge
+    # holds only what it took off them
+    # (test_input_data_outranks_the_body_beside_a_seed_named_field). Never set
+    # for a ``many`` call, whose ``validated_many`` asks with no arguments.
+    return {**held[1], **arguments} if state.input_beneath else held[1]
 
 
 def server_values(validator: Any) -> Mapping[str, Any]:

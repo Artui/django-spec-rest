@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass
 from typing import Any
 
@@ -27,9 +28,11 @@ from django_spec_rest.dispatch.kernel_edge import (
     adispatch_kernel_spec,
     dispatch_kernel_spec,
     runs_on_kernel,
+    seed_named_fields,
 )
 from django_spec_rest.service_specs.invalid_arguments import InvalidArguments
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
+from django_spec_rest.service_specs.utils import EDGE_CALL
 from django_spec_rest.views.utils import view_call_context
 from tests.views.test_kernel_views import _CREATE, _ONE, _CreateView
 
@@ -69,6 +72,18 @@ def test_another_validator_s_body_is_stripped_of_nothing() -> None:
     response = view(factory.post("/", {"title": "t", "user": 1}, format="json"))
     assert response.status_code == 400
     assert "Unknown argument." in str(response.data["user"])
+
+
+def test_a_read_only_field_named_like_a_seed_is_none_the_body_sends() -> None:
+    """A read-only field takes nothing from a body, so no seed-named field is
+    held for it, whatever its name; only the writable ones are."""
+
+    class _Input(serializers.Serializer):
+        title = serializers.CharField()
+        user = serializers.IntegerField(read_only=True)
+        result = serializers.IntegerField()
+
+    assert seed_named_fields(SerializerValidator(_Input)) == frozenset({"result"})
 
 
 def _sync(spec: Any, **kwargs: Any) -> Any:
@@ -146,6 +161,43 @@ def test_a_bare_dispatch_error_leaves_as_the_route_s_400(core: Callable[..., Any
     with pytest.raises(KernelDispatchRefused) as raised:
         core(ServiceSpec(service=service, permissions=_OPEN), **_parts({}))
     assert raised.value.detail == "Not this way."
+
+
+def _sync_then_state(spec: Any, **kwargs: Any) -> Any:
+    # Every outcome is a case; the state after it is the assertion.
+    with suppress(Exception):
+        dispatch_kernel_spec(spec, **kwargs)
+    return EDGE_CALL.get()
+
+
+async def _async_then_state(spec: Any, **kwargs: Any) -> Any:
+    # Read inside the coroutine that awaited the core, so the state is the
+    # context the core ran in, not one ``async_to_sync`` copied back.
+    with suppress(Exception):
+        await adispatch_kernel_spec(spec, **kwargs)
+    return EDGE_CALL.get()
+
+
+@pytest.mark.parametrize("outcome", ["returned", "refused", "raised"])
+@pytest.mark.parametrize(
+    "core", [_sync_then_state, async_to_sync(_async_then_state)], ids=["sync", "async"]
+)
+def test_the_edge_s_state_ends_with_the_call(core: Callable[..., Any], outcome: str) -> None:
+    """The state the edge sets for a call is gone after it, however the call
+    ended, so the next call on the same thread or task starts from none."""
+
+    class _Input(serializers.Serializer):
+        title = serializers.CharField()
+        user = serializers.IntegerField()
+
+    def service(*, data: Any) -> None:
+        if outcome == "raised":
+            raise RuntimeError("boom")
+        if outcome == "refused":
+            raise DispatchError("Not this way.")
+
+    spec = ServiceSpec(service=service, permissions=_OPEN, validator=SerializerValidator(_Input))
+    assert core(spec, **_parts({"title": "t", "user": 1})) is None
 
 
 def test_the_two_cores_take_the_same_arguments() -> None:

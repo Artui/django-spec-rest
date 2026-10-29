@@ -84,9 +84,10 @@ ALLOWED_VIEWS_IMPORTS: dict[str, frozenset[str]] = {
 ALLOWED_DRF_IMPORTS: dict[str, frozenset[str]] = {
     "audience/build_audience_projection.py": frozenset({"rest_framework.serializers"}),
     "dispatch/enforce_permissions.py": frozenset({"rest_framework.exceptions"}),
-    # The DRF edge over the kernel's own ``dispatch``: it reads a DRF ``Request``'s
-    # body and query string, and answers each kernel refusal as a DRF exception,
-    # the bare ``DispatchError``'s under a ``400`` it declares.
+    # The DRF edge over the kernel's own ``dispatch``: it answers each kernel
+    # refusal as a DRF exception (``exceptions``), the bare ``DispatchError``'s
+    # under a ``400`` it declares (``status``). ``request`` is for annotations
+    # alone: the ``Request`` whose body and query string it reads is handed in.
     "dispatch/kernel_edge.py": frozenset(
         {
             "rest_framework.exceptions",

@@ -31,15 +31,23 @@ kernel's own unless stated:
 
 - **Nothing is stripped**: a body key ``request`` or ``serializer`` that no
   field declares reaches the kernel's closed argument set and is refused there
-  as "Unknown argument." under ``REJECT``, as on every other transport.
+  as "Unknown argument." under ``UNKNOWN_ARGUMENTS``, as on every other
+  transport.
 - **The one strip that stays**: a writable field of the spec's
   ``SerializerValidator`` named like one of the dispatcher's own seeds
   (``user``, ``result``, ``instance``, ...) or ``serializer`` is no parameter,
   because the kernel refuses a parameter a seed occupies, while a DRF
   serializer was always free to declare one. So the edge takes the field's
-  value off the kernel's arguments and hands the serializer what the request
-  sent, the declared captures over it, where it validates into ``data``
-  (``seed_named_fields``).
+  value off the kernel's arguments and hands it to the serializer beneath what
+  the kernel hands it, the caller's checked values, the declared captures and
+  ``input_data``'s, so it validates into ``data`` while every value the kernel
+  checked keeps its own (``seed_named_fields``). For a single object only: a
+  ``many`` spec's rows are handed to the kernel as sent, so a row's
+  seed-named field is refused there as an unknown argument, and what the
+  bulk path makes of it is the mutation views'.
+  An ``input_data`` value for such a field never reaches the serializer: the
+  kernel hands a Validator only the keys its ``parameters()`` declare, and
+  the field is none of them.
 
 Every refusal the kernel raises leaves as a DRF exception, by
 ``KERNEL_REFUSALS``, so DRF's exception handler answers it as it answers its
@@ -71,6 +79,7 @@ from django_service_specs.services.service_error import ServiceError
 from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelectorSpec
 from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
 from django_service_specs.types.dispatch_error import DispatchError
+from django_service_specs.types.unknown_arguments import UnknownArguments
 from django_service_specs.types.unset import UNSET
 from rest_framework import status as drf_status
 from rest_framework.exceptions import APIException
@@ -90,6 +99,14 @@ from django_spec_rest.service_specs.utils import (
 from django_spec_rest.views.mutation.map_service_error import map_service_error
 
 KernelSpec = KernelServiceSpec | KernelSelectorSpec
+
+UNKNOWN_ARGUMENTS = UnknownArguments.REJECT
+"""What the kernel route does with an argument the spec declares no parameter for.
+
+The kernel's own default, under which every undeclared body or query key is a
+``400`` "Unknown argument.". Which answer HTTP gives is an open owner question:
+drfs over HTTP dispatches under ``IGNORE``, dropping such a key unseen. Both
+cores pass this one value, so the decision is this line."""
 
 
 def runs_on_kernel(spec: object) -> TypeIs[KernelSpec]:
@@ -243,12 +260,12 @@ def kernel_arguments(
     ``"true"`` is a string there, as on every typed transport
     (test_a_json_body_is_not_read_as_flat_strings).
 
-    The second value is ``(validator, sent)`` where the body sends a field
-    ``seed_named_fields`` names: that field is taken off the arguments, and the
-    serializer binds what the request sent, with the captures over it and
-    nothing taken off, where the field validates (see the module docstring).
-    Otherwise ``None``, and the serializer binds what the kernel hands it, its
-    ``input_data`` provider's values merged in.
+    The second value is ``(validator, held)`` where the body sends a field
+    ``seed_named_fields`` names: each such field's value is taken off the
+    arguments and held, and the serializer binds it beneath what the kernel
+    hands it (see the module docstring). Otherwise ``None``, and the serializer
+    binds what the kernel hands it, its ``input_data`` provider's values merged
+    in. A ``many`` spec is never held for.
     """
     parameters: Parameters = spec.parameters()
     route = {
@@ -269,13 +286,17 @@ def kernel_arguments(
         sent = {**body, **coerce_flat(parameters, route)}
     else:
         raise DispatchError(f"The body must be an object; got {type(body).__name__}.")
-    held = seed_named_fields(spec.validator).intersection(sent)
-    if not held:
+    names = seed_named_fields(spec.validator).intersection(sent)
+    if not names:
         return sent, None
-    # The serializer binds ``sent`` rather than the raw body, so a declared
-    # capture outranks the client's value here as it does on every other call
-    # (test_a_declared_capture_outranks_the_body_beside_a_seed_named_field).
-    return {name: value for name, value in sent.items() if name not in held}, (spec.validator, sent)
+    # Only the held fields' values, beneath the kernel's checked arguments
+    # (``EdgeCallState.input_beneath``), so a declared capture and
+    # ``input_data`` outrank the client's value here as on every other call
+    # (test_a_declared_capture_outranks_the_body_beside_a_seed_named_field,
+    # test_input_data_outranks_the_body_beside_a_seed_named_field).
+    held = {name: sent[name] for name in names}
+    arguments = {name: value for name, value in sent.items() if name not in names}
+    return arguments, (spec.validator, held)
 
 
 def dispatch_kernel_spec(
@@ -295,12 +316,13 @@ def dispatch_kernel_spec(
     """
     with answering_refusals():
         arguments, held = kernel_arguments(spec, view=view, request=request)
-        token = EDGE_CALL.set(EdgeCallState(validator_input=held))
+        token = EDGE_CALL.set(EdgeCallState(validator_input=held, input_beneath=True))
         try:
             return dispatch(
                 spec,
                 principal=request.user,
                 arguments=arguments,
+                unknown_arguments=UNKNOWN_ARGUMENTS,
                 target=target,
                 call_context=call_context,
             )
@@ -323,12 +345,13 @@ async def adispatch_kernel_spec(
     """
     with answering_refusals():
         arguments, held = kernel_arguments(spec, view=view, request=request)
-        token = EDGE_CALL.set(EdgeCallState(validator_input=held))
+        token = EDGE_CALL.set(EdgeCallState(validator_input=held, input_beneath=True))
         try:
             return await adispatch(
                 spec,
                 principal=request.user,
                 arguments=arguments,
+                unknown_arguments=UNKNOWN_ARGUMENTS,
                 target=target,
                 call_context=call_context,
             )
