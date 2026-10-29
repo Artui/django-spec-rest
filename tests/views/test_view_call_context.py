@@ -1,9 +1,8 @@
 """``view_call_context``: the one call-context dict of the request a view serves.
 
-The live-view cases in ``tests/test_transport_parity.py`` hold the hand-offs a
-request makes; these hold the helper's own contract, and the layers of the
-view-side resolvers that only a direct call reaches (the spec's own ``kwargs``
-and ``input_data`` layers, which ``dispatch_spec`` runs on a live view).
+The helper's own contract, and what the kernel route hands each callable of a
+kernel spec that declares ``call_context``: the view's dict, as the very
+object, so a value one stage keeps there is read by the next.
 """
 
 from __future__ import annotations
@@ -11,18 +10,27 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from django.core.exceptions import ImproperlyConfigured
+from django_service_specs import (
+    Parameter,
+    Parameters,
+    SelectorKind,
+    SelectorSpec,
+    ServiceSpec,
+    Unrestricted,
+)
 from rest_framework import serializers
 from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
 
-from django_spec_rest import ServiceSpec, ServiceViewSet
-from django_spec_rest.views.utils import (
-    resolve_extra_kwargs,
-    resolve_input_extras,
-    resolve_serializer_context,
-    view_call_context,
-)
+from django_spec_rest import SelectorRetrieveView, ServiceCreateView
+from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
+from django_spec_rest.service_specs.serializer_validator import SerializerValidator
+from django_spec_rest.views.utils import view_call_context
+from tests.testapp.models import Author
+from tests.testapp.serializers import AuthorSerializer
+
+factory = APIRequestFactory()
+_OPEN = (Unrestricted(),)
 
 
 class _View:
@@ -33,7 +41,7 @@ class _View:
 
 
 def _request() -> Request:
-    return Request(APIRequestFactory().get("/"))
+    return Request(factory.get("/"))
 
 
 def test_the_dict_carries_the_edge_s_four_standard_entries() -> None:
@@ -58,65 +66,83 @@ def test_one_view_is_one_dict_and_another_view_another() -> None:
     assert view_call_context(_View(), request) is not view_call_context(view, request)
 
 
-def _recording(seen: list[Any]) -> Any:
-    def provide(*, call_context: dict[str, Any]) -> dict[str, Any]:
-        seen.append(call_context)
-        return {}
-
-    return provide
+class _NameIn(serializers.Serializer):
+    name = serializers.CharField()
 
 
-def test_the_spec_kwargs_layer_is_handed_the_view_s_dict() -> None:
-    view, request, seen = _View(), _request(), []
-    resolve_extra_kwargs(
-        view,
-        request,
-        spec_kwargs=_recording(seen),
-        action_hook=None,
-        catch_all_hook="get_service_kwargs",
-    )
-    assert seen == [view_call_context(view, request)]
-    assert seen[0] is view_call_context(view, request)
+class _KernelCreateView(ServiceCreateView):
+    """``get_permissions`` answers the view's own classes, as for a spec setting none.
+
+    ``MutationFlowMixin.get_permissions`` reads ``spec.permission_classes``,
+    which a kernel spec has no attribute for.
+    """
+
+    def get_permissions(self) -> list[Any]:
+        return [permission() for permission in self.permission_classes]
 
 
-def test_the_spec_input_data_layer_is_handed_the_view_s_dict() -> None:
-    view, request, seen = _View(), _request(), []
-    resolve_input_extras(
-        view,
-        request,
-        spec_input_data=_recording(seen),
-        action_hook=None,
-        catch_all_hook="get_input_data",
-    )
-    assert seen[0] is view_call_context(view, request)
+@pytest.mark.django_db
+def test_every_callable_of_a_kernel_service_is_handed_the_view_s_dict() -> None:
+    """The ``kwargs`` and ``input_data`` providers, both seats' context callables
+    and the service: each declaring ``call_context`` is handed the one dict, and
+    what the first keeps there the last reads."""
+    seen: dict[str, Any] = {}
+
+    def recording(stage: str, answer: Any = None) -> Any:
+        def provide(*, call_context: dict[str, Any]) -> Any:
+            seen[stage] = call_context
+            call_context.setdefault("first", stage)
+            return {} if answer is None else answer
+
+        return provide
+
+    def service(*, data: Any, call_context: dict[str, Any]) -> Author:
+        seen["service"] = call_context
+        return Author.objects.create(name=data["name"])
+
+    class _View(_KernelCreateView):
+        spec = ServiceSpec(
+            service=service,
+            permissions=_OPEN,
+            kwargs=recording("kwargs"),
+            input_data=recording("input_data"),
+            validator=SerializerValidator(_NameIn, serializer_context=recording("validator")),
+            presenter=SerializerPresenter(
+                AuthorSerializer, serializer_context=recording("presenter")
+            ),
+        )
+
+    response = _View.as_view()(factory.post("/", {"name": "Ada"}, format="json"))
+
+    assert response.status_code == 201
+    assert set(seen) == {"kwargs", "input_data", "validator", "presenter", "service"}
+    the_dict = seen["service"]
+    assert all(context is the_dict for context in seen.values())
+    assert the_dict["view"]._call_context is the_dict
+    assert the_dict["request"] is the_dict["view"].request
+    assert the_dict["first"] in seen
 
 
-def test_the_spec_serializer_context_layer_is_handed_the_view_s_dict() -> None:
-    view, request, seen = _View(), _request(), []
-    resolve_serializer_context(
-        view,
-        request,
-        direction_hook="get_output_serializer_context",
-        action_hook=None,
-        spec_provider=_recording(seen),
-    )
-    assert seen[0] is view_call_context(view, request)
+@pytest.mark.django_db
+def test_a_kernel_selector_is_handed_the_view_s_dict() -> None:
+    seen: dict[str, Any] = {}
+    author = Author.objects.create(name="Ada")
 
+    def one(*, pk: int, call_context: dict[str, Any]) -> Author | None:
+        seen["selector"] = call_context
+        return Author.objects.filter(pk=pk).first()
 
-class _Title(serializers.Serializer):
-    title = serializers.CharField()
+    class _View(SelectorRetrieveView):
+        serializer_class = AuthorSerializer
+        spec = SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=one,
+            reads=Parameters.of(Parameter("pk", "integer", required=True)),
+            permissions=_OPEN,
+        )
 
+    response = _View.as_view()(factory.get("/"), pk=str(author.pk))
 
-@pytest.mark.parametrize("field", ["success_status", "response_finalizer"])
-def test_a_status_or_finalizer_naming_the_call_context_is_refused_when_the_view_is_built(
-    field: str,
-) -> None:
-    """Neither is offered the request's dict, so naming it is refused up front, not at a request."""
-
-    def naming(*, call_context: dict[str, Any]) -> Any: ...
-
-    spec = ServiceSpec(service=lambda *, data: data, input_serializer=_Title, **{field: naming})
-    viewset = type("_VS", (ServiceViewSet,), {"action_specs": {"create": spec}})
-
-    with pytest.raises(ImproperlyConfigured, match=r"\['call_context'\]"):
-        viewset.as_view({"post": "create"})
+    assert response.status_code == 200
+    assert seen["selector"] is seen["selector"]["view"]._call_context
+    assert seen["selector"]["action"] is None
