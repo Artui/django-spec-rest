@@ -29,6 +29,7 @@ from rest_framework.exceptions import APIException
 from django_spec_rest.service_specs.invalid_arguments import InvalidArguments
 from django_spec_rest.service_specs.not_permitted import NotPermitted
 from django_spec_rest.service_specs.principal_unavailable import PrincipalUnavailable
+from django_spec_rest.service_specs.translate_drf_refusals import TRANSLATED_FROM
 from django_spec_rest.views.mutation.map_service_error import map_service_error
 
 
@@ -48,8 +49,14 @@ class KernelDispatchRefused(APIException):
 
 
 def _as_raised(exc: Any) -> APIException:
-    """A refusal that is a DRF exception already: the dual-base twins a Validator or presenter raises."""
-    return exc
+    """A refusal that is a DRF exception already, as the author raised it where it was translated.
+
+    The dual-base twins a Validator or presenter raises are DRF's answer as
+    they are. A refusal ``translate_drf_refusals`` made of an author's own
+    carries that exception under ``TRANSLATED_FROM``, and the author's is the
+    answer, so DRF's handler reads the class the author chose.
+    """
+    return getattr(exc, TRANSLATED_FROM, exc)
 
 
 def _dispatch_refused(exc: DispatchError) -> APIException:
@@ -107,8 +114,13 @@ def answering_refusals() -> Generator[None]:
     """Re-raise a kernel refusal inside the block as the DRF exception the map answers it with.
 
     Raised ``from`` the kernel's, so the traceback keeps where dispatch
-    refused, and the exception left as it is when it is DRF's already. Used as
-    a ``with`` block around ``await`` too.
+    refused, and the exception left as it is when it is DRF's already. The
+    author's own exception, where ``translate_drf_refusals`` made the refusal
+    of it, is raised as it was, with the context it was raised in
+    (test_the_exception_keeps_the_context_it_was_raised_in) and the cause it
+    was raised from (test_the_exception_keeps_the_cause_it_was_raised_from)
+    rather than the translated refusal as either. Used as a ``with`` block
+    around ``await`` too.
     """
     try:
         yield
@@ -116,4 +128,15 @@ def answering_refusals() -> Generator[None]:
         answer = answer_refusal(exc)
         if answer is exc:
             raise
+        if answer is getattr(exc, TRANSLATED_FROM, None):
+            # Raising it here makes the translated refusal its context; the
+            # context it was raised in is put back as it propagates, and its
+            # cause was never touched. Held by the two tests named above, and by
+            # test_a_raise_with_no_context_is_restored_with_none for the context
+            # being put back to ``None`` rather than left as the refusal.
+            context = answer.__context__
+            try:
+                raise answer
+            finally:
+                answer.__context__ = context
         raise answer from exc
