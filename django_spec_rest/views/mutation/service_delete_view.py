@@ -19,8 +19,10 @@ class ServiceDeleteView(MutationFlowMixin, GenericAPIView):
     """``DELETE`` endpoint that runs a service callable.
 
     The instance to delete is resolved via ``spec.instance_selector_spec``
-    when set — no ``queryset`` / ``lookup_field`` required on the subclass —
-    falling back to DRF's ``get_object()``.
+    when set — no ``queryset`` / ``lookup_field`` required on the subclass.
+    A drfs spec falls back to DRF's ``get_object()``; a kernel spec never
+    does, its target being its own lookup's, so ``as_view()`` refuses one that
+    declares neither a target selector nor ``many``.
 
     Configure by setting ``spec`` to a
     [`ServiceSpec`][django_spec_rest.types.service_spec.ServiceSpec]. The spec's

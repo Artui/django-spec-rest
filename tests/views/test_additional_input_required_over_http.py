@@ -14,10 +14,12 @@ alone (the exception type), a handler answering with a ``str`` body is left alon
 dict), a handler whose body has no ``schema`` key of its own is left alone (the key),
 and a body of ``None`` or a Django response with no ``.data`` is left alone.
 
-One difference is a strict ``xfail``: an update or delete view that loads its row with
-``get_object()`` over a kernel spec naming no selector is a 500 on the kernel route,
-where the drfs one answered 422 with the schema. The update and delete cases above
-declare ``instance_selector_spec`` instead.
+One difference is by design: an update or delete view that loads its row with
+``get_object()`` over a kernel spec naming no selector, where the drfs one answered
+422 with the schema, is refused when the view is built, since a kernel spec's target
+is its own lookup's and ``get_object()`` is never asked for one. The update and delete
+cases declare ``instance_selector_spec`` instead, its ``pk`` read required, since the
+kernel's ``check_seeds`` refuses an optional read over a keyword with no default.
 
 Viewsets are not here: a viewset does not route a kernel spec yet, so the cases that
 reach the restore through ``@service_action``, a viewset's own ``handle_exception``
@@ -32,6 +34,7 @@ from typing import Any
 
 import pytest
 from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpResponse, JsonResponse
 from django.test import override_settings
 from django_service_specs import (
@@ -77,7 +80,7 @@ _PURGE_SPEC = ServiceSpec(service=_purge, permissions=_OPEN, atomic=False)
 # A detail route's spec names the row it acts on: the kernel refuses a target for a
 # spec that declares none, so the lookup is the spec's own, read from the route's ``pk``.
 # The view-resolved shape (``queryset`` and ``get_object()`` over a spec with no
-# selector) is the xfail below.
+# selector) is refused at ``as_view()``, below.
 _PURGE_ONE_SPEC = ServiceSpec(
     service=_purge,
     permissions=_OPEN,
@@ -85,7 +88,7 @@ _PURGE_ONE_SPEC = ServiceSpec(
     instance_selector_spec=SelectorSpec(
         kind=SelectorKind.RETRIEVE,
         selector=lambda *, pk: Author.objects.filter(pk=pk).first(),
-        reads=Parameters.of(Parameter("pk", "integer")),
+        reads=Parameters.of(Parameter("pk", "integer", required=True)),
         permissions=_OPEN,
     ),
 )
@@ -160,28 +163,17 @@ def test_the_http_body_carries_the_schema_as_it_was_raised(entry: str) -> None:
     assert json.loads(response.content) == {"detail": "Confirm the purge.", "schema": _PURGE_SCHEMA}
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=TypeError,
-    reason=(
-        "a kernel spec with no target selector on an update or delete view that loads its row "
-        "with get_object(): the view hands that row to the kernel as target=, which the kernel "
-        "refuses with a TypeError (a 500) where the drfs path answered 422 with the schema; the "
-        "fault is in views/mutation/utils.py, dispatch_mutation_for_spec"
-    ),
-)
 @pytest.mark.parametrize(
-    ("view", "method"),
-    [(_PurgeUpdateByGetObject, "put"), (_PurgeDeleteByGetObject, "delete")],
+    "view",
+    [_PurgeUpdateByGetObject, _PurgeDeleteByGetObject],
     ids=["ServiceUpdateView", "ServiceDeleteView"],
 )
-def test_a_view_that_loads_its_row_with_get_object_serves_the_schema(
-    view: type, method: str
-) -> None:
-    response = _respond(view, method, True)
-
-    assert response.status_code == 422
-    assert json.loads(response.content) == {"detail": "Confirm the purge.", "schema": _PURGE_SCHEMA}
+def test_a_view_that_loads_its_row_with_get_object_is_refused_at_as_view(view: type) -> None:
+    """Changed by design: the drfs view answered 422 with the schema. A kernel spec's
+    target is its own lookup's, so one naming none would run on no row, and the view is
+    refused when it is built rather than answering anything."""
+    with pytest.raises(ImproperlyConfigured, match="declares no target selector"):
+        view.as_view()
 
 
 _seen: list[Exception] = []

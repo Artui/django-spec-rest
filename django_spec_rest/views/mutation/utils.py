@@ -687,8 +687,11 @@ def resolve_mutation_instance(
     # The kernel takes a target only where the spec declares the selector that
     # would find it, and refuses one handed to a spec declaring none, so a
     # kernel spec's target is its own lookup's or there is none: the view's
-    # ``get_object()`` never runs for it, and the call acts on no row
-    # (test_service_update_view's test_a_spec_with_no_target_selector_acts_on_no_row).
+    # ``get_object()`` never runs for it. A standalone update or delete view
+    # refuses such a spec at ``as_view()``; a caller that check never reaches
+    # (a viewset's action, ``@service_action``) is handed no row rather than
+    # a ``get_object()`` row the kernel would refuse (test_service_update_view's
+    # test_a_kernel_spec_with_no_target_selector_is_handed_no_row).
     if runs_on_kernel(spec):
         return None
     return view.get_object()

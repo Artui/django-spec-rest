@@ -125,6 +125,31 @@ class TestBulkCreateMany:
         response = view(factory.post("/", [{"title": "a"}, {"title": "b"}], format="json"))
         assert response.data == [{"title": "x"}, {"title": "x"}]
 
+    def test_an_update_view_takes_a_many_spec_s_list_body_as_its_rows(self) -> None:
+        """A ``many`` spec names no target selector, the kernel refusing one,
+        since its list body is its rows: an update view mounts it, where a
+        single-object spec naming no target is refused."""
+        posts = [Post.objects.create(title="a"), Post.objects.create(title="b")]
+
+        def retitle(*, data: list[dict[str, Any]]) -> list[Post]:
+            for post, row in zip(posts, data, strict=True):
+                post.title = row["title"]
+                post.save(update_fields=["title"])
+            return posts
+
+        spec = ServiceSpec(
+            service=retitle,
+            permissions=_OPEN,
+            validator=SerializerValidator(_PostIn),
+            presenter=SerializerPresenter(_PostSerializer),
+            many=True,
+        )
+        response = _view(ServiceUpdateView, spec)(
+            factory.put("/", [{"title": "x"}, {"title": "y"}], format="json")
+        )
+        assert response.status_code == 200
+        assert [row["title"] for row in response.data] == ["x", "y"]
+
     def test_a_service_error_maps_to_422(self) -> None:
         def boom(*, data: Any) -> None:
             raise ServiceError("no")

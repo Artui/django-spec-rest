@@ -33,7 +33,7 @@ from rest_framework.response import Response
 from rest_framework.test import APIRequestFactory, force_authenticate
 from rest_framework.views import APIView
 
-from django_spec_rest import ServiceUpdateView
+from django_spec_rest import ServiceDeleteView, ServiceUpdateView
 from django_spec_rest.service_specs.kernel_spec_variant import kernel_spec_variant
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
@@ -278,33 +278,37 @@ class TestTheTarget:
         assert response.status_code == 200
         assert lookups == []
 
-    def test_a_spec_with_no_target_selector_acts_on_no_row(self) -> None:
-        """The view's ``get_object()`` is never asked for a kernel spec, which
-        takes no target it does not look up itself."""
-        ran: list[bool] = []
+    @pytest.mark.parametrize("base", [ServiceUpdateView, ServiceDeleteView])
+    def test_a_detail_view_s_kernel_spec_with_no_target_selector_is_refused_at_as_view(
+        self, base: type
+    ) -> None:
+        """Changed by design: a drfs update or delete scoped its call with the
+        view's ``get_object()``, which a kernel spec never asks, so a spec
+        naming no target would run on no row. It is refused when the view is
+        built, before ``check_seeds`` answers anything of it."""
 
-        class _View(ServiceUpdateView):
+        class _View(base):
             queryset = Author.objects.all()
-            spec = ServiceSpec(service=lambda: ran.append(True), permissions=_OPEN)
+            spec = ServiceSpec(service=lambda: None, permissions=_OPEN)
 
+        with pytest.raises(ImproperlyConfigured) as refused:
+            _View.as_view()
+        message = str(refused.value)
+        assert message.startswith("_View.spec declares no target selector")
+        assert "instance_selector_spec" in message
+        assert "which nothing fills" not in message
+
+    def test_a_kernel_spec_with_no_target_selector_is_handed_no_row(self) -> None:
+        """Where nothing refused the spec when the view was built, the view's
+        ``get_object()`` is still never asked: the kernel would refuse the row
+        it found as a ``target=`` to a spec declaring no target selector."""
+
+        class _View:
             def get_object(self) -> Any:
                 raise AssertionError("get_object() is not asked for a kernel spec")
 
-        assert _View.as_view()(factory.put("/", {}, format="json"), pk=1).status_code == 204
-        assert ran == [True]
-
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "views/spec_validation.py: an update view's kernel spec with no target "
-            "selector is not refused at as_view()"
-        ),
-    )
-    def test_an_update_view_s_kernel_spec_with_no_target_selector_is_refused_at_as_view(
-        self,
-    ) -> None:
-        with pytest.raises(ImproperlyConfigured):
-            _view(ServiceSpec(service=lambda: None, permissions=_OPEN))
+        spec = ServiceSpec(service=lambda: None, permissions=_OPEN)
+        assert utils.resolve_mutation_instance(_View(), spec) is None
 
 
 class TestWhatAnUpdatePresents:

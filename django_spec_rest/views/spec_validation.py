@@ -967,6 +967,7 @@ def validate_mutation_view_spec(
         _validate_response_finalizer(
             getattr(view_cls, "response_finalizer", None), label=view_cls.__name__
         )
+        _refuse_a_detail_spec_with_no_target(view_cls, spec, has_instance=has_instance)
         # A view hook's keys reach the service through the edge's overlay,
         # which ``check_seeds`` cannot see and its own docstring says not to
         # be asked beside, so a hooked view is not asked it, as drfs read an
@@ -983,6 +984,35 @@ def validate_mutation_view_spec(
         has_instance=has_instance,
         permissive_extras=hooked,
     )
+
+
+def _refuse_a_detail_spec_with_no_target(
+    view_cls: type, spec: KernelServiceSpec, *, has_instance: bool
+) -> None:
+    """Refuse an update or delete view's kernel spec that names nothing for it to act on.
+
+    A drfs spec naming no target lookup was scoped by the view's
+    ``get_object()``; a kernel spec never asks it, since the kernel refuses a
+    ``target=`` handed to a spec declaring no target selector, so such a spec
+    would run on no row at all (test_service_update_view's
+    test_a_detail_view_s_kernel_spec_with_no_target_selector_is_refused_at_as_view).
+    Asked before ``check_seeds``, whose refusal of a service taking
+    ``instance`` would name the symptom rather than the seat.
+
+    One arc to coverage, so each conjunct is named: ``has_instance`` by every
+    create view over a spec with no target selector (test_service_create_view's
+    test_creates_and_returns_201), ``many`` by a bulk update, whose list body
+    is its rows and which the kernel refuses a target selector to
+    (test_bulk_mutations' test_an_update_view_takes_a_many_spec_s_list_body_as_its_rows), and
+    the target selector by the refusal's own test.
+    """
+    if has_instance and not spec.many and spec.target_selector_spec() is None:
+        raise ImproperlyConfigured(
+            f"{view_cls.__name__}.spec declares no target selector, so it would act on no "
+            "row: a kernel spec's target is its own lookup's, and the view's get_object() is "
+            "never asked for one. Set instance_selector_spec to the row it acts on, "
+            "collection_selector_spec to a set, or many=True for a list body."
+        )
 
 
 def _overrides_the_action_hook(view_cls: type, chain: str) -> bool:
