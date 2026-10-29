@@ -1,48 +1,54 @@
 """A target lookup's typed reads are coerced and flattened as the spec's own are.
 
-A query string, a route capture and a form body carry strings, and a repeated
-key carries every value, so each is read against the type its declaration
-names: an integer and a boolean parsed from their string, an array as every
-value the key repeats. A ``reads`` entry on the target lookup is the same
-declaration as one on the spec, so its type is the one the value is read
-against, on a live view and off HTTP, on either core.
+A route capture and a form body carry strings, and a repeated form key carries
+every value, so each is read against the type its declaration names: an
+integer and a boolean parsed from their string, an array as every value the
+key repeats. A JSON body is not flattened, its values are checked as sent, and
+a value of either that does not convert is a 400 naming it. A ``reads``
+entry on the target lookup is a parameter of the spec, so its type is the one
+the value is read against.
+
+The kernel route's answer today, which no plan decision names yet: drfs read a lookup's typed ``QueryParam`` off the query
+string. On the kernel route a service spec's arguments are its body and its
+declared captures, so the values here are sent there; and a name both the spec
+and its lookup read, which drfs gave to the spec, is refused, since a kernel
+spec declares one source per name.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import Any
 
 import pytest
-from asgiref.sync import async_to_sync
-from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ImproperlyConfigured
-from django.http import QueryDict
-from rest_framework import serializers
-from rest_framework.exceptions import ValidationError
-from rest_framework.parsers import JSONParser
-from rest_framework.request import Request
-from rest_framework.test import APIRequestFactory
-
-from django_spec_rest import (
-    DispatchResult,
-    OfflineServiceView,
-    QueryParam,
+from django_service_specs import (
+    Parameter,
+    Parameters,
     SelectorKind,
     SelectorSpec,
     ServiceSpec,
-    ServiceUpdateView,
-    UrlKwarg,
-    adispatch_spec,
-    dispatch_spec,
+    Unrestricted,
 )
-from django_spec_rest.registry.spec_registry import SpecRegistry
+from rest_framework import serializers
+from rest_framework.test import APIRequestFactory
+
+from django_spec_rest import ServiceUpdateView
+from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
+from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from tests.testapp.models import Post
 from tests.testapp.serializers import PostSerializer
 
 _factory = APIRequestFactory()
 
-_QUERY = "/?n=3&flag=true&tags=a&tags=b"
+_READS = Parameters(
+    (
+        Parameter("pk", "integer", required=True),
+        Parameter("n", "integer"),
+        Parameter("flag", "boolean"),
+        Parameter("tags", "array", items="string"),
+        Parameter("org", "integer"),
+    )
+)
 _READ = {"n": 3, "flag": True, "tags": ["a", "b"], "org": 7}
 
 
@@ -50,168 +56,104 @@ class _BodyIn(serializers.Serializer):
     body = serializers.CharField(required=False)
 
 
-def _spec(
-    seen: dict[str, Any], *, spec_reads: Any = (), lookup_reads: Any = None
-) -> ServiceSpec[Any, Any, Any]:
+class _UpdateView(ServiceUpdateView):
+    permission_classes = []
+
+    def get_permissions(self) -> list[Any]:
+        # ``MutationFlowMixin``'s reads a drfs-only field; the spine's views
+        # answer the view's own classes the same way.
+        return [permission() for permission in self.permission_classes]
+
+
+def _spec(seen: dict[str, Any], *, lookup_reads: Parameters = _READS, **fields: Any) -> ServiceSpec:
     def selector(
         *, pk: int, n: Any = None, flag: Any = None, tags: Any = None, org: Any = None
     ) -> Any:
         seen.update(n=n, flag=flag, tags=tags, org=org)
-        return Post.objects.filter(pk=pk)
+        return Post.objects.get(pk=pk)
 
     def service(*, instance: Any, data: Any) -> Any:
         return instance
 
-    reads = (
-        QueryParam("n", type="integer"),
-        QueryParam("flag", type="boolean"),
-        QueryParam("tags", type="array"),
-        UrlKwarg("org", type="integer"),
-    )
     return ServiceSpec(
         service=service,
-        input_serializer=_BodyIn,
-        reads=spec_reads,
+        validator=SerializerValidator(_BodyIn),
+        presenter=SerializerPresenter(PostSerializer),
         instance_selector_spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE,
-            selector=selector,
-            reads=reads if lookup_reads is None else lookup_reads,
+            kind=SelectorKind.RETRIEVE, selector=selector, reads=lookup_reads
         ),
-        output_selector_spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE, output_serializer=PostSerializer
-        ),
-        permission_classes=[],
+        permissions=(Unrestricted(),),
         atomic=False,
+        **fields,
     )
 
 
-def _sync(spec: Any, **kwargs: Any) -> DispatchResult:
-    return dispatch_spec(spec, user=None, **kwargs)
-
-
-def _async(spec: Any, **kwargs: Any) -> DispatchResult:
-    return async_to_sync(adispatch_spec)(spec, user=None, **kwargs)
-
-
-_CORES = pytest.mark.parametrize("dispatch", [_sync, _async], ids=["sync", "async"])
+def _put(spec: ServiceSpec, body: Any, fmt: str, **route: Any) -> Any:
+    view = type("_View", (_UpdateView,), {"spec": spec}).as_view()
+    return view(_factory.put("/", body, format=fmt), **route)
 
 
 @pytest.mark.django_db
-def test_a_live_view_reads_them_from_its_query_string_and_route() -> None:
+def test_a_form_body_and_a_route_capture_are_read_against_their_types() -> None:
     seen: dict[str, Any] = {}
     post = Post.objects.create(title="a")
-    view = type(
-        "_View",
-        (ServiceUpdateView,),
-        {"queryset": Post.objects.all(), "permission_classes": [], "spec": _spec(seen)},
-    )
 
-    response = view.as_view()(_factory.put(_QUERY, {}, format="json"), pk=post.pk, org="7")
+    response = _put(
+        _spec(seen),
+        {"n": "3", "flag": "true", "tags": ["a", "b"]},
+        "multipart",
+        pk=post.pk,
+        org="7",
+    )
 
     assert response.status_code == 200, response.data
     assert seen == _READ
 
 
 @pytest.mark.django_db
-@_CORES
-def test_a_live_view_on_either_core_reads_them_alike(
-    dispatch: Callable[..., DispatchResult],
-) -> None:
+def test_a_json_body_is_read_as_sent_and_a_capture_still_coerced() -> None:
     seen: dict[str, Any] = {}
     post = Post.objects.create(title="a")
-    view = ServiceUpdateView()
-    view.request = Request(_factory.put(_QUERY, {}, format="json"), parsers=[JSONParser()])
-    view.request.user = AnonymousUser()
-    view.kwargs = {"pk": post.pk, "org": "7"}
-    view.format_kwarg = None
 
-    dispatch(_spec(seen), params=view.request.data, request=view.request, view=view)
+    response = _put(
+        _spec(seen), {"n": 3, "flag": True, "tags": ["a", "b"]}, "json", pk=str(post.pk), org="7"
+    )
 
+    assert response.status_code == 200, response.data
     assert seen == _READ
 
 
 @pytest.mark.django_db
-@_CORES
-def test_an_offline_views_query_string_and_route_are_read_alike(
-    dispatch: Callable[..., DispatchResult],
-) -> None:
+@pytest.mark.parametrize("fmt", ["json", "multipart"])
+def test_a_value_that_does_not_convert_is_refused(fmt: str) -> None:
     seen: dict[str, Any] = {}
     post = Post.objects.create(title="a")
-    view = OfflineServiceView(
-        request=Request(_factory.put(_QUERY)), kwargs={"pk": post.pk, "org": "7"}
+
+    response = _put(_spec(seen), {"n": "x"}, fmt, pk=post.pk)
+
+    assert response.status_code == 400
+    assert "n" in response.data
+    assert seen == {}
+
+
+def test_a_name_the_spec_and_its_lookup_both_read_is_refused() -> None:
+    spec_reads = Parameters((Parameter("n", "integer"),))
+    lookup_reads = Parameters(
+        (Parameter("pk", "integer", required=True), Parameter("n", "integer"))
     )
 
-    dispatch(_spec(seen), params={"body": "x"}, request=view.request, view=view)
-
-    assert seen == _READ
-
-
-@pytest.mark.django_db
-@_CORES
-def test_a_form_body_sent_off_http_is_read_alike(
-    dispatch: Callable[..., DispatchResult],
-) -> None:
-    seen: dict[str, Any] = {}
-    post = Post.objects.create(title="a")
-    view = OfflineServiceView(request=Request(_factory.put("/")), kwargs={"pk": post.pk})
-    body = QueryDict("n=3&flag=true&tags=a&tags=b&org=7", mutable=True)
-
-    dispatch(_spec(seen), params=body, request=view.request, view=view)
-
-    assert seen == _READ
-    assert view.kwargs == {"pk": post.pk, "org": 7}
+    with pytest.raises(ImproperlyConfigured, match=r"Parameters \['n'\] are declared by two"):
+        _spec({}, lookup_reads=lookup_reads, reads=spec_reads)
 
 
-@pytest.mark.django_db
-@_CORES
-@pytest.mark.parametrize("declared_on", ["spec", "lookup"])
-def test_off_http_a_mapping_is_checked_as_the_spec_s_own_reads_are(
-    dispatch: Callable[..., DispatchResult], declared_on: str
-) -> None:
-    """A value the type takes is read as it, and one it cannot take is refused under its name."""
-    seen: dict[str, Any] = {}
-    post = Post.objects.create(title="a")
-    spec = (
-        _spec(seen, spec_reads=(QueryParam("n", type="integer"),), lookup_reads=())
-        if declared_on == "spec"
-        else _spec(seen)
+def test_a_lookup_read_named_like_a_call_seed_is_refused() -> None:
+    lookup_reads = Parameters(
+        (Parameter("pk", "integer", required=True), Parameter("request", "string"))
     )
 
-    def call(n: Any) -> None:
-        view = OfflineServiceView(request=Request(_factory.put("/")), kwargs={"pk": post.pk})
-        dispatch(spec, params={"n": n}, request=view.request, view=view)
-
-    for sent in (3, "3"):
-        call(sent)
-        assert seen["n"] == 3
-
-    with pytest.raises(ValidationError) as excinfo:
-        call("three")
-    assert list(excinfo.value.detail) == ["n"]
-
-
-@pytest.mark.django_db
-@_CORES
-def test_a_name_the_spec_and_its_lookup_both_read_is_the_spec_s(
-    dispatch: Callable[..., DispatchResult],
-) -> None:
-    seen: dict[str, Any] = {}
-    post = Post.objects.create(title="a")
-    view = OfflineServiceView(request=Request(_factory.put("/?n=3")), kwargs={"pk": post.pk})
-    spec = _spec(
-        seen,
-        spec_reads=(QueryParam("n", type="integer"),),
-        lookup_reads=(QueryParam("n", type="string"),),
-    )
-
-    dispatch(spec, params={}, request=view.request, view=view)
-
-    assert seen["n"] == 3
-
-
-def test_a_lookup_read_named_like_a_seed_is_refused() -> None:
     with pytest.raises(
         ImproperlyConfigured,
-        match=r"ServiceSpec\.instance_selector_spec\.reads declares 'request', which dispatch fills",
+        match=r"ServiceSpec\.instance_selector_spec\.reads declares the parameter\(s\) "
+        r"\['request'\], which dispatch hands every callable on every mount",
     ):
-        SpecRegistry().register("lookup", _spec({}, lookup_reads=(QueryParam("request"),)))
+        _spec({}, lookup_reads=lookup_reads)

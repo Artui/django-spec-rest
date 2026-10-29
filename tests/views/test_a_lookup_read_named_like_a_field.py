@@ -1,89 +1,61 @@
 """A target lookup reading a name that is also a writable input field.
 
-Renaming a row by the key that finds it - a lookup by ``slug`` and a body
-``slug`` - is this shape: the route's capture scopes the lookup, and the body's
-value is the serializer's field, as on 0.57.0. The two never meet, so the spec
-dispatches rather than being refused for declaring the name twice. A client's
-value is never the lookup's: with no route capture the lookup keeps its own
-default, and a read with none is refused as missing.
+drfs dispatched this shape, a lookup by ``title`` and a body ``title``: the
+route's capture scoped the lookup and the body's value was the serializer's
+field. A kernel spec declares one source per name, and this one has two, so its
+``parameters()`` is refused in the kernel's words, and with it ``as_view()``:
+the kernel route's answer today, which no plan decision names yet, from a spec that dispatched to one refused when the view is
+built. The lookup reads a name of its own instead, which the route captures
+and the client's body never moves.
 """
 
 from __future__ import annotations
 
-import dataclasses
-from collections.abc import Callable
 from typing import Any
 
 import pytest
-from asgiref.sync import async_to_sync
-from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ImproperlyConfigured
-from django.http import QueryDict
-from django_service_specs.specs.kernel_spec import kernel_spec
-from rest_framework import serializers
-from rest_framework.exceptions import ValidationError
-from rest_framework.parsers import JSONParser, MultiPartParser
-from rest_framework.request import Request
-from rest_framework.test import APIRequestFactory
-
-from django_spec_rest import (
-    DispatchResult,
+from django_service_specs import (
+    Parameter,
+    Parameters,
     SelectorKind,
     SelectorSpec,
     ServiceSpec,
-    ServiceUpdateView,
-    ViewHooks,
-    adispatch_spec,
-    dispatch_spec,
-    spec_to_json_schema,
+    Unrestricted,
 )
-from django_spec_rest.registry.spec_registry import SpecRegistry
-from django_spec_rest.service_specs.as_kernel_spec import as_kernel_spec
-from django_spec_rest.types.offline_service_view import OfflineServiceView
+from rest_framework import serializers
+from rest_framework.test import APIRequestFactory
+
+from django_spec_rest import ServiceUpdateView
+from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
+from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from tests.testapp.models import Post
 from tests.testapp.serializers import PostSerializer
 
 _factory = APIRequestFactory()
-
-
-def _sync(spec: Any, **kwargs: Any) -> DispatchResult:
-    return dispatch_spec(spec, user=None, **kwargs)
-
-
-def _async(spec: Any, **kwargs: Any) -> DispatchResult:
-    return async_to_sync(adispatch_spec)(spec, user=None, **kwargs)
-
-
-Dispatch = Callable[..., DispatchResult]
-_CORES = pytest.mark.parametrize("dispatch", [_sync, _async], ids=["sync", "async"])
-
-
-def _form(values: dict[str, Any]) -> QueryDict:
-    body = QueryDict(mutable=True)
-    for name, value in values.items():
-        body[name] = value
-    return body
-
-
-_BODY = pytest.mark.parametrize("body", [dict, _form], ids=["mapping", "form"])
+_TWICE = r"Parameters \['title'\] are declared by two sources"
 
 
 class _TitleIn(serializers.Serializer):
     title = serializers.CharField()
 
 
-def _spec(seen: dict[str, Any], *, default: bool = False) -> ServiceSpec[Any, Any, Any]:
-    if default:
+class _UpdateView(ServiceUpdateView):
+    permission_classes = []
 
-        def selector(*, pk: int, title: str = "lookup-default") -> Any:
-            seen["lookup_title"] = title
-            return Post.objects.filter(pk=pk)
+    def get_permissions(self) -> list[Any]:
+        # ``MutationFlowMixin``'s reads a drfs-only field; the spine's views
+        # answer the view's own classes the same way.
+        return [permission() for permission in self.permission_classes]
 
-    else:
 
-        def selector(*, pk: int, title: str) -> Any:
-            seen["lookup_title"] = title
-            return Post.objects.filter(pk=pk, title=title)
+def _spec(seen: dict[str, Any], *, lookup_reads: str) -> ServiceSpec:
+    def selector(**pool: Any) -> Any:
+        # ``**`` takes the whole pool (``user``, ``progress``), so only the
+        # two reads are kept.
+        scope = {name: pool[name] for name in ("pk", lookup_reads)}
+        seen["lookup"] = scope
+        return Post.objects.get(pk=scope["pk"], title=scope[lookup_reads])
 
     def service(*, instance: Any, data: Any, title: str = "svc-default") -> Any:
         seen.update(title=title, data=dict(data))
@@ -91,175 +63,100 @@ def _spec(seen: dict[str, Any], *, default: bool = False) -> ServiceSpec[Any, An
 
     return ServiceSpec(
         service=service,
-        input_serializer=_TitleIn,
-        instance_selector_spec=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=selector),
-        output_selector_spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE, output_serializer=PostSerializer
+        validator=SerializerValidator(_TitleIn),
+        presenter=SerializerPresenter(PostSerializer),
+        instance_selector_spec=SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=selector,
+            reads=Parameters(
+                (
+                    Parameter("pk", "integer", required=True),
+                    Parameter(lookup_reads, "string", required=True),
+                )
+            ),
         ),
+        permissions=(Unrestricted(),),
         atomic=False,
     )
 
 
-def _view(spec: ServiceSpec[Any, Any, Any], **attrs: Any) -> type[ServiceUpdateView]:
-    return type(
-        "_View",
-        (ServiceUpdateView,),
-        {"queryset": Post.objects.all(), "permission_classes": [], "spec": spec, **attrs},
-    )
+def test_the_spec_s_parameters_refuse_the_name_declared_twice() -> None:
+    with pytest.raises(ImproperlyConfigured, match=_TWICE):
+        _spec({}, lookup_reads="title").parameters()
 
 
-# The service's ``title`` is the field's validated value, as any validated value
-# reaches the parameter of its name.
-_ROUTED = {"lookup_title": "old", "title": "new", "data": {"title": "new"}}
+def test_as_view_refuses_it_in_the_kernel_s_words() -> None:
+    with pytest.raises(ImproperlyConfigured, match=_TWICE):
+        type("_View", (_UpdateView,), {"spec": _spec({}, lookup_reads="title")}).as_view()
+
+
+def _put(spec: ServiceSpec, body: dict[str, Any], *, fmt: str = "json", **route: Any) -> Any:
+    view = type("_View", (_UpdateView,), {"spec": spec}).as_view()
+    return view(_factory.put("/", body, format=fmt), **route)
 
 
 @pytest.mark.django_db
 @pytest.mark.parametrize("fmt", ["json", "multipart"])
-def test_the_route_scopes_the_lookup_and_the_body_fills_the_field_over_http(fmt: str) -> None:
+def test_the_route_scopes_the_lookup_and_the_body_fills_the_field(fmt: str) -> None:
     seen: dict[str, Any] = {}
     post = Post.objects.create(title="old")
 
-    response = _view(_spec(seen)).as_view()(
-        _factory.put("/", {"title": "new"}, format=fmt), pk=post.pk, title="old"
+    response = _put(
+        _spec(seen, lookup_reads="current"), {"title": "new"}, fmt=fmt, pk=post.pk, current="old"
     )
 
     assert response.status_code == 200, response.data
-    assert seen == _ROUTED
+    assert seen == {
+        "lookup": {"pk": post.pk, "current": "old"},
+        "title": "new",
+        "data": {"title": "new"},
+    }
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("fmt", ["json", "multipart"])
-def test_the_route_scopes_the_lookup_and_the_body_fills_the_field_on_a_live_async_view(
-    fmt: str,
-) -> None:
+def test_a_body_value_never_moves_a_captured_lookup() -> None:
     seen: dict[str, Any] = {}
     post = Post.objects.create(title="old")
-    view = ServiceUpdateView()
-    view.request = Request(
-        _factory.put("/", {"title": "new"}, format=fmt),
-        parsers=[JSONParser(), MultiPartParser()],
-    )
-    view.request.user = AnonymousUser()
-    view.kwargs = {"pk": post.pk, "title": "old"}
-    view.format_kwarg = None
+    Post.objects.create(title="other")
 
-    async_to_sync(adispatch_spec)(
-        _spec(seen), user=None, params=view.request.data, request=view.request, view=view
+    response = _put(
+        _spec(seen, lookup_reads="current"),
+        {"title": "new", "pk": 0, "current": "other"},
+        pk=post.pk,
+        current="old",
     )
 
-    assert seen == _ROUTED
+    assert response.status_code == 200, response.data
+    assert seen["lookup"] == {"pk": post.pk, "current": "old"}
 
 
 @pytest.mark.django_db
-@_CORES
-@_BODY
-def test_the_route_scopes_the_lookup_and_the_body_fills_the_field_off_http(
-    dispatch: Dispatch, body: Callable[[dict[str, Any]], Any]
-) -> None:
-    seen: dict[str, Any] = {}
-    post = Post.objects.create(title="old")
-    view = OfflineServiceView(
-        request=Request(_factory.put("/")), kwargs={"pk": post.pk, "title": "old"}
-    )
-
-    dispatch(_spec(seen), params=body({"title": "new"}), view=view)
-
-    assert seen == _ROUTED
-
-
-@pytest.mark.django_db
-@_CORES
-@_BODY
-def test_with_no_route_capture_the_clients_value_never_scopes_the_lookup(
-    dispatch: Dispatch, body: Callable[[dict[str, Any]], Any]
-) -> None:
-    """The client's ``title`` is the field's alone, so the lookup keeps its default."""
+def test_a_lookup_read_the_route_does_not_capture_is_the_caller_s_argument() -> None:
+    """The kernel route's answer: a capture the spec declares goes over the
+    body, and a declared read the route does not capture is an argument like
+    any other, so the body sends it (``kernel_arguments``). drfs never let a
+    client's value scope a lookup; on the kernel route only the URL
+    configuration's capture does that. Pinned as today's answer, not a
+    decided one: whether a client's body may choose the row an update
+    touches is a question for the owner."""
     seen: dict[str, Any] = {}
     post = Post.objects.create(title="old")
 
-    dispatch(_spec(seen, default=True), params=body({"pk": post.pk, "title": "new"}))
+    response = _put(
+        _spec(seen, lookup_reads="current"), {"title": "new", "current": "old"}, pk=post.pk
+    )
 
-    assert seen == {"lookup_title": "lookup-default", "title": "new", "data": {"title": "new"}}
+    assert response.status_code == 200, response.data
+    assert seen["lookup"] == {"pk": post.pk, "current": "old"}
 
 
 @pytest.mark.django_db
-@_CORES
-@pytest.mark.parametrize("author", ["hook", "provider"])
-def test_an_authors_value_for_the_read_scopes_the_lookup_and_fills_the_field(
-    dispatch: Dispatch, author: str
-) -> None:
-    """An author's value is the server's: the lookup reads it, and the field validates it."""
+def test_with_neither_the_lookup_s_required_read_is_refused_as_missing() -> None:
     seen: dict[str, Any] = {}
-    post = Post.objects.create(title="server")
-    view = OfflineServiceView(
-        request=Request(_factory.put("/")), kwargs={"pk": post.pk, "title": "old"}
-    )
-    spec = _spec(seen)
-    hooks = ViewHooks()
-    if author == "hook":
-        hooks = ViewHooks(extra_kwargs={"title": "server"})
-    else:
-        spec = dataclasses.replace(spec, kwargs=lambda: {"title": "server"})
+    post = Post.objects.create(title="old")
 
-    dispatch(spec, params={"title": "new"}, view=view, view_hooks=hooks)
-
-    assert seen == {"lookup_title": "server", "title": "server", "data": {"title": "server"}}
-
-
-@pytest.mark.django_db
-@pytest.mark.parametrize("fmt", ["json", "multipart"])
-def test_with_no_route_capture_a_lookup_read_with_no_default_is_refused_as_missing_over_http(
-    fmt: str,
-) -> None:
-    seen: dict[str, Any] = {}
-    post = Post.objects.create(title="new")
-
-    response = _view(_spec(seen)).as_view()(
-        _factory.put("/", {"title": "new"}, format=fmt), pk=post.pk
-    )
+    response = _put(_spec(seen, lookup_reads="current"), {"title": "new"}, pk=post.pk)
 
     assert response.status_code == 400
-    assert response.data == {"title": ["This field is required."]}
+    assert "current" in response.data
     assert seen == {}
-
-
-@pytest.mark.django_db
-@_CORES
-@_BODY
-def test_with_no_route_capture_a_lookup_read_with_no_default_is_refused_as_missing(
-    dispatch: Dispatch, body: Callable[[dict[str, Any]], Any]
-) -> None:
-    seen: dict[str, Any] = {}
-    post = Post.objects.create(title="new")
-
-    with pytest.raises(ValidationError) as excinfo:
-        dispatch(_spec(seen), params=body({"pk": post.pk, "title": "new"}))
-
-    assert excinfo.value.get_codes() == {"title": ["required"]}
-    assert seen == {}
-
-
-@pytest.mark.parametrize("compile_spec", [kernel_spec, as_kernel_spec])
-def test_the_compiled_specs_parameters_refuse_the_name_declared_twice(
-    compile_spec: Callable[[Any], Any],
-) -> None:
-    """The kernel declares one source per name, and this one has two.
-
-    Dispatch reads the lookup's value from the route and the field's from the
-    body, so the spec dispatches, but asking the compiled spec for its
-    parameters is refused in the kernel's words.
-    """
-    with pytest.raises(ImproperlyConfigured, match=r"Parameters \['title'\] are declared by two"):
-        compile_spec(_spec({})).parameters()
-
-
-def test_the_spec_registers_though_its_parameters_are_refused() -> None:
-    registry = SpecRegistry()
-
-    registry.register("rename", dataclasses.replace(_spec({}), permission_classes=[]))
-
-    assert registry.get("rename") is not None
-
-
-def test_the_schema_describes_the_spec_though_its_parameters_are_refused() -> None:
-    assert spec_to_json_schema(_spec({}))["properties"] == {"title": {"type": "string"}}
