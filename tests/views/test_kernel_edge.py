@@ -21,6 +21,7 @@ import pytest
 from asgiref.sync import async_to_sync
 from django.contrib.auth.models import User
 from django.core.exceptions import ImproperlyConfigured
+from django.http import QueryDict
 from django_service_specs import (
     DataclassValidator,
     DispatchError,
@@ -28,6 +29,7 @@ from django_service_specs import (
     Parameters,
     SelectorKind,
     ServiceSpec,
+    UnknownArguments,
     Unrestricted,
 )
 from django_service_specs import SelectorSpec as KernelSelectorSpec
@@ -37,6 +39,7 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 
 from django_spec_rest import SelectorKind, SelectorSpec
 from django_spec_rest import ServiceSpec as DrfsServiceSpec
+from django_spec_rest.dispatch import kernel_edge
 from django_spec_rest.dispatch.kernel_edge import (
     adispatch_kernel_spec,
     dispatch_kernel_spec,
@@ -356,6 +359,58 @@ def test_a_row_the_kernel_s_lookup_misses_carries_no_output_layer(
     hooks = ViewHooks(output_serializer_context=lambda context: {"shown": True})
     result = core(_rename_spec(), view_hooks=hooks, **_with_route(_parts({}), pk=999))
     assert (result.kind, result.context) == ("not_found", None)
+
+
+def _named_list(seen: list[str]) -> KernelSelectorSpec:
+    return KernelSelectorSpec(
+        kind=SelectorKind.LIST,
+        selector=lambda *, name: seen.append(name) or Author.objects.none(),
+        reads=Parameters.of(Parameter("name", "string", required=True)),
+        permissions=_OPEN,
+    )
+
+
+def _listing(query_string: str) -> dict[str, Any]:
+    parts = _parts({})
+    parts["request"] = parts["view"].initialize_request(factory.get(f"/?{query_string}"))
+    return parts
+
+
+_POLICIES = pytest.mark.parametrize("policy", [UnknownArguments.REJECT, UnknownArguments.IGNORE])
+
+
+@CORES
+@_POLICIES
+def test_a_query_handed_over_is_read_in_place_of_the_request_s(
+    core: Callable[..., Any], monkeypatch: pytest.MonkeyPatch, policy: UnknownArguments
+) -> None:
+    """A selector spec reads the query string its caller hands, so a key the
+    view's own pagination reads and the request carries is never the spec's
+    argument, under either policy."""
+    monkeypatch.setattr(kernel_edge, "UNKNOWN_ARGUMENTS", policy)
+    seen: list[str] = []
+    core(_named_list(seen), query=QueryDict("name=handed"), **_listing("name=sent&page=2"))
+    assert seen == ["handed"]
+
+
+@CORES
+@_POLICIES
+def test_with_no_query_handed_the_request_s_is_read(
+    core: Callable[..., Any], monkeypatch: pytest.MonkeyPatch, policy: UnknownArguments
+) -> None:
+    """Today's behaviour: the request's query string is the arguments, so its
+    ``page`` is refused under ``REJECT`` and dropped under ``IGNORE``."""
+    monkeypatch.setattr(kernel_edge, "UNKNOWN_ARGUMENTS", policy)
+    seen: list[str] = []
+    parts = _listing("name=sent&page=2")
+    if policy is UnknownArguments.REJECT:
+        with pytest.raises(InvalidArguments) as refused:
+            core(_named_list(seen), **parts)
+        assert list(refused.value.detail) == ["page"]
+        assert seen == []
+    else:
+        core(_named_list(seen), **parts)
+        assert seen == ["sent"]
 
 
 def test_the_async_core_reads_the_body_off_the_loop() -> None:

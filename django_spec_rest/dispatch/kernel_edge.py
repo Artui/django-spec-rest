@@ -69,6 +69,7 @@ from types import MappingProxyType
 from typing import Any
 
 from asgiref.sync import sync_to_async
+from django.http import QueryDict
 from django.utils.datastructures import MultiValueDict
 from django_service_specs.dispatch.adispatch import adispatch
 from django_service_specs.dispatch.dispatch import dispatch
@@ -90,10 +91,12 @@ from typing_extensions import TypeIs
 from django_spec_rest.dispatch.kernel_refusals import answering_refusals
 from django_spec_rest.service_specs.recording_spec import KernelSpec, recording_spec
 from django_spec_rest.service_specs.seed_named_fields import seed_named_fields
+from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from django_spec_rest.service_specs.utils import (
     EDGE_CALL,
     SERIALIZER_CONTEXT_SEED,
     EdgeCallState,
+    serializer_context,
 )
 from django_spec_rest.types.view_hooks import ViewHooks
 
@@ -129,6 +132,7 @@ def kernel_arguments(
     view: Any,
     request: Request,
     input_data: Mapping[str, Any] | None = None,
+    query: QueryDict | None = None,
 ) -> tuple[dict[str, Any], tuple[Any, Any] | None]:
     """The arguments a request makes for ``spec``, and the body its serializer binds, if any.
 
@@ -136,7 +140,11 @@ def kernel_arguments(
       a repeated key or a comma list for an array, a blank value absent where
       the parameter cannot take ``""``, Django's ``csrfmiddlewaretoken``
       dropped, and an undeclared key kept for the closed argument set to
-      refuse.
+      refuse. ``query`` is read in place of ``request.query_params`` where a
+      caller hands one: a list view hands the query string without the keys
+      its own pagination, ordering and format read, which are DRF's and no
+      argument of the spec (test_kernel_edge's
+      test_a_query_handed_over_is_read_in_place_of_the_request_s).
     - **A service spec reads the body**: a ``many`` spec's under its
       ``many_argument``, as a drfs ``many`` spec takes a list body; a form body
       (a ``QueryDict``) through ``flat_arguments``; a JSON object as it was
@@ -176,7 +184,11 @@ def kernel_arguments(
     }
     if isinstance(spec, KernelSelectorSpec):
         return coerce_flat(
-            parameters, {**flat_arguments(parameters, request.query_params), **route}
+            parameters,
+            {
+                **flat_arguments(parameters, request.query_params if query is None else query),
+                **route,
+            },
         ), None
     body: Any = request.data
     server = dict(input_data or {})
@@ -221,6 +233,7 @@ def dispatch_kernel_spec(
     target: Any = UNSET,
     view_hooks: ViewHooks | None = None,
     on_target: Callable[[Any], None] | None = None,
+    query: QueryDict | None = None,
 ) -> DispatchResult:
     """Run a kernel ``spec`` for ``request`` through the kernel's ``dispatch``.
 
@@ -238,6 +251,9 @@ def dispatch_kernel_spec(
     through the call's state and the output half on the result's presentation
     context (``_with_output_layers``).
 
+    ``query`` is the query string a selector spec reads, where the caller
+    hands one in place of the request's (``kernel_arguments``).
+
     ``on_target`` is asked of what the spec's own lookup finds before anything
     runs on it, where ``target`` is ``UNSET``: the view's DRF object
     permissions, which ``get_object()`` asks of a row it finds and the kernel's
@@ -249,12 +265,15 @@ def dispatch_kernel_spec(
     hooks = view_hooks if view_hooks is not None else ViewHooks()
     with answering_refusals():
         dispatched = recording_spec(spec)
-        extra_kwargs, server = _overlay(spec, hooks)
-        arguments, held = kernel_arguments(spec, view=view, request=request, input_data=server)
-        token = EDGE_CALL.set(
-            EdgeCallState(validator_input=held, input_beneath=True, view_hooks=hooks)
+        state = _edge_state(
+            spec, view=view, request=request, hooks=hooks, call_context=call_context
         )
+        token = EDGE_CALL.set(state)
         try:
+            extra_kwargs, server = _overlay(spec, hooks)
+            arguments, state.validator_input = kernel_arguments(
+                spec, view=view, request=request, input_data=server, query=query
+            )
             found = _resolved(
                 dispatched,
                 principal=request.user,
@@ -290,6 +309,7 @@ async def adispatch_kernel_spec(
     target: Any = UNSET,
     view_hooks: ViewHooks | None = None,
     on_target: Callable[[Any], None] | None = None,
+    query: QueryDict | None = None,
 ) -> DispatchResult:
     """``dispatch_kernel_spec`` from async code, awaiting the kernel's ``adispatch``.
 
@@ -303,14 +323,15 @@ async def adispatch_kernel_spec(
     hooks = view_hooks if view_hooks is not None else ViewHooks()
     with answering_refusals():
         dispatched = recording_spec(spec)
-        extra_kwargs, server = _overlay(spec, hooks)
-        arguments, held = await sync_to_async(kernel_arguments, thread_sensitive=True)(
-            spec, view=view, request=request, input_data=server
+        state = _edge_state(
+            spec, view=view, request=request, hooks=hooks, call_context=call_context
         )
-        token = EDGE_CALL.set(
-            EdgeCallState(validator_input=held, input_beneath=True, view_hooks=hooks)
-        )
+        token = EDGE_CALL.set(state)
         try:
+            extra_kwargs, server = _overlay(spec, hooks)
+            arguments, state.validator_input = await sync_to_async(
+                kernel_arguments, thread_sensitive=True
+            )(spec, view=view, request=request, input_data=server, query=query)
             found = await sync_to_async(_resolved, thread_sensitive=True)(
                 dispatched,
                 principal=request.user,
@@ -335,6 +356,56 @@ async def adispatch_kernel_spec(
             return _with_output_layers(result, hooks)
         finally:
             EDGE_CALL.reset(token)
+
+
+def _edge_state(
+    spec: KernelSpec,
+    *,
+    view: Any,
+    request: Request,
+    hooks: ViewHooks,
+    call_context: dict[str, Any],
+) -> EdgeCallState:
+    """The edge's state for one call of ``spec``, set before anything describes its serializer.
+
+    Set before the arguments are read, since reading them asks
+    ``spec.parameters()``, which describes the input serializer: with the
+    state's ``describe_context`` it is built with the call's request and
+    view, the view's input layers and the Validator's own context callable,
+    as the Validator binds it, so a ``get_fields`` reading
+    ``self.context["request"]`` declares the fields the call validates
+    (test_service_create_view's
+    test_a_request_scoped_serializer_declares_the_fields_the_call_validates;
+    the layers by test_the_view_s_input_layer_reaches_the_description and
+    test_the_validator_s_own_context_reaches_the_description), and is built
+    once for the call. A context callable taking ``**kwargs``
+    is left out of a description and never asked to rebuild one that cannot
+    be built without it: ``whole_pool`` is answered ``None``, so what the
+    serializer raises is raised as it is
+    (test_a_serializer_its_description_cannot_build_raises_as_it_is). A
+    saving, not a guard: asked again with the description's context, the
+    serializer raises the same.
+    """
+    validator = spec.validator if isinstance(spec, KernelServiceSpec) else None
+    provider = validator.serializer_context if isinstance(validator, SerializerValidator) else None
+    ambient = {"request": request, "view": view}
+
+    def describe_context(
+        arguments: Any = None, *, whole_pool: bool = False
+    ) -> dict[str, Any] | None:
+        if whole_pool:
+            return None
+        return serializer_context(
+            request.user,
+            ambient,
+            arguments,
+            view_layers=hooks.input_serializer_context,
+            provider=provider,
+            describing=True,
+            call_context=call_context,
+        )
+
+    return EdgeCallState(input_beneath=True, view_hooks=hooks, describe_context=describe_context)
 
 
 def _overlay(spec: KernelSpec, hooks: ViewHooks) -> tuple[dict[str, Any], dict[str, Any]]:

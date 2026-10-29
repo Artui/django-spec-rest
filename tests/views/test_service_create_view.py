@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from django.contrib.auth.models import User
 from django_service_specs import (
     ProgressReporter,
     SelectorKind,
@@ -25,7 +26,7 @@ from django_service_specs import (
 )
 from rest_framework import serializers
 from rest_framework.permissions import BasePermission
-from rest_framework.test import APIRequestFactory
+from rest_framework.test import APIRequestFactory, force_authenticate
 
 from django_spec_rest import ServiceCreateView
 from django_spec_rest.dispatch import kernel_edge
@@ -317,3 +318,60 @@ class TestTheViewsHookChains:
         view = _view(spec, get_progress_reporter=lambda self: _Sink())
         assert _post(view, {}).status_code == 204
         assert heard
+
+
+class _Noted(serializers.Serializer):
+    """A ``note`` field the serializer declares only where its context says so."""
+
+    name = serializers.CharField()
+
+    def get_fields(self) -> dict[str, serializers.Field]:
+        fields = super().get_fields()
+        request = self.context["request"]
+        if request.user.is_staff or self.context.get("noted"):
+            fields["note"] = serializers.CharField()
+        return fields
+
+
+class TestTheDescription:
+    """A kernel spec's input serializer is described with the call's context."""
+
+    def _noted(self, received: dict[str, Any], **validator: Any) -> ServiceSpec:
+        return _spec(
+            service=lambda *, data: received.update(data),
+            validator=SerializerValidator(_Noted, **validator),
+        )
+
+    def test_a_request_scoped_serializer_declares_the_fields_the_call_validates(self) -> None:
+        received: dict[str, Any] = {}
+        request = factory.post("/", {"name": "Ada", "note": "kept"}, format="json")
+        force_authenticate(request, user=User.objects.create(username="staff", is_staff=True))
+        response = _view(self._noted(received))(request)
+        assert response.status_code == 204, response.data
+        assert received == {"name": "Ada", "note": "kept"}
+
+    def test_the_view_s_input_layer_reaches_the_description(self) -> None:
+        received: dict[str, Any] = {}
+        view = _view(
+            self._noted(received),
+            get_input_serializer_context=lambda self: {
+                **self.get_serializer_context(),
+                "noted": True,
+            },
+        )
+        assert _post(view, {"name": "Ada", "note": "kept"}).status_code == 204
+        assert received == {"name": "Ada", "note": "kept"}
+
+    def test_the_validator_s_own_context_reaches_the_description(self) -> None:
+        received: dict[str, Any] = {}
+        spec = self._noted(received, serializer_context=lambda *, request: {"noted": True})
+        assert _post(_view(spec), {"name": "Ada", "note": "kept"}).status_code == 204
+        assert received == {"name": "Ada", "note": "kept"}
+
+    def test_a_serializer_its_description_cannot_build_raises_as_it_is(self) -> None:
+        class _Tenanted(serializers.Serializer):
+            def get_fields(self) -> dict[str, serializers.Field]:
+                return {self.context["tenant"]: serializers.CharField()}
+
+        with pytest.raises(KeyError, match="tenant"):
+            _post(_view(_spec(validator=SerializerValidator(_Tenanted))), {})

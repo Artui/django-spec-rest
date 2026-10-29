@@ -14,7 +14,9 @@ from typing import Any
 import pytest
 from django.contrib.auth.models import User
 from django.core.exceptions import ImproperlyConfigured
+from django.db.models import Q
 from django_service_specs import (
+    Affordance,
     DataclassValidator,
     Parameter,
     Parameters,
@@ -210,6 +212,30 @@ class TestTheTarget:
         assert lookups == [author.pk]
         author.refresh_from_db()
         assert author.name == "orig"
+
+    @pytest.mark.parametrize(("allowed", "status"), [(False, 403), (True, 409)])
+    def test_the_view_s_object_permission_answers_before_an_affordance(
+        self, allowed: bool, status: int
+    ) -> None:
+        """A caller the view denies the row is refused before an affordance
+        answers for it, so it learns nothing of the row's state; one the view
+        allows meets the affordance's ``409``."""
+
+        class _Object(BasePermission):
+            def has_object_permission(self, request: Any, view: Any, obj: Any) -> bool:
+                return allowed
+
+        spec = ServiceSpec(
+            service=lambda *, instance: None,
+            permissions=_OPEN,
+            instance_selector_spec=_AUTHOR,
+            affordances=(Affordance(code="locked", reason="Locked.", when=Q(name="open")),),
+        )
+        author = Author.objects.create(name="orig")
+        response = _view(spec, permission_classes=[_Object])(
+            factory.put("/", {}, format="json"), pk=author.pk
+        )
+        assert response.status_code == status
 
     def test_a_row_the_view_resolved_is_looked_up_once(self) -> None:
         """A caller handing the row it resolved is trusted with it: the spec's
