@@ -8,6 +8,7 @@ never hands a Validator (``seed_named_fields``).
 from __future__ import annotations
 
 import functools
+import threading
 import weakref
 from collections.abc import Callable, Mapping
 from typing import Any, cast
@@ -22,14 +23,22 @@ from django_spec_rest.service_specs.utils import edge_call_state
 KernelSpec = KernelServiceSpec | KernelSelectorSpec
 
 
-_RECORDING: dict[int, tuple[weakref.ref[KernelServiceSpec], KernelServiceSpec]] = {}
-"""Each spec's recording twin, by the spec's identity, built once (``recording_spec``).
+_RECORDING: dict[
+    int, tuple[weakref.ref[KernelServiceSpec], dict[frozenset[str], KernelServiceSpec]]
+] = {}
+"""Each spec's recording twins, by the spec's identity and then by the names each records.
 
 Keyed by ``id`` because a spec's dataclass hash reads every field, some of
 which need not hash. Each entry holds a weak reference to its spec, whose
-callback drops the entry when the spec dies, and a read serves the twin only
+callback drops the entry when the spec dies, and a read serves a twin only
 while that reference still names the spec asked about, as the kernel's own
-``kernel_spec`` cache holds its compiled specs."""
+``kernel_spec`` cache holds its compiled specs. Beneath the spec, by the
+seed-named fields the call's serializer declares: a request-scoped
+``get_fields`` declares different ones per caller, so the first call must not
+decide what a later one records
+(test_kernel_edge's test_one_spec_s_twin_records_what_each_call_s_serializer_declares)."""
+
+_LOCK = threading.Lock()
 
 
 def recording_spec(spec: KernelSpec) -> KernelSpec:
@@ -46,7 +55,17 @@ def recording_spec(spec: KernelSpec) -> KernelSpec:
     What it records goes into the body the edge holds for the Validator
     (``_record``).
 
-    Built once per spec, since ``derive`` re-runs the spec's checks. Only a single-object service spec with a provider and a
+    **Asked inside the edge's call**, with its state set, since the names are
+    the seed-named fields of the serializer described for the call: with the
+    call's request, so a ``get_fields`` reading ``self.context["request"]``
+    describes rather than raising, and declares the fields this caller sends
+    (test_kernel_edge's
+    test_the_twin_records_the_fields_the_call_s_own_serializer_declares). The
+    async core asks it in the thread it reads the call in, since describing
+    may query (test_the_async_core_builds_the_twin_off_the_loop).
+
+    Built once per spec and set of names, since ``derive`` re-runs the spec's
+    checks. Only a single-object service spec with a provider and a
     seed-named field has one; the kernel refuses an ``async`` provider when
     the spec is built, so the wrapper is sync alone. The twin shares every
     seat but the provider, so presenting the result through the view's own
@@ -64,11 +83,21 @@ def recording_spec(spec: KernelSpec) -> KernelSpec:
     if not names:
         return spec
     key = id(spec)
-    cached = _RECORDING.get(key)
-    if cached is not None and cached[0]() is spec:
-        return cached[1]
-    twin = spec.derive(input_data=_recording(spec.input_data, names))
-    _RECORDING[key] = (weakref.ref(spec, lambda _dead: _RECORDING.pop(key, None)), twin)
+    with _LOCK:
+        held = _RECORDING.get(key)
+        # One arc to coverage: ``held[0]() is not spec`` refuses an entry a
+        # reused ``id`` left under another spec (test_kernel_edge's
+        # test_a_stale_entry_under_a_live_spec_s_id_is_not_its_twin); the
+        # weakref callback is what normally keeps one from existing
+        # (test_a_spec_s_recording_twin_is_built_once_and_dropped_with_it).
+        if held is None or held[0]() is not spec:
+            held = _RECORDING[key] = (
+                weakref.ref(spec, lambda _dead: _RECORDING.pop(key, None)),
+                {},
+            )
+        twin = held[1].get(names)
+        if twin is None:
+            twin = held[1][names] = spec.derive(input_data=_recording(spec.input_data, names))
     return twin
 
 

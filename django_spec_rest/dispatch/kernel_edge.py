@@ -264,13 +264,12 @@ def dispatch_kernel_spec(
     """
     hooks = view_hooks if view_hooks is not None else ViewHooks()
     with answering_refusals():
-        dispatched = recording_spec(spec)
         state = _edge_state(
             spec, view=view, request=request, hooks=hooks, call_context=call_context
         )
         token = EDGE_CALL.set(state)
         try:
-            extra_kwargs, arguments, state.validator_input = _read_call(
+            dispatched, extra_kwargs, arguments, state.validator_input = _read_call(
                 spec, view=view, request=request, hooks=hooks, query=query
             )
             found = _resolved(
@@ -323,15 +322,19 @@ async def adispatch_kernel_spec(
     """
     hooks = view_hooks if view_hooks is not None else ViewHooks()
     with answering_refusals():
-        dispatched = recording_spec(spec)
         state = _edge_state(
             spec, view=view, request=request, hooks=hooks, call_context=call_context
         )
         token = EDGE_CALL.set(state)
         try:
-            extra_kwargs, arguments, state.validator_input = await sync_to_async(
-                _read_call, thread_sensitive=True
-            )(spec, view=view, request=request, hooks=hooks, query=query)
+            (
+                dispatched,
+                extra_kwargs,
+                arguments,
+                state.validator_input,
+            ) = await sync_to_async(_read_call, thread_sensitive=True)(
+                spec, view=view, request=request, hooks=hooks, query=query
+            )
             found = await sync_to_async(_resolved, thread_sensitive=True)(
                 dispatched,
                 principal=request.user,
@@ -365,16 +368,22 @@ def _read_call(
     request: Request,
     hooks: ViewHooks,
     query: QueryDict | None,
-) -> tuple[dict[str, Any], dict[str, Any], tuple[Any, Any] | None]:
-    """The overlay, the arguments and the held body of one call: every read that describes.
+) -> tuple[KernelSpec, dict[str, Any], dict[str, Any], tuple[Any, Any] | None]:
+    """The spec to dispatch, the overlay, the arguments and the held body of one call.
 
-    One sync step, so the async core hops to a thread once for all of it.
+    Every read that describes the input serializer, in one sync step, so the
+    async core hops to a thread once for all of it. The spec to dispatch is
+    ``recording_spec``'s, built here rather than before the call's state is
+    set, so the fields it records are those the serializer declares
+    described with the call's request (test_kernel_edge's
+    test_the_twin_records_the_fields_the_call_s_own_serializer_declares,
+    test_the_async_core_builds_the_twin_off_the_loop).
     """
     extra_kwargs, server = _overlay(spec, hooks)
     arguments, held = kernel_arguments(
         spec, view=view, request=request, input_data=server, query=query
     )
-    return extra_kwargs, arguments, held
+    return recording_spec(spec), extra_kwargs, arguments, held
 
 
 def _edge_state(

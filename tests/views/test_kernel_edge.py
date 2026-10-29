@@ -46,6 +46,7 @@ from django_spec_rest.dispatch.kernel_edge import (
     runs_on_kernel,
 )
 from django_spec_rest.dispatch.kernel_refusals import KernelDispatchRefused
+from django_spec_rest.service_specs import recording_spec as recording_spec_module
 from django_spec_rest.service_specs.invalid_arguments import InvalidArguments
 from django_spec_rest.service_specs.recording_spec import recording_spec
 from django_spec_rest.service_specs.seed_named_fields import seed_named_fields
@@ -266,6 +267,32 @@ def test_a_spec_s_recording_twin_is_built_once_and_dropped_with_it() -> None:
     assert held() is None
 
 
+def test_a_stale_entry_under_a_live_spec_s_id_is_not_its_twin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An entry whose weak reference names another spec, as a reused ``id``
+    would leave one, is rebuilt rather than served."""
+
+    def spec() -> ServiceSpec:
+        return ServiceSpec(
+            service=lambda *, data: None,
+            permissions=_OPEN,
+            validator=SerializerValidator(_UserPk),
+            input_data=lambda: {},
+        )
+
+    live, other = spec(), spec()
+    stale = recording_spec(other)
+    monkeypatch.setitem(
+        recording_spec_module._RECORDING,
+        id(live),
+        (weakref.ref(other), {frozenset({"user"}): stale}),
+    )
+    twin = recording_spec(live)
+    assert twin is not stale
+    assert twin is not live
+
+
 def test_a_spec_with_nothing_to_record_is_dispatched_as_it_is() -> None:
     def spec(**kwargs: Any) -> ServiceSpec:
         return ServiceSpec(service=lambda *, data: None, permissions=_OPEN, **kwargs)
@@ -280,6 +307,93 @@ def test_a_spec_with_nothing_to_record_is_dispatched_as_it_is() -> None:
         assert recording_spec(unrecorded) is unrecorded
     recorded = spec(**provided)
     assert recording_spec(recorded) is not recorded
+
+
+class _StaffSeeds(serializers.Serializer):
+    """Declares a seed-named ``user`` for every caller, and a ``result`` for staff only.
+
+    Reads ``self.context["request"].user`` as a DRF serializer may, so it can
+    only be described with the call's request."""
+
+    title = serializers.CharField()
+    user = serializers.CharField(required=False)
+
+    def get_fields(self) -> dict[str, serializers.Field]:
+        fields = super().get_fields()
+        if self.context["request"].user.is_staff:
+            fields["result"] = serializers.CharField(required=False)
+        return fields
+
+
+def _staff_seeds(received: dict[str, Any]) -> ServiceSpec:
+    return ServiceSpec(
+        service=lambda *, data: received.update(data),
+        permissions=_OPEN,
+        validator=SerializerValidator(_StaffSeeds),
+        input_data=lambda: {"user": "server-user", "result": "server-result"},
+    )
+
+
+@CORES
+def test_the_twin_records_the_fields_the_call_s_own_serializer_declares(
+    core: Callable[..., Any],
+) -> None:
+    """The twin is built inside the call, from the serializer described with
+    the call's request: a ``get_fields`` reading the request's user describes,
+    where unbound it would raise, and a staff caller's ``result`` field is
+    the provider's, where a description with no request declares none and
+    the client's value would bind."""
+    received: dict[str, Any] = {}
+    staff = User.objects.create(username="staff", is_staff=True)
+    body = {"title": "t", "user": "client-user", "result": "client-result"}
+    core(_staff_seeds(received), **_parts(body, user=staff))
+    assert received == {"title": "t", "user": "server-user", "result": "server-result"}
+
+
+def test_one_spec_s_twin_records_what_each_call_s_serializer_declares() -> None:
+    """The first call's fields do not decide what a later call records: a
+    caller declaring ``user`` alone, then a staff caller declaring ``result``
+    too, each bind the provider's value for every field their own serializer
+    declares."""
+    received: dict[str, Any] = {}
+    spec = _staff_seeds(received)
+    plain = User.objects.create(username="plain")
+    staff = User.objects.create(username="staff", is_staff=True)
+    dispatch_kernel_spec(spec, **_parts({"title": "t", "user": "client-user"}, user=plain))
+    assert received == {"title": "t", "user": "server-user"}
+    received.clear()
+    body = {"title": "t", "user": "client-user", "result": "client-result"}
+    dispatch_kernel_spec(spec, **_parts(body, user=staff))
+    assert received == {"title": "t", "user": "server-user", "result": "server-result"}
+
+
+@pytest.mark.django_db(transaction=True)
+def test_the_async_core_builds_the_twin_off_the_loop() -> None:
+    """Building the twin describes the serializer, whose ``get_fields`` may
+    query, so the async core builds it in the thread it reads the call in."""
+    on_loop: list[bool] = []
+
+    class _Querying(serializers.Serializer):
+        title = serializers.CharField()
+        user = serializers.CharField(required=False)
+
+        def get_fields(self) -> dict[str, serializers.Field]:
+            on_loop.append(_on_the_loop())
+            User.objects.count()
+            return super().get_fields()
+
+    received: dict[str, Any] = {}
+    spec = ServiceSpec(
+        service=lambda *, data: received.update(data),
+        permissions=_OPEN,
+        validator=SerializerValidator(_Querying),
+        input_data=lambda: {"user": "server-user"},
+        atomic=False,
+    )
+    _async(spec, **_parts({"title": "t", "user": "client-user"}))
+    assert received == {"title": "t", "user": "server-user"}
+    assert on_loop
+    assert True not in on_loop
 
 
 def test_a_provider_answering_no_mapping_is_the_kernel_s_to_refuse() -> None:
