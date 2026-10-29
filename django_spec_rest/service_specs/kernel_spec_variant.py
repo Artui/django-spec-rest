@@ -115,8 +115,9 @@ def kernel_spec_variant(
       call may leave out, which is why the kernel refuses ``partial=True`` on
       one, so a ``PATCH`` runs it whole, as a drfs spec with no
       ``input_serializer`` compiles. A Validator that cannot take a partial
-      call is refused by ``derive``, as a drfs spec over a dataclass is by
-      its compile.
+      call (``supports_partial`` false, a dataclass's) is validated whole, so
+      the variant is the spec itself, as drfs validated a ``PATCH`` to a
+      dataclass.
     - ``lenient``: the spec's ``SerializerValidator`` declared lenient, every
       other keyword of it carried over, so the kernel's shape check passes
       each value through to the serializer as above. A ``many`` spec keeps its
@@ -191,8 +192,16 @@ def _kernel_changes(spec: KernelServiceSpec, partial: bool | None, lenient: bool
     # test_a_variant_with_nothing_to_change_is_the_spec_itself: ``already-lenient``
     # without the first (``None`` reads the spec's own, so derives nothing),
     # ``no-validator`` without the second (the kernel refuses ``partial=True``
-    # there), and ``already-whole`` / ``already-partial`` without the third.
-    if partial is not None and validator is not None and spec.partial is not partial:
+    # there), ``already-whole`` / ``already-partial`` without the third, and, for
+    # the fourth, test_a_partial_variant_over_a_validator_that_cannot_be_partial_is_the_spec_itself
+    # (a Validator that builds every field is validated whole, as drfs validated a
+    # ``PATCH`` to a dataclass, where ``derive`` would refuse ``partial=True``).
+    if (
+        partial is not None
+        and validator is not None
+        and spec.partial is not partial
+        and validator.supports_partial
+    ):
         changes["partial"] = partial
     # One arc to coverage, so each conjunct is named: without the first, every
     # partial variant's Validator is relaxed too

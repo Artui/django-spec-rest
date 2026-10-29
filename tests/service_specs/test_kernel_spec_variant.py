@@ -18,7 +18,6 @@ from typing import Any
 
 import pytest
 from django.contrib.auth.models import AnonymousUser
-from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import (
     DataclassValidator,
     Grant,
@@ -201,12 +200,18 @@ def test_a_variant_with_nothing_to_change_is_the_spec_itself(
     [DataclassValidator(_Plain), SerializerValidator(_Plain)],
     ids=["dataclass-validator", "serializer-over-a-dataclass"],
 )
-def test_a_partial_variant_over_a_validator_that_cannot_be_partial_is_refused(
+def test_a_partial_variant_over_a_validator_that_cannot_be_partial_is_the_spec_itself(
     validator: Any,
 ) -> None:
-    """The kernel's own refusal, at ``derive``: such a Validator builds every field."""
-    with pytest.raises(ImproperlyConfigured, match="cannot validate a partial call"):
-        kernel_spec_variant(_spec(validator=validator), partial=True)
+    """Validated whole, as drfs answered: a ``PATCH`` to a dataclass is not partial.
+
+    Such a Validator builds every field, so the kernel refuses ``partial=True``
+    at ``derive``; the variant is the spec instead, and held by nothing.
+    """
+    spec = _spec(validator=validator)
+
+    assert kernel_spec_variant(spec, partial=True) is spec
+    assert id(spec) not in module._VARIANTS
 
 
 @pytest.mark.parametrize(
@@ -311,14 +316,32 @@ def test_partial_and_lenient_derive_one_variant_together() -> None:
     assert kernel_spec_variant(spec, partial=True, lenient=True) is both
 
 
+# drfs chose ``lenient`` per request: ``over_http(view)`` (dispatch/utils.py) was true for any
+# call a live view dispatched, so every request through a DRF view validated by its serializer
+# alone, whatever the spec's own Validator declared. Only a call with no view, or an agent
+# transport's offline one, kept the kernel's typed check.
+_DRFS_LENIENT = pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason=(
+        "dispatch/kernel_edge.py does not dispatch kernel_spec_variant(lenient=True), "
+        "which drfs' edge did per request"
+    ),
+)
+
+
 @pytest.mark.django_db
 @pytest.mark.parametrize(
-    ("lenient", "status"), [(False, 400), (True, 204)], ids=["typed", "lenient"]
+    "lenient",
+    [pytest.param(False, marks=_DRFS_LENIENT, id="undeclared"), pytest.param(True, id="declared")],
 )
-def test_a_live_view_dispatches_the_spec_s_own_validator(lenient: bool, status: int) -> None:
-    """The edge dispatches no lenient variant of a kernel spec, so a JSON
-    ``"true"`` for a boolean is the kernel's refusal unless the spec's own
-    Validator is declared ``lenient``."""
+def test_a_live_view_dispatches_the_spec_s_own_validator(lenient: bool) -> None:
+    """A JSON ``"true"`` for a boolean is a 204 with ``published=True``, as drfs answered.
+
+    The ``declared`` case holds the spec's own ``lenient=True`` Validator; the
+    ``undeclared`` case is the regression a drfs client meets: the kernel edge
+    dispatches the spec's Validator as declared, so the typed check refuses it.
+    """
     seen: dict[str, Any] = {}
 
     def service(*, data: Any) -> None:
@@ -334,5 +357,5 @@ def test_a_live_view_dispatches_the_spec_s_own_validator(lenient: bool, status: 
 
     response = view(APIRequestFactory().post("/", {"published": "true"}, format="json"))
 
-    assert response.status_code == status, response.data
-    assert seen == ({"published": True} if lenient else {})
+    assert response.status_code == 204, response.data
+    assert seen == {"published": True}

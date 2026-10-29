@@ -13,9 +13,9 @@ drfs read both from one view hook, whose value named like a field was the
 serializer's as well, over what the body sent. A kernel spec's ``kwargs`` seat
 feeds the callable alone, on every transport, so a ``kwargs`` value named like
 a field never reaches the serializer, and the field validates what the client
-sent. That is the kernel's answer, asserted here as it stands; no decision of
-the carry-over list names it, and a value the serializer must see goes on
-``input_data``.
+sent. No decision of the carry-over list names that answer, so
+test_a_kwargs_value_named_like_a_field_is_the_service_s_alone records drfs'
+answer as an expected failure pending the owner's decision.
 """
 
 from __future__ import annotations
@@ -114,13 +114,22 @@ def test_each_key_reaches_its_own_parameter_off_http(
     assert seen == _HANDED
 
 
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason=(
+        "open owner decision: a kernel spec's kwargs feed the callable only, "
+        "where drfs fed the field"
+    ),
+)
 @pytest.mark.parametrize("fmt", ["json", "multipart"])
 def test_a_kwargs_value_named_like_a_field_is_the_service_s_alone(fmt: str) -> None:
-    """The field validates the client's value; the parameter takes the provider's.
+    """Records drfs' answer pending the decision: the provider's value is the field's too.
 
-    drfs' hook value was the field's too, over the body's. The kernel's
-    ``kwargs`` seat never feeds the Validator, so ``data`` carries what the
-    body sent while the service's ``tenant`` is the provider's.
+    drfs' hook value was the field's as well, over the body's, so ``data``
+    carried the provider's ``A``. The kernel's ``kwargs`` seat never feeds the
+    Validator, so ``data`` carries what the body sent (``evil``) while the
+    service's ``tenant`` is the provider's.
     """
     seen: dict[str, Any] = {}
     spec = _spec(seen, kwargs=lambda: dict(_BOTH))
@@ -129,7 +138,7 @@ def test_a_kwargs_value_named_like_a_field_is_the_service_s_alone(fmt: str) -> N
     response = view(_factory.post("/", {"tenant": "evil"}, format=fmt))
 
     assert response.status_code == 204, response.data
-    assert seen == {"tenant": "A", "org": "B", "data": {"org": "evil"}}
+    assert seen == _HANDED
 
 
 @_CORES
