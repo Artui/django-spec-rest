@@ -175,11 +175,13 @@ jobs:
     # because the test settings install the app:
     #
     #   1. importing the package, and the kernel module holding the write,
-    #      without it must work. ``ContentType`` is a Django *model* and an
-    #      installed app's models module may import ``django_spec_rest``
-    #      while ``apps.populate()`` runs -- an eager import raises
-    #      AppRegistryNotReady even when the app *is* installed, and a plain
-    #      ImportError when it is not.
+    #      without it must work. ``ContentType`` is a Django *model*, and a
+    #      project may import ``django_spec_rest`` before the app registry is
+    #      ready (from an ``AppConfig`` module or an app's ``__init__``, or
+    #      before ``django.setup()``) -- an eager import raises
+    #      AppRegistryNotReady there even when the app *is* installed, and a
+    #      RuntimeError about a model in no installed app once setup has run
+    #      without it.
     #   2. writing a generic relation without it must say so. Without the
     #      gate, the lookup fails with a LookupError about an app label, which
     #      names neither INSTALLED_APPS nor the remedy.

@@ -16,8 +16,7 @@ carries; releases up to 0.62.0 are in
 - **Renamed from `djangorestframework-services`.** The distribution is
   `django-spec-rest` and the importable package is `django_spec_rest`, where it
   was `rest_framework_services`; every module keeps its path under the new
-  root. Replace the import prefix and the dependency name; nothing else about
-  the API changes in this step.
+  root. Replace the import prefix and the dependency name.
 
 ### Removed
 

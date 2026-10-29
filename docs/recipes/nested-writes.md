@@ -234,9 +234,10 @@ differently; they mirror the arguments of the same name on Django's
 
     It is the library's only contact with that app, and the app is not
     guaranteed to be installed, so the content-type lookup is resolved on first
-    use rather than imported with the package — an installed app's models
-    module may import `django_spec_rest` while Django is still populating the
-    app registry, where importing a model raises `AppRegistryNotReady`.
+    use rather than imported with the package — a project may import
+    `django_spec_rest` before the app registry is ready (from an `AppConfig`
+    module or an app's `__init__`, or before `django.setup()`), where
+    importing a model raises `AppRegistryNotReady`.
 
     Declaring a `GenericRelationSpec` is always safe. *Writing* one without the
     app installed raises `ImproperlyConfigured` naming the app and the remedy.
