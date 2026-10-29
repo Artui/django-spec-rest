@@ -1,4 +1,4 @@
-"""``kernel_spec_variant`` - a drfs spec's compiled form, as the DRF edge needs it per request."""
+"""``kernel_spec_variant`` - a spec's compiled form, as the DRF edge needs it per request."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import dataclasses
 import sys
 import threading
 import weakref
+from collections.abc import Callable
 from typing import Any
 
 from django.core.exceptions import ImproperlyConfigured
@@ -101,10 +102,42 @@ def kernel_spec_variant(
       for (``SerializerValidator(excluded=...)``): the edge compiles the
       names a seed of the call takes, so a serializer field of that name is
       the serializer's alone rather than a parameter the kernel refuses.
+
+    **A kernel spec** is dispatched as declared, so ``partial`` is the one
+    variant it takes: the spec with that flag, built through its own
+    ``derive`` and so checked as a fresh declaration, which the kernel's
+    ``relax_partial`` relaxes when it is dispatched. Derived once per source
+    and held as the compiles are, so a ``Grant`` minted for it covers the next
+    request's (test_a_grant_for_a_variant_covers_the_next_request_s_variant).
+    A spec the flag would not change is answered as itself and held by
+    nothing: a selector spec, which has no ``partial``; a service spec
+    already compiled with the flag asked for; and one with no Validator, which
+    has nothing a partial call may leave out and which the kernel refuses
+    ``partial=True`` on, so a ``PATCH`` runs it whole as a drfs spec with no
+    ``input_serializer`` compiles
+    (test_a_variant_with_nothing_to_change_is_the_spec_itself). A Validator
+    that cannot take a partial call is refused by ``derive``, as a drfs spec
+    over a dataclass is by its compile. Every other keyword names a seat a
+    kernel spec declares itself - its ``permissions``, its
+    ``instance_selector_spec``, its providers and its Validator, where
+    ``SerializerValidator(lenient=True)`` is the author's own word for DRF's
+    coercion - and asking for one raises ``TypeError``
+    (test_a_drfs_only_variant_of_a_kernel_spec_is_refused).
     """
     key: _Variant = (partial, unguarded, target, server_input, spread, lenient, excluded)
     if key == (None, False, False, True, False, False, frozenset()):
         return kernel_spec(spec)
+    if isinstance(spec, KernelServiceSpec | KernelSelectorSpec):
+        return _derived(spec, key)
+    return _held(
+        spec,
+        key,
+        lambda: _compile(spec, partial, unguarded, target, server_input, spread, lenient, excluded),
+    )
+
+
+def _held(spec: Any, key: _Variant, build: Callable[[], Any]) -> Any:
+    """The variant ``key`` of ``spec``, built by ``build`` on first use and held while ``spec`` lives."""
     with _LOCK:
         held = _VARIANTS.get(id(spec))
         if held is None:
@@ -114,10 +147,40 @@ def kernel_spec_variant(
         variants = held[1]
         compiled = variants.get(key)
         if compiled is None:
-            compiled = variants[key] = _compile(
-                spec, partial, unguarded, target, server_input, spread, lenient, excluded
-            )
+            compiled = variants[key] = build()
     return compiled
+
+
+def _derived(
+    spec: KernelServiceSpec | KernelSelectorSpec, key: _Variant
+) -> KernelServiceSpec | KernelSelectorSpec:
+    """A kernel spec's variant: ``partial`` derived, and nothing else asked of it.
+
+    The variant is never ``spec`` itself once held, or ``_VARIANTS`` would
+    hold the source alive and its weak reference would never fire, so a spec
+    the flag leaves as it is returns before anything is held
+    (test_a_variant_with_nothing_to_change_is_the_spec_itself asserts it is
+    held by nothing).
+    """
+    partial, *rest = key
+    if tuple(rest) != _NOTHING_BUT_PARTIAL:
+        raise TypeError(
+            "kernel_spec_variant takes only partial= for a kernel spec, which declares the "
+            "rest on itself: its permissions, instance_selector_spec, providers or Validator "
+            "(SerializerValidator(lenient=True) for DRF's own coercion)."
+        )
+    # One arc to coverage, so each disjunct is named by its case of
+    # test_a_variant_with_nothing_to_change_is_the_spec_itself: ``selector``
+    # without the first (a selector spec has no ``validator``), ``no-validator``
+    # without the second (the kernel refuses ``partial=True`` there), and
+    # ``already-whole`` / ``already-partial`` without the third.
+    if not isinstance(spec, KernelServiceSpec) or spec.validator is None or spec.partial is partial:
+        return spec
+    return _held(spec, key, lambda: spec.derive(partial=partial))
+
+
+# Every keyword of ``kernel_spec_variant`` but ``partial``, at its default.
+_NOTHING_BUT_PARTIAL = (False, False, True, False, False, frozenset())
 
 
 def _compile(

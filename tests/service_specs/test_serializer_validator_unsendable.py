@@ -1,30 +1,39 @@
 """``SerializerValidator.unsendable``: the required fields no call can send.
 
 A field named in ``RESERVED_POOL_SEEDS``, in ``BOUND`` or in ``excluded`` is no
-parameter, so a call on the kernel route has nowhere to put its value, while
-HTTP and ``dispatch_spec`` read it from the body. A transport reads the
-attribute with ``getattr(compiled.validator, "unsendable", frozenset())`` to
-refuse a spec whose call could never validate. Each test reads it through the
-public instance, off a compiled spec where the plan names one.
+parameter, so a call through the kernel's own ``dispatch`` has nowhere to put
+its value, while the DRF edge reads it from the body. A transport reads the
+attribute to refuse a spec whose call could never validate. Each spec here is
+the kernel's own ``ServiceSpec`` with a ``SerializerValidator`` on its seat,
+and each test reads the attribute off that seat.
+
+The kernel's ``Validator`` does not declare the attribute yet, so a reader
+holding any other Validator still reads it with ``getattr`` and a default.
+The test of that default is a strict xfail until the kernel declares it.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 import pytest
 from django.contrib.auth.models import AnonymousUser, User
-from django_service_specs.dispatch.dispatch import dispatch as kernel_dispatch
-from django_service_specs.dispatch.grant import Grant
-from django_service_specs.parameters.invalid_arguments import (
-    InvalidArguments as KernelInvalidArguments,
+from django_service_specs import (
+    DataclassValidator,
+    Grant,
+    InvalidArguments,
+    ServiceSpec,
+    UnknownArguments,
+    Unrestricted,
+    Validator,
+    dispatch,
 )
-from django_service_specs.specs.kernel_spec import kernel_spec
-from django_service_specs.types.unknown_arguments import UnknownArguments
 from rest_framework import serializers
 
-from django_spec_rest import ServiceSpec
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
+
+_OPEN = (Unrestricted(),)
 
 
 class _RequiredUserIn(serializers.Serializer):
@@ -69,9 +78,18 @@ def _noop(**_: Any) -> None:
     return None
 
 
-def _validator_of(serializer: type[Any], *, many: bool = False) -> SerializerValidator:
-    spec = ServiceSpec(service=_noop, input_serializer=serializer, many=many, atomic=False)
-    validator = kernel_spec(spec).validator
+def _spec(serializer: type[Any], **fields: Any) -> ServiceSpec:
+    return ServiceSpec(
+        service=_noop,
+        permissions=_OPEN,
+        validator=SerializerValidator(serializer),
+        atomic=False,
+        **fields,
+    )
+
+
+def _validator_of(serializer: type[Any], **fields: Any) -> SerializerValidator:
+    validator = _spec(serializer, **fields).validator
     assert isinstance(validator, SerializerValidator)
     return validator
 
@@ -85,7 +103,7 @@ def test_a_required_field_named_user_is_unsendable() -> None:
 
 
 def test_a_required_field_named_serializer_is_unsendable() -> None:
-    """``serializer`` is in ``BOUND``, and HTTP serves it, so it is named like ``user``."""
+    """``serializer`` is in ``BOUND``, and the DRF edge serves it, so it is named like ``user``."""
     validator = _validator_of(_RequiredSerializerIn)
 
     assert validator.parameters().names() == frozenset({"title"})
@@ -101,12 +119,8 @@ def test_a_read_only_field_is_not_unsendable() -> None:
     assert _validator_of(_ReadOnlySeedNamesIn).unsendable == frozenset()
 
 
-def test_a_field_named_like_a_registered_seed_is_not_unsendable() -> None:
-    """The kernel route declares it a parameter, which a seed or a call then fills.
-
-    The compiled spec does not exclude ``tenant`` (only the DRF edge's variant
-    does), so the Validator declares it and a call can send it.
-    """
+def test_a_field_named_like_no_seed_is_a_parameter_and_not_unsendable() -> None:
+    """The Validator declares ``tenant``, so a call can send it."""
     validator = _validator_of(_TenantIn)
 
     assert validator.parameters().names() == frozenset({"title", "tenant"})
@@ -137,38 +151,34 @@ def test_a_hidden_field_is_not_unsendable() -> None:
 
 @pytest.mark.django_db
 def test_a_partial_spec_names_the_same_fields() -> None:
-    """Whether a call may leave the field out is the compiled spec's ``partial``, not this attribute's."""
-    spec = ServiceSpec(service=_noop, input_serializer=_RequiredUserIn, partial=True, atomic=False)
-    validator = kernel_spec(spec).validator
-
-    assert validator.unsendable == frozenset({"user"})
+    """Whether a call may leave the field out is the spec's ``partial``, not this attribute's."""
+    assert _validator_of(_RequiredUserIn, partial=True).unsendable == frozenset({"user"})
 
 
 @pytest.mark.django_db
 def test_a_many_specs_row_fields_are_read_through_the_row_serializer() -> None:
     """The Validator of a ``many`` spec holds the row serializer, so a row is what is read.
 
-    A row's required ``user`` is named because the kernel route cannot send it
-    either: ``parameters()`` omits it from the row's own Parameters, and a call
-    over ``items`` is refused for it under ``REJECT`` (an unknown argument) and
-    under ``IGNORE`` (required). A row field named like a registered seed is no
-    different from the non-``many`` case: declared, so not named.
+    A row's required ``user`` is named because the kernel's ``dispatch`` cannot
+    send it either: ``parameters()`` omits it from the row's own Parameters, and
+    a call over ``items`` is refused for it under ``REJECT`` (an unknown
+    argument) and under ``IGNORE`` (required). A row field named like no seed is
+    no different from the single-object case: declared, so not named.
     """
-    spec = ServiceSpec(service=_noop, input_serializer=_RequiredUserIn, many=True, atomic=False)
-    compiled = kernel_spec(spec)
+    spec = _spec(_RequiredUserIn, many=True)
     principal = AnonymousUser()
 
     for policy in (UnknownArguments.REJECT, UnknownArguments.IGNORE):
-        with pytest.raises(KernelInvalidArguments) as excinfo:
-            kernel_dispatch(
-                compiled,
+        with pytest.raises(InvalidArguments) as excinfo:
+            dispatch(
+                spec,
                 principal=principal,
                 arguments={"items": [{"title": "t", "user": 1}]},
-                grant=Grant(compiled, principal),
+                grant=Grant(spec, principal),
                 unknown_arguments=policy,
             )
         assert set(excinfo.value.detail["items"][0]) == {"user"}, policy
-    assert compiled.validator.unsendable == frozenset({"user"})
+    assert _validator_of(_RequiredUserIn, many=True).unsendable == frozenset({"user"})
     assert _validator_of(_TenantIn, many=True).unsendable == frozenset()
 
 
@@ -182,6 +192,32 @@ def test_a_lenient_validator_names_the_same_fields() -> None:
 
 
 @pytest.mark.django_db
-def test_a_transport_reads_it_with_getattr_off_any_validator() -> None:
-    assert getattr(_validator_of(_RequiredUserIn), "unsendable", frozenset()) == {"user"}
-    assert getattr(object(), "unsendable", frozenset()) == frozenset()
+def test_a_reader_holding_the_seat_reads_the_override() -> None:
+    """What a transport reads off the spec's ``validator`` is this class's answer."""
+    seat: Validator = _spec(_RequiredUserIn).validator
+
+    assert getattr(seat, "unsendable", frozenset()) == frozenset({"user"})
+
+
+@dataclass
+class _Plain:
+    title: str
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AttributeError,
+    reason=(
+        "kernel item 13: Validator.unsendable is not on the kernel's Validator yet, "
+        "so a kernel validator has no empty default to answer"
+    ),
+)
+def test_a_kernel_validator_answers_the_empty_default() -> None:
+    """Once the kernel declares the default, a reader stops needing ``getattr``.
+
+    Strict, so the kernel minor that declares it turns this green and fails
+    the suite until the xfail is lifted and ``getattr`` readers move.
+    """
+    validator: Any = DataclassValidator(_Plain)
+
+    assert validator.unsendable == frozenset()
