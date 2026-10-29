@@ -386,14 +386,15 @@ def _resolved(
     test_service_update_view's test_a_put_s_own_row_is_asked_of_the_view_once
     (``on_target``), test_kernel_edge's
     test_with_no_on_target_the_kernel_s_own_lookup_finds_the_row (its absence:
-    a caller handing none would have ``None`` called), test_a_row_the_view_resolved_is_looked_up_once (``target``:
-    without it a row the caller handed over is looked up again), and
-    test_service_create_view's test_a_create_is_handed_no_target (the target
-    selector: a create has none, and ``resolve_target`` would resolve
-    ``None`` and hand it on as a target the kernel refuses a create). The type
-    is a selector spec's, which takes no target and has no target selector
-    to ask; ``ty`` holds it. A ``many`` spec declares no target selector,
-    which the kernel refuses when the spec is built.
+    a caller handing none would have ``None`` called),
+    test_service_update_view's test_a_row_the_view_resolved_is_looked_up_once
+    (``target``: without it a row the caller handed over is looked up again),
+    and test_bulk_length_over_http's test_the_kernel_s_cap_holds_on_http (the
+    target selector: a ``many`` spec declares none, the kernel refusing one
+    when the spec is built, and its list body is no target to resolve). The
+    type is a selector spec's, which takes no target and has no target
+    selector to ask; ``ty`` holds it, and no view hands a selector spec an
+    ``on_target``, so no test does.
     """
     if (
         on_target is None
@@ -420,9 +421,10 @@ def _with_output_layers(result: DispatchResult, hooks: ViewHooks) -> DispatchRes
     ``SerializerPresenter`` reads it (``output_view_layers``), rather than
     through the call's pool. A result with no context, a missing row, is
     presented by no one, and one with no output layer has nothing to carry.
-    One arc to coverage: the context by test_kernel_views'
-    test_a_missing_row_the_spec_s_lookup_finds_is_404 under its view's hooks,
-    the layer by every call through a view with no output hook.
+    One arc to coverage: the context by test_kernel_edge's
+    test_a_row_the_kernel_s_lookup_misses_carries_no_output_layer. The layer
+    is a saving, not a guard: hooks with no output layer carried on the
+    context present as no hooks do, so no test fails without it.
     """
     if result.context is None or hooks.output_serializer_context is None:
         return result

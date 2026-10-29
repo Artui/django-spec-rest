@@ -48,6 +48,7 @@ from django_spec_rest.service_specs.recording_spec import recording_spec
 from django_spec_rest.service_specs.seed_named_fields import seed_named_fields
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from django_spec_rest.service_specs.utils import EDGE_CALL
+from django_spec_rest.types.view_hooks import ViewHooks
 from django_spec_rest.views.utils import view_call_context
 from tests.testapp.models import Author
 from tests.views.test_kernel_views import _CREATE, _ONE, _AuthorInput, _CreateView
@@ -344,6 +345,17 @@ def test_a_row_the_lookup_misses_is_not_found_and_asks_nothing(
     asked: list[Any] = []
     result = core(_rename_spec(), on_target=asked.append, **_with_route(_parts({}), pk=999))
     assert (result.kind, asked) == ("not_found", [])
+
+
+@CORES
+def test_a_row_the_kernel_s_lookup_misses_carries_no_output_layer(
+    core: Callable[..., Any],
+) -> None:
+    """A missing row's answer has no presentation context to put the view's
+    output layer on, so it comes back as the kernel gave it."""
+    hooks = ViewHooks(output_serializer_context=lambda context: {"shown": True})
+    result = core(_rename_spec(), view_hooks=hooks, **_with_route(_parts({}), pk=999))
+    assert (result.kind, result.context) == ("not_found", None)
 
 
 def test_the_async_core_reads_the_body_off_the_loop() -> None:

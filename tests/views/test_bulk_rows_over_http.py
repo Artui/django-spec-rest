@@ -113,7 +113,7 @@ def test_a_body_that_is_no_list_beside_view_input_data_is_refused_as_without_it(
     reason=(
         "service_specs/serializer_validator.py: a bulk row's writable field named like a "
         "dispatcher seed is refused as an unknown argument; the kernel route holds no "
-        "per-row body for the Validator to bind it from (R5 (a) inside many rows)"
+        "per-row body for the Validator to bind it from"
     ),
 )
 def test_a_bulk_row_s_writable_user_validates_from_the_body() -> None:
