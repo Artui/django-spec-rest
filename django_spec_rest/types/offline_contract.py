@@ -5,9 +5,9 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
-from rest_framework_services.types.field_marking import FieldMarking
-from rest_framework_services.types.query_param import QueryParam
-from rest_framework_services.types.url_kwarg import UrlKwarg
+from django_spec_rest.types.field_marking import FieldMarking
+from django_spec_rest.types.query_param import QueryParam
+from django_spec_rest.types.url_kwarg import UrlKwarg
 
 
 @dataclass(frozen=True)
@@ -55,7 +55,7 @@ class OfflineContract:
     """Per-tool overrides layered over the output serializer's own markings.
 
     Here rather than at a mount because
-    [`FieldAudience`][rest_framework_services.types.field_audience.FieldAudience]
+    [`FieldAudience`][django_spec_rest.types.field_audience.FieldAudience]
     already settles the question: *the axis is audience, not protocol* -- an MCP
     server and an in-process toolset want the same thing as each other, and
     something different from a browser. If the two are one audience, an override

@@ -2,7 +2,7 @@
 
 Importing this module pulls in ``drf-spectacular``, so the package's top-level
 ``__init__.py`` does not load it; users opt in via
-[`rest_framework_services.openapi.enable_openapi`][rest_framework_services.openapi.enable_openapi.enable_openapi].
+[`django_spec_rest.openapi.enable_openapi`][django_spec_rest.openapi.enable_openapi.enable_openapi].
 """
 
 from __future__ import annotations
@@ -13,18 +13,18 @@ from drf_spectacular.contrib.django_filters import DjangoFilterExtension
 from drf_spectacular.openapi import AutoSchema
 from drf_spectacular.utils import OpenApiResponse, PolymorphicProxySerializer
 
-from rest_framework_services.can_present_nothing import can_present_nothing
-from rest_framework_services.openapi._resolve import (
+from django_spec_rest.can_present_nothing import can_present_nothing
+from django_spec_rest.openapi._resolve import (
     resolve_polymorphic_spec,
     resolve_selector_spec,
     resolve_service_spec,
 )
-from rest_framework_services.openapi._to_serializer import to_serializer_class
-from rest_framework_services.openapi.service_error_serializer import (
+from django_spec_rest.openapi._to_serializer import to_serializer_class
+from django_spec_rest.openapi.service_error_serializer import (
     ServiceErrorSerializer,
 )
-from rest_framework_services.openapi.utils import default_status
-from rest_framework_services.views.mutation.utils import status_for_a_body
+from django_spec_rest.openapi.utils import default_status
+from django_spec_rest.views.mutation.utils import status_for_a_body
 
 
 class ServiceAutoSchema(AutoSchema):
@@ -41,7 +41,7 @@ class ServiceAutoSchema(AutoSchema):
       the status is ``204``; or, where no serializer is declared, a no-content
       response at the status itself.
     - A ``422`` documenting
-      [`ServiceErrorSerializer`][rest_framework_services.openapi.service_error_serializer.ServiceErrorSerializer],
+      [`ServiceErrorSerializer`][django_spec_rest.openapi.service_error_serializer.ServiceErrorSerializer],
       as ``spec.document_service_error`` gates it.
 
     Read surfaces (``Selector*View`` and the read-side action mixins) lean on

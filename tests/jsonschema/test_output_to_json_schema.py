@@ -7,12 +7,12 @@ import dataclasses
 import pytest
 from rest_framework import serializers
 
-from rest_framework_services.dispatch.render_spec_output import render_spec_output
-from rest_framework_services.jsonschema.output_to_json_schema import output_to_json_schema
-from rest_framework_services.types.audience_projection import AudienceProjection
-from rest_framework_services.types.selector_kind import SelectorKind
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_spec_rest.dispatch.render_spec_output import render_spec_output
+from django_spec_rest.jsonschema.output_to_json_schema import output_to_json_schema
+from django_spec_rest.types.audience_projection import AudienceProjection
+from django_spec_rest.types.selector_kind import SelectorKind
+from django_spec_rest.types.selector_spec import SelectorSpec
+from django_spec_rest.types.service_spec import ServiceSpec
 
 
 class _Out(serializers.Serializer):

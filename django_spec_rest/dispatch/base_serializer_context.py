@@ -6,6 +6,6 @@ definition moved down rather than letting ``service_specs/`` import ``dispatch/`
 
 from __future__ import annotations
 
-from rest_framework_services.service_specs.base_serializer_context import base_serializer_context
+from django_spec_rest.service_specs.base_serializer_context import base_serializer_context
 
 __all__ = ["base_serializer_context"]

@@ -20,10 +20,10 @@ from typing import Any, Final, NoReturn
 
 from django.core.exceptions import ImproperlyConfigured
 
-from rest_framework_services.types.affordance_declarer import AffordanceDeclarer
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
-from rest_framework_services.types.utils import affordance_alias
+from django_spec_rest.types.affordance_declarer import AffordanceDeclarer
+from django_spec_rest.types.selector_spec import SelectorSpec
+from django_spec_rest.types.service_spec import ServiceSpec
+from django_spec_rest.types.utils import affordance_alias
 
 AFFORDANCES_KEY: Final = "affordances"
 """The key each rendered object carries its answers under -- the field's own name."""

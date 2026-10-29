@@ -5,15 +5,15 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from rest_framework_services.audience.audience_projection_for_spec import (
+from django_spec_rest.audience.audience_projection_for_spec import (
     audience_projection_for_spec,
 )
-from rest_framework_services.audience.project_payload import project_payload
-from rest_framework_services.dispatch.render_spec_output import render_spec_output
-from rest_framework_services.types.audience_projection import AudienceProjection
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
-from rest_framework_services.types.view_hooks import ViewHooks
+from django_spec_rest.audience.project_payload import project_payload
+from django_spec_rest.dispatch.render_spec_output import render_spec_output
+from django_spec_rest.types.audience_projection import AudienceProjection
+from django_spec_rest.types.selector_spec import SelectorSpec
+from django_spec_rest.types.service_spec import ServiceSpec
+from django_spec_rest.types.view_hooks import ViewHooks
 
 
 def render_for_audience(
@@ -28,7 +28,7 @@ def render_for_audience(
     view_hooks: ViewHooks | None = None,
     call_context: dict[str, Any] | None = None,
 ) -> Any:
-    """[`render_spec_output`][rest_framework_services.dispatch.render_spec_output.render_spec_output]
+    """[`render_spec_output`][django_spec_rest.dispatch.render_spec_output.render_spec_output]
     plus the agent projection.
 
     The single call an agent transport makes instead of ``render_spec_output``,
@@ -43,7 +43,7 @@ def render_for_audience(
     ``projection`` is the serializer's resolved markings. Omit it and one is
     derived from the spec, which costs a serializer instantiation per call — a
     transport that registers its tools up front should build it once with
-    [`audience_projection_for_spec`][rest_framework_services.audience.audience_projection_for_spec.audience_projection_for_spec]
+    [`audience_projection_for_spec`][django_spec_rest.audience.audience_projection_for_spec.audience_projection_for_spec]
     and pass it in.
 
     Render the agent's **answer** with this. A pipeline that feeds one spec's

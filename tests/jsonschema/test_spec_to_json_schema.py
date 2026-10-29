@@ -14,18 +14,18 @@ from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 from typing_extensions import NotRequired, TypedDict, Unpack
 
-from rest_framework_services.dispatch.dispatch_spec import dispatch_spec
-from rest_framework_services.dispatch.null_progress import null_progress
-from rest_framework_services.dispatch.render_spec_output import render_spec_output
-from rest_framework_services.jsonschema.spec_to_json_schema import spec_to_json_schema
-from rest_framework_services.registry.capability_manifest import capability_manifest
-from rest_framework_services.registry.spec_registry import SpecRegistry
-from rest_framework_services.types.input_description import InputDescription
-from rest_framework_services.types.input_required import InputRequired
-from rest_framework_services.types.not_client_input import NotClientInput
-from rest_framework_services.types.selector_kind import SelectorKind
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_spec_rest.dispatch.dispatch_spec import dispatch_spec
+from django_spec_rest.dispatch.null_progress import null_progress
+from django_spec_rest.dispatch.render_spec_output import render_spec_output
+from django_spec_rest.jsonschema.spec_to_json_schema import spec_to_json_schema
+from django_spec_rest.registry.capability_manifest import capability_manifest
+from django_spec_rest.registry.spec_registry import SpecRegistry
+from django_spec_rest.types.input_description import InputDescription
+from django_spec_rest.types.input_required import InputRequired
+from django_spec_rest.types.not_client_input import NotClientInput
+from django_spec_rest.types.selector_kind import SelectorKind
+from django_spec_rest.types.selector_spec import SelectorSpec
+from django_spec_rest.types.service_spec import ServiceSpec
 
 
 @dataclasses.dataclass
@@ -353,7 +353,7 @@ def test_selector_output_without_serializer_is_none() -> None:
 
 
 def test_registry_is_forwarded_to_service_input() -> None:
-    from rest_framework_services.types.json_schema_registry import DEFAULT_JSON_SCHEMA_REGISTRY
+    from django_spec_rest.types.json_schema_registry import DEFAULT_JSON_SCHEMA_REGISTRY
 
     class _MoneyField(serializers.Field): ...
 
@@ -370,7 +370,7 @@ def test_registry_is_forwarded_to_service_input() -> None:
 
 
 def test_registry_is_forwarded_to_selector_filter() -> None:
-    from rest_framework_services.types.json_schema_registry import DEFAULT_JSON_SCHEMA_REGISTRY
+    from django_spec_rest.types.json_schema_registry import DEFAULT_JSON_SCHEMA_REGISTRY
 
     class _RefFilter(django_filters.Filter): ...
 

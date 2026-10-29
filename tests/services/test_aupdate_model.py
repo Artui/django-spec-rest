@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from rest_framework_services import aupdate_model
+from django_spec_rest import aupdate_model
 from tests.testapp.models import Author, Post, Tag
 
 

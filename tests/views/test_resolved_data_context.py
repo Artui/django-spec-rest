@@ -9,7 +9,7 @@ providers must be unaffected, and a provider may now declare any *subset* of
 ``view`` / ``request`` / the extras.
 
 The mechanism lives in
-:func:`rest_framework_services.views.utils._invoke_provider`; these tests
+:func:`django_spec_rest.views.utils._invoke_provider`; these tests
 exercise it end-to-end through every entry point plus a few unit-level
 assertions on the helper itself.
 """
@@ -25,7 +25,7 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.test import APIRequestFactory
 from rest_framework.viewsets import GenericViewSet
 
-from rest_framework_services import (
+from django_spec_rest import (
     SelectorKind,
     SelectorListView,
     SelectorRetrieveView,
@@ -36,7 +36,7 @@ from rest_framework_services import (
     ServiceViewSet,
     selector_action,
 )
-from rest_framework_services.views.utils import _invoke_provider
+from django_spec_rest.views.utils import _invoke_provider
 from tests.testapp.models import Author
 from tests.testapp.serializers import AuthorSerializer
 

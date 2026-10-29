@@ -19,7 +19,7 @@ from django.db import connection
 from django.db.models import Q, QuerySet
 from django.test.utils import CaptureQueriesContext
 
-from rest_framework_services import (
+from django_spec_rest import (
     ActionUnavailable,
     Affordance,
     SelectorKind,

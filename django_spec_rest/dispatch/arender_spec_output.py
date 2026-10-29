@@ -1,16 +1,16 @@
 """``arender_spec_output`` — async sibling of
-[`render_spec_output`][rest_framework_services.dispatch.render_spec_output.render_spec_output]."""
+[`render_spec_output`][django_spec_rest.dispatch.render_spec_output.render_spec_output]."""
 
 from __future__ import annotations
 
 from collections.abc import Mapping
 from typing import Any
 
-from rest_framework_services.dispatch.render_spec_output import render_spec_output
-from rest_framework_services.dispatch.utils import arun_off_loop
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
-from rest_framework_services.types.view_hooks import ViewHooks
+from django_spec_rest.dispatch.render_spec_output import render_spec_output
+from django_spec_rest.dispatch.utils import arun_off_loop
+from django_spec_rest.types.selector_spec import SelectorSpec
+from django_spec_rest.types.service_spec import ServiceSpec
+from django_spec_rest.types.view_hooks import ViewHooks
 
 
 async def arender_spec_output(
@@ -25,7 +25,7 @@ async def arender_spec_output(
     call_context: dict[str, Any] | None = None,
 ) -> Any:
     """Async
-    [`render_spec_output`][rest_framework_services.dispatch.render_spec_output.render_spec_output].
+    [`render_spec_output`][django_spec_rest.dispatch.render_spec_output.render_spec_output].
 
     Identical arguments, identical result — the whole render runs in Django's
     thread-sensitive executor instead of on the event loop, which is what an
@@ -40,7 +40,7 @@ async def arender_spec_output(
     - The no-serializer path list-coerces, which evaluates a queryset too.
 
     So an async caller that awaited
-    [`adispatch_spec`][rest_framework_services.dispatch.adispatch_spec.adispatch_spec] —
+    [`adispatch_spec`][django_spec_rest.dispatch.adispatch_spec.adispatch_spec] —
     which returns a ``LIST`` result as a **lazy** queryset, deliberately — cannot render
     it inline without raising ``SynchronousOnlyOperation``. Pair the two:
 
@@ -51,7 +51,7 @@ async def arender_spec_output(
 
     A transport that already does its own thread hop around rendering (to paginate or
     post-process in the same hop) can keep calling
-    [`render_spec_output`][rest_framework_services.dispatch.render_spec_output.render_spec_output]
+    [`render_spec_output`][django_spec_rest.dispatch.render_spec_output.render_spec_output]
     inside it — this is for the ordinary case, where the hop shouldn't have to be the
     caller's problem to remember.
 

@@ -18,7 +18,7 @@ from django.db.models import QuerySet
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
-from rest_framework_services import (
+from django_spec_rest import (
     DispatchResult,
     SelectorKind,
     SelectorSpec,
@@ -26,8 +26,8 @@ from rest_framework_services import (
     adispatch_spec,
     dispatch_spec,
 )
-from rest_framework_services.types.argument_binding import ArgumentBinding
-from rest_framework_services.types.unknown_arguments import UnknownArguments
+from django_spec_rest.types.argument_binding import ArgumentBinding
+from django_spec_rest.types.unknown_arguments import UnknownArguments
 from tests.testapp.models import Post
 
 

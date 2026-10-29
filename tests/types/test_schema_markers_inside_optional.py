@@ -21,7 +21,7 @@ from django.core.exceptions import ImproperlyConfigured
 from rest_framework.exceptions import ValidationError
 from typing_extensions import TypedDict, Unpack
 
-from rest_framework_services import (
+from django_spec_rest import (
     InputDescription,
     InputRequired,
     NotClientInput,
@@ -31,8 +31,8 @@ from rest_framework_services import (
     dispatch_spec,
     spec_to_json_schema,
 )
-from rest_framework_services.types.read_input_description import read_input_description
-from rest_framework_services.types.read_schema_markers import read_schema_markers
+from django_spec_rest.types.read_input_description import read_input_description
+from django_spec_rest.types.read_schema_markers import read_schema_markers
 
 _NULLABLE_INTEGER = {"anyOf": [{"type": "integer"}, {"type": "null"}]}
 

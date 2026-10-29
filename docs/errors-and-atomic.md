@@ -11,7 +11,7 @@ Two ground rules:
 ## Framework-agnostic exceptions
 
 ```python
-from rest_framework_services import ServiceError, ServiceValidationError
+from django_spec_rest import ServiceError, ServiceValidationError
 
 
 def withdraw(*, instance, data):

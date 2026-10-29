@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from rest_framework_services.types.unset import UNSET
+from django_spec_rest.types.unset import UNSET
 
 
 @dataclass(frozen=True)
@@ -18,12 +18,12 @@ class UrlKwarg:
     is no route, so the caller supplies the value as an ordinary argument: the transport
     advertises it in the tool / operation schema, pops it out of the arguments, and
     hands it to ``build_offline_context(kwargs=…)``, from where
-    [`dispatch_spec`][rest_framework_services.dispatch.dispatch_spec.dispatch_spec]
+    [`dispatch_spec`][django_spec_rest.dispatch.dispatch_spec.dispatch_spec]
     spreads it into the selector / target pools — authoritative over the spec params,
     below a ``spec.kwargs`` provider. It never reaches the spec as an ordinary input, so
     the unknown-argument policy never flags it. Adapters import this declaration and
     pair it with
-    [`validate_channel_names`][rest_framework_services.types.validate_channel_names.validate_channel_names].
+    [`validate_channel_names`][django_spec_rest.types.validate_channel_names.validate_channel_names].
 
     Reach for one when the value is a URL-derived input a spec depends on that is
     **not** already an ordinary argument — most commonly a scoping ``spec.kwargs``
@@ -47,7 +47,7 @@ class UrlKwarg:
     Attributes:
         name: The argument / view-kwarg key. Must not collide with a reserved
             transport key; see
-            [`validate_channel_names`][rest_framework_services.types.validate_channel_names.validate_channel_names].
+            [`validate_channel_names`][django_spec_rest.types.validate_channel_names.validate_channel_names].
         type: The JSON-Schema type advertised to the caller — ``"string"`` by
             default, or ``"integer"`` / ``"number"`` / ``"boolean"`` …
         description: Optional help text shown to the caller.
@@ -63,7 +63,7 @@ class UrlKwarg:
             a route capture the spec genuinely cannot run without, so a caller is
             told up front instead of failing mid-dispatch. Setting both
             ``required`` and a ``default`` is contradictory and raises in
-            [`validate_channel_names`][rest_framework_services.types.validate_channel_names.validate_channel_names]. It is the
+            [`validate_channel_names`][django_spec_rest.types.validate_channel_names.validate_channel_names]. It is the
             registered-declaration counterpart of
             ``InputRequired``, which does the same job
             for a key the callable's own ``TypedDict`` declares; both end up in the

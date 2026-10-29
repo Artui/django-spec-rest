@@ -9,7 +9,7 @@ import pytest
 from rest_framework.test import APIRequestFactory
 from rest_framework.viewsets import GenericViewSet
 
-from rest_framework_services import SelectorKind, SelectorSpec, ServiceSpec, service_action
+from django_spec_rest import SelectorKind, SelectorSpec, ServiceSpec, service_action
 from tests.testapp.models import Author
 from tests.testapp.serializers import AuthorSerializer
 
@@ -164,7 +164,7 @@ class TestServiceAction:
         assert response.status_code == 202
 
     def test_service_error_maps_to_422(self) -> None:
-        from rest_framework_services import ServiceError
+        from django_spec_rest import ServiceError
 
         def boom(*, data: _ApproveInput) -> None:
             raise ServiceError("nope")

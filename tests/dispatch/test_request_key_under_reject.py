@@ -17,15 +17,15 @@ from asgiref.sync import async_to_sync
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
-from rest_framework_services import (
+from django_spec_rest import (
     DispatchResult,
     SelectorSpec,
     ServiceSpec,
     adispatch_spec,
     dispatch_spec,
 )
-from rest_framework_services.types.selector_kind import SelectorKind
-from rest_framework_services.types.unknown_arguments import UnknownArguments
+from django_spec_rest.types.selector_kind import SelectorKind
+from django_spec_rest.types.unknown_arguments import UnknownArguments
 
 
 def _sync(spec: Any, **kwargs: Any) -> DispatchResult:

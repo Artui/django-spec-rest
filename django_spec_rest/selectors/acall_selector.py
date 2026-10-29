@@ -1,5 +1,5 @@
 """``acall_selector`` — async counterpart to
-[`call_selector`][rest_framework_services.selectors.call_selector.call_selector]."""
+[`call_selector`][django_spec_rest.selectors.call_selector.call_selector]."""
 
 from __future__ import annotations
 
@@ -8,8 +8,8 @@ from typing import Any, TypeVar, cast
 
 from rest_framework.request import Request
 
-from rest_framework_services.is_async import is_async
-from rest_framework_services.views.utils import request_seeds, resolve_callable_kwargs
+from django_spec_rest.is_async import is_async
+from django_spec_rest.views.utils import request_seeds, resolve_callable_kwargs
 
 ResultT = TypeVar("ResultT")
 

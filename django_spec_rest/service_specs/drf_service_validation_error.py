@@ -15,7 +15,7 @@ class DRFServiceValidationError(KernelServiceValidationError, ValidationError):
 
     What an author callable's DRF ``ValidationError`` leaves the kernel route
     as, through
-    [`translate_drf_refusals`][rest_framework_services.service_specs.translate_drf_refusals.translate_drf_refusals]:
+    [`translate_drf_refusals`][django_spec_rest.service_specs.translate_drf_refusals.translate_drf_refusals]:
     a service, a selector, a precondition, a provider or an
     ``extend_queryset`` refusing well-shaped input by a rule of its own. A
     transport reading the kernel's classes answers it as the service's

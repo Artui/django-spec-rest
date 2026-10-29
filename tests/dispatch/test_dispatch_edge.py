@@ -23,7 +23,7 @@ from django_service_specs.parameters.invalid_arguments import (
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
-from rest_framework_services import (
+from django_spec_rest import (
     SelectorKind,
     SelectorSpec,
     ServiceSpec,
@@ -31,14 +31,14 @@ from rest_framework_services import (
     build_offline_context,
     dispatch_spec,
 )
-from rest_framework_services.types.argument_binding import ArgumentBinding
-from rest_framework_services.types.not_client_input import NotClientInput
-from rest_framework_services.types.pool_seeds import DEFAULT_POOL_SEEDS
-from rest_framework_services.types.query_param import QueryParam
-from rest_framework_services.types.unknown_arguments import UnknownArguments
-from rest_framework_services.types.unset import UNSET
-from rest_framework_services.types.url_kwarg import UrlKwarg
-from rest_framework_services.types.view_hooks import ViewHooks
+from django_spec_rest.types.argument_binding import ArgumentBinding
+from django_spec_rest.types.not_client_input import NotClientInput
+from django_spec_rest.types.pool_seeds import DEFAULT_POOL_SEEDS
+from django_spec_rest.types.query_param import QueryParam
+from django_spec_rest.types.unknown_arguments import UnknownArguments
+from django_spec_rest.types.unset import UNSET
+from django_spec_rest.types.url_kwarg import UrlKwarg
+from django_spec_rest.types.view_hooks import ViewHooks
 from tests.testapp.models import Author, Post
 
 

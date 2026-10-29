@@ -10,7 +10,7 @@ from rest_framework.routers import SimpleRouter
 from rest_framework.test import APIClient, APIRequestFactory
 from rest_framework.viewsets import GenericViewSet
 
-from rest_framework_services import (
+from django_spec_rest import (
     SelectorKind,
     SelectorRetrieveMixin,
     SelectorRetrieveView,

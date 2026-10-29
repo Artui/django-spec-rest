@@ -7,9 +7,9 @@ from typing import Annotated
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 
-from rest_framework_services.types.input_required import InputRequired
-from rest_framework_services.types.not_client_input import NotClientInput
-from rest_framework_services.types.read_schema_markers import read_schema_markers
+from django_spec_rest.types.input_required import InputRequired
+from django_spec_rest.types.not_client_input import NotClientInput
+from django_spec_rest.types.read_schema_markers import read_schema_markers
 
 
 def test_plain_annotation_passes_through_unmarked() -> None:

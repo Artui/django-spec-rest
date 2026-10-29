@@ -13,12 +13,12 @@ from django_service_specs.specs.kernel_spec import kernel_spec
 from django_service_specs.types.unknown_arguments import UnknownArguments
 from rest_framework import serializers
 
-from rest_framework_services.jsonschema.spec_to_json_schema import spec_to_json_schema
-from rest_framework_services.service_specs.kernel_spec_variant import kernel_spec_variant
-from rest_framework_services.types.json_schema_registry import JsonSchemaRegistry
-from rest_framework_services.types.selector_kind import SelectorKind
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_spec_rest.jsonschema.spec_to_json_schema import spec_to_json_schema
+from django_spec_rest.service_specs.kernel_spec_variant import kernel_spec_variant
+from django_spec_rest.types.json_schema_registry import JsonSchemaRegistry
+from django_spec_rest.types.selector_kind import SelectorKind
+from django_spec_rest.types.selector_spec import SelectorSpec
+from django_spec_rest.types.service_spec import ServiceSpec
 
 
 class _MoneyField(serializers.CharField): ...

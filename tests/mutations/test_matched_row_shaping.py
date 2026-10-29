@@ -22,7 +22,7 @@ import pytest
 from django.core.exceptions import ImproperlyConfigured
 from django_service_specs.parameters.invalid_arguments import InvalidArguments
 
-from rest_framework_services import (
+from django_spec_rest import (
     ChildSpec,
     ForwardRelationSpec,
     GenericRelationSpec,

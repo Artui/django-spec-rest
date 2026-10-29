@@ -7,9 +7,9 @@ from typing import Annotated, Any
 import pytest
 from typing_extensions import TypedDict, Unpack
 
-from rest_framework_services.types.input_required import InputRequired
-from rest_framework_services.types.marked_input_keys import marked_input_keys
-from rest_framework_services.types.not_client_input import NotClientInput
+from django_spec_rest.types.input_required import InputRequired
+from django_spec_rest.types.marked_input_keys import marked_input_keys
+from django_spec_rest.types.not_client_input import NotClientInput
 
 
 class _Extras(TypedDict, total=False):

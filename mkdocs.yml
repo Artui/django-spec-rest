@@ -1,8 +1,8 @@
-site_name: djangorestframework-services
+site_name: django-spec-rest
 site_description: A service / selector layer for Django REST Framework — precise, controllable side effects for mutating endpoints.
-site_url: https://artui.github.io/djangorestframework-services/
-repo_url: https://github.com/Artui/djangorestframework-services
-repo_name: Artui/djangorestframework-services
+site_url: https://artui.github.io/django-spec-rest/
+repo_url: https://github.com/Artui/django-spec-rest
+repo_name: Artui/django-spec-rest
 edit_uri: edit/main/docs/
 
 theme:
@@ -105,7 +105,6 @@ nav:
       - Declare specs once for many transports: recipes/spec-registry.md
       - Mark fields for an agent audience: recipes/agent-audience.md
       - URL-derived & required inputs off-HTTP: recipes/off-http-inputs.md
-      - Scaffold a service app: recipes/scaffold-app.md
   - Reference:
       - reference/index.md
       - Views: reference/views.md

@@ -30,14 +30,14 @@ from rest_framework.parsers import JSONParser
 from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
 
-from rest_framework_services import (
+from django_spec_rest import (
     ServiceCreateView,
     ServiceSpec,
     ServiceUpdateView,
     adispatch_spec,
     dispatch_spec,
 )
-from rest_framework_services.types.offline_service_view import OfflineServiceView
+from django_spec_rest.types.offline_service_view import OfflineServiceView
 
 _factory = APIRequestFactory()
 SEEN: dict[str, Any] = {}

@@ -1,5 +1,5 @@
 """``acall_service`` — async counterpart to
-[`call_service`][rest_framework_services.services.call_service.call_service]."""
+[`call_service`][django_spec_rest.services.call_service.call_service]."""
 
 from __future__ import annotations
 
@@ -8,11 +8,11 @@ from typing import Any, TypeVar, cast
 
 from rest_framework.request import Request
 
-from rest_framework_services.exceptions.service_error import ServiceError
-from rest_framework_services.is_async import is_async
-from rest_framework_services.types.unset import UNSET
-from rest_framework_services.views.mutation.map_service_error import map_service_error
-from rest_framework_services.views.utils import request_seeds, resolve_callable_kwargs
+from django_spec_rest.exceptions.service_error import ServiceError
+from django_spec_rest.is_async import is_async
+from django_spec_rest.types.unset import UNSET
+from django_spec_rest.views.mutation.map_service_error import map_service_error
+from django_spec_rest.views.utils import request_seeds, resolve_callable_kwargs
 
 ResultT = TypeVar("ResultT")
 
@@ -29,7 +29,7 @@ async def acall_service(
     """Invoke ``service`` from async code with the framework's kwargs pool.
 
     Same contract as
-    [`call_service`][rest_framework_services.services.call_service.call_service],
+    [`call_service`][django_spec_rest.services.call_service.call_service],
     ``map_errors`` included. Async services are awaited directly; a sync service is
     called inline with no thread hop, so the caller owns any sync-side I/O safety.
 

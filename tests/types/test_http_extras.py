@@ -8,7 +8,7 @@ from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
 from typing_extensions import Unpack, assert_type
 
-from rest_framework_services import HttpExtras
+from django_spec_rest import HttpExtras
 
 
 class _User:

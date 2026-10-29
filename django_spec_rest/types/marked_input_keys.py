@@ -6,10 +6,10 @@ import inspect
 from collections.abc import Callable
 from typing import Any
 
-from rest_framework_services.types.read_schema_markers import read_schema_markers
-from rest_framework_services.types.typed_dict_input import typed_dict_input
-from rest_framework_services.types.unpack_typed_dict import unpack_typed_dict
-from rest_framework_services.types.utils import callable_type_hints
+from django_spec_rest.types.read_schema_markers import read_schema_markers
+from django_spec_rest.types.typed_dict_input import typed_dict_input
+from django_spec_rest.types.unpack_typed_dict import unpack_typed_dict
+from django_spec_rest.types.utils import callable_type_hints
 
 
 def marked_input_keys(fn: Callable[..., Any]) -> tuple[frozenset[str], frozenset[str]]:

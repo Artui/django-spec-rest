@@ -8,24 +8,24 @@ from typing import Any, Literal
 
 from django.core.exceptions import ImproperlyConfigured
 
-from rest_framework_services.can_present_nothing import can_present_nothing
-from rest_framework_services.dispatch.utils import resolve_argument_binding, server_owned_keys
-from rest_framework_services.jsonschema.filterset_to_json_schema import filterset_to_json_schema
-from rest_framework_services.jsonschema.output_to_json_schema import output_to_json_schema
-from rest_framework_services.jsonschema.serializer_to_json_schema import serializer_to_json_schema
-from rest_framework_services.jsonschema.utils import (
+from django_spec_rest.can_present_nothing import can_present_nothing
+from django_spec_rest.dispatch.utils import resolve_argument_binding, server_owned_keys
+from django_spec_rest.jsonschema.filterset_to_json_schema import filterset_to_json_schema
+from django_spec_rest.jsonschema.output_to_json_schema import output_to_json_schema
+from django_spec_rest.jsonschema.serializer_to_json_schema import serializer_to_json_schema
+from django_spec_rest.jsonschema.utils import (
     callable_input_schema,
     list_constraints_for_schema,
 )
-from rest_framework_services.types.argument_binding import ArgumentBinding
-from rest_framework_services.types.json_schema_registry import (
+from django_spec_rest.types.argument_binding import ArgumentBinding
+from django_spec_rest.types.json_schema_registry import (
     DEFAULT_JSON_SCHEMA_REGISTRY,
     JsonSchemaRegistry,
 )
-from rest_framework_services.types.reserved_pool_seeds import RESERVED_POOL_SEEDS
-from rest_framework_services.types.selector_kind import SelectorKind
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_spec_rest.types.reserved_pool_seeds import RESERVED_POOL_SEEDS
+from django_spec_rest.types.selector_kind import SelectorKind
+from django_spec_rest.types.selector_spec import SelectorSpec
+from django_spec_rest.types.service_spec import ServiceSpec
 
 # Pool seeds the transport injects rather than the caller supplying them, so
 # they are skipped when reflecting a selector's parameters. A param filled by a
@@ -64,7 +64,7 @@ def spec_to_json_schema(
     The convenience an alternate transport (a Pydantic-AI toolset, the MCP server) calls
     instead of reaching into spec internals itself. ``registry`` supplies consumer rules
     for custom field / filter / Python types — see
-    [`JsonSchemaRegistry`][rest_framework_services.types.json_schema_registry.JsonSchemaRegistry].
+    [`JsonSchemaRegistry`][django_spec_rest.types.json_schema_registry.JsonSchemaRegistry].
     Passed, it describes every part of the schema, the empty
     ``DEFAULT_JSON_SCHEMA_REGISTRY`` included
     (test_a_passed_registry_wins_over_the_spec_s,
@@ -79,7 +79,7 @@ def spec_to_json_schema(
 
     ``phase="input"`` (default) returns the input-argument schema:
 
-    - [`ServiceSpec`][rest_framework_services.types.service_spec.ServiceSpec] → its
+    - [`ServiceSpec`][django_spec_rest.types.service_spec.ServiceSpec] → its
         ``input_serializer`` (``spec.partial`` honoured), a bare ``{"type": "object"}``
         without one, and, with no ``input_serializer`` under a spreading
         ``argument_binding``, the service's own parameters (below). The target
@@ -95,7 +95,7 @@ def spec_to_json_schema(
         dispatch that input with ``many_as_argument=True``. ``partial`` relaxes the
         item and never the argument, which DRF requires under ``partial`` too, and
         ``max_depth`` counts from the item, since the wrapper is not a serializer.
-    - [`SelectorSpec`][rest_framework_services.types.selector_spec.SelectorSpec] → an
+    - [`SelectorSpec`][django_spec_rest.types.selector_spec.SelectorSpec] → an
       object whose ``properties`` combine the selector callable's own annotated
       parameters (skipping the ``request`` / ``user`` / ``view`` transport seeds) with
       its ``filter_set`` fields, so ``get_widget(user, pk)`` advertises ``pk`` instead
@@ -117,7 +117,7 @@ def spec_to_json_schema(
     - a name in ``supplied`` is dropped from ``properties`` and ``required``, marked
       or not -- the transport fills it, and the client cannot replace it;
     - so is every name in
-      [`RESERVED_POOL_SEEDS`][rest_framework_services.types.reserved_pool_seeds]
+      [`RESERVED_POOL_SEEDS`][django_spec_rest.types.reserved_pool_seeds]
       (``progress``, ``data`` and the rest), without being listed, because client
       input can never take one: the pool's ``request``, ``user`` and ``progress``
       are filled over whatever a caller sends, and a selector's params never
@@ -165,9 +165,9 @@ def spec_to_json_schema(
     spec's, one with an ``input_serializer`` and ``phase="output"`` do not read it.
 
     ``phase="output"`` returns the output schema, or ``None`` when undeclared: a
-    [`ServiceSpec`][rest_framework_services.types.service_spec.ServiceSpec] supplies its
+    [`ServiceSpec`][django_spec_rest.types.service_spec.ServiceSpec] supplies its
     ``output_selector_spec``'s ``output_serializer`` and ``affordances``, a
-    [`SelectorSpec`][rest_framework_services.types.selector_spec.SelectorSpec] its own.
+    [`SelectorSpec`][django_spec_rest.types.selector_spec.SelectorSpec] its own.
     A ``ServiceSpec``'s schema states the kind dispatch renders, which is not always
     the one declared: an array for ``many=True``, the nested ``kind`` where the
     ``output_selector_spec`` has a ``selector`` to re-read through, and one value
@@ -176,7 +176,7 @@ def spec_to_json_schema(
     carries, ``reason`` included -- the shape ``render_spec_output`` produces.
     Where dispatch may present ``None``, the item's type is ``["object", "null"]``,
     as
-    [`can_present_nothing`][rest_framework_services.can_present_nothing.can_present_nothing]
+    [`can_present_nothing`][django_spec_rest.can_present_nothing.can_present_nothing]
     answers it: an ``allow_none`` RETRIEVE ``SelectorSpec``'s miss, a single-row
     ``ServiceSpec`` whose ``output_selector_spec`` re-reads through a ``selector``
     that may find no row, and a ``ServiceSpec`` declaring ``allow_none=True``. A

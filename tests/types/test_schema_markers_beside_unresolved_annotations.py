@@ -27,7 +27,7 @@ from django.core.exceptions import ImproperlyConfigured
 from rest_framework.exceptions import ValidationError
 from typing_extensions import NotRequired, TypedDict, Unpack
 
-from rest_framework_services import (
+from django_spec_rest import (
     DispatchResult,
     InputDescription,
     InputRequired,
@@ -42,7 +42,7 @@ from rest_framework_services import (
     dispatch_spec,
     spec_to_json_schema,
 )
-from rest_framework_services.types.marked_input_keys import marked_input_keys
+from django_spec_rest.types.marked_input_keys import marked_input_keys
 
 if TYPE_CHECKING:
     # Only a type checker sees these, so the runtime cannot resolve an annotation
@@ -391,7 +391,7 @@ class TestMarkersReadByName:
 _EAGER_SOURCE = """
 from typing import TYPE_CHECKING, Annotated
 
-from rest_framework_services import InputRequired, NotClientInput
+from django_spec_rest import InputRequired, NotClientInput
 
 if TYPE_CHECKING:
     from tests.testapp.models import Post
@@ -410,7 +410,7 @@ from typing import TYPE_CHECKING, Annotated
 
 from typing_extensions import NotRequired, TypedDict, Unpack
 
-from rest_framework_services import InputRequired, NotClientInput
+from django_spec_rest import InputRequired, NotClientInput
 
 _Hide = NotClientInput
 
@@ -432,7 +432,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Annotated
 
 if TYPE_CHECKING:
-    from rest_framework_services import NotClientInput
+    from django_spec_rest import NotClientInput
 
 
 def selector(*, team: Annotated[str, NotClientInput] = "own-team", limit: int = 10) -> str:
@@ -491,7 +491,7 @@ from typing import TYPE_CHECKING, Annotated
 
 from typing_extensions import TypedDict
 
-from rest_framework_services import NotClientInput
+from django_spec_rest import NotClientInput
 
 _Hide = NotClientInput
 

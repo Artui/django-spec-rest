@@ -24,14 +24,14 @@ from rest_framework.permissions import BasePermission
 from rest_framework.request import Request
 from rest_framework.views import APIView
 
-from rest_framework_services.service_specs.build_offline_context import build_offline_context
-from rest_framework_services.service_specs.drf_permission_check import DRFPermissionCheck
-from rest_framework_services.service_specs.not_permitted import NotPermitted
-from rest_framework_services.types.query_param import QueryParam
-from rest_framework_services.types.selector_kind import SelectorKind
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
-from rest_framework_services.types.url_kwarg import UrlKwarg
+from django_spec_rest.service_specs.build_offline_context import build_offline_context
+from django_spec_rest.service_specs.drf_permission_check import DRFPermissionCheck
+from django_spec_rest.service_specs.not_permitted import NotPermitted
+from django_spec_rest.types.query_param import QueryParam
+from django_spec_rest.types.selector_kind import SelectorKind
+from django_spec_rest.types.selector_spec import SelectorSpec
+from django_spec_rest.types.service_spec import ServiceSpec
+from django_spec_rest.types.url_kwarg import UrlKwarg
 from tests.testapp.models import Post
 
 _SEEN: list[dict[str, Any]] = []

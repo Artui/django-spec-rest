@@ -11,12 +11,12 @@ from typing import Any
 import pytest
 from rest_framework import serializers
 
-from rest_framework_services.dispatch.dispatch_spec import dispatch_spec
-from rest_framework_services.service_specs.invalid_arguments import InvalidArguments
-from rest_framework_services.types.json_schema_registry import JsonSchemaRegistry
-from rest_framework_services.types.selector_kind import SelectorKind
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_spec_rest.dispatch.dispatch_spec import dispatch_spec
+from django_spec_rest.service_specs.invalid_arguments import InvalidArguments
+from django_spec_rest.types.json_schema_registry import JsonSchemaRegistry
+from django_spec_rest.types.selector_kind import SelectorKind
+from django_spec_rest.types.selector_spec import SelectorSpec
+from django_spec_rest.types.service_spec import ServiceSpec
 
 pytestmark = pytest.mark.django_db
 

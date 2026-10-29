@@ -42,8 +42,6 @@ the [Quickstart](../quickstart.md) and [Concepts](../concepts.md).
 - **[Declare specs once for many transports](spec-registry.md)** — hold your
   spec set in a `SpecRegistry` so MCP, an agent toolset, and HTTP read one
   source; tags, filtered views, and several registries per project.
-- **[Scaffold a service app](scaffold-app.md)** — `startserviceapp` and
-  the convention behind `services/`, `selectors/`, `validators/`.
 - **[Mark fields for an agent audience](agent-audience.md)** — keep one
   serializer for your API and your agent tools, and declare per field which
   are content, which are opaque handles, and which are plumbing a model

@@ -10,7 +10,7 @@ from rest_framework.response import Response
 from rest_framework.test import APIRequestFactory
 from rest_framework.viewsets import GenericViewSet
 
-from rest_framework_services import (
+from django_spec_rest import (
     SelectorKind,
     SelectorSpec,
     ServiceCreateView,

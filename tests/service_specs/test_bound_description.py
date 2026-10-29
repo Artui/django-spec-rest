@@ -16,7 +16,7 @@ from typing import Any
 import pytest
 from rest_framework import serializers
 
-from rest_framework_services.service_specs.utils import (
+from django_spec_rest.service_specs.utils import (
     EDGE_CALL,
     DescribeBinding,
     EdgeCallState,

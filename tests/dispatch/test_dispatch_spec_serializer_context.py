@@ -17,13 +17,13 @@ import pytest
 from django_service_specs.dispatch.present import present
 from rest_framework import serializers
 
-from rest_framework_services.dispatch.dispatch_spec import dispatch_spec
-from rest_framework_services.service_specs.build_offline_context import build_offline_context
-from rest_framework_services.types.pool_seeds import DEFAULT_POOL_SEEDS
-from rest_framework_services.types.selector_kind import SelectorKind
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
-from rest_framework_services.types.view_hooks import ViewHooks
+from django_spec_rest.dispatch.dispatch_spec import dispatch_spec
+from django_spec_rest.service_specs.build_offline_context import build_offline_context
+from django_spec_rest.types.pool_seeds import DEFAULT_POOL_SEEDS
+from django_spec_rest.types.selector_kind import SelectorKind
+from django_spec_rest.types.selector_spec import SelectorSpec
+from django_spec_rest.types.service_spec import ServiceSpec
+from django_spec_rest.types.view_hooks import ViewHooks
 
 _KEYS = ("base", "shared", "hook_in", "hook_out", "spec_in", "spec_out")
 

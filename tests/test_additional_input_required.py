@@ -22,7 +22,7 @@ from rest_framework.test import APIRequestFactory
 from rest_framework.views import exception_handler
 from rest_framework.viewsets import GenericViewSet, ViewSet
 
-from rest_framework_services import (  # noqa: I001
+from django_spec_rest import (  # noqa: I001
     ActionSerializerResolver,
     AdditionalInputRequired,
     PolymorphicServiceSpec,
@@ -41,7 +41,7 @@ from rest_framework_services import (  # noqa: I001
     dispatch_spec,
     service_action,
 )
-from rest_framework_services.views.mutation.map_service_error import map_service_error
+from django_spec_rest.views.mutation.map_service_error import map_service_error
 from tests.testapp.models import Author
 from tests.testapp.serializers import AuthorSerializer
 

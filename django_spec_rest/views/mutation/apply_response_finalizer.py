@@ -8,7 +8,7 @@ from typing import Any
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from rest_framework_services.views.utils import resolve_callable_kwargs
+from django_spec_rest.views.utils import resolve_callable_kwargs
 
 
 def apply_response_finalizer(

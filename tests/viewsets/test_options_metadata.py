@@ -26,7 +26,7 @@ from rest_framework.response import Response
 from rest_framework.test import APIRequestFactory
 from rest_framework.viewsets import GenericViewSet, ViewSet
 
-from rest_framework_services import (
+from django_spec_rest import (
     ActionSerializerResolver,
     PolymorphicServiceSpec,
     SelectorKind,

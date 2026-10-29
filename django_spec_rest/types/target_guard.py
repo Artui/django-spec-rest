@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
-from rest_framework_services.types.offline_context import OfflineContext
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_spec_rest.types.offline_context import OfflineContext
+from django_spec_rest.types.selector_spec import SelectorSpec
+from django_spec_rest.types.service_spec import ServiceSpec
 
 
 class TargetGuard(Protocol):
@@ -14,14 +14,14 @@ class TargetGuard(Protocol):
 
     ``dispatch_spec`` deliberately does **not** consult ``permission_classes``
     (authorization is the caller's job — which is why
-    [`enforce_permissions`][rest_framework_services.dispatch.enforce_permissions.enforce_permissions]
+    [`enforce_permissions`][django_spec_rest.dispatch.enforce_permissions.enforce_permissions]
     ships separately). But object-level checks need the resolved instance, which only
     ``dispatch_spec`` sees, *before* the service runs. So ``dispatch_spec`` exposes this
     hook rather than folding authz in: it stays authz-agnostic, only invoking a
     caller-supplied guard.
 
     The signature is deliberately **identical to**
-    [`enforce_permissions`][rest_framework_services.dispatch.enforce_permissions.enforce_permissions], so the canonical wiring
+    [`enforce_permissions`][django_spec_rest.dispatch.enforce_permissions.enforce_permissions], so the canonical wiring
     is passing that function directly, by name — not wrapping it in a ``lambda``:
 
         dispatch_spec(spec, ..., on_target_resolved=enforce_permissions)
@@ -30,15 +30,15 @@ class TargetGuard(Protocol):
     shape and passes it the same way; ``ty`` enforces conformance.
 
     ``dispatch_spec`` builds the
-    [`OfflineContext`][rest_framework_services.types.offline_context.OfflineContext]
+    [`OfflineContext`][django_spec_rest.types.offline_context.OfflineContext]
     itself, **from what the caller passed it**, and calls ``guard(spec, context,
     instance=target)``. That distinction matters for the canonical wiring above:
     a pure non-HTTP caller may pass neither ``request`` nor ``view``, and
-    [`enforce_permissions`][rest_framework_services.dispatch.enforce_permissions.enforce_permissions]
+    [`enforce_permissions`][django_spec_rest.dispatch.enforce_permissions.enforce_permissions]
     hands the request straight to a DRF permission class, which reads
     ``request.user``. So a spec declaring ``permission_classes`` must be
     dispatched with the ``request`` / ``view`` from
-    [`build_offline_context`][rest_framework_services.dispatch.build_offline_context.build_offline_context];
+    [`build_offline_context`][django_spec_rest.dispatch.build_offline_context.build_offline_context];
     without them the guard refuses by name rather than failing inside DRF. A
     custom guard that needs no request is unaffected. ``instance`` is the resolved row for an update, the
     resolved set for a collection (bulk) mutation, and ``None`` for a create — so the

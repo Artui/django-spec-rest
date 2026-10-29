@@ -10,16 +10,16 @@ filtered views — see the recipe
 
 ## `SpecRegistry`
 
-::: rest_framework_services.registry.spec_registry.SpecRegistry
+::: django_spec_rest.registry.spec_registry.SpecRegistry
 
 ## `RegisteredSpec`
 
-::: rest_framework_services.types.registered_spec.RegisteredSpec
+::: django_spec_rest.types.registered_spec.RegisteredSpec
 
 ## `capability_manifest`
 
-::: rest_framework_services.registry.capability_manifest.capability_manifest
+::: django_spec_rest.registry.capability_manifest.capability_manifest
 
 ## `OfflineContract`
 
-::: rest_framework_services.types.offline_contract.OfflineContract
+::: django_spec_rest.types.offline_contract.OfflineContract

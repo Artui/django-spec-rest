@@ -15,7 +15,7 @@ from rest_framework.routers import DefaultRouter
 from rest_framework.test import APIRequestFactory
 from rest_framework.viewsets import GenericViewSet
 
-from rest_framework_services import (
+from django_spec_rest import (
     PolymorphicServiceSpec,
     SelectorKind,
     SelectorListView,
@@ -28,8 +28,8 @@ from rest_framework_services import (
     ServiceViewSet,
     service_action,
 )
-from rest_framework_services.openapi import enable_openapi
-from rest_framework_services.openapi.service_auto_schema import (
+from django_spec_rest.openapi import enable_openapi
+from django_spec_rest.openapi.service_auto_schema import (
     ServiceAutoSchema,
     _filter_set_parameters,
     _SpecFilterBackend,

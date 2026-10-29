@@ -30,7 +30,7 @@ from django_service_specs.specs.kernel_spec import kernel_spec
 from rest_framework import serializers
 from typing_extensions import TypedDict, Unpack
 
-from rest_framework_services import (
+from django_spec_rest import (
     DEFAULT_POOL_SEEDS,
     ArgumentBinding,
     QueryParam,
@@ -40,7 +40,7 @@ from rest_framework_services import (
     UnknownArguments,
     dispatch_spec,
 )
-from rest_framework_services.service_specs.invalid_arguments import InvalidArguments
+from django_spec_rest.service_specs.invalid_arguments import InvalidArguments
 from tests.testapp.models import Post
 
 _SEEDS = DEFAULT_POOL_SEEDS.extend(tenant=lambda: "acme")

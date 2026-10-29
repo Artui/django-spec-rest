@@ -6,11 +6,11 @@ from dataclasses import fields
 
 from django.db.models import Q
 
-from rest_framework_services.types.affordance import Affordance
-from rest_framework_services.types.affordance_declarer import AffordanceDeclarer
-from rest_framework_services.types.selector_kind import SelectorKind
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_spec_rest.types.affordance import Affordance
+from django_spec_rest.types.affordance_declarer import AffordanceDeclarer
+from django_spec_rest.types.selector_kind import SelectorKind
+from django_spec_rest.types.selector_spec import SelectorSpec
+from django_spec_rest.types.service_spec import ServiceSpec
 
 ARCHIVED = Affordance(code="archived", reason="Archived.", when=Q(archived=False))
 

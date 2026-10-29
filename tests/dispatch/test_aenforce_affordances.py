@@ -11,8 +11,8 @@ from __future__ import annotations
 import pytest
 from asgiref.sync import async_to_sync
 
-from rest_framework_services import ActionUnavailable, ServiceSpec, aenforce_affordances
-from rest_framework_services.types.affordance import Affordance
+from django_spec_rest import ActionUnavailable, ServiceSpec, aenforce_affordances
+from django_spec_rest.types.affordance import Affordance
 
 
 def test_it_refuses_what_the_kernel_refuses() -> None:

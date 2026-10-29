@@ -15,11 +15,11 @@ from django_service_specs.specs.service_spec import ServiceSpec as KernelService
 from rest_framework import serializers
 from rest_framework.permissions import AllowAny
 
-from rest_framework_services.service_specs import kernel_spec_variant as module
-from rest_framework_services.service_specs.kernel_spec_variant import kernel_spec_variant
-from rest_framework_services.types.selector_kind import SelectorKind
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_spec_rest.service_specs import kernel_spec_variant as module
+from django_spec_rest.service_specs.kernel_spec_variant import kernel_spec_variant
+from django_spec_rest.types.selector_kind import SelectorKind
+from django_spec_rest.types.selector_spec import SelectorSpec
+from django_spec_rest.types.service_spec import ServiceSpec
 from tests.testapp.models import Post
 
 

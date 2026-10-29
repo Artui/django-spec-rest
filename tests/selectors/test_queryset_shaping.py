@@ -15,7 +15,7 @@ from django.db.models.query import Prefetch
 from rest_framework import serializers
 from rest_framework.test import APIRequestFactory, force_authenticate
 
-from rest_framework_services import (
+from django_spec_rest import (
     SelectorKind,
     SelectorListView,
     SelectorRetrieveView,
@@ -593,7 +593,7 @@ class TestValidation:
 
 from dataclasses import dataclass  # noqa: E402
 
-from rest_framework_services import ServiceCreateView, ServiceSpec  # noqa: E402
+from django_spec_rest import ServiceCreateView, ServiceSpec  # noqa: E402
 
 
 @dataclass
@@ -734,7 +734,7 @@ class TestServiceSpecShaping:
             )
 
     def test_works_with_viewset_create_action(self) -> None:
-        from rest_framework_services import ServiceViewSet
+        from django_spec_rest import ServiceViewSet
 
         author = Author.objects.create(name="Ada")
 

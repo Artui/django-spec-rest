@@ -10,14 +10,14 @@ from typing import Any
 
 from django_service_specs.pool.base_pool import base_pool as kernel_base_pool
 
-import rest_framework_services
-from rest_framework_services.dispatch.base_pool import base_pool
-from rest_framework_services.dispatch.null_progress import null_progress
+import django_spec_rest
+from django_spec_rest.dispatch.base_pool import base_pool
+from django_spec_rest.dispatch.null_progress import null_progress
 
 
 def test_is_the_kernel_s_object_at_drfs_path_and_root() -> None:
     assert base_pool is kernel_base_pool
-    assert rest_framework_services.base_pool is kernel_base_pool
+    assert django_spec_rest.base_pool is kernel_base_pool
 
 
 def test_a_pool_needs_no_request() -> None:

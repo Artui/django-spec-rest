@@ -19,8 +19,8 @@ from rest_framework.fields import get_error_detail
 from rest_framework.settings import api_settings
 from rest_framework_dataclasses.serializers import DataclassSerializer
 
-from rest_framework_services.service_specs.invalid_arguments import InvalidArguments
-from rest_framework_services.service_specs.utils import (
+from django_spec_rest.service_specs.invalid_arguments import InvalidArguments
+from django_spec_rest.service_specs.utils import (
     author_keys,
     bind_serializer,
     bound_description,
@@ -36,7 +36,7 @@ from rest_framework_services.service_specs.utils import (
     validator_input,
     write_form_value,
 )
-from rest_framework_services.types.json_schema_registry import JsonSchemaRegistry
+from django_spec_rest.types.json_schema_registry import JsonSchemaRegistry
 
 # What this Validator binds into the call's pool: the bound serializer. A field
 # of that name is the serializer's alone, never a parameter, and a validated key
@@ -86,7 +86,7 @@ class SerializerValidator(Validator):
       ``ValidationContext.call_context``. A call that carries
       neither gets an offline request whose ``user`` is the
       principal and whose ``data`` is the arguments, built by
-      [`build_offline_context`][rest_framework_services.service_specs.build_offline_context.build_offline_context],
+      [`build_offline_context`][django_spec_rest.service_specs.build_offline_context.build_offline_context],
       so a ``CurrentUserDefault`` reads the principal and a field or a
       ``validate()`` reading ``self.context["request"]`` finds a request
       rather than a ``KeyError``. What a registered request's ``user`` is, is
@@ -105,7 +105,7 @@ class SerializerValidator(Validator):
       between the two.
 
     A refusal is one
-    [`InvalidArguments`][rest_framework_services.service_specs.invalid_arguments.InvalidArguments],
+    [`InvalidArguments`][django_spec_rest.service_specs.invalid_arguments.InvalidArguments],
     the kernel's refusal that is DRF's ``ValidationError`` as well, carrying
     the serializer's ``errors`` unchanged: DRF's ``ErrorDetail`` leaves, each
     with its code, cross-field messages under ``non_field_errors``, and a

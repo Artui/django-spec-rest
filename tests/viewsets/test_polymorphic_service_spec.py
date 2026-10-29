@@ -11,7 +11,7 @@ from rest_framework.permissions import OR, BasePermission, OperandHolder
 from rest_framework.test import APIRequestFactory
 from rest_framework.viewsets import GenericViewSet
 
-from rest_framework_services import (
+from django_spec_rest import (
     PolymorphicServiceSpec,
     SelectorKind,
     SelectorSpec,

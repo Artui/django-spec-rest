@@ -14,13 +14,13 @@ from typing import Any
 import pytest
 from rest_framework import serializers
 
-import rest_framework_services as pkg
-from rest_framework_services.can_present_nothing import can_present_nothing
-from rest_framework_services.dispatch.dispatch_spec import dispatch_spec
-from rest_framework_services.jsonschema.spec_to_json_schema import spec_to_json_schema
-from rest_framework_services.types.selector_kind import SelectorKind
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
+import django_spec_rest as pkg
+from django_spec_rest.can_present_nothing import can_present_nothing
+from django_spec_rest.dispatch.dispatch_spec import dispatch_spec
+from django_spec_rest.jsonschema.spec_to_json_schema import spec_to_json_schema
+from django_spec_rest.types.selector_kind import SelectorKind
+from django_spec_rest.types.selector_spec import SelectorSpec
+from django_spec_rest.types.service_spec import ServiceSpec
 
 RETRIEVE = SelectorKind.RETRIEVE
 LIST = SelectorKind.LIST

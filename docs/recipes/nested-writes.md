@@ -17,7 +17,7 @@ read from `data[relation]`; each row runs back through `create_from_input` /
 `update_from_input`, so scalar / m2m / nested semantics compose recursively.
 
 ```python
-from rest_framework_services import ChildSpec, ForwardRelationSpec, update_from_input
+from django_spec_rest import ChildSpec, ForwardRelationSpec, update_from_input
 
 
 def update_post(*, instance, data):
@@ -234,9 +234,10 @@ differently; they mirror the arguments of the same name on Django's
 
     It is the library's only contact with that app, and the app is not
     guaranteed to be installed, so the content-type lookup is resolved on first
-    use rather than imported with the package — `rest_framework_services` itself
-    ships in `INSTALLED_APPS` and is imported while Django is still populating
-    the app registry, where importing a model raises `AppRegistryNotReady`.
+    use rather than imported with the package — a project may import
+    `django_spec_rest` before the app registry is ready (from an `AppConfig`
+    module or an app's `__init__`, or before `django.setup()`), where
+    importing a model raises `AppRegistryNotReady`.
 
     Declaring a `GenericRelationSpec` is always safe. *Writing* one without the
     app installed raises `ImproperlyConfigured` naming the app and the remedy.
@@ -460,7 +461,7 @@ The default model services forward `relations=`, so a
 parent-with-relations resource needs no hand-written service:
 
 ```python
-from rest_framework_services import ServiceSpec, create_model
+from django_spec_rest import ServiceSpec, create_model
 
 ServiceSpec(
     service=create_model(Author, relations={"books": ChildSpec(model=Book, fk="author")}),

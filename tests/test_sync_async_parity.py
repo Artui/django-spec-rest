@@ -38,7 +38,7 @@ from django_service_specs.dispatch.present import present
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
-from rest_framework_services import (
+from django_spec_rest import (
     DEFAULT_POOL_SEEDS,
     ArgumentBinding,
     DispatchResult,
@@ -55,12 +55,12 @@ from rest_framework_services import (
     render_for_audience,
     render_spec_output,
 )
-from rest_framework_services.dispatch.aenforce_affordances import aenforce_affordances
-from rest_framework_services.dispatch.aunmet_operation_affordance import (
+from django_spec_rest.dispatch.aenforce_affordances import aenforce_affordances
+from django_spec_rest.dispatch.aunmet_operation_affordance import (
     aunmet_operation_affordance,
 )
-from rest_framework_services.dispatch.enforce_affordances import enforce_affordances
-from rest_framework_services.dispatch.unmet_operation_affordance import (
+from django_spec_rest.dispatch.enforce_affordances import enforce_affordances
+from django_spec_rest.dispatch.unmet_operation_affordance import (
     unmet_operation_affordance,
 )
 from tests.testapp.models import Catalog, Post, Section

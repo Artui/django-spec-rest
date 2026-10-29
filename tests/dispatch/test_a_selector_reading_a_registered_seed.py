@@ -14,7 +14,7 @@ import pytest
 from asgiref.sync import async_to_sync
 from django.core.exceptions import ImproperlyConfigured
 
-from rest_framework_services import (
+from django_spec_rest import (
     DEFAULT_POOL_SEEDS,
     ArgumentBinding,
     DispatchResult,
@@ -26,7 +26,7 @@ from rest_framework_services import (
     adispatch_spec,
     dispatch_spec,
 )
-from rest_framework_services.registry.spec_registry import SpecRegistry
+from django_spec_rest.registry.spec_registry import SpecRegistry
 from tests.testapp.models import Post
 
 _SEEDS = DEFAULT_POOL_SEEDS.extend(tenant=lambda: "acme")

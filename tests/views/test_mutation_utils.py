@@ -13,7 +13,7 @@ from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
 from rest_framework_dataclasses.serializers import DataclassSerializer
 
-from rest_framework_services.views.mutation.utils import (
+from django_spec_rest.views.mutation.utils import (
     build_input_serializer,
     build_input_serializer_from_data,
     validate_input,

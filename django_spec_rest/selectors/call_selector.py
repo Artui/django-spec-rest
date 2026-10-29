@@ -1,6 +1,6 @@
 """``call_selector`` — invoke a selector callable from inside an HTTP request.
 
-Mirrors [`call_service`][rest_framework_services.services.call_service.call_service]
+Mirrors [`call_service`][django_spec_rest.services.call_service.call_service]
 for selectors. No ``data`` / ``instance`` keys — selectors are read-only
 business logic.
 """
@@ -13,8 +13,8 @@ from typing import Any, TypeVar, cast
 from asgiref.sync import async_to_sync
 from rest_framework.request import Request
 
-from rest_framework_services.is_async import is_async
-from rest_framework_services.views.utils import request_seeds, resolve_callable_kwargs
+from django_spec_rest.is_async import is_async
+from django_spec_rest.views.utils import request_seeds, resolve_callable_kwargs
 
 ResultT = TypeVar("ResultT")
 

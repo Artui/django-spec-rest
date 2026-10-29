@@ -15,7 +15,7 @@ from asgiref.sync import async_to_sync
 from rest_framework import serializers
 from rest_framework.test import APIRequestFactory
 
-from rest_framework_services import (
+from django_spec_rest import (
     DispatchResult,
     SelectorKind,
     SelectorSpec,

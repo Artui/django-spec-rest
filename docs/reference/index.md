@@ -33,15 +33,15 @@ signatures from the source — when in doubt, follow the source link
 
 ## Public surface
 
-The top-level `rest_framework_services` package re-exports the user-
+The top-level `django_spec_rest` package re-exports the user-
 facing API. Everything below is supported, but deeper imports
-(`rest_framework_services.viewsets`, `rest_framework_services.views`,
-`rest_framework_services.mutations`, `rest_framework_services.types`,
-`rest_framework_services.exceptions`, `rest_framework_services.selectors`,
-`rest_framework_services.services`) are stable too.
+(`django_spec_rest.viewsets`, `django_spec_rest.views`,
+`django_spec_rest.mutations`, `django_spec_rest.types`,
+`django_spec_rest.exceptions`, `django_spec_rest.selectors`,
+`django_spec_rest.services`) are stable too.
 
 ```python
-from rest_framework_services import (
+from django_spec_rest import (
     # views
     ServiceCreateView,
     ServiceUpdateView,

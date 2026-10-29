@@ -17,21 +17,21 @@ import pytest
 from django.core.exceptions import ImproperlyConfigured
 from rest_framework import serializers
 
-from rest_framework_services.audience.audience_projection_for_spec import (
+from django_spec_rest.audience.audience_projection_for_spec import (
     audience_projection_for_spec,
 )
-from rest_framework_services.audience.utils import described_output
-from rest_framework_services.can_present_nothing import can_present_nothing
-from rest_framework_services.dispatch.arender_for_audience import arender_for_audience
-from rest_framework_services.dispatch.dispatch_spec import dispatch_spec
-from rest_framework_services.dispatch.render_for_audience import render_for_audience
-from rest_framework_services.jsonschema.spec_to_json_schema import spec_to_json_schema
-from rest_framework_services.registry.spec_registry import SpecRegistry
-from rest_framework_services.types.field_marking import MARKING, FieldMarking
-from rest_framework_services.types.not_client_input import NotClientInput
-from rest_framework_services.types.query_param import QueryParam
-from rest_framework_services.types.selector_kind import SelectorKind
-from rest_framework_services.types.selector_spec import SelectorSpec
+from django_spec_rest.audience.utils import described_output
+from django_spec_rest.can_present_nothing import can_present_nothing
+from django_spec_rest.dispatch.arender_for_audience import arender_for_audience
+from django_spec_rest.dispatch.dispatch_spec import dispatch_spec
+from django_spec_rest.dispatch.render_for_audience import render_for_audience
+from django_spec_rest.jsonschema.spec_to_json_schema import spec_to_json_schema
+from django_spec_rest.registry.spec_registry import SpecRegistry
+from django_spec_rest.types.field_marking import MARKING, FieldMarking
+from django_spec_rest.types.not_client_input import NotClientInput
+from django_spec_rest.types.query_param import QueryParam
+from django_spec_rest.types.selector_kind import SelectorKind
+from django_spec_rest.types.selector_spec import SelectorSpec
 
 RETRIEVE = SelectorKind.RETRIEVE
 LIST = SelectorKind.LIST

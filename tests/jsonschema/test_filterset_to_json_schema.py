@@ -8,13 +8,13 @@ from typing import Any
 import django_filters
 import pytest
 
-from rest_framework_services.jsonschema.filterset_to_json_schema import (
+from django_spec_rest.jsonschema.filterset_to_json_schema import (
     _choice_schema,
     _filter_to_schema,
     _scalar_for,
     filterset_to_json_schema,
 )
-from rest_framework_services.types.json_schema_registry import DEFAULT_JSON_SCHEMA_REGISTRY
+from django_spec_rest.types.json_schema_registry import DEFAULT_JSON_SCHEMA_REGISTRY
 from tests.testapp.models import Author
 
 

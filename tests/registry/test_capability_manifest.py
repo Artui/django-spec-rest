@@ -12,7 +12,7 @@ from django.db.models import Q
 from rest_framework import serializers
 from rest_framework.permissions import BasePermission
 
-from rest_framework_services import (
+from django_spec_rest import (
     DEFAULT_JSON_SCHEMA_REGISTRY,
     Affordance,
     SelectorKind,
@@ -22,7 +22,7 @@ from rest_framework_services import (
     capability_manifest,
     spec_to_json_schema,
 )
-from rest_framework_services.registry.capability_manifest import _drfs_spec
+from django_spec_rest.registry.capability_manifest import _drfs_spec
 
 
 class _IsSupport(BasePermission):
@@ -105,7 +105,7 @@ def test_the_whole_document_as_served() -> None:
 
     assert capability_manifest(registry) == {
         "version": 1,
-        "dialect": "rest_framework_services.jsonschema/1",
+        "dialect": "django_spec_rest.jsonschema/1",
         "operations": [
             {
                 "name": "refund_order",
@@ -161,7 +161,7 @@ def test_the_document_survives_json_unchanged() -> None:
 def test_an_empty_registry_is_an_empty_document_not_an_error() -> None:
     assert capability_manifest(SpecRegistry()) == {
         "version": 1,
-        "dialect": "rest_framework_services.jsonschema/1",
+        "dialect": "django_spec_rest.jsonschema/1",
         "operations": [],
         "unguarded": [],
     }

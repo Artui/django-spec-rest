@@ -7,9 +7,9 @@ from typing import Annotated, Any, Union, get_args, get_origin
 
 from django.core.exceptions import ImproperlyConfigured
 
-from rest_framework_services.types.input_description import InputDescription
-from rest_framework_services.types.input_required import InputRequired
-from rest_framework_services.types.not_client_input import NotClientInput
+from django_spec_rest.types.input_description import InputDescription
+from django_spec_rest.types.input_required import InputRequired
+from django_spec_rest.types.not_client_input import NotClientInput
 
 _NONE_TYPE = type(None)
 # Both union types. Before 3.14, ``X | None`` is a ``types.UnionType`` only when

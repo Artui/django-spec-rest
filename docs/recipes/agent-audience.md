@@ -13,13 +13,13 @@ was handed. Declare the difference on the server, once, on the field.
 ## Declare it
 
 The marking is an
-[`FieldMarking`][rest_framework_services.types.field_marking.FieldMarking] in DRF's
+[`FieldMarking`][django_spec_rest.types.field_marking.FieldMarking] in DRF's
 per-field `style` bag, under the
-[`MARKING`][rest_framework_services.types.field_marking.MARKING] key:
+[`MARKING`][django_spec_rest.types.field_marking.MARKING] key:
 
 ```python
 from rest_framework import serializers
-from rest_framework_services import MARKING, FieldMarking
+from django_spec_rest import MARKING, FieldMarking
 
 
 class InvoiceSerializer(serializers.ModelSerializer):
@@ -81,7 +81,7 @@ its schema says so, while the REST response keeps `"gold"`. Mark the field
 ## Apply it
 
 An agent transport renders with
-[`render_for_audience`][rest_framework_services.dispatch.render_for_audience.render_for_audience]
+[`render_for_audience`][django_spec_rest.dispatch.render_for_audience.render_for_audience]
 instead of `render_spec_output`:
 
 ```python
@@ -92,7 +92,7 @@ payload = render_for_audience(spec, result.value, many=True)
 handle is somebody else's input, so its constant is never re-spelled.
 
 For the schema side, hand the same projection to
-[`output_to_json_schema`][rest_framework_services.jsonschema.output_to_json_schema.output_to_json_schema]
+[`output_to_json_schema`][django_spec_rest.jsonschema.output_to_json_schema.output_to_json_schema]
 so both sides come from the one declaration:
 
 ```python
@@ -136,7 +136,7 @@ suppresses the substitution on both sides and keeps the constant.
 An agent reading `2026-01-31T13:00:00Z` out to a person is doing the same thing
 it does with `PENDING_REVIEW`: repeating a machine's spelling because nothing
 told it there was another one. A
-[`ValueFormatter`][rest_framework_services.types.value_formatter.ValueFormatter]
+[`ValueFormatter`][django_spec_rest.types.value_formatter.ValueFormatter]
 is that declaration, and `FieldMarking.timestamp()` is the one you probably want:
 
 ```python
@@ -175,7 +175,7 @@ case inside one. Money with its currency, a duration, a percentage, a quantity
 with its unit — all of them are the same shape:
 
 ```python
-from rest_framework_services import FieldMarking, ValueFormatter
+from django_spec_rest import FieldMarking, ValueFormatter
 
 total = FieldMarking.formatted(
     ValueFormatter(
@@ -249,7 +249,7 @@ An override can move the label and it can introduce the clash the serializer
 could not have — two fields marked `FieldMarking.label()` from two places — which
 raises `ImproperlyConfigured` naming the mount.
 
-The [example project](https://github.com/Artui/djangorestframework-services/tree/main/examples) hides `updated_at` from an agent on its retrieve
+The [example project](https://github.com/Artui/django-spec-rest/tree/main/examples) hides `updated_at` from an agent on its retrieve
 spec with `field_audiences`, and asserts the REST response still carries it.
 
 **A project that wants two agent audiences with different visibility does not

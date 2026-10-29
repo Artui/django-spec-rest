@@ -7,8 +7,8 @@ from typing import Annotated
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 
-from rest_framework_services import InputDescription, InputRequired, NotClientInput
-from rest_framework_services.types.read_input_description import read_input_description
+from django_spec_rest import InputDescription, InputRequired, NotClientInput
+from django_spec_rest.types.read_input_description import read_input_description
 
 
 def test_a_plain_annotation_has_none() -> None:

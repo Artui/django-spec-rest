@@ -13,11 +13,11 @@ from typing import Any
 
 import pytest
 
-from rest_framework_services.types.child_spec import ChildSpec
-from rest_framework_services.types.forward_relation_spec import ForwardRelationSpec
-from rest_framework_services.types.generic_relation_spec import GenericRelationSpec
-from rest_framework_services.types.many_to_many_spec import ManyToManySpec
-from rest_framework_services.types.reverse_one_to_one_spec import ReverseOneToOneSpec
+from django_spec_rest.types.child_spec import ChildSpec
+from django_spec_rest.types.forward_relation_spec import ForwardRelationSpec
+from django_spec_rest.types.generic_relation_spec import GenericRelationSpec
+from django_spec_rest.types.many_to_many_spec import ManyToManySpec
+from django_spec_rest.types.reverse_one_to_one_spec import ReverseOneToOneSpec
 from tests.testapp.models import Attachment, Author, Profile, Section, Tag
 
 # Each kind built with its required arguments by keyword, plus ``extra``.

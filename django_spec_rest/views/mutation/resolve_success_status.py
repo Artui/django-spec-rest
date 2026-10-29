@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from typing import Any
 
-from rest_framework_services.views.utils import resolve_callable_kwargs
+from django_spec_rest.views.utils import resolve_callable_kwargs
 
 
 def resolve_success_status(

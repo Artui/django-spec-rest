@@ -6,7 +6,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_spec_rest.types.service_spec import ServiceSpec
 
 # How ``get_permissions`` behaves for a polymorphic action (see the field docs).
 PermissionStrategy = Literal["union", "discriminate", "require_identical"]
@@ -17,7 +17,7 @@ class PolymorphicServiceSpec:
     """A single action that accepts several mutually exclusive payload shapes.
 
     Each variant has its own input serializer and service, bundled as a full
-    [`ServiceSpec`][rest_framework_services.types.service_spec.ServiceSpec] under a
+    [`ServiceSpec`][django_spec_rest.types.service_spec.ServiceSpec] under a
     string key. A ``discriminator`` callable inspects the request and returns the key;
     dispatch then proceeds through the chosen spec exactly as a plain ``ServiceSpec``
     would. Usable where a view takes a ``ServiceSpec``: an ``action_specs`` entry
@@ -51,7 +51,7 @@ class PolymorphicServiceSpec:
             ``user`` / ``view`` (or ``**kwargs``), and ``call_context``, the
             request's call context, by name only — and returns a key present in
             ``specs``. For a no-match / rejected payload it should **raise**
-            (e.g. [`ServiceValidationError`][rest_framework_services.exceptions.service_validation_error.ServiceValidationError],
+            (e.g. [`ServiceValidationError`][django_spec_rest.exceptions.service_validation_error.ServiceValidationError],
             which the view layer maps to a 400); returning a key absent from
             ``specs`` is a configuration error and raises
             ``ImproperlyConfigured``.

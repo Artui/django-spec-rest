@@ -5,18 +5,18 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any, Final
 
-from rest_framework_services.dispatch.unguarded_specs import unguarded_specs
-from rest_framework_services.jsonschema.spec_to_json_schema import spec_to_json_schema
-from rest_framework_services.registry.spec_registry import SpecRegistry
-from rest_framework_services.types.affordance import Affordance
-from rest_framework_services.types.json_schema_registry import (
+from django_spec_rest.dispatch.unguarded_specs import unguarded_specs
+from django_spec_rest.jsonschema.spec_to_json_schema import spec_to_json_schema
+from django_spec_rest.registry.spec_registry import SpecRegistry
+from django_spec_rest.types.affordance import Affordance
+from django_spec_rest.types.json_schema_registry import (
     DEFAULT_JSON_SCHEMA_REGISTRY,
     JsonSchemaRegistry,
 )
-from rest_framework_services.types.registered_spec import RegisteredSpec
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
-from rest_framework_services.types.utils import is_row_condition
+from django_spec_rest.types.registered_spec import RegisteredSpec
+from django_spec_rest.types.selector_spec import SelectorSpec
+from django_spec_rest.types.service_spec import ServiceSpec
+from django_spec_rest.types.utils import is_row_condition
 
 _MANIFEST_VERSION: Final = 1
 """The document's own format version, bumped when a key changes meaning or moves.
@@ -24,7 +24,7 @@ _MANIFEST_VERSION: Final = 1
 Adding a key does not bump it; a reader ignores keys it does not know.
 """
 
-_SCHEMA_DIALECT: Final = "rest_framework_services.jsonschema/1"
+_SCHEMA_DIALECT: Final = "django_spec_rest.jsonschema/1"
 """Names the schema policy every ``*_schema`` value in the document follows.
 
 Not a JSON Schema meta-schema URI, because that would not distinguish anything:
@@ -52,7 +52,7 @@ def capability_manifest(
     ```python
     {
         "version": 1,
-        "dialect": "rest_framework_services.jsonschema/1",
+        "dialect": "django_spec_rest.jsonschema/1",
         "operations": [
             {
                 "name": "refund_order",
@@ -97,18 +97,18 @@ def capability_manifest(
       ``False``. Always ``None`` on a query, which has no such declaration -- its
       ``kind`` already says it changes nothing.
     - ``input_schema`` / ``output_schema`` -- exactly what
-      [`spec_to_json_schema`][rest_framework_services.jsonschema.spec_to_json_schema.spec_to_json_schema]
+      [`spec_to_json_schema`][django_spec_rest.jsonschema.spec_to_json_schema.spec_to_json_schema]
       derives for each phase, so the document carries this package's schema
       dialect rather than a second one; ``output_schema`` is ``None`` where no
       output is declared. A single-row ``output_schema`` admits ``null`` where
-      [`can_present_nothing`][rest_framework_services.can_present_nothing.can_present_nothing]
+      [`can_present_nothing`][django_spec_rest.can_present_nothing.can_present_nothing]
       says dispatch may present ``None``. ``dialect`` names that policy at the
       top level.
     - ``guards`` -- one ``{"source": <dotted class path>}`` per permission class,
       in declaration order. Always a list: a ``SpecRegistry`` refuses a spec that
       declares none, so ``[]`` is a declared "no permissions".
     - ``affordances`` -- one ``{"code": ..., "reason": ..., "scope": ...}`` per
-      [`Affordance`][rest_framework_services.types.affordance.Affordance] a
+      [`Affordance`][django_spec_rest.types.affordance.Affordance] a
       mutation declares, in declaration order: the codes a call can be refused
       with, and the sentence each refusal says. ``scope`` is ``"row"`` for a condition on the row, which is answered
       per object, and ``"operation"`` for a callable one, which is answered

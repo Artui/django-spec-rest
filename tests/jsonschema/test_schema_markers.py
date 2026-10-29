@@ -13,14 +13,14 @@ import pytest
 from django.core.exceptions import ImproperlyConfigured
 from typing_extensions import TypedDict, Unpack
 
-from rest_framework_services.jsonschema.spec_to_json_schema import spec_to_json_schema
-from rest_framework_services.jsonschema.utils import callable_input_schema
-from rest_framework_services.selectors.list_selector import ListSelector
-from rest_framework_services.types.http_extras import HttpExtras
-from rest_framework_services.types.input_description import InputDescription
-from rest_framework_services.types.input_required import InputRequired
-from rest_framework_services.types.not_client_input import NotClientInput
-from rest_framework_services.types.selector_spec import SelectorSpec
+from django_spec_rest.jsonschema.spec_to_json_schema import spec_to_json_schema
+from django_spec_rest.jsonschema.utils import callable_input_schema
+from django_spec_rest.selectors.list_selector import ListSelector
+from django_spec_rest.types.http_extras import HttpExtras
+from django_spec_rest.types.input_description import InputDescription
+from django_spec_rest.types.input_required import InputRequired
+from django_spec_rest.types.not_client_input import NotClientInput
+from django_spec_rest.types.selector_spec import SelectorSpec
 
 
 class _WidgetExtras(HttpExtras[Any], total=False):

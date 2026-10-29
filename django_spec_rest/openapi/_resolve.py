@@ -9,10 +9,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from rest_framework_services.types.polymorphic_service_spec import PolymorphicServiceSpec
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
-from rest_framework_services.viewsets.utils import resolve_action_spec_entry
+from django_spec_rest.types.polymorphic_service_spec import PolymorphicServiceSpec
+from django_spec_rest.types.selector_spec import SelectorSpec
+from django_spec_rest.types.service_spec import ServiceSpec
+from django_spec_rest.viewsets.utils import resolve_action_spec_entry
 
 
 def resolve_polymorphic_spec(view: Any) -> PolymorphicServiceSpec | None:

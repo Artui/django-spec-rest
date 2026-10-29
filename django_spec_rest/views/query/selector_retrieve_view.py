@@ -10,12 +10,12 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.serializers import BaseSerializer
 
-from rest_framework_services.dispatch.renderable_serializer_class import renderable_serializer_class
-from rest_framework_services.selectors.utils import dispatch_selector_for_spec
-from rest_framework_services.types.selector_kind import SelectorKind
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.views.spec_validation import validate_selector_view_spec
-from rest_framework_services.views.utils import (
+from django_spec_rest.dispatch.renderable_serializer_class import renderable_serializer_class
+from django_spec_rest.selectors.utils import dispatch_selector_for_spec
+from django_spec_rest.types.selector_kind import SelectorKind
+from django_spec_rest.types.selector_spec import SelectorSpec
+from django_spec_rest.views.spec_validation import validate_selector_view_spec
+from django_spec_rest.views.utils import (
     _JsonNullResponse,
     add_affordances,
     get_class_attr,
@@ -27,7 +27,7 @@ class SelectorRetrieveView(RetrieveModelMixin, GenericAPIView):
     """``GET`` endpoint that returns a single object.
 
     Set ``spec`` to a
-    [`SelectorSpec`][rest_framework_services.types.selector_spec.SelectorSpec] to
+    [`SelectorSpec`][django_spec_rest.types.selector_spec.SelectorSpec] to
     configure the selector and/or the output serializer. Both fields are optional:
 
     - ``spec.selector`` overrides ``get_object()``; ``None`` falls back to

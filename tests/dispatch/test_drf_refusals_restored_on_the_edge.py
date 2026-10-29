@@ -27,7 +27,7 @@ from rest_framework.exceptions import NotAuthenticated, PermissionDenied, Valida
 from rest_framework.permissions import BasePermission
 from rest_framework.test import APIRequestFactory
 
-from rest_framework_services import (
+from django_spec_rest import (
     SelectorKind,
     SelectorListView,
     SelectorRetrieveView,
@@ -37,7 +37,7 @@ from rest_framework_services import (
     adispatch_spec,
     dispatch_spec,
 )
-from rest_framework_services.service_specs.not_permitted import NotPermitted
+from django_spec_rest.service_specs.not_permitted import NotPermitted
 from tests.testapp.models import Post
 
 pytestmark = pytest.mark.django_db

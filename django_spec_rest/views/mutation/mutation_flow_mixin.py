@@ -8,8 +8,8 @@ from typing import Any
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from rest_framework_services.types.service_spec import ServiceSpec
-from rest_framework_services.views.mutation.utils import (
+from django_spec_rest.types.service_spec import ServiceSpec
+from django_spec_rest.views.mutation.utils import (
     _ServesRaisedSchema,
     dispatch_mutation_for_spec,
 )

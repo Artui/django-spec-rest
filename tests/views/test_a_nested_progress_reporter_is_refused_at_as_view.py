@@ -13,14 +13,14 @@ import pytest
 from django.core.exceptions import ImproperlyConfigured
 from rest_framework import serializers
 
-from rest_framework_services import (
+from django_spec_rest import (
     SelectorKind,
     SelectorSpec,
     ServiceCreateView,
     ServiceSpec,
     ServiceUpdateView,
 )
-from rest_framework_services.views.spec_validation import validate_service_spec
+from django_spec_rest.views.spec_validation import validate_service_spec
 
 
 class _In(serializers.Serializer):

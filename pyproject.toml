@@ -71,7 +71,7 @@ dependencies = [
 
 [project.optional-dependencies]
 # OpenAPI / Swagger via drf-spectacular. Pulled in only when the user
-# installs the extra and calls ``rest_framework_services.openapi.enable_openapi``.
+# installs the extra and calls ``django_spec_rest.openapi.enable_openapi``.
 spectacular = ["drf-spectacular>=0.27,<1.0"]
 # django-filter introspection for ``filterset_to_json_schema``. The core never
 # imports django-filter (``SelectorSpec.filter_set`` is applied by duck typing);
@@ -132,10 +132,10 @@ packages = ["django_spec_rest"]
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "tests.conftest_settings"
 asyncio_mode = "auto"
-addopts = "--cov=rest_framework_services --cov-report=term-missing --cov-fail-under=100"
+addopts = "--cov=django_spec_rest --cov-report=term-missing --cov-fail-under=100"
 
 [tool.coverage.run]
-source = ["rest_framework_services"]
+source = ["django_spec_rest"]
 branch = true
 
 [tool.coverage.report]
@@ -196,7 +196,7 @@ ignore = [
 "tests/types/test_utils.py" = ["TID251"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["rest_framework_services"]
+known-first-party = ["django_spec_rest"]
 # CLAUDE.md requires this at the top of every annotated file; required-imports
 # is what enforces it rather than leaving it to memory.
 required-imports = ["from __future__ import annotations"]
@@ -221,7 +221,7 @@ skip-magic-trailing-comma = false
 line-ending = "auto"
 
 [tool.ty.environment]
-root = ["./rest_framework_services"]
+root = ["./django_spec_rest"]
 
 # bump-my-version drives `make release-bump` — it rewrites the version in
 # django_spec_rest/version.py (the single source of truth; hatchling

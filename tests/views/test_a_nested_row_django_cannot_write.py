@@ -14,7 +14,7 @@ import pytest
 from rest_framework import serializers
 from rest_framework.test import APIRequestFactory
 
-from rest_framework_services import ChildSpec, ServiceCreateView, ServiceSpec, create_model
+from django_spec_rest import ChildSpec, ServiceCreateView, ServiceSpec, create_model
 from tests.testapp.models import Catalog, Section
 
 pytestmark = pytest.mark.django_db

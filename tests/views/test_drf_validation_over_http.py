@@ -29,9 +29,9 @@ from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
 from typing_extensions import TypedDict
 
-from rest_framework_services import ServiceCreateView, ServiceSpec, dispatch_spec
-from rest_framework_services.types.offline_service_view import OfflineServiceView
-from rest_framework_services.types.unset import UNSET
+from django_spec_rest import ServiceCreateView, ServiceSpec, dispatch_spec
+from django_spec_rest.types.offline_service_view import OfflineServiceView
+from django_spec_rest.types.unset import UNSET
 
 _factory = APIRequestFactory()
 SEEN: dict[str, Any] = {}

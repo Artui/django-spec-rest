@@ -33,10 +33,10 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import AllowAny
 from rest_framework.test import APIRequestFactory
 
-from rest_framework_services import SelectorKind, SelectorRetrieveView, SelectorSpec
-from rest_framework_services.dispatch.render_spec_output import render_spec_output
-from rest_framework_services.service_specs.invalid_arguments import InvalidArguments
-from rest_framework_services.service_specs.serializer_presenter import SerializerPresenter
+from django_spec_rest import SelectorKind, SelectorRetrieveView, SelectorSpec
+from django_spec_rest.dispatch.render_spec_output import render_spec_output
+from django_spec_rest.service_specs.invalid_arguments import InvalidArguments
+from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from tests.testapp.models import Post
 
 pytestmark = pytest.mark.django_db

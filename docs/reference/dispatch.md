@@ -57,7 +57,7 @@ one on the same result.
 
 **Who validates a call depends on its `view`.** A live DRF view, meaning any
 `view` that is not an
-[`OfflineServiceView`][rest_framework_services.types.offline_service_view.OfflineServiceView],
+[`OfflineServiceView`][django_spec_rest.types.offline_service_view.OfflineServiceView],
 has its request validated by the input serializer alone, from the body the
 request parsed, in DRF's words. With an `OfflineServiceView` or no `view`, the
 kernel first checks every declared argument against its type, so `"true"` for a
@@ -109,11 +109,11 @@ returned passes the dict it dispatched with.
 
 ### `dispatch_spec`
 
-::: rest_framework_services.dispatch.dispatch_spec.dispatch_spec
+::: django_spec_rest.dispatch.dispatch_spec.dispatch_spec
 
 ### `adispatch_spec`
 
-::: rest_framework_services.dispatch.adispatch_spec.adispatch_spec
+::: django_spec_rest.dispatch.adispatch_spec.adispatch_spec
 
 ### `render_spec_output`
 
@@ -125,11 +125,11 @@ entries: the dict a dispatch was given already has them, and with none passed
 the provider has a fresh dict for this render alone. `arender_spec_output`,
 `render_for_audience` and `arender_for_audience` take it the same way.
 
-::: rest_framework_services.dispatch.render_spec_output.render_spec_output
+::: django_spec_rest.dispatch.render_spec_output.render_spec_output
 
 ### `arender_spec_output`
 
-::: rest_framework_services.dispatch.arender_spec_output.arender_spec_output
+::: django_spec_rest.dispatch.arender_spec_output.arender_spec_output
 
 ### `render_for_audience`
 
@@ -141,11 +141,11 @@ identically. Not for a pipeline that feeds one spec's output into the next —
 that still wants `render_spec_output`, or the handles the next step reads by
 will have been projected away.
 
-::: rest_framework_services.dispatch.render_for_audience.render_for_audience
+::: django_spec_rest.dispatch.render_for_audience.render_for_audience
 
 ### `arender_for_audience`
 
-::: rest_framework_services.dispatch.arender_for_audience.arender_for_audience
+::: django_spec_rest.dispatch.arender_for_audience.arender_for_audience
 
 ### `paginate_output`
 
@@ -179,15 +179,15 @@ LIST selector may return as it is — is paged as its `.all()`; a `list` or
 `tuple` is paged in memory. Anything else raises `TypeError`, since there is
 nothing to count and nothing to slice.
 
-::: rest_framework_services.dispatch.paginate_output.paginate_output
+::: django_spec_rest.dispatch.paginate_output.paginate_output
 
 ### `DEFAULT_PAGE_SIZE`
 
-::: rest_framework_services.dispatch.paginate_output.DEFAULT_PAGE_SIZE
+::: django_spec_rest.dispatch.paginate_output.DEFAULT_PAGE_SIZE
 
 ### `OutputPage`
 
-::: rest_framework_services.types.output_page.OutputPage
+::: django_spec_rest.types.output_page.OutputPage
 
 ### `base_serializer_context`
 
@@ -197,7 +197,7 @@ free over HTTP, synthesized for the off-HTTP path. `dispatch_spec` and
 transport builds a serializer outside them. See
 [Customise serializer context](../recipes/serializer-context.md#off-the-http-path).
 
-::: rest_framework_services.dispatch.base_serializer_context.base_serializer_context
+::: django_spec_rest.dispatch.base_serializer_context.base_serializer_context
 
 ### `renderable_serializer_class`
 
@@ -207,11 +207,11 @@ class as declared, a bare dataclass wrapped in a `DataclassSerializer`.
 that instantiates an output declaration outside them resolves it here first,
 or a dataclass output raises where a serializer would have rendered.
 
-::: rest_framework_services.dispatch.renderable_serializer_class.renderable_serializer_class
+::: django_spec_rest.dispatch.renderable_serializer_class.renderable_serializer_class
 
 ### `DispatchResult`
 
-::: rest_framework_services.types.dispatch_result.DispatchResult
+::: django_spec_rest.types.dispatch_result.DispatchResult
 
 It carries no `status`: a transport answers its own, which over HTTP is the
 view's `success_status`. `dispatch_spec` still accepts `success_status=` for
@@ -272,7 +272,7 @@ parameter. On a DRF view such a parameter needs a default, since `as_view()`
 refuses a required parameter no call is sure to provide. See
 [a service with no input serializer](../recipes/off-http-inputs.md#a-service-with-no-input-serializer).
 
-::: rest_framework_services.types.argument_binding.ArgumentBinding
+::: django_spec_rest.types.argument_binding.ArgumentBinding
 
 ### `UnknownArguments`
 
@@ -303,7 +303,7 @@ will query, an undeclared key is refused before it does. A selector or target
 lookup taking a bare `**kwargs`, and a service with no `input_serializer` taking
 one under `SPREAD_AUTHOR_WINS`, drop an undeclared key rather than refuse it.
 
-::: rest_framework_services.types.unknown_arguments.UnknownArguments
+::: django_spec_rest.types.unknown_arguments.UnknownArguments
 
 ### `TargetGuard`
 
@@ -311,7 +311,7 @@ The object-permission hook invoked with the resolved mutation target before the
 service runs. Its signature matches `enforce_permissions`, so that primitive is
 passed directly — by name, not wrapped in a `lambda`.
 
-::: rest_framework_services.types.target_guard.TargetGuard
+::: django_spec_rest.types.target_guard.TargetGuard
 
 ### `ViewHooks`
 
@@ -346,7 +346,7 @@ seed (`request`, `view`, `progress`) is dropped, the seed winning; anything else
 reaches the callables beside the arguments. `input_data` from the hooks is
 merged beneath the spec's own `input_data`.
 
-::: rest_framework_services.types.view_hooks.ViewHooks
+::: django_spec_rest.types.view_hooks.ViewHooks
 
 ## Authorizing an off-HTTP call
 
@@ -356,7 +356,7 @@ that wants the *same* authorization a DRF view would apply wires
 `enforce_permissions` in **two** places:
 
 ```python
-from rest_framework_services import (
+from django_spec_rest import (
     adispatch_spec,
     build_offline_context,
     enforce_permissions,
@@ -387,7 +387,7 @@ queryset runs only the class-level check, never `has_object_permission`.
 
 ### `build_offline_context`
 
-::: rest_framework_services.dispatch.build_offline_context.build_offline_context
+::: django_spec_rest.dispatch.build_offline_context.build_offline_context
 
 **Read-shaping over the offline path.** Pass `query_params=` to seed the synthetic
 request's `GET` `QueryDict` — the source `request.query_params` reads. That is how
@@ -416,11 +416,11 @@ one. Relevant when you're deciding what `build_absolute_uri()` should return off
 the HTTP path — see
 [Absolute URLs off the HTTP path](../recipes/serializer-context.md#absolute-urls-off-the-http-path).
 
-::: rest_framework_services.types.offline_http_request.OfflineHttpRequest
+::: django_spec_rest.types.offline_http_request.OfflineHttpRequest
 
 ### `enforce_permissions`
 
-::: rest_framework_services.dispatch.enforce_permissions.enforce_permissions
+::: django_spec_rest.dispatch.enforce_permissions.enforce_permissions
 
 ### `enforce_affordances` / `aenforce_affordances`
 
@@ -438,9 +438,9 @@ hands it to a condition that names `call_context` (and to none taking a bare
 read one context. A `call_context` passed beside a different one already in the
 `pool` is refused with `ImproperlyConfigured`.
 
-::: rest_framework_services.dispatch.enforce_affordances.enforce_affordances
+::: django_spec_rest.dispatch.enforce_affordances.enforce_affordances
 
-::: rest_framework_services.dispatch.aenforce_affordances.aenforce_affordances
+::: django_spec_rest.dispatch.aenforce_affordances.aenforce_affordances
 
 ### `unmet_operation_affordance` / `aunmet_operation_affordance`
 
@@ -460,9 +460,9 @@ is handed to a condition naming `call_context`, as in `enforce_affordances`;
 with none, the one the `pool` carries is, else a fresh dict the conditions of
 this call share.
 
-::: rest_framework_services.dispatch.unmet_operation_affordance.unmet_operation_affordance
+::: django_spec_rest.dispatch.unmet_operation_affordance.unmet_operation_affordance
 
-::: rest_framework_services.dispatch.aunmet_operation_affordance.aunmet_operation_affordance
+::: django_spec_rest.dispatch.aunmet_operation_affordance.aunmet_operation_affordance
 
 ### `operation_affordances`
 
@@ -470,13 +470,13 @@ The conditions those two would ask, before anything is asked. An empty answer
 means there is nothing to ask at list time, so a transport can skip building a
 pool, or making a thread hop of its own, for most of the operations it lists.
 
-::: rest_framework_services.dispatch.operation_affordances.operation_affordances
+::: django_spec_rest.dispatch.operation_affordances.operation_affordances
 
 ## Shared
 
 ### `resolve_callable_kwargs`
 
-::: rest_framework_services.views.utils.resolve_callable_kwargs
+::: django_spec_rest.views.utils.resolve_callable_kwargs
 
 ### `provider_keys`
 
@@ -488,7 +488,7 @@ which calls to refuse before dispatch, rather than keeping a copy of the
 reader:
 
 ```python
-from rest_framework_services import provider_keys
+from django_spec_rest import provider_keys
 
 keys = provider_keys(spec.kwargs)
 if keys is None:
@@ -502,11 +502,11 @@ else:
 The answer is a [`ProviderKeys`](#providerkeys), a `NamedTuple`, so a caller
 that would rather not unpack it reads `keys.filled` and `keys.declinable`.
 
-::: rest_framework_services.dispatch.provider_keys.provider_keys
+::: django_spec_rest.dispatch.provider_keys.provider_keys
 
 ### `ProviderKeys`
 
-::: rest_framework_services.types.provider_keys.ProviderKeys
+::: django_spec_rest.types.provider_keys.ProviderKeys
 
 ### `server_owned_keys`
 
@@ -529,7 +529,7 @@ the input serializer's field names, rather than reading each callable's markers
 again, which would miss a key that one callable hides and another takes plainly:
 
 ```python
-from rest_framework_services import server_owned_keys
+from django_spec_rest import server_owned_keys
 
 # A service tool merging its target lookup's keys into what it built from the
 # service's input serializer (empty when the spec has none).
@@ -545,59 +545,59 @@ Pass the spec the transport dispatches. Asked with the nested
 lookup and its own preconditions hide, and a key the service or one of its
 preconditions hides is still advertised, then dropped.
 
-::: rest_framework_services.dispatch.utils.server_owned_keys
+::: django_spec_rest.dispatch.utils.server_owned_keys
 
 ### `is_async`
 
-::: rest_framework_services.is_async.is_async
+::: django_spec_rest.is_async.is_async
 
 ## Service side
 
 ### `run_service`
 
-::: rest_framework_services.services.run_service.run_service
+::: django_spec_rest.services.run_service.run_service
 
 ### `arun_service`
 
-::: rest_framework_services.services.arun_service.arun_service
+::: django_spec_rest.services.arun_service.arun_service
 
 ### `build_input_serializer`
 
-::: rest_framework_services.views.mutation.utils.build_input_serializer
+::: django_spec_rest.views.mutation.utils.build_input_serializer
 
 ### `build_input_serializer_from_data`
 
-::: rest_framework_services.views.mutation.utils.build_input_serializer_from_data
+::: django_spec_rest.views.mutation.utils.build_input_serializer_from_data
 
 ### `validate_input`
 
-::: rest_framework_services.views.mutation.utils.validate_input
+::: django_spec_rest.views.mutation.utils.validate_input
 
 ### `resolve_mutation_instance`
 
-::: rest_framework_services.views.mutation.utils.resolve_mutation_instance
+::: django_spec_rest.views.mutation.utils.resolve_mutation_instance
 
 ## Selector side
 
 ### `run_selector`
 
-::: rest_framework_services.selectors.utils.run_selector
+::: django_spec_rest.selectors.utils.run_selector
 
 ### `arun_selector`
 
-::: rest_framework_services.selectors.utils.arun_selector
+::: django_spec_rest.selectors.utils.arun_selector
 
 ### `is_queryset`
 
-::: rest_framework_services.selectors.utils.is_queryset
+::: django_spec_rest.selectors.utils.is_queryset
 
 ### `materialize_retrieve`
 
-::: rest_framework_services.selectors.utils.materialize_retrieve
+::: django_spec_rest.selectors.utils.materialize_retrieve
 
 ### `amaterialize_retrieve`
 
-::: rest_framework_services.selectors.utils.amaterialize_retrieve
+::: django_spec_rest.selectors.utils.amaterialize_retrieve
 
 ### `apply_queryset_shaping`
 
@@ -621,7 +621,7 @@ the kernel:
 `extend_queryset` is still called as `extend_queryset(qs, view, request)`, by
 position; one answering with an awaitable is refused.
 
-::: rest_framework_services.selectors.utils.apply_queryset_shaping
+::: django_spec_rest.selectors.utils.apply_queryset_shaping
 
 ## Pool seeds
 
@@ -659,6 +659,6 @@ dict literal of your own:
   in a dict literal the same entry silently outranks the value your transport
   authenticated.
 
-::: rest_framework_services.dispatch.base_pool.base_pool
+::: django_spec_rest.dispatch.base_pool.base_pool
 
-::: rest_framework_services.dispatch.null_progress.null_progress
+::: django_spec_rest.dispatch.null_progress.null_progress
