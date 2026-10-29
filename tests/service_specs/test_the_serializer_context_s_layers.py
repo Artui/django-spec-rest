@@ -15,15 +15,22 @@ from typing import Any
 
 import pytest
 from django.contrib.auth.models import AnonymousUser
-from django_service_specs import DEFAULT_POOL_SEEDS, ServiceSpec, Unrestricted
+from django_service_specs import (
+    DEFAULT_POOL_SEEDS,
+    SelectorKind,
+    SelectorSpec,
+    ServiceSpec,
+    Unrestricted,
+)
 from django_service_specs.dispatch.dispatch import dispatch
 from django_service_specs.dispatch.present import present
 from rest_framework import serializers
 from rest_framework.test import APIRequestFactory
 
-from django_spec_rest import ServiceCreateView
+from django_spec_rest import SelectorListView, SelectorRetrieveView, ServiceCreateView
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
+from tests.testapp.models import Post
 
 pytestmark = pytest.mark.django_db
 
@@ -125,18 +132,34 @@ class TestTheSeatsCallable:
 
         assert output == {"base": "view", "shared": "spec", "spec_out": "hi"}
 
-    def test_an_input_key_never_reaches_the_output_nor_the_reverse(self) -> None:
-        seen: list[dict[str, Any]] = []
-        spec = _spec(
-            seen,
-            input_context=lambda: {"spec_in": 1},
-            output_context=lambda: {"spec_out": 2},
+    def test_an_input_key_is_the_output_s_too_for_both_share_one_dict(self) -> None:
+        """Changed by design: drfs gave the input and the output serializer a copy of
+        the view's context each, so a key one seat's callable set never reached the
+        other. A kernel route builds one context dict per request and hands it to every
+        serializer, so the input callable's key is on the output serializer and the
+        output callable's key lands on the very dict the input serializer holds."""
+        contexts: list[dict[str, Any]] = []
+
+        class _Recording(serializers.Serializer):
+            title = serializers.CharField()
+
+            def validate(self, attrs: Any) -> Any:
+                contexts.append(self.context)
+                return attrs
+
+        spec = ServiceSpec(
+            service=_create,
+            permissions=_OPEN,
+            validator=SerializerValidator(_Recording, serializer_context=lambda: {"spec_in": 1}),
+            presenter=SerializerPresenter(_Out, serializer_context=lambda: {"spec_out": 2}),
         )
 
         output, _ = _post(spec)
 
-        assert "spec_out" not in seen[0]
-        assert "spec_in" not in output
+        assert output["spec_in"] == 1
+        assert output["spec_out"] == 2
+        (input_context,) = contexts
+        assert (input_context["spec_in"], input_context["spec_out"]) == (1, 2)
 
     def test_the_input_callable_is_asked_once_per_call_with_the_view_s_request(self) -> None:
         asked: list[bool] = []
@@ -198,16 +221,9 @@ def test_no_layer_reaches_a_kwargs_service_s_pool() -> None:
     assert not set(pools[0]).intersection({*_KEYS, "_serializer_context_layers"})
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "the kernel route resolves no view hooks: dispatch_mutation_for_spec hands "
-        "dispatch_kernel_spec no ViewHooks and EdgeCallState carries none, so a view's "
-        "get_input_serializer_context / get_output_serializer_context (and their "
-        "per-action forms) reach neither serializer"
-    ),
-)
 class TestTheViewsHooks:
+    """The view's directional hooks, the second and third layers on the one dict."""
+
     def test_layer_over_the_view_s_own_context_on_the_input(self) -> None:
         seen: list[dict[str, Any]] = []
 
@@ -216,9 +232,19 @@ class TestTheViewsHooks:
         assert seen == [{"base": "view", "shared": "hook", "hook_in": "in"}]
 
     def test_layer_over_the_view_s_own_context_on_the_output_with_the_result(self) -> None:
+        """Changed by design: the input hook's key is on the output serializer too.
+
+        drfs built each serializer's context from its own hook alone, so ``hook_in``
+        never reached the output; the kernel route's one dict per request carries
+        every layer to every serializer."""
         output, _ = _post(_spec([]), _HookedView)
 
-        assert output == {"base": "view", "shared": "hook", "hook_out": "hi"}
+        assert output == {
+            "base": "view",
+            "shared": "hook",
+            "hook_in": "in",
+            "hook_out": "hi",
+        }
 
     def test_lie_beneath_the_seat_s_callable(self) -> None:
         seen: list[dict[str, Any]] = []
@@ -228,6 +254,70 @@ class TestTheViewsHooks:
 
         assert seen == [{"base": "view", "shared": "spec", "hook_in": "in"}]
         assert output["hook_out"] == "hi"
+
+
+class _PostOut(serializers.Serializer):
+    title = serializers.CharField()
+    context = serializers.SerializerMethodField()
+
+    def get_context(self, obj: Any) -> dict[str, Any]:
+        return {key: self.context[key] for key in _KEYS if key in self.context}
+
+
+class _ContextHook:
+    """A selector view whose ``get_serializer_context`` is the view layer, none of the
+    directional hooks: a selector view has only the one output serializer."""
+
+    permission_classes: Any = []
+    authentication_classes: Any = []
+
+    def get_permissions(self) -> list[Any]:
+        return []
+
+    def get_serializer_context(self) -> dict[str, Any]:
+        return {**super().get_serializer_context(), "base": "view", "shared": "view"}  # ty: ignore[unresolved-attribute]
+
+
+class TestOnASelectorView:
+    """A selector view's presenter is handed the view's own context and the seat's
+    callable over it: the two layers a selector view has."""
+
+    def _spec(self, kind: SelectorKind, **options: Any) -> SelectorSpec:
+        return SelectorSpec(
+            kind=kind,
+            selector=(
+                (lambda: Post.objects.order_by("id").first())
+                if kind is SelectorKind.RETRIEVE
+                else (lambda: Post.objects.order_by("id"))
+            ),
+            permissions=_OPEN,
+            presenter=SerializerPresenter(_PostOut, **options),
+        )
+
+    def test_a_retrieve_view_layers_the_seat_s_callable_over_its_own_context(self) -> None:
+        Post.objects.create(title="p")
+        spec = self._spec(
+            SelectorKind.RETRIEVE, serializer_context=lambda: {"shared": "spec", "spec_out": 1}
+        )
+        view = type("_Served", (_ContextHook, SelectorRetrieveView), {"spec": spec})
+
+        response = view.as_view()(APIRequestFactory().get("/"))
+
+        assert response.status_code == 200, response.data
+        assert response.data["context"] == {"base": "view", "shared": "spec", "spec_out": 1}
+
+    def test_a_list_view_layers_the_seat_s_callable_over_its_own_context(self) -> None:
+        Post.objects.create(title="p")
+        spec = self._spec(
+            SelectorKind.LIST, serializer_context=lambda: {"shared": "spec", "spec_out": 1}
+        )
+        view = type("_Served", (_ContextHook, SelectorListView), {"spec": spec})
+
+        response = view.as_view()(APIRequestFactory().get("/"))
+
+        assert response.status_code == 200, response.data
+        (row,) = response.data
+        assert row["context"] == {"base": "view", "shared": "spec", "spec_out": 1}
 
 
 @pytest.mark.xfail(

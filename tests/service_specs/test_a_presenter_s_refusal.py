@@ -190,15 +190,9 @@ def test_a_live_view_answers_the_refusal_as_a_400(error: ValidationError, body: 
     assert (response.status_code, response.content) == (400, body)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "a retrieve view serving a kernel spec renders through get_serializer_class(), "
-        "which reads a drfs output_serializer, rather than presenting through the "
-        "spec's presenter with the kernel's present"
-    ),
-)
 def test_a_retrieve_view_answers_the_refusal_as_a_400() -> None:
+    """A retrieve view presents a kernel spec through the spec's presenter, so the
+    refusal is the dual class and the body is its mapping, as on a create view."""
     spec = _retrieve(ValidationError({"fields": ["nope"]}))
 
     class _View(SelectorRetrieveView):
