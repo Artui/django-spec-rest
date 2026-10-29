@@ -38,7 +38,9 @@ def build_offline_context(
 
     Args:
         user: Set as ``request.user``, so callables and permissions that read it behave
-            as on HTTP.
+            as on HTTP. ``request.auth`` is ``None``, set without running DRF's
+            authenticators, so reading it never replaces this user: a scope
+            check off DRF is the transport's to make.
         params: Seeds ``request.data``, straight into DRF's parsed-data cache (a
             synthetic request has no stream to parse). It is *not* validated here — that
             is
@@ -106,6 +108,15 @@ def build_offline_context(
     raw: Any = Request(base)
     drf_request: Request = cast(Request, raw)
     drf_request.user = user
+    # Set rather than left to DRF: ``request.auth`` authenticates on its first
+    # read, and this request has no authenticator, so that read would replace
+    # ``user`` with ``AnonymousUser`` and a class reading ``auth`` before
+    # ``user`` - a token scope check - would refuse a signed-in principal
+    # (test_a_class_reading_auth_first_still_sees_the_principal). A credential
+    # off DRF is the transport's to check, so there is none to report here.
+    # The setter writes through to ``base``, a copy or a synthesized request,
+    # never the caller's (test_on_a_wrapped_django_request_too).
+    drf_request.auth = None
     # ``_full_data`` is the cache DRF's ``request.data`` property returns; seeding
     # it bypasses parsing entirely (there is no stream on a synthetic request).
     drf_request._full_data = params if params is not None else {}  # ty: ignore[unresolved-attribute]
