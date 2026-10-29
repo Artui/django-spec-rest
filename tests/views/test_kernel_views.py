@@ -7,17 +7,11 @@ here is the kernel's own ``ServiceSpec`` or ``SelectorSpec``, with the DRF seats
 view through ``as_view()`` with nothing imported that the kernel route added,
 so each one fails against a tree without it.
 
-Two of the views' own methods still read drfs-only fields, and those are not
-this module's to change, so the views here stand in for them:
-
-- ``MutationFlowMixin.get_permissions`` reads ``spec.permission_classes``,
-  which a kernel spec has no attribute for, so ``_CreateView`` answers the
-  view's own ``permission_classes`` as that method does for a spec setting
-  none;
-- the retrieve and list views render through ``get_serializer_class()``,
-  which reads a drfs ``output_serializer``, so the selector views here set
-  ``serializer_class``, and what they render is DRF's, not the spec's
-  presenter.
+One of the views' own methods still reads a drfs-only field, and it is not
+this module's to change, so the views here stand in for it: the retrieve and
+list views render through ``get_serializer_class()``, which reads a drfs
+``output_serializer``, so the selector views here set ``serializer_class``,
+and what they render is DRF's, not the spec's presenter.
 """
 
 from __future__ import annotations
@@ -76,18 +70,9 @@ _CREATE = ServiceSpec(
 
 
 class _CreateView(ServiceCreateView):
-    """A create view over a kernel spec.
-
-    ``get_permissions`` stands in for ``MutationFlowMixin``'s, which reads
-    ``spec.permission_classes`` off the spec and so raises on a kernel spec,
-    which declares its checks as ``permissions``; this answers what that method
-    answers for a spec setting none: the view's own classes.
-    """
+    """A create view over a kernel spec."""
 
     spec = _CREATE
-
-    def get_permissions(self) -> list[Any]:
-        return [permission() for permission in self.permission_classes]
 
 
 def _view(spec: ServiceSpec, base: type[_CreateView] = _CreateView) -> Any:
@@ -104,9 +89,21 @@ class TestACreateView:
         assert response.status_code == 201
         assert response.data == {"id": Author.objects.get().pk, "name": "Ada"}
 
+    def test_the_view_s_own_classes_refuse_before_the_spec_runs(self) -> None:
+        """A kernel spec's checks are its ``permissions``, asked by ``dispatch``;
+        the view's own ``permission_classes`` are DRF's, asked first."""
+
+        class _Deny(BasePermission):
+            def has_permission(self, request: Any, view: Any) -> bool:
+                return False
+
+        view = type("_View", (_CreateView,), {"permission_classes": [_Deny]}).as_view()
+        assert _post(view, {"name": "Ada"}).status_code == 403
+        assert not Author.objects.exists()
+
     def test_a_kernel_spec_passes_as_view(self) -> None:
-        """``as_view()`` checks a drfs spec's fields, none of which a kernel spec
-        has; the kernel checked its own when it was built."""
+        """``as_view()`` checks no drfs field on a kernel spec, which has none of
+        them; a kernel spec well declared passes the checks it does run."""
         assert callable(_CreateView.as_view())
 
     def test_a_kernel_selector_spec_on_a_mutation_view_is_refused_at_as_view(self) -> None:
@@ -521,7 +518,7 @@ class TestTheArgumentsAreReadAsTheKernelReadsAWire:
         spec = ServiceSpec(
             service=lambda *, author: received.update(author=author),
             permissions=_OPEN,
-            reads=Parameters.of(Parameter("author", "integer")),
+            reads=Parameters.of(Parameter("author", "integer", required=True)),
         )
         response = _post(_view(spec), {"author": 9}, author="4")
         assert response.status_code == 204, response.data
@@ -532,7 +529,7 @@ class TestTheArgumentsAreReadAsTheKernelReadsAWire:
         spec = ServiceSpec(
             service=lambda *, draft: received.update(draft=draft),
             permissions=_OPEN,
-            reads=Parameters.of(Parameter("draft", "boolean")),
+            reads=Parameters.of(Parameter("draft", "boolean", required=True)),
         )
         response = _post(_view(spec), {}, draft="true")
         assert response.status_code == 204, response.data
@@ -543,7 +540,7 @@ class TestTheArgumentsAreReadAsTheKernelReadsAWire:
         spec = ServiceSpec(
             service=lambda *, author: received.update(author=author),
             permissions=_OPEN,
-            reads=Parameters.of(Parameter("author", "integer")),
+            reads=Parameters.of(Parameter("author", "integer", required=True)),
         )
         response = _post(_view(spec), {"author": "9"}, format="multipart", author="4")
         assert response.status_code == 204, response.data
@@ -608,7 +605,7 @@ class TestATargetTheViewHandsOver:
             instance_selector_spec=SelectorSpec(
                 kind=SelectorKind.RETRIEVE,
                 selector=lambda *, pk: Author.objects.filter(pk=pk).first(),
-                reads=Parameters.of(Parameter("pk", "integer")),
+                reads=Parameters.of(Parameter("pk", "integer", required=True)),
                 permissions=_OPEN,
             ),
         )
@@ -643,7 +640,7 @@ def _get(view: type, spec: SelectorSpec, path: str = "/", **kwargs: Any) -> Resp
 _ONE = SelectorSpec(
     kind=SelectorKind.RETRIEVE,
     selector=lambda *, pk: Author.objects.filter(pk=pk).first(),
-    reads=Parameters.of(Parameter("pk", "integer")),
+    reads=Parameters.of(Parameter("pk", "integer", required=True)),
     permissions=_OPEN,
 )
 
@@ -678,7 +675,7 @@ class TestARetrieveView:
         spec = SelectorSpec(
             kind=SelectorKind.RETRIEVE,
             selector=one,
-            reads=Parameters.of(Parameter("pk", "integer")),
+            reads=Parameters.of(Parameter("pk", "integer", required=True)),
             permissions=_OPEN,
         )
         assert _get(_OneAuthor, spec, pk=str(author.pk)).status_code == 200
@@ -714,7 +711,7 @@ class TestAListView:
             kind=SelectorKind.LIST,
             selector=authors,
             reads=Parameters.of(
-                Parameter("ids", "array", items="integer"),
+                Parameter("ids", "array", items="integer", required=True),
                 Parameter("named", "string", required=False),
             ),
             permissions=_OPEN,
@@ -747,7 +744,7 @@ class TestAListView:
         spec = SelectorSpec(
             kind=SelectorKind.LIST,
             selector=authors,
-            reads=Parameters.of(Parameter("published", "boolean")),
+            reads=Parameters.of(Parameter("published", "boolean", required=True)),
             permissions=_OPEN,
         )
         response = _get(_AuthorsByName, spec, "/?published=true")

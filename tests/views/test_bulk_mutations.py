@@ -1,36 +1,48 @@
-"""Bulk mutations through the HTTP views (many + collection targets)."""
+"""Bulk mutations through the HTTP views over kernel specs: ``many`` bodies and collection targets.
+
+Changed by design: a drfs collection spec read its filters from the query
+string beside the body; a kernel service spec's arguments are its body and the
+route captures it declares, so a collection selector's reads come from those
+and the query string is no argument of a write.
+"""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any
 
-import django_filters
 import pytest
-from django.core.exceptions import ImproperlyConfigured
 from django.db.models import QuerySet
+from django_service_specs import (
+    Parameter,
+    Parameters,
+    SelectorKind,
+    SelectorSpec,
+    ServiceError,
+    ServiceSpec,
+    Unrestricted,
+)
 from rest_framework import serializers
 from rest_framework.permissions import BasePermission
 from rest_framework.test import APIRequestFactory
 
 from django_spec_rest import (
-    SelectorKind,
-    SelectorSpec,
     ServiceCreateView,
     ServiceDeleteView,
-    ServiceError,
-    ServiceSpec,
     ServiceUpdateView,
     delete_collection,
 )
+from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
+from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from tests.testapp.models import Author, Post
 
+pytestmark = pytest.mark.django_db
+
 factory = APIRequestFactory()
+_OPEN = (Unrestricted(),)
 
 
-@dataclass
-class _PostIn:
-    title: str
+class _PostIn(serializers.Serializer):
+    title = serializers.CharField()
 
 
 class _PostSerializer(serializers.ModelSerializer):
@@ -39,461 +51,172 @@ class _PostSerializer(serializers.ModelSerializer):
         fields = ("id", "title")
 
 
-class _PublishedFilterSet(django_filters.FilterSet):
-    """Narrows by ``?published=``."""
-
-    published = django_filters.BooleanFilter()
-
-    class Meta:
-        model = Post
-        fields = ["published"]
+def _bulk_create(*, data: list[dict[str, Any]]) -> list[Post]:
+    return [Post.objects.create(title=row["title"]) for row in data]
 
 
 def _all_posts() -> QuerySet[Post]:
     return Post.objects.all().order_by("id")
 
 
-def _bulk_create(*, data: list[_PostIn]) -> list[Post]:
-    return [Post.objects.create(title=item.title) for item in data]
+_MANY = ServiceSpec(
+    service=_bulk_create,
+    permissions=_OPEN,
+    validator=SerializerValidator(_PostIn),
+    presenter=SerializerPresenter(_PostSerializer),
+    many=True,
+    atomic=False,
+)
 
 
-@pytest.mark.django_db
+def _view(base: type, spec: ServiceSpec, **attrs: Any) -> Any:
+    return type("_View", (base,), {"spec": spec, **attrs}).as_view()
+
+
+def _collection(selector: Any = _all_posts, **seats: Any) -> SelectorSpec:
+    return SelectorSpec(kind=SelectorKind.LIST, selector=selector, permissions=_OPEN, **seats)
+
+
 class TestBulkCreateMany:
     def test_list_in_list_out_201(self) -> None:
-        class _View(ServiceCreateView):
-            spec = ServiceSpec(
-                service=_bulk_create,
-                input_serializer=_PostIn,
-                many=True,
-                atomic=False,
-                output_selector_spec=SelectorSpec(
-                    kind=SelectorKind.RETRIEVE, output_serializer=_PostSerializer
-                ),
-            )
-
-        response = _View.as_view()(
+        response = _view(ServiceCreateView, _MANY)(
             factory.post("/", [{"title": "a"}, {"title": "b"}], format="json")
         )
         assert response.status_code == 201
         assert [row["title"] for row in response.data] == ["a", "b"]
 
-    def test_callable_success_status_on_bulk_body(self) -> None:
-        def status(*, result: list[Post]) -> int:
-            return 201 if result else 200
+    def test_a_list_body_is_never_looked_up(self) -> None:
+        """A ``many`` call resolves no target, so the view's object permissions
+        are asked of nothing, and the rows are created."""
 
-        class _View(ServiceCreateView):
-            spec = ServiceSpec(
-                service=_bulk_create,
-                input_serializer=_PostIn,
-                many=True,
-                success_status=status,
-                atomic=False,
-                output_selector_spec=SelectorSpec(
-                    kind=SelectorKind.RETRIEVE, output_serializer=_PostSerializer
-                ),
-            )
+        class _DenyObject(BasePermission):
+            def has_object_permission(self, request: Any, view: Any, obj: Any) -> bool:
+                return False
 
-        response = _View.as_view()(factory.post("/", [{"title": "a"}], format="json"))
-        assert response.status_code == 201
+        view = _view(ServiceCreateView, _MANY, permission_classes=[_DenyObject])
+        assert view(factory.post("/", [{"title": "a"}], format="json")).status_code == 201
+
+    def test_callable_success_status_on_a_bulk_body(self) -> None:
+        view = _view(
+            ServiceCreateView, _MANY, success_status=lambda *, result: 200 if result else 201
+        )
+        assert view(factory.post("/", [{"title": "a"}], format="json")).status_code == 200
+
+    def test_callable_success_status_on_an_empty_body(self) -> None:
+        spec = ServiceSpec(
+            service=lambda *, data: None,
+            permissions=_OPEN,
+            validator=SerializerValidator(_PostIn),
+            many=True,
+        )
+        view = _view(ServiceCreateView, spec, success_status=lambda: 202)
+        response = view(factory.post("/", [{"title": "a"}], format="json"))
+        assert response.status_code == 202
+        assert response.data is None
+
+    def test_a_get_service_kwargs_value_pins_each_row(self) -> None:
+        def create(*, data: list[dict[str, Any]]) -> list[dict[str, Any]]:
+            return [dict(row) for row in data]
+
+        spec = ServiceSpec(
+            service=create, permissions=_OPEN, validator=SerializerValidator(_PostIn), many=True
+        )
+        view = _view(ServiceCreateView, spec, get_service_kwargs=lambda self: {"title": "x"})
+        response = view(factory.post("/", [{"title": "a"}, {"title": "b"}], format="json"))
+        assert response.data == [{"title": "x"}, {"title": "x"}]
+
+    def test_a_service_error_maps_to_422(self) -> None:
+        def boom(*, data: Any) -> None:
+            raise ServiceError("no")
+
+        spec = ServiceSpec(
+            service=boom, permissions=_OPEN, validator=SerializerValidator(_PostIn), many=True
+        )
+        response = _view(ServiceCreateView, spec)(
+            factory.post("/", [{"title": "a"}], format="json")
+        )
+        assert response.status_code == 422
 
 
-@pytest.mark.django_db
-class TestBulkDeleteCollection:
-    def test_callable_success_status_empty_body(self) -> None:
+class TestBulkCollectionTargets:
+    def test_delete_over_a_collection_204(self) -> None:
         Post.objects.create(title="a")
+        spec = ServiceSpec(
+            service=delete_collection(Post),
+            permissions=_OPEN,
+            collection_selector_spec=_collection(),
+            atomic=False,
+        )
+        assert _view(ServiceDeleteView, spec)(factory.delete("/")).status_code == 204
+        assert not Post.objects.exists()
 
-        def status(*, result: Any) -> int:
-            return 205
+    def test_a_count_return_bumps_204_to_200(self) -> None:
+        Post.objects.create(title="a")
+        spec = ServiceSpec(
+            service=lambda *, collection: {"deleted": collection.delete()[0]},
+            permissions=_OPEN,
+            collection_selector_spec=_collection(),
+            atomic=False,
+        )
+        response = _view(ServiceDeleteView, spec)(factory.delete("/"))
+        assert response.status_code == 200
+        assert response.data == {"deleted": 1}
 
-        class _View(ServiceDeleteView):
-            spec = ServiceSpec(
-                service=delete_collection(Post),
-                collection_selector_spec=SelectorSpec(kind=SelectorKind.LIST, selector=_all_posts),
-                success_status=status,
-                atomic=False,
-            )
+    def test_the_collection_selector_reads_a_declared_route_capture(self) -> None:
+        mine = Author.objects.create(name="mine")
+        Post.objects.create(title="kept", author=Author.objects.create(name="other"))
+        Post.objects.create(title="gone", author=mine)
+        spec = ServiceSpec(
+            service=delete_collection(Post),
+            permissions=_OPEN,
+            collection_selector_spec=_collection(
+                lambda *, author: Post.objects.filter(author_id=author),
+                reads=Parameters.of(Parameter("author", "integer", required=True)),
+            ),
+            atomic=False,
+        )
+        assert (
+            _view(ServiceDeleteView, spec)(factory.delete("/"), author=mine.pk).status_code == 204
+        )
+        assert list(Post.objects.values_list("title", flat=True)) == ["kept"]
 
-        response = _View.as_view()(factory.delete("/"))
-        assert response.status_code == 205
+    def test_a_route_capture_outranks_the_body_s_value(self) -> None:
+        mine = Author.objects.create(name="mine")
+        Post.objects.create(title="kept", author=Author.objects.create(name="other"))
+        spec = ServiceSpec(
+            service=delete_collection(Post),
+            permissions=_OPEN,
+            collection_selector_spec=_collection(
+                lambda *, author: Post.objects.filter(author_id=author),
+                reads=Parameters.of(Parameter("author", "integer", required=True)),
+            ),
+            atomic=False,
+        )
+        other = Post.objects.get().author_id
+        request = factory.delete("/", {"author": other}, format="json")
+        assert _view(ServiceDeleteView, spec)(request, author=mine.pk).status_code == 204
+        assert Post.objects.filter(title="kept").exists()
 
-    def test_delete_over_query_filter_204(self) -> None:
-        Post.objects.create(title="shipped", published=True)
-        Post.objects.create(title="draft", published=False)
-
-        class _View(ServiceDeleteView):
-            spec = ServiceSpec(
-                service=delete_collection(Post),
-                collection_selector_spec=SelectorSpec(
-                    kind=SelectorKind.LIST, selector=_all_posts, filter_set=_PublishedFilterSet
-                ),
-                atomic=False,
-            )
-
-        response = _View.as_view()(factory.delete("/?published=true"))
-        assert response.status_code == 204
-        assert set(Post.objects.values_list("title", flat=True)) == {"draft"}
-
-    def test_count_return_bumps_204_to_200(self) -> None:
+    def test_bulk_update_over_a_collection_renders_a_list(self) -> None:
         Post.objects.create(title="a")
         Post.objects.create(title="b")
 
-        def count_delete(*, collection: QuerySet[Post]) -> dict[str, int]:
-            n, _ = collection.delete()
-            return {"deleted": n}
+        def rename(*, collection: Any, data: dict[str, Any]) -> list[Post]:
+            collection.update(title=data["title"])
+            return list(Post.objects.order_by("id"))
 
-        class _View(ServiceDeleteView):
-            spec = ServiceSpec(
-                service=count_delete,
-                collection_selector_spec=SelectorSpec(kind=SelectorKind.LIST, selector=_all_posts),
-                atomic=False,
-            )
-
-        response = _View.as_view()(factory.delete("/"))
+        spec = ServiceSpec(
+            service=rename,
+            permissions=_OPEN,
+            validator=SerializerValidator(_PostIn),
+            collection_selector_spec=_collection(),
+            presenter=SerializerPresenter(_PostSerializer),
+            returns_many=True,
+            atomic=False,
+        )
+        response = _view(ServiceUpdateView, spec)(factory.put("/", {"title": "z"}, format="json"))
         assert response.status_code == 200
-        assert response.data == {"deleted": 2}
-
-    def test_service_error_maps_to_422(self) -> None:
-        def boom(*, collection: QuerySet[Post]) -> None:
-            raise ServiceError("nope")
-
-        class _View(ServiceDeleteView):
-            spec = ServiceSpec(
-                service=boom,
-                collection_selector_spec=SelectorSpec(kind=SelectorKind.LIST, selector=_all_posts),
-                atomic=False,
-            )
-
-        response = _View.as_view()(factory.delete("/"))
-        assert response.status_code == 422
-
-    def test_collection_selector_receives_url_kwargs(self) -> None:
-        # Nested route ``/authors/{author_pk}/posts/`` — the collection selector
-        # scopes to the parent from the URL, so the bulk delete only touches
-        # that author's posts (regression: URL kwargs weren't reaching the
-        # collection pool, unlike the instance/retrieve path).
-        ada = Author.objects.create(name="Ada")
-        grace = Author.objects.create(name="Grace")
-        Post.objects.create(title="a1", author=ada)
-        Post.objects.create(title="a2", author=ada)
-        Post.objects.create(title="g1", author=grace)
-
-        def _authors_posts(*, author_pk: int) -> QuerySet[Post]:
-            return Post.objects.filter(author_id=author_pk)
-
-        class _View(ServiceDeleteView):
-            spec = ServiceSpec(
-                service=delete_collection(Post),
-                collection_selector_spec=SelectorSpec(
-                    kind=SelectorKind.LIST, selector=_authors_posts
-                ),
-                atomic=False,
-            )
-
-        response = _View.as_view()(factory.delete("/"), author_pk=ada.pk)
-        assert response.status_code == 204
-        # Only Ada's posts were deleted; Grace's survive.
-        assert set(Post.objects.values_list("title", flat=True)) == {"g1"}
-
-    def test_url_kwargs_win_over_client_query_on_conflict(self) -> None:
-        # A client can't override the route scope by passing the same key in the
-        # query string — route captures are authoritative.
-        ada = Author.objects.create(name="Ada")
-        grace = Author.objects.create(name="Grace")
-        Post.objects.create(title="a1", author=ada)
-        Post.objects.create(title="g1", author=grace)
-
-        def _by_author(*, author_pk: int) -> QuerySet[Post]:
-            return Post.objects.filter(author_id=author_pk)
-
-        class _View(ServiceDeleteView):
-            spec = ServiceSpec(
-                service=delete_collection(Post),
-                collection_selector_spec=SelectorSpec(kind=SelectorKind.LIST, selector=_by_author),
-                atomic=False,
-            )
-
-        # Client tries to redirect the scope to Grace via ?author_pk=<grace>.
-        response = _View.as_view()(factory.delete(f"/?author_pk={grace.pk}"), author_pk=ada.pk)
-        assert response.status_code == 204
-        # The route's author_pk (Ada) won → Grace's post is untouched.
-        assert set(Post.objects.values_list("title", flat=True)) == {"g1"}
-
-
-@pytest.mark.django_db
-class TestBulkUpdateCollection:
-    def test_bulk_update_over_filter(self) -> None:
-        Post.objects.create(title="a", published=False)
-        Post.objects.create(title="b", published=False)
-
-        def publish_all(*, collection: QuerySet[Post]) -> dict[str, int]:
-            return {"updated": collection.update(published=True)}
-
-        class _View(ServiceUpdateView):
-            spec = ServiceSpec(
-                service=publish_all,
-                collection_selector_spec=SelectorSpec(
-                    kind=SelectorKind.LIST, selector=_all_posts, filter_set=_PublishedFilterSet
-                ),
-                atomic=False,
-            )
-
-        response = _View.as_view()(factory.put("/?published=false"))
-        assert response.status_code == 200
-        assert response.data == {"updated": 2}
-        assert Post.objects.filter(published=True).count() == 2
-
-    def test_bulk_update_renders_list_output(self) -> None:
-        Post.objects.create(title="a", published=False)
-        Post.objects.create(title="b", published=False)
-        Post.objects.create(title="c", published=True)
-
-        def publish_drafts(*, collection: QuerySet[Post]) -> list[int]:
-            ids = list(collection.values_list("id", flat=True))
-            Post.objects.filter(id__in=ids).update(published=True)
-            return ids
-
-        def published_by_ids(*, result: list[int]) -> QuerySet[Post]:
-            return Post.objects.filter(id__in=result).order_by("id")
-
-        class _View(ServiceUpdateView):
-            spec = ServiceSpec(
-                service=publish_drafts,
-                collection_selector_spec=SelectorSpec(
-                    kind=SelectorKind.LIST, selector=_all_posts, filter_set=_PublishedFilterSet
-                ),
-                output_selector_spec=SelectorSpec(
-                    kind=SelectorKind.LIST,
-                    selector=published_by_ids,
-                    output_serializer=_PostSerializer,
-                ),
-                atomic=False,
-            )
-
-        response = _View.as_view()(factory.put("/?published=false"))
-        assert response.status_code == 200
-        assert [row["title"] for row in response.data] == ["a", "b"]
-        assert Post.objects.filter(published=True).count() == 3
-
-    def test_a_list_output_with_no_re_read_renders_the_services_return_as_a_list(self) -> None:
-        """No ``selector`` on the ``LIST`` output, so nothing is re-read: the
-        service's own return is the set rendered, row by row, as dispatch reports
-        it. Rendered as one row, a list has no ``title`` to read."""
-        Post.objects.create(title="a", published=False)
-        Post.objects.create(title="b", published=False)
-
-        def publish(*, collection: QuerySet[Post]) -> list[Post]:
-            rows = list(collection)
-            for row in rows:
-                row.published = True
-                row.save(update_fields=["published"])
-            return rows
-
-        class _View(ServiceUpdateView):
-            spec = ServiceSpec(
-                service=publish,
-                collection_selector_spec=SelectorSpec(kind=SelectorKind.LIST, selector=_all_posts),
-                output_selector_spec=SelectorSpec(
-                    kind=SelectorKind.LIST, output_serializer=_PostSerializer
-                ),
-                atomic=False,
-            )
-
-        response = _View.as_view()(factory.put("/"))
-        assert response.status_code == 200
-        assert [row["title"] for row in response.data] == ["a", "b"]
-        assert Post.objects.filter(published=True).count() == 2
-
-    def test_a_list_output_with_no_re_read_refuses_a_none_return_after_the_write(
-        self,
-    ) -> None:
-        # A list is never ``None``, so nothing to present is not an empty body
-        # here: it is the author's error, raised once the service has written.
-        Post.objects.create(title="a", published=False)
-
-        def publish(*, collection: QuerySet[Post]) -> None:
-            collection.update(published=True)
-
-        class _View(ServiceUpdateView):
-            spec = ServiceSpec(
-                service=publish,
-                collection_selector_spec=SelectorSpec(kind=SelectorKind.LIST, selector=_all_posts),
-                output_selector_spec=SelectorSpec(
-                    kind=SelectorKind.LIST, output_serializer=_PostSerializer
-                ),
-                atomic=False,
-            )
-
-        with pytest.raises(ImproperlyConfigured, match="returned NoneType"):
-            _View.as_view()(factory.put("/"))
-        assert Post.objects.filter(published=True).count() == 1
-
-
-class TestBulkValidation:
-    # ``many`` beside a ``collection_selector_spec`` is refused when the spec is
-    # built, before any view sees it: tests/types/test_service_spec.py.
-
-    def test_collection_selector_must_be_list_kind(self) -> None:
-        class _View(ServiceDeleteView):
-            spec = ServiceSpec(
-                service=delete_collection(Post),
-                collection_selector_spec=SelectorSpec(
-                    kind=SelectorKind.RETRIEVE, selector=_all_posts
-                ),
-            )
-
-        with pytest.raises(ImproperlyConfigured, match="must be SelectorKind.LIST"):
-            _View.as_view()
-
-    def test_collection_selector_requires_selector_at_as_view(self) -> None:
-        class _View(ServiceDeleteView):
-            spec = ServiceSpec(
-                service=delete_collection(Post),
-                collection_selector_spec=SelectorSpec(kind=SelectorKind.LIST),
-            )
-
-        with pytest.raises(ImproperlyConfigured, match="requires a `selector`"):
-            _View.as_view()
-
-    def test_valid_collection_spec_passes(self) -> None:
-        class _View(ServiceDeleteView):
-            spec = ServiceSpec(
-                service=delete_collection(Post),
-                collection_selector_spec=SelectorSpec(kind=SelectorKind.LIST, selector=_all_posts),
-            )
-
-        assert _View.as_view() is not None
-
-
-class _IdsFilterSet(django_filters.FilterSet):
-    """A multi-valued filter: every ``?id=`` value names a row to keep.
-
-    A flattened query string would hand it only the last value, so the
-    difference between the two shapes shows up as the *wrong set* rather than
-    as an exception.
-    """
-
-    id = django_filters.ModelMultipleChoiceFilter(queryset=Post.objects.all(), method="_by_rows")
-
-    class Meta:
-        model = Post
-        fields = ["id"]
-
-    def _by_rows(self, queryset: QuerySet[Post], name: str, value: list[Post]) -> QuerySet[Post]:
-        return queryset.filter(pk__in=[row.pk for row in value]) if value else queryset
-
-
-@dataclass
-class _ArchiveIn:
-    reason: str
-
-
-@pytest.mark.django_db
-class TestBulkChannelSeparation:
-    """The query string filters; the body validates.
-
-    The single-instance path has always kept the two apart. The bulk path used
-    to merge them into one mapping, which made a query parameter able to
-    satisfy an ``input_serializer`` field — a privileged value arriving over
-    the channel that lands in access logs and ``Referer`` headers — and flattened
-    the query string on the way, so only the last value of a repeated parameter
-    survived to reach the filter.
-    """
-
-    def test_a_query_parameter_cannot_satisfy_an_input_serializer_field(self) -> None:
-        Post.objects.create(title="a")
-
-        def _archive(*, collection: QuerySet[Post], data: _ArchiveIn) -> dict[str, Any]:
-            return {"reason": data.reason, "count": collection.count()}
-
-        class _View(ServiceDeleteView):
-            spec = ServiceSpec(
-                service=_archive,
-                input_serializer=_ArchiveIn,
-                collection_selector_spec=SelectorSpec(kind=SelectorKind.LIST, selector=_all_posts),
-                atomic=False,
-            )
-
-        response = _View.as_view()(factory.delete("/?reason=cleanup"))
-
-        assert response.status_code == 400
-        assert "reason" in response.data
-
-    def test_a_body_field_still_validates_on_the_bulk_path(self) -> None:
-        """The other half of the same rule — the body channel is untouched."""
-        Post.objects.create(title="a")
-
-        def _archive(*, collection: QuerySet[Post], data: _ArchiveIn) -> dict[str, Any]:
-            return {"reason": data.reason, "count": collection.count()}
-
-        class _View(ServiceUpdateView):
-            spec = ServiceSpec(
-                service=_archive,
-                input_serializer=_ArchiveIn,
-                collection_selector_spec=SelectorSpec(kind=SelectorKind.LIST, selector=_all_posts),
-                atomic=False,
-            )
-
-        response = _View.as_view()(factory.put("/", {"reason": "cleanup"}, format="json"))
-
-        assert response.status_code == 200
-        assert response.data == {"reason": "cleanup", "count": 1}
-
-    def test_a_repeated_query_parameter_reaches_the_filter_whole(self) -> None:
-        keep = Post.objects.create(title="keep")
-        first = Post.objects.create(title="first")
-        second = Post.objects.create(title="second")
-
-        class _View(ServiceDeleteView):
-            spec = ServiceSpec(
-                service=delete_collection(Post),
-                collection_selector_spec=SelectorSpec(
-                    kind=SelectorKind.LIST, selector=_all_posts, filter_set=_IdsFilterSet
-                ),
-                atomic=False,
-            )
-
-        response = _View.as_view()(factory.delete(f"/?id={first.pk}&id={second.pk}"))
-
-        assert response.status_code == 204
-        # Both named rows went, and only those: a flattened query string would
-        # have kept the first one by dropping all but the last value.
-        assert list(Post.objects.values_list("id", flat=True)) == [keep.pk]
-
-    def test_the_query_string_no_longer_reaches_the_collection_selectors_arguments(
-        self,
-    ) -> None:
-        """The narrowing consequence of the split, pinned rather than implied.
-
-        A collection selector's keyword arguments come from the body and the
-        route, as the single-instance path's do. A filter belongs in
-        ``filter_set``, which reads the query string.
-        """
-        seen: list[Any] = []
-
-        def _scoped(*, scope: str = "unset") -> QuerySet[Post]:
-            seen.append(scope)
-            return Post.objects.none()
-
-        class _View(ServiceDeleteView):
-            spec = ServiceSpec(
-                service=delete_collection(Post),
-                collection_selector_spec=SelectorSpec(kind=SelectorKind.LIST, selector=_scoped),
-                atomic=False,
-            )
-
-        assert _View.as_view()(factory.delete("/?scope=from-query")).status_code == 204
-        assert seen == ["unset"]
-
-
-@pytest.mark.django_db
-class TestBulkTargetGuard:
-    """The bulk path passes the object-permission guard, like every other one.
-
-    A collection target is a queryset, which the guard skips — so this is a
-    no-op until a ``collection_selector_spec`` resolves a single row, which
-    ``shape_queryset`` passes through untouched when no shaping field is set.
-    Off HTTP the same spec has always had its guard run.
-    """
+        assert [row["title"] for row in response.data] == ["z", "z"]
 
     def test_a_single_row_collection_target_is_object_checked(self) -> None:
         post = Post.objects.create(title="a")
@@ -502,20 +225,14 @@ class TestBulkTargetGuard:
             def has_object_permission(self, request: Any, view: Any, obj: Any) -> bool:
                 return False
 
-        def _one_post() -> Post:
-            return post
-
-        class _View(ServiceDeleteView):
-            permission_classes = [_DenyObject]
-            spec = ServiceSpec(
-                service=lambda *, collection: collection.delete(),
-                collection_selector_spec=SelectorSpec(kind=SelectorKind.LIST, selector=_one_post),
-                atomic=False,
-            )
-
-        response = _View.as_view()(factory.delete("/"))
-
-        assert response.status_code == 403
+        spec = ServiceSpec(
+            service=lambda *, collection: collection.delete(),
+            permissions=_OPEN,
+            collection_selector_spec=_collection(lambda: post),
+            atomic=False,
+        )
+        view = _view(ServiceDeleteView, spec, permission_classes=[_DenyObject])
+        assert view(factory.delete("/")).status_code == 403
         assert Post.objects.count() == 1
 
     def test_a_queryset_collection_target_is_untouched_by_the_guard(self) -> None:
@@ -526,15 +243,12 @@ class TestBulkTargetGuard:
             def has_object_permission(self, request: Any, view: Any, obj: Any) -> bool:
                 return False
 
-        class _View(ServiceDeleteView):
-            permission_classes = [_DenyObject]
-            spec = ServiceSpec(
-                service=delete_collection(Post),
-                collection_selector_spec=SelectorSpec(kind=SelectorKind.LIST, selector=_all_posts),
-                atomic=False,
-            )
-
-        response = _View.as_view()(factory.delete("/"))
-
-        assert response.status_code == 204
+        spec = ServiceSpec(
+            service=delete_collection(Post),
+            permissions=_OPEN,
+            collection_selector_spec=_collection(),
+            atomic=False,
+        )
+        view = _view(ServiceDeleteView, spec, permission_classes=[_DenyObject])
+        assert view(factory.delete("/")).status_code == 204
         assert Post.objects.count() == 0
