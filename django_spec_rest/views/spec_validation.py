@@ -33,6 +33,7 @@ from rest_framework.permissions import BasePermission
 from rest_framework.serializers import Serializer
 
 from django_spec_rest.dispatch.kernel_edge import runs_on_kernel
+from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from django_spec_rest.service_specs.utils import (
     UNREADABLE_WITHOUT_A_CALL,
     writable_input_names,
@@ -923,7 +924,34 @@ def _check_kernel_seeds(spec: KernelServiceSpec | KernelSelectorSpec) -> None:
     ``__post_init__``, so nothing of a drfs spec's field checks is owed here.
     Held on a mutation view by test_a_keyword_nothing_fills_is_refused and on
     a selector view by test_a_list_selector_requiring_data_is_refused.
+
+    **A serializer that cannot be described at mount is not asked.**
+    ``check_seeds`` reads ``spec.parameters()``, which describes a
+    ``SerializerValidator``'s serializer, and at ``as_view()`` there is no
+    call to describe it with: its context holds ``None`` for the request and
+    none of the view's layers. A ``get_fields`` reading
+    ``self.context["request"].user`` or a key the view's input layer adds
+    would raise from the URLconf's import, so such a spec's checks are its
+    first request's, where the kernel answers them as it dispatches
+    (test_spec_validation_e2e's TestASerializerThatCannotBeDescribedAtMount).
+    Only the description is tried and caught, never ``check_seeds`` itself,
+    so every refusal it makes of a serializer that describes still raises
+    here (test_a_refusal_check_seeds_makes_of_a_describable_spec_still_raises).
     """
+    # A selector spec has no validator to describe; reading one off it raises
+    # at as_view() (test_a_var_keyword_selector_reads_no_route_capture and
+    # test_url_kwarg_over_http mount selector views at import).
+    validator = spec.validator if isinstance(spec, KernelServiceSpec) else None
+    if isinstance(validator, SerializerValidator):
+        try:
+            validator.parameters()
+        # Each type is one a serializer raises when described with no call:
+        # ``AttributeError`` reading ``.user`` off the ``None`` request
+        # (test_one_reading_the_request_s_user_mounts_and_serves), ``KeyError``
+        # reading a key only the view's layer adds
+        # (test_one_reading_a_key_the_view_s_layer_adds_mounts_and_serves).
+        except (AttributeError, KeyError):
+            return
     check_seeds(spec)
 
 

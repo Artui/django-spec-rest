@@ -259,6 +259,106 @@ class TestAMutationView:
         assert callable(base.as_view())
 
 
+class _StaffOnly(serializers.Serializer):
+    """Reads the caller off its context, so it cannot be described with no request."""
+
+    title = serializers.CharField()
+
+    def get_fields(self) -> dict[str, serializers.Field]:
+        fields = super().get_fields()
+        if self.context["request"].user.is_staff:
+            fields["note"] = serializers.CharField(required=False)
+        return fields
+
+
+class _Tenanted(serializers.Serializer):
+    """Reads a key only the view's input layer adds, so it cannot be described at mount."""
+
+    def get_fields(self) -> dict[str, serializers.Field]:
+        return {self.context["tenant"]: serializers.CharField()}
+
+
+@pytest.mark.django_db
+class TestASerializerThatCannotBeDescribedAtMount:
+    """A serializer built only with the call's context is not described when
+    the view is built: ``check_seeds`` describes it unbound, which would raise
+    from the URLconf's import, so its checks are the first request's."""
+
+    def test_one_reading_the_request_s_user_mounts_and_serves(self) -> None:
+        received: dict[str, Any] = {}
+        spec = ServiceSpec(
+            service=lambda *, data: received.update(data),
+            permissions=_OPEN,
+            validator=SerializerValidator(_StaffOnly),
+            atomic=False,
+        )
+        view = _build(ServiceCreateView, spec)
+        assert view(_factory.post("/", {"title": "t"}, format="json")).status_code == 204
+        assert received == {"title": "t"}
+
+    def test_one_reading_a_key_the_view_s_layer_adds_mounts_and_serves(self) -> None:
+        received: dict[str, Any] = {}
+
+        class _View(ServiceCreateView):
+            spec = ServiceSpec(
+                service=lambda *, data: received.update(data),
+                permissions=_OPEN,
+                validator=SerializerValidator(_Tenanted),
+                atomic=False,
+            )
+
+            def get_input_serializer_context(self) -> dict[str, Any]:
+                return {**self.get_serializer_context(), "tenant": "acme"}
+
+        response = _View.as_view()(_factory.post("/", {"acme": "x"}, format="json"))
+        assert response.status_code == 204
+        assert received == {"acme": "x"}
+
+    def test_a_keyword_nothing_fills_is_refused_on_the_first_request(self) -> None:
+        """Skipped at mount, the unfilled keyword is still met on the first
+        request, loudly: the kernel calls the target selector without it, and
+        Python's own ``TypeError`` naming the keyword leaves the view, a 500,
+        before the selector's body or the service runs. It is not
+        ``check_seeds``' wording, which only a mount-time check gives."""
+        ran: list[str] = []
+
+        def row(*, tenant: str) -> None:
+            ran.append("selector")
+
+        def service(*, data: Any, instance: Any) -> None:
+            ran.append("service")
+
+        view = _build(ServiceUpdateView, _unfilled_target(_StaffOnly, row, service))
+        with pytest.raises(TypeError, match="missing 1 required keyword-only argument: 'tenant'"):
+            view(_factory.put("/", {"title": "t"}, format="json"))
+        assert ran == []
+
+    def test_a_refusal_check_seeds_makes_of_a_describable_spec_still_raises(self) -> None:
+        """Only the description is caught: a serializer that describes at mount
+        meets every refusal ``check_seeds`` makes there."""
+
+        def row(*, tenant: str) -> None: ...
+
+        def service(*, data: Any, instance: Any) -> None: ...
+
+        with pytest.raises(
+            ImproperlyConfigured,
+            match=_nothing_fills("tenant", seat=r"ServiceSpec\.instance_selector_spec\.selector"),
+        ):
+            _build(ServiceUpdateView, _unfilled_target(_TitleIn, row, service))
+
+
+def _unfilled_target(serializer: Any, row: Any, service: Any) -> ServiceSpec:
+    """An update whose target selector requires a keyword nothing fills."""
+    return ServiceSpec(
+        service=service,
+        permissions=_OPEN,
+        validator=SerializerValidator(serializer),
+        instance_selector_spec=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=row),
+        atomic=False,
+    )
+
+
 class TestASelectorView:
     def test_a_list_selector_requiring_data_is_refused(self) -> None:
         """The kernel seeds ``data`` for a service only."""
