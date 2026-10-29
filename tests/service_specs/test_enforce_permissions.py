@@ -13,6 +13,10 @@ What changes by design: drfs refused a context with no request by name, as
 from inside the caller's class. A kernel call never reaches a class without a
 request, since the check builds the offline pair for whatever the call lacks,
 so a call with no ``call_context`` at all is answered rather than refused.
+
+A hazard for a port: the kernel asks the spec being dispatched, never the
+``collection_selector_spec`` resolving its target, so classes moved onto
+the nested selector refuse nothing.
 """
 
 from __future__ import annotations
@@ -47,19 +51,11 @@ class _Buggy(BasePermission):
         return request.no_such_attribute
 
 
-def _every_tag(*classes: type[BasePermission]) -> ServiceSpec:
-    """A service over every tag, ``classes`` asked about the collection it resolves.
-
-    The classes are the service's own, asked by the kernel about the target
-    it resolved for the spec being dispatched.
-    """
-    return ServiceSpec(
-        service=lambda *, collection: collection.count(),
-        collection_selector_spec=SelectorSpec(
-            kind=SelectorKind.LIST,
-            selector=lambda: Tag.objects.all(),
-            permissions=(DRFPermissionCheck(()),),
-        ),
+def _every_tag(*classes: type[BasePermission]) -> SelectorSpec:
+    """A list of every tag, checked by ``classes`` against the queryset it returns."""
+    return SelectorSpec(
+        kind=SelectorKind.LIST,
+        selector=lambda: Tag.objects.all(),
         permissions=(DRFPermissionCheck(classes),),
     )
 
@@ -70,15 +66,31 @@ def test_no_classes_admits_every_call() -> None:
     assert dispatch(spec, principal=User(), arguments={}).value == "ran"
 
 
-def test_a_collection_target_is_never_asked_about_an_object() -> None:
+def test_a_list_s_queryset_is_never_asked_about_an_object() -> None:
     Tag.objects.create(name="a")
 
-    assert dispatch(_every_tag(_DenyObject), principal=User(), arguments={}).value == 1
+    result = dispatch(_every_tag(_DenyObject), principal=User(), arguments={})
+
+    assert list(result.value) == list(Tag.objects.all())
 
 
-def test_the_class_level_check_still_refuses_a_collection_target() -> None:
+def test_the_class_level_check_still_refuses_a_list() -> None:
     with pytest.raises(NotPermitted):
         dispatch(_every_tag(_DenyRequest), principal=User(), arguments={})
+
+
+def test_a_collection_selector_s_own_classes_are_not_what_answers() -> None:
+    # The kernel asks the spec being dispatched, never the selector resolving
+    # its target, so classes a port moves onto the nested selector refuse
+    # nothing: they belong on the service.
+    Tag.objects.create(name="a")
+    spec = ServiceSpec(
+        service=lambda *, collection: collection.count(),
+        collection_selector_spec=_every_tag(_DenyRequest),
+        permissions=(DRFPermissionCheck(()),),
+    )
+
+    assert dispatch(spec, principal=User(), arguments={}).value == 1
 
 
 @pytest.mark.parametrize(("is_staff", "admitted"), [(True, True), (False, False)])
