@@ -447,7 +447,10 @@ def _overlay(spec: KernelSpec, hooks: ViewHooks) -> tuple[dict[str, Any], dict[s
     Validator all read the one value, beneath the view's ``input_data``, which
     names the serializer's input on purpose
     (test_service_create_view's test_a_get_service_kwargs_value_named_like_a_field_pins_it,
-    test_a_get_service_kwargs_value_named_like_a_seed_field_pins_it). For a
+    test_a_get_service_kwargs_value_named_like_a_seed_field_pins_it), and so
+    is one naming a read the spec declares itself, which left in the overlay
+    the kernel would refuse with a 500
+    (test_a_get_service_kwargs_value_named_like_a_spec_read_pins_it). For a
     ``many`` spec the pinned keys go over each row, as ``input_data``'s do,
     which is why a row's fields, the Validator's parameters, are named
     besides the spec's own (test_bulk_mutations'

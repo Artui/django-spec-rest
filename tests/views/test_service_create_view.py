@@ -15,6 +15,8 @@ from typing import Any
 import pytest
 from django.contrib.auth.models import User
 from django_service_specs import (
+    Parameter,
+    Parameters,
     ProgressReporter,
     SelectorKind,
     SelectorSpec,
@@ -221,6 +223,22 @@ class TestTheViewsHookChains:
             get_service_kwargs=lambda self: {"user": 7},
         )
         assert _post(view, {"user": 1}).data == {"user": 7}
+
+    def test_a_get_service_kwargs_value_named_like_a_spec_read_pins_it(self) -> None:
+        """A hook's key naming one of the spec's own reads, not a Validator
+        field, is pinned into the arguments too: the kernel refuses an overlay
+        key naming a parameter, so left in the overlay it would be a 500."""
+        seen: dict[str, Any] = {}
+        spec = ServiceSpec(
+            service=lambda *, note: seen.update(note=note),
+            permissions=_OPEN,
+            reads=Parameters.of(Parameter("note", "string")),
+            atomic=False,
+        )
+        view = _view(spec, get_service_kwargs=lambda self: {"note": "server"})
+        response = _post(view, {"note": "client"})
+        assert response.status_code == 204
+        assert seen == {"note": "server"}
 
     def test_get_input_data_outranks_a_pinning_get_service_kwargs(self) -> None:
         view = _view(

@@ -572,9 +572,10 @@ def _dispatch_kernel_mutation(
     # (the value), test_service_delete_view's test_a_delete_returning_nothing_answers_204
     # (the caller's intent), test_service_update_view's
     # test_an_update_with_no_presenter_returning_nothing_answers_204 (the
-    # presenter) and test_an_output_selector_s_none_is_its_own (the re-read,
-    # which owns its ``None``). The target's is a saving: with none,
-    # ``value`` stays ``None``.
+    # presenter) and test_an_output_selector_s_none_is_its_own_beside_the_spec_s_presenter
+    # (the re-read, which owns its ``None``: the presenter must be the service
+    # spec's for this conjunct alone to decide). The target's is a saving:
+    # with none, ``value`` stays ``None``.
     if (
         result.value is None
         and result.instance is not None

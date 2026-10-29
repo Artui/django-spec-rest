@@ -363,6 +363,27 @@ class TestWhatAnUpdatePresents:
         assert response.status_code == 204
         assert response.data is None
 
+    def test_an_output_selector_s_none_is_its_own_beside_the_spec_s_presenter(self) -> None:
+        """With the presenter on the service spec rather than the re-read, a
+        re-read finding nothing is still no content: the target is presented
+        in place of a ``None`` only where no re-read owns it."""
+        author = Author.objects.create(name="orig")
+        spec = ServiceSpec(
+            service=lambda *, instance: None,
+            permissions=_OPEN,
+            instance_selector_spec=_AUTHOR,
+            presenter=_PRESENTER,
+            output_selector_spec=SelectorSpec(
+                kind=SelectorKind.RETRIEVE,
+                selector=lambda *, result: None,
+                permissions=_OPEN,
+                allow_none=True,
+            ),
+        )
+        response = _view(spec)(factory.put("/", {}, format="json"), pk=author.pk)
+        assert response.status_code == 204
+        assert response.data is None
+
     def test_an_output_selector_s_re_read_is_presented(self) -> None:
         author = Author.objects.create(name="orig")
         spec = ServiceSpec(
