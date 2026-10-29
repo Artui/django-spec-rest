@@ -44,7 +44,7 @@ from rest_framework import serializers
 from rest_framework.response import Response
 from rest_framework.test import APIRequestFactory, force_authenticate
 
-from django_spec_rest.dispatch.kernel_edge import KERNEL_REFUSALS, answer_refusal
+from django_spec_rest.dispatch.kernel_refusals import KERNEL_REFUSALS, answer_refusal
 from django_spec_rest.service_specs.invalid_arguments import InvalidArguments
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from tests.views.test_kernel_views import _CreateView
