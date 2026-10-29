@@ -8,7 +8,9 @@ expected, and the two signatures compared.
 
 from __future__ import annotations
 
+import gc
 import inspect
+import weakref
 from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass
@@ -17,6 +19,7 @@ from typing import Any
 import pytest
 from asgiref.sync import async_to_sync
 from django.contrib.auth.models import User
+from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import DataclassValidator, DispatchError, ServiceSpec, Unrestricted
 from rest_framework import serializers
 from rest_framework.test import APIRequestFactory, force_authenticate
@@ -27,6 +30,7 @@ from django_spec_rest.dispatch.kernel_edge import (
     KernelDispatchRefused,
     adispatch_kernel_spec,
     dispatch_kernel_spec,
+    recording_spec,
     runs_on_kernel,
     seed_named_fields,
 )
@@ -34,7 +38,7 @@ from django_spec_rest.service_specs.invalid_arguments import InvalidArguments
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from django_spec_rest.service_specs.utils import EDGE_CALL
 from django_spec_rest.views.utils import view_call_context
-from tests.views.test_kernel_views import _CREATE, _ONE, _CreateView
+from tests.views.test_kernel_views import _CREATE, _ONE, _AuthorInput, _CreateView
 
 pytestmark = pytest.mark.django_db
 
@@ -198,6 +202,79 @@ def test_the_edge_s_state_ends_with_the_call(core: Callable[..., Any], outcome: 
 
     spec = ServiceSpec(service=service, permissions=_OPEN, validator=SerializerValidator(_Input))
     assert core(spec, **_parts({"title": "t", "user": 1})) is None
+
+
+class _UserPk(serializers.Serializer):
+    title = serializers.CharField()
+    user = serializers.IntegerField(required=False)
+
+
+@CORES
+def test_the_provider_is_called_once_and_its_value_binds(core: Callable[..., Any]) -> None:
+    """The recording twin's provider is the spec's own, bound from the pool by
+    its signature and asked once, and its value for a seed-named field is what
+    the serializer binds, over what the client sent for it."""
+    calls: list[Any] = []
+    received: dict[str, Any] = {}
+
+    def user_pk(*, user: Any) -> dict[str, Any]:
+        calls.append(user)
+        return {"user": user.pk}
+
+    principal = User.objects.create(username="ada")
+    spec = ServiceSpec(
+        service=lambda *, data: received.update(data),
+        permissions=_OPEN,
+        validator=SerializerValidator(_UserPk),
+        input_data=user_pk,
+    )
+    core(spec, **_parts({"title": "t", "user": 7}, user=principal))
+    assert calls == [principal]
+    assert received == {"title": "t", "user": principal.pk}
+
+
+def test_a_spec_s_recording_twin_is_built_once_and_dropped_with_it() -> None:
+    spec = ServiceSpec(
+        service=lambda *, data: None,
+        permissions=_OPEN,
+        validator=SerializerValidator(_UserPk),
+        input_data=lambda: {},
+    )
+    twin = recording_spec(spec)
+    assert twin is not spec
+    assert recording_spec(spec) is twin
+    assert twin.validator is spec.validator
+    held = weakref.ref(twin)
+    del spec, twin
+    gc.collect()
+    assert held() is None
+
+
+def test_a_spec_with_nothing_to_record_is_dispatched_as_it_is() -> None:
+    def spec(**kwargs: Any) -> ServiceSpec:
+        return ServiceSpec(service=lambda *, data: None, permissions=_OPEN, **kwargs)
+
+    provided = {"validator": SerializerValidator(_UserPk), "input_data": lambda: {}}
+    for unrecorded in (
+        _ONE,
+        spec(many=True, **provided),
+        spec(validator=SerializerValidator(_UserPk)),
+        spec(validator=SerializerValidator(_AuthorInput), input_data=lambda: {}),
+    ):
+        assert recording_spec(unrecorded) is unrecorded
+    recorded = spec(**provided)
+    assert recording_spec(recorded) is not recorded
+
+
+def test_a_provider_answering_no_mapping_is_the_kernel_s_to_refuse() -> None:
+    spec = ServiceSpec(
+        service=lambda *, data: None,
+        permissions=_OPEN,
+        validator=SerializerValidator(_UserPk),
+        input_data=lambda: None,
+    )
+    with pytest.raises(ImproperlyConfigured, match="returned NoneType"):
+        dispatch_kernel_spec(spec, **_parts({"title": "t"}))
 
 
 def test_the_two_cores_take_the_same_arguments() -> None:

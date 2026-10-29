@@ -542,10 +542,10 @@ class EdgeCallState:
     - ``input_beneath``: whether that body is bound together with the
       kernel's checked arguments rather than in their place, so their values -
       the caller's, the route's and ``input_data``'s - are the ones bound. The
-      kernel route's edge sets it and holds only the values of the fields it
-      took off the arguments, each named like a seed and so no parameter, so
-      the two never share a key; drfs' edge holds the whole body and does not
-      (``validator_input``).
+      kernel route's edge sets it and holds only fields named like a seed,
+      and so no parameter - the client's values it took off the arguments and
+      ``input_data``'s answer for them over those - so the two never share a
+      key; drfs' edge holds the whole body and does not (``validator_input``).
     - ``server_values``: the server's value for each field of that
       Validator's body the edge put one into - a view hook's or the spec's
       ``kwargs`` provider's value naming the field, and ``input_data``, a field

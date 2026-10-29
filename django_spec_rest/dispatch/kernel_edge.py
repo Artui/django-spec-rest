@@ -45,9 +45,14 @@ kernel's own unless stated:
   ``many`` spec's rows are handed to the kernel as sent, so a row's
   seed-named field is refused there as an unknown argument, and what the
   bulk path makes of it is the mutation views'.
-  An ``input_data`` value for such a field never reaches the serializer: the
-  kernel hands a Validator only the keys its ``parameters()`` declare, and
-  the field is none of them.
+  ``input_data`` fills such a field as it fills any other, though the kernel
+  hands a Validator only the keys its ``parameters()`` declare: the edge
+  dispatches a twin of the spec whose provider records its answer for these
+  fields as it returns it, called once as the spec's own is, and the
+  serializer binds that answer over the client's value (``recording_spec``).
+  A key the provider owns and declines is absent rather than the client's,
+  and one it may decline and declines stays the client's, as the kernel
+  answers both for a declared field.
 
 Every refusal the kernel raises leaves as a DRF exception, by
 ``KERNEL_REFUSALS``, so DRF's exception handler answers it as it answers its
@@ -57,9 +62,12 @@ against.
 
 from __future__ import annotations
 
+import dataclasses
+import functools
+import weakref
 from collections.abc import Callable, Generator, Mapping
 from contextlib import contextmanager
-from typing import Any
+from typing import Any, cast
 
 from django.utils.datastructures import MultiValueDict
 from django_service_specs.authorization.not_permitted import NotPermitted as KernelNotPermitted
@@ -75,6 +83,7 @@ from django_service_specs.parameters.invalid_arguments import (
     InvalidArguments as KernelInvalidArguments,
 )
 from django_service_specs.parameters.parameters import Parameters
+from django_service_specs.pool.provider_keys import provider_keys
 from django_service_specs.services.service_error import ServiceError
 from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelectorSpec
 from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
@@ -94,6 +103,7 @@ from django_spec_rest.service_specs.utils import (
     EDGE_CALL,
     EdgeCallState,
     describe_serializer,
+    edge_call_state,
     is_input,
 )
 from django_spec_rest.views.mutation.map_service_error import map_service_error
@@ -236,6 +246,82 @@ def seed_named_fields(validator: Any) -> frozenset[str]:
     return frozenset(writable.difference(validator.parameters().names()))
 
 
+_RECORDING: dict[int, KernelServiceSpec] = {}
+"""Each spec's recording twin, by the spec's identity, built once (``recording_spec``).
+
+Keyed by ``id`` because a spec's dataclass hash reads every field, some of
+which need not hash; each entry is dropped when its spec is collected."""
+
+
+def recording_spec(spec: KernelSpec) -> KernelSpec:
+    """``spec``, or its twin whose ``input_data`` records its answer for the seed-named fields.
+
+    The kernel hands a Validator only the ``input_data`` keys its
+    ``parameters()`` declare, and a seed-named field is none of them, so the
+    provider's value for one would never reach the serializer, and a client
+    sending the field would bind its own value in the server's place
+    (test_the_provider_s_value_outranks_the_client_s). The twin's provider is
+    the spec's own, wrapped so its signature, and so the pool it is bound from,
+    is the spec's, and called once per call as the spec's is
+    (test_kernel_edge's test_the_provider_is_called_once_and_its_value_binds).
+    What it records goes into the body the edge holds for the Validator
+    (``_record``).
+
+    Built once per spec, since ``dataclasses.replace`` re-runs the spec's
+    checks. Only a single-object service spec with a provider and a
+    seed-named field has one; the kernel refuses an ``async`` provider when
+    the spec is built, so the wrapper is sync alone. The twin shares every
+    seat but the provider, so presenting the result through the view's own
+    spec is unchanged.
+    """
+    # One arc to coverage, so each disjunct is named: a selector spec and a
+    # ``many`` spec by test_kernel_edge's
+    # test_a_spec_with_nothing_to_record_is_dispatched_as_it_is, which also
+    # holds a spec with no provider and one with no seed-named field.
+    if not isinstance(spec, KernelServiceSpec) or spec.many or spec.input_data is None:
+        return spec
+    names = seed_named_fields(spec.validator)
+    if not names:
+        return spec
+    twin = _RECORDING.get(id(spec))
+    if twin is None:
+        twin = dataclasses.replace(spec, input_data=_recording(spec.input_data, names))
+        _RECORDING[id(spec)] = twin
+        weakref.finalize(spec, _RECORDING.pop, id(spec), None)
+    return twin
+
+
+def _recording(provider: Callable[..., Any], names: frozenset[str]) -> Any:
+    @functools.wraps(provider)
+    def recording(*args: Any, **kwargs: Any) -> Any:
+        answer = provider(*args, **kwargs)
+        _record(answer, names)
+        return answer
+
+    return recording
+
+
+def _record(answer: Any, names: frozenset[str]) -> None:
+    """Put ``answer``'s value for each of ``names`` into the body the edge holds for the call.
+
+    A value the provider declines with ``UNSET`` is no answer: what the body
+    holds for the name stands, which ``kernel_arguments`` has already emptied
+    of a key the provider owns
+    (test_an_owned_field_it_declines_is_absent_not_the_client_s,
+    test_a_declinable_field_it_declines_stays_the_client_s). The twin is
+    dispatched by the two cores here alone, inside the call whose state holds
+    that body, so the body is always there. An answer that is no mapping is
+    left for the kernel to refuse in its own words
+    (test_kernel_edge's test_a_provider_answering_no_mapping_is_the_kernel_s_to_refuse).
+    """
+    if not isinstance(answer, Mapping):
+        return
+    body = cast(tuple[Any, dict[str, Any]], edge_call_state().validator_input)[1]
+    for name in names.intersection(answer):
+        if answer[name] is not UNSET:
+            body[name] = answer[name]
+
+
 def kernel_arguments(
     spec: KernelSpec, *, view: Any, request: Request
 ) -> tuple[dict[str, Any], tuple[Any, Any] | None]:
@@ -261,11 +347,13 @@ def kernel_arguments(
     (test_a_json_body_is_not_read_as_flat_strings).
 
     The second value is ``(validator, held)`` where the body sends a field
-    ``seed_named_fields`` names: each such field's value is taken off the
-    arguments and held, and the serializer binds it beside what the kernel
-    hands it (see the module docstring). Otherwise ``None``, and the serializer
-    binds what the kernel hands it, its ``input_data`` provider's values merged
-    in. A ``many`` spec is never held for.
+    ``seed_named_fields`` names, or the spec's ``input_data`` may fill one:
+    each such field's value the body sends is taken off the arguments and
+    held, but for one the provider owns, which is the provider's alone, and
+    the serializer binds what is held beside what the kernel hands it (see the
+    module docstring). Otherwise ``None``, and the serializer binds what the
+    kernel hands it, its ``input_data`` provider's values merged in. A
+    ``many`` spec is never held for.
     """
     parameters: Parameters = spec.parameters()
     route = {
@@ -286,15 +374,18 @@ def kernel_arguments(
         sent = {**body, **coerce_flat(parameters, route)}
     else:
         raise DispatchError(f"The body must be an object; got {type(body).__name__}.")
-    names = seed_named_fields(spec.validator).intersection(sent)
-    if not names:
+    fields = seed_named_fields(spec.validator)
+    names = fields.intersection(sent)
+    if not names and (spec.input_data is None or not fields):
         return sent, None
+    keys = provider_keys(spec.input_data)
+    owned = frozenset() if keys is None else keys.filled
     # Only the held fields' values, bound with the kernel's checked arguments
     # rather than in their place (``EdgeCallState.input_beneath``), so a declared capture and
     # ``input_data`` outrank the client's value here as on every other call
     # (test_a_declared_capture_outranks_the_body_beside_a_seed_named_field,
     # test_input_data_outranks_the_body_beside_a_seed_named_field).
-    held = {name: sent[name] for name in names}
+    held = {name: sent[name] for name in names.difference(owned)}
     arguments = {name: value for name, value in sent.items() if name not in names}
     return arguments, (spec.validator, held)
 
@@ -319,7 +410,7 @@ def dispatch_kernel_spec(
         token = EDGE_CALL.set(EdgeCallState(validator_input=held, input_beneath=True))
         try:
             return dispatch(
-                spec,
+                recording_spec(spec),
                 principal=request.user,
                 arguments=arguments,
                 unknown_arguments=UNKNOWN_ARGUMENTS,
@@ -348,7 +439,7 @@ async def adispatch_kernel_spec(
         token = EDGE_CALL.set(EdgeCallState(validator_input=held, input_beneath=True))
         try:
             return await adispatch(
-                spec,
+                recording_spec(spec),
                 principal=request.user,
                 arguments=arguments,
                 unknown_arguments=UNKNOWN_ARGUMENTS,

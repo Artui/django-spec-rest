@@ -22,7 +22,8 @@ this module's to change, so the views here stand in for them:
 
 from __future__ import annotations
 
-from typing import Any
+import dataclasses
+from typing import Any, TypedDict, cast
 
 import django_filters
 import pytest
@@ -37,6 +38,7 @@ from django_service_specs import (
     SelectorSpec,
     ServiceSpec,
     Unrestricted,
+    UnsetType,
 )
 from rest_framework import serializers
 from rest_framework.permissions import BasePermission
@@ -106,6 +108,10 @@ class TestACreateView:
         """``as_view()`` checks a drfs spec's fields, none of which a kernel spec
         has; the kernel checked its own when it was built."""
         assert callable(_CreateView.as_view())
+
+    def test_a_kernel_selector_spec_on_a_mutation_view_is_refused_at_as_view(self) -> None:
+        with pytest.raises(ImproperlyConfigured, match="is a SelectorSpec"):
+            type("_View", (_CreateView,), {"spec": _ONE}).as_view()
 
     def test_the_serializer_s_refusal_is_drf_s_400(self) -> None:
         response = _post(_view(_CREATE), {"name": "x" * 21})
@@ -297,29 +303,114 @@ class TestASeedNamedFieldValidatesFromTheBody:
         assert response.status_code == 204, response.data
         assert received == {"title": "from the server", "user": 7}
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "The kernel hands a Validator only the input_data keys its parameters() "
-            "declare, and a seed-named field is none of them, so the server's value "
-            "never reaches the serializer; drfs' edge hands it over the client's."
-        ),
-    )
-    def test_input_data_filling_a_seed_named_field_outranks_the_body(self) -> None:
-        class _Input(serializers.Serializer):
-            title = serializers.CharField()
-            user = serializers.IntegerField(required=False)
 
-        received: dict[str, Any] = {}
-        spec = ServiceSpec(
-            service=lambda *, data: received.update(data),
+class _UserPk(serializers.Serializer):
+    title = serializers.CharField(required=False)
+    user = serializers.IntegerField(required=False)
+
+
+class _OwnsTitle(TypedDict):
+    title: str
+
+
+class _OwnsUser(TypedDict):
+    user: int
+
+
+class _MayFillUser(TypedDict):
+    user: int | UnsetType
+
+
+def _declines_title() -> _OwnsTitle:
+    return cast(_OwnsTitle, {"title": UNSET})
+
+
+def _declines_owned_user() -> _OwnsUser:
+    return cast(_OwnsUser, {"user": UNSET})
+
+
+def _declines_user() -> _MayFillUser:
+    return {"user": UNSET}
+
+
+def _user_pk(*, user: Any) -> dict[str, Any]:
+    return {"user": user.pk}
+
+
+def _post_as(principal: User, spec: ServiceSpec, body: Any) -> tuple[Response, dict[str, Any]]:
+    """Post ``body`` as ``principal`` to ``spec``'s create view, and what its service received."""
+    received: dict[str, Any] = {}
+    spec = dataclasses.replace(spec, service=lambda *, data: received.update(data))
+    request = factory.post("/", body, format="json")
+    force_authenticate(request, user=principal)
+    return _view(spec)(request), received
+
+
+class TestInputDataOverASeedNamedField:
+    """The kernel hands a Validator only the ``input_data`` keys its parameters
+    declare, and a seed-named field is none of them, so the edge reads the
+    provider's answer for such a field as the provider gives it and binds it
+    over the client's, the provider still called once."""
+
+    def _spec(self, input_data: Any) -> ServiceSpec:
+        return ServiceSpec(
+            service=lambda: None,
             permissions=_OPEN,
-            validator=SerializerValidator(_Input),
-            input_data=lambda: {"user": 1},
+            validator=SerializerValidator(_UserPk),
+            input_data=input_data,
         )
-        response = _post(_view(spec), {"title": "t", "user": 7})
+
+    def test_the_provider_s_value_outranks_the_client_s(self) -> None:
+        principal = User.objects.create(username="ada")
+        other = User.objects.create(username="bo")
+        calls: list[Any] = []
+
+        def user_pk(*, user: Any) -> dict[str, Any]:
+            calls.append(user)
+            return {"user": user.pk}
+
+        response, received = _post_as(
+            principal, self._spec(user_pk), {"title": "t", "user": other.pk}
+        )
         assert response.status_code == 204, response.data
-        assert received == {"title": "t", "user": 1}
+        assert received == {"title": "t", "user": principal.pk}
+        assert calls == [principal]
+
+    def test_the_provider_s_value_reaches_a_body_leaving_the_field_out(self) -> None:
+        principal = User.objects.create(username="ada")
+        response, received = _post_as(principal, self._spec(_user_pk), {"title": "t"})
+        assert response.status_code == 204, response.data
+        assert received == {"title": "t", "user": principal.pk}
+
+    def test_an_owned_field_it_declines_is_absent_not_the_client_s(self) -> None:
+        principal = User.objects.create(username="ada")
+        response, received = _post_as(
+            principal, self._spec(_declines_owned_user), {"title": "t", "user": 7}
+        )
+        assert response.status_code == 204, response.data
+        assert received == {"title": "t"}
+
+    def test_a_declinable_field_it_declines_stays_the_client_s(self) -> None:
+        principal = User.objects.create(username="ada")
+        response, received = _post_as(
+            principal, self._spec(_declines_user), {"title": "t", "user": 7}
+        )
+        assert response.status_code == 204, response.data
+        assert received == {"title": "t", "user": 7}
+
+    @pytest.mark.parametrize("extra", [{}, {"user": 7}], ids=["plain", "seed-named"])
+    def test_an_owned_parameter_it_declines_never_takes_the_client_s_value(
+        self, extra: dict[str, Any]
+    ) -> None:
+        """Beside a seed-named field too: the serializer binds the kernel's
+        checked arguments, which hold no ``title``, and nothing of the body but
+        that field."""
+        principal = User.objects.create(username="ada")
+        response, received = _post_as(
+            principal, self._spec(_declines_title), {"title": "from the client", **extra}
+        )
+        assert response.status_code == 204, response.data
+        assert received == extra
 
 
 class TestTheArgumentsAreReadAsTheKernelReadsAWire:
@@ -414,6 +505,17 @@ class TestTheArgumentsAreReadAsTheKernelReadsAWire:
         response = _post(_view(spec), {"author": 9}, author="4")
         assert response.status_code == 204, response.data
         assert received == {"author": 4}
+
+    def test_a_capture_on_a_json_body_is_coerced(self) -> None:
+        received: dict[str, Any] = {}
+        spec = ServiceSpec(
+            service=lambda *, draft: received.update(draft=draft),
+            permissions=_OPEN,
+            reads=Parameters.of(Parameter("draft", "boolean")),
+        )
+        response = _post(_view(spec), {}, draft="true")
+        assert response.status_code == 204, response.data
+        assert received == {"draft": True}
 
     def test_a_capture_outranks_a_form_body(self) -> None:
         received: dict[str, Any] = {}
@@ -534,6 +636,10 @@ class TestARetrieveView:
 
     def test_a_kernel_selector_spec_passes_as_view(self) -> None:
         assert callable(type("_View", (_OneAuthor,), {"spec": _ONE}).as_view())
+
+    def test_a_kernel_service_spec_on_a_selector_view_is_refused_at_as_view(self) -> None:
+        with pytest.raises(ImproperlyConfigured, match="is a ServiceSpec"):
+            type("_View", (_OneAuthor,), {"spec": _CREATE}).as_view()
 
     def test_a_list_spec_on_a_retrieve_view_is_refused_at_as_view(self) -> None:
         spec = SelectorSpec(kind=SelectorKind.LIST, selector=Author.objects.all, permissions=_OPEN)

@@ -19,6 +19,7 @@ from typing import Any
 from django.core.exceptions import ImproperlyConfigured
 from django_service_specs.adapters.filters.filter_set_parameters import filter_set_parameters
 from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelectorSpec
+from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
 from rest_framework.permissions import BasePermission
 from rest_framework.serializers import Serializer
 
@@ -882,6 +883,14 @@ def _validate_selector_kind(
         )
 
 
+def _serves_the_other_kind(view_cls: type, spec: Any, served: type) -> str:
+    """Why ``view_cls`` refuses ``spec``: a kernel spec of the kind the view does not serve."""
+    return (
+        f"{view_cls.__name__}.spec is a {type(spec).__name__}, but this view serves a "
+        f"{served.__name__}. Set the spec on a view of its own kind."
+    )
+
+
 def validate_mutation_view_spec(
     view_cls: type,
     *,
@@ -892,7 +901,17 @@ def validate_mutation_view_spec(
     No-op when ``spec`` is unset — the base classes inherit a ``None``
     placeholder so ``as_view()`` itself doesn't trip.
     """
-    spec: ServiceSpec[Any, Any, Any] | None = getattr(view_cls, "spec", None)
+    spec: ServiceSpec[Any, Any, Any] | KernelServiceSpec | KernelSelectorSpec | None = getattr(
+        view_cls, "spec", None
+    )
+    # A kernel selector spec is a kernel spec the kernel dispatches as gladly,
+    # so without this a mutation view would run a read for a write
+    # (test_kernel_views' test_a_kernel_selector_spec_on_a_mutation_view_is_refused_at_as_view).
+    # One arc to coverage, so each conjunct is named: without the first every
+    # drfs spec is refused (test_spec_validation_e2e), and without the second
+    # every kernel service spec (test_a_kernel_spec_passes_as_view).
+    if runs_on_kernel(spec) and not isinstance(spec, KernelServiceSpec):
+        raise ImproperlyConfigured(_serves_the_other_kind(view_cls, spec, KernelServiceSpec))
     # Every check ``validate_service_spec`` makes is of a drfs spec's own
     # fields - ``success_status``, ``input_serializer``, ``permission_classes``
     # and the signatures over them - none of which a kernel spec has; the
@@ -933,11 +952,17 @@ def validate_selector_view_spec(
     ``RETRIEVE`` for
     [`SelectorRetrieveView`][django_spec_rest.views.query.selector_retrieve_view.SelectorRetrieveView]).
     """
-    spec: SelectorSpec[Any, Any] | KernelSelectorSpec | None = getattr(view_cls, "spec", None)
+    spec: SelectorSpec[Any, Any] | KernelSelectorSpec | KernelServiceSpec | None = getattr(
+        view_cls, "spec", None
+    )
     if spec is None:
         return
     label = f"{view_cls.__name__}.spec"
     if runs_on_kernel(spec):
+        if not isinstance(spec, KernelSelectorSpec):
+            # As ``validate_mutation_view_spec`` refuses a kernel selector spec
+            # (test_kernel_views' test_a_kernel_service_spec_on_a_selector_view_is_refused_at_as_view).
+            raise ImproperlyConfigured(_serves_the_other_kind(view_cls, spec, KernelSelectorSpec))
         # ``validate_selector_spec``'s checks of a drfs spec's own fields are
         # the kernel's ``__post_init__``'s for a kernel spec, but two are the
         # view's: the kind its mount point is shaped for
