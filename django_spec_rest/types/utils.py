@@ -19,12 +19,12 @@ from typing import Annotated, Any, Final, ForwardRef, get_args
 from django.core.exceptions import ImproperlyConfigured
 from typing_extensions import Format, get_annotations, get_type_hints
 
-from rest_framework_services.types.field_marking import FieldMarking
-from rest_framework_services.types.input_required import InputRequired
-from rest_framework_services.types.not_client_input import NotClientInput
-from rest_framework_services.types.offline_contract import OfflineContract
-from rest_framework_services.types.query_param import QueryParam
-from rest_framework_services.types.url_kwarg import UrlKwarg
+from django_spec_rest.types.field_marking import FieldMarking
+from django_spec_rest.types.input_required import InputRequired
+from django_spec_rest.types.not_client_input import NotClientInput
+from django_spec_rest.types.offline_contract import OfflineContract
+from django_spec_rest.types.query_param import QueryParam
+from django_spec_rest.types.url_kwarg import UrlKwarg
 
 
 def validate_metadata(metadata: Any, *, label: str) -> None:

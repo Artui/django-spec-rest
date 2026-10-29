@@ -6,8 +6,8 @@ from typing import TYPE_CHECKING, Annotated
 
 from typing_extensions import NotRequired, Required, TypedDict
 
-from rest_framework_services.types.not_client_input import NotClientInput
-from rest_framework_services.types.typed_dict_input import typed_dict_input
+from django_spec_rest.types.not_client_input import NotClientInput
+from django_spec_rest.types.typed_dict_input import typed_dict_input
 
 if TYPE_CHECKING:
     # Only a type checker sees it, so an annotation naming it does not resolve.

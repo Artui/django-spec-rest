@@ -7,9 +7,9 @@ from collections.abc import Sequence
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 
-from rest_framework_services.types.query_param import QueryParam
-from rest_framework_services.types.url_kwarg import UrlKwarg
-from rest_framework_services.types.validate_channel_names import (
+from django_spec_rest.types.query_param import QueryParam
+from django_spec_rest.types.url_kwarg import UrlKwarg
+from django_spec_rest.types.validate_channel_names import (
     _ChannelDeclaration,
     validate_channel_names,
 )

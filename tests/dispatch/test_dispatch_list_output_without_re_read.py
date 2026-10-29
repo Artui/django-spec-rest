@@ -27,7 +27,7 @@ from django.db.models import QuerySet
 from jsonschema import Draft202012Validator
 from rest_framework import serializers
 
-from rest_framework_services import (
+from django_spec_rest import (
     DispatchResult,
     SelectorKind,
     SelectorSpec,
@@ -38,7 +38,7 @@ from rest_framework_services import (
     render_spec_output,
     spec_to_json_schema,
 )
-from rest_framework_services.jsonschema.spec_to_json_schema import _rendered_kind
+from django_spec_rest.jsonschema.spec_to_json_schema import _rendered_kind
 from tests.testapp.models import Post
 
 
@@ -71,8 +71,8 @@ def kernel(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> N
     compiled spec says today.
     """
     if request.param == "kernel-answers-list":
-        sync_core = importlib.import_module("rest_framework_services.dispatch.dispatch_spec")
-        async_core = importlib.import_module("rest_framework_services.dispatch.adispatch_spec")
+        sync_core = importlib.import_module("django_spec_rest.dispatch.dispatch_spec")
+        async_core = importlib.import_module("django_spec_rest.dispatch.adispatch_spec")
         kernel_dispatch = sync_core.dispatch
         kernel_adispatch = async_core.adispatch
 

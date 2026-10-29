@@ -10,7 +10,7 @@ are part of the public API.
 `SelectorRetrieveMixin` + `ActionSerializerResolver` + DRF's `GenericViewSet`:
 
 ```python
-from rest_framework_services import SelectorKind, SelectorSpec, SelectorViewSet
+from django_spec_rest import SelectorKind, SelectorSpec, SelectorViewSet
 
 
 class AuthorReadOnly(SelectorViewSet):
@@ -33,7 +33,7 @@ Or compose it yourself, if you want to mix in something custom:
 
 ```python
 from rest_framework.viewsets import GenericViewSet
-from rest_framework_services import (
+from django_spec_rest import (
     ActionSerializerResolver,
     SelectorKind,
     SelectorListMixin,
@@ -67,7 +67,7 @@ updated.
 
 ```python
 from rest_framework.viewsets import GenericViewSet
-from rest_framework_services import (
+from django_spec_rest import (
     ActionSerializerResolver,
     SelectorKind,
     SelectorRetrieveMixin,

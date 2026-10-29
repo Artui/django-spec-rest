@@ -16,13 +16,13 @@ from django.utils import timezone
 from jsonschema import Draft202012Validator
 from rest_framework import serializers
 
-from rest_framework_services.audience.build_audience_projection import build_audience_projection
-from rest_framework_services.audience.project_payload import project_payload
-from rest_framework_services.jsonschema.output_to_json_schema import output_to_json_schema
-from rest_framework_services.jsonschema.utils import field_to_schema
-from rest_framework_services.types.field_marking import MARKING, FieldMarking
-from rest_framework_services.types.selector_kind import SelectorKind
-from rest_framework_services.types.value_formatter import ValueFormatter
+from django_spec_rest.audience.build_audience_projection import build_audience_projection
+from django_spec_rest.audience.project_payload import project_payload
+from django_spec_rest.jsonschema.output_to_json_schema import output_to_json_schema
+from django_spec_rest.jsonschema.utils import field_to_schema
+from django_spec_rest.types.field_marking import MARKING, FieldMarking
+from django_spec_rest.types.selector_kind import SelectorKind
+from django_spec_rest.types.value_formatter import ValueFormatter
 
 STATUSES = [("PENDING_REVIEW", "Awaiting review"), ("PAID", "Paid")]
 

@@ -30,8 +30,8 @@ from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
 from typing_extensions import TypedDict, Unpack
 
-import rest_framework_services
-from rest_framework_services import (
+import django_spec_rest
+from django_spec_rest import (
     ArgumentBinding,
     ChildSpec,
     NotClientInput,
@@ -45,10 +45,10 @@ from rest_framework_services import (
     create_model,
     dispatch_spec,
 )
-from rest_framework_services.service_specs.invalid_arguments import InvalidArguments
-from rest_framework_services.types.offline_service_view import OfflineServiceView
-from rest_framework_services.types.unset import UNSET
-from rest_framework_services.types.view_hooks import ViewHooks
+from django_spec_rest.service_specs.invalid_arguments import InvalidArguments
+from django_spec_rest.types.offline_service_view import OfflineServiceView
+from django_spec_rest.types.unset import UNSET
+from django_spec_rest.types.view_hooks import ViewHooks
 from tests.testapp.models import Catalog, Post, Section
 
 # --- null follows the annotation, not the default ---------------------------------
@@ -459,7 +459,7 @@ def test_a_refused_argument_is_invalid_arguments_a_drf_validation_error() -> Non
         )
 
     assert isinstance(excinfo.value, ValidationError)
-    assert "InvalidArguments" not in rest_framework_services.__all__
+    assert "InvalidArguments" not in django_spec_rest.__all__
 
 
 def _no_serializer(*, data: Any = "default", title: str = "default") -> dict[str, Any]:

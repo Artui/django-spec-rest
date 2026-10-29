@@ -8,7 +8,7 @@ The runtime accepts three shapes for ``input_serializer``:
 
 Schema generators only know how to read ``Serializer`` subclasses, so this helper
 mirrors
-[`validate_input`][rest_framework_services.views.mutation.utils.validate_input]'s
+[`validate_input`][django_spec_rest.views.mutation.utils.validate_input]'s
 branching to produce a class the generator can introspect — keeping the schema and the
 runtime in lockstep."""
 
@@ -19,7 +19,7 @@ from typing import cast
 
 from rest_framework.serializers import Serializer
 
-from rest_framework_services.dispatch.renderable_serializer_class import renderable_serializer_class
+from django_spec_rest.dispatch.renderable_serializer_class import renderable_serializer_class
 
 
 def to_serializer_class(value: type | None) -> type[Serializer] | None:

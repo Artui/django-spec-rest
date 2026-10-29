@@ -23,8 +23,8 @@ from django_service_specs.specs.kernel_spec import kernel_spec
 from django_service_specs.types.unknown_arguments import UnknownArguments
 from rest_framework import serializers
 
-from rest_framework_services import ServiceSpec
-from rest_framework_services.service_specs.serializer_validator import SerializerValidator
+from django_spec_rest import ServiceSpec
+from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 
 
 class _RequiredUserIn(serializers.Serializer):

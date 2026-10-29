@@ -24,7 +24,7 @@ from rest_framework.parsers import JSONParser
 from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
 
-from rest_framework_services import (
+from django_spec_rest import (
     DispatchResult,
     OfflineServiceView,
     QueryParam,
@@ -36,7 +36,7 @@ from rest_framework_services import (
     adispatch_spec,
     dispatch_spec,
 )
-from rest_framework_services.registry.spec_registry import SpecRegistry
+from django_spec_rest.registry.spec_registry import SpecRegistry
 from tests.testapp.models import Post
 from tests.testapp.serializers import PostSerializer
 

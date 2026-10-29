@@ -12,7 +12,7 @@ from django.db.models import QuerySet
 from django.http import HttpRequest, QueryDict
 from rest_framework import serializers
 
-from rest_framework_services import (
+from django_spec_rest import (
     DispatchResult,
     SelectorKind,
     SelectorSpec,
@@ -20,9 +20,9 @@ from rest_framework_services import (
     dispatch_spec,
     render_spec_output,
 )
-from rest_framework_services.service_specs.build_offline_context import build_offline_context
-from rest_framework_services.types.offline_context import OfflineContext
-from rest_framework_services.types.offline_service_view import OfflineServiceView
+from django_spec_rest.service_specs.build_offline_context import build_offline_context
+from django_spec_rest.types.offline_context import OfflineContext
+from django_spec_rest.types.offline_service_view import OfflineServiceView
 from tests.testapp.models import Post
 
 _USER = object()

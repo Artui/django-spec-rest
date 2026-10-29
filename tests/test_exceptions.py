@@ -11,7 +11,7 @@ import re
 
 from django.utils.translation import gettext_lazy
 
-from rest_framework_services.exceptions import (
+from django_spec_rest.exceptions import (
     action_unavailable,
     additional_input_required,
     service_conflict,
@@ -19,7 +19,7 @@ from rest_framework_services.exceptions import (
     service_not_found,
     service_validation_error,
 )
-from rest_framework_services.exceptions.service_validation_error import (
+from django_spec_rest.exceptions.service_validation_error import (
     ServiceValidationError,
 )
 
@@ -36,7 +36,7 @@ def test_a_lazy_translation_is_the_message() -> None:
 
 def test_no_module_imports_drf() -> None:
     # Match `from rest_framework`/`import rest_framework` only when the
-    # next character is NOT `_` (which would mean rest_framework_services).
+    # next character is NOT `_` (which would mean django_spec_rest).
     forbidden = re.compile(r"\b(?:from|import)\s+rest_framework(?!\w)")
     for module in (
         action_unavailable,

@@ -9,9 +9,9 @@ from rest_framework import status as drf_status
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from rest_framework_services.views.mutation.mutation_flow_mixin import MutationFlowMixin
-from rest_framework_services.views.mutation.utils import resolve_mutation_instance
-from rest_framework_services.viewsets.utils import (
+from django_spec_rest.views.mutation.mutation_flow_mixin import MutationFlowMixin
+from django_spec_rest.views.mutation.utils import resolve_mutation_instance
+from django_spec_rest.viewsets.utils import (
     _ActionSpecsMixin,
     dispatches_action_specs,
     resolve_action_service_spec,

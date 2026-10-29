@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from rest_framework_services.types.unset import UNSET
+from django_spec_rest.types.unset import UNSET
 
 
 @dataclass(frozen=True)
@@ -25,18 +25,18 @@ class QueryParam:
     the caller's argument, and is put onto the request's ``query_params`` where
     they lack it, so a serializer or provider reading them finds it.
 
-    A [`SelectorSpec`][rest_framework_services.types.selector_spec.SelectorSpec]
+    A [`SelectorSpec`][django_spec_rest.types.selector_spec.SelectorSpec]
     ``filter_set`` does **not** need this — its fields are already generated into the
     schema and flow through as ordinary ``params``.
 
     Declared here rather than in each adapter for the same reason as
-    [`UrlKwarg`][rest_framework_services.types.url_kwarg.UrlKwarg]: it is the same
+    [`UrlKwarg`][django_spec_rest.types.url_kwarg.UrlKwarg]: it is the same
     declaration whichever transport carries it. Pair it with
-    [`validate_channel_names`][rest_framework_services.types.validate_channel_names.validate_channel_names].
+    [`validate_channel_names`][django_spec_rest.types.validate_channel_names.validate_channel_names].
 
     - ``name`` — the argument / query-string key. Must not collide with a reserved
       transport key; see
-      [`validate_channel_names`][rest_framework_services.types.validate_channel_names.validate_channel_names].
+      [`validate_channel_names`][django_spec_rest.types.validate_channel_names.validate_channel_names].
     - ``type`` — the JSON-Schema type advertised to the caller (``"string"`` by default;
       ``"integer"`` / ``"number"`` / ``"boolean"`` / ``"array"`` …).
     - ``description`` — optional help text shown to the caller.
@@ -57,7 +57,7 @@ class QueryParam:
     **No ``required`` flag, deliberately.** A query param is *read-shaping* —
     omitting one is legitimate by construction, and the spec runs correctly
     without it. Requiredness belongs to inputs the spec cannot run without, which
-    is [`UrlKwarg`][rest_framework_services.types.url_kwarg.UrlKwarg] and the
+    is [`UrlKwarg`][django_spec_rest.types.url_kwarg.UrlKwarg] and the
     ``InputRequired`` marker. In the compiled parameters
     (``kernel_spec(spec).parameters()``) and the kernel's input schema
     (``spec_input_schema``), a param naming a parameter with no default of a

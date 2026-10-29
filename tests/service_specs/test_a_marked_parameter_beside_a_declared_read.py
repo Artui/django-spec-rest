@@ -30,15 +30,15 @@ from rest_framework.permissions import AllowAny
 from rest_framework.test import APIRequestFactory
 from typing_extensions import TypedDict, Unpack
 
-from rest_framework_services import adispatch_spec, dispatch_spec
-from rest_framework_services.service_specs.invalid_arguments import InvalidArguments
-from rest_framework_services.types.input_required import InputRequired
-from rest_framework_services.types.query_param import QueryParam
-from rest_framework_services.types.selector_kind import SelectorKind
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
-from rest_framework_services.types.url_kwarg import UrlKwarg
-from rest_framework_services.views.query.selector_list_view import SelectorListView
+from django_spec_rest import adispatch_spec, dispatch_spec
+from django_spec_rest.service_specs.invalid_arguments import InvalidArguments
+from django_spec_rest.types.input_required import InputRequired
+from django_spec_rest.types.query_param import QueryParam
+from django_spec_rest.types.selector_kind import SelectorKind
+from django_spec_rest.types.selector_spec import SelectorSpec
+from django_spec_rest.types.service_spec import ServiceSpec
+from django_spec_rest.types.url_kwarg import UrlKwarg
+from django_spec_rest.views.query.selector_list_view import SelectorListView
 from tests.testapp.models import Post
 from tests.testapp.serializers import PostSerializer
 

@@ -10,7 +10,7 @@ import pytest
 from django.core.exceptions import ImproperlyConfigured
 from django.db.models import Q
 
-from rest_framework_services import (
+from django_spec_rest import (
     Affordance,
     NotClientInput,
     SelectorKind,

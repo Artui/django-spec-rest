@@ -1,7 +1,7 @@
 # Example: invoices
 
 A minimal Django project showing the full surface of
-`djangorestframework-services` on a single resource.
+`django-spec-rest` on a single resource.
 
 ## What it demonstrates
 

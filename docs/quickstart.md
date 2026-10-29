@@ -10,14 +10,13 @@ which the library already depends on.
 ## 1. Install
 
 ```bash
-pip install djangorestframework-services
+pip install django-spec-rest
 # or, with uv:
-uv add djangorestframework-services
+uv add django-spec-rest
 ```
 
-Add nothing to `INSTALLED_APPS` — there are no models or migrations.
-(You only need to add `"rest_framework_services"` if you want to use the
-`startserviceapp` management command.)
+Add nothing to `INSTALLED_APPS` — there are no models, migrations,
+templates or management commands.
 
 ## 2. Write the input and output dataclasses
 
@@ -62,7 +61,7 @@ A plain callable. No DRF imports required; raise framework-agnostic
 exceptions if you need to.
 
 ```python
-from rest_framework_services import create_from_input
+from django_spec_rest import create_from_input
 
 from myapp.models import Author
 
@@ -82,7 +81,7 @@ for them vs. writing the service out by hand.
 ## 5. Wire the view
 
 ```python
-from rest_framework_services import (
+from django_spec_rest import (
     SelectorKind,
     SelectorSpec,
     ServiceCreateView,

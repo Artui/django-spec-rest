@@ -1,20 +1,20 @@
-"""djangorestframework-services — service/selector layer for Django REST Framework.
+"""django-spec-rest — service/selector layer for Django REST Framework.
 
 Public API re-exports live here. Importing the top-level package is enough
-for typical usage; deeper imports (``rest_framework_services.mutations``,
-``rest_framework_services.exceptions``, ``rest_framework_services.types``,
-``rest_framework_services.views``, ``rest_framework_services.viewsets``,
-``rest_framework_services.selectors``) are stable and supported.
+for typical usage; deeper imports (``django_spec_rest.mutations``,
+``django_spec_rest.exceptions``, ``django_spec_rest.types``,
+``django_spec_rest.views``, ``django_spec_rest.viewsets``,
+``django_spec_rest.selectors``) are stable and supported.
 """
 
-from rest_framework_services.audience import (
+from django_spec_rest.audience import (
     annotate_output_schema,
     audience_projection_for_spec,
     build_audience_projection,
     project_payload,
 )
-from rest_framework_services.can_present_nothing import can_present_nothing
-from rest_framework_services.dispatch import (
+from django_spec_rest.can_present_nothing import can_present_nothing
+from django_spec_rest.dispatch import (
     DEFAULT_PAGE_SIZE,
     adispatch_spec,
     aenforce_affordances,
@@ -39,7 +39,7 @@ from rest_framework_services.dispatch import (
     unguarded_specs,
     unmet_operation_affordance,
 )
-from rest_framework_services.exceptions import (
+from django_spec_rest.exceptions import (
     ActionUnavailable,
     AdditionalInputRequired,
     ServiceConflict,
@@ -47,23 +47,23 @@ from rest_framework_services.exceptions import (
     ServiceNotFound,
     ServiceValidationError,
 )
-from rest_framework_services.implements import implements
-from rest_framework_services.is_async import is_async
-from rest_framework_services.jsonschema import (
+from django_spec_rest.implements import implements
+from django_spec_rest.is_async import is_async
+from django_spec_rest.jsonschema import (
     filterset_to_json_schema,
     output_to_json_schema,
     serializer_to_json_schema,
     spec_to_json_schema,
 )
-from rest_framework_services.mutations import (
+from django_spec_rest.mutations import (
     acreate_from_input,
     apply_input,
     aupdate_from_input,
     create_from_input,
     update_from_input,
 )
-from rest_framework_services.registry import SpecRegistry, capability_manifest
-from rest_framework_services.selectors import (
+from django_spec_rest.registry import SpecRegistry, capability_manifest
+from django_spec_rest.selectors import (
     AsyncSelector,
     ListSelector,
     RetrieveSelector,
@@ -77,7 +77,7 @@ from rest_framework_services.selectors import (
     materialize_retrieve,
     run_selector,
 )
-from rest_framework_services.services import (
+from django_spec_rest.services import (
     CreateService,
     DeleteService,
     UpdateService,
@@ -94,7 +94,7 @@ from rest_framework_services.services import (
     run_service,
     update_model,
 )
-from rest_framework_services.types import (
+from django_spec_rest.types import (
     DEFAULT_JSON_SCHEMA_REGISTRY,
     DEFAULT_POOL_SEEDS,
     MARKING,
@@ -151,23 +151,23 @@ from rest_framework_services.types import (
     ViewHooks,
     validate_channel_names,
 )
-from rest_framework_services.version import __version__
-from rest_framework_services.views import (
+from django_spec_rest.version import __version__
+from django_spec_rest.views import (
     SelectorListView,
     SelectorRetrieveView,
     ServiceCreateView,
     ServiceDeleteView,
     ServiceUpdateView,
 )
-from rest_framework_services.views.mutation.mutation_flow_mixin import MutationFlowMixin
-from rest_framework_services.views.mutation.utils import (
+from django_spec_rest.views.mutation.mutation_flow_mixin import MutationFlowMixin
+from django_spec_rest.views.mutation.utils import (
     build_input_serializer,
     build_input_serializer_from_data,
     resolve_mutation_instance,
     validate_input,
 )
-from rest_framework_services.views.utils import resolve_callable_kwargs
-from rest_framework_services.viewsets import (
+from django_spec_rest.views.utils import resolve_callable_kwargs
+from django_spec_rest.viewsets import (
     ActionSerializerResolver,
     SelectorListMixin,
     SelectorRetrieveMixin,

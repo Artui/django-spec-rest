@@ -1,5 +1,5 @@
 """``adispatch_spec`` - async sibling of
-[`dispatch_spec`][rest_framework_services.dispatch.dispatch_spec.dispatch_spec]."""
+[`dispatch_spec`][django_spec_rest.dispatch.dispatch_spec.dispatch_spec]."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from typing import Any
 from asgiref.sync import sync_to_async
 from django_service_specs.dispatch.adispatch import adispatch
 
-from rest_framework_services.dispatch.utils import (
+from django_spec_rest.dispatch.utils import (
     edge_call,
     edge_errors,
     listed_output,
@@ -17,20 +17,20 @@ from rest_framework_services.dispatch.utils import (
     prepare_edge_call,
     with_output_layers,
 )
-from rest_framework_services.service_specs.register_drf_row_errors import (
+from django_spec_rest.service_specs.register_drf_row_errors import (
     register_drf_row_errors,
 )
-from rest_framework_services.service_specs.utils import EdgeCallState
-from rest_framework_services.types.argument_binding import ArgumentBinding
-from rest_framework_services.types.dispatch_result import DispatchResult
-from rest_framework_services.types.pool_seeds import DEFAULT_POOL_SEEDS, PoolSeeds
-from rest_framework_services.types.progress_reporter import ProgressReporter
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
-from rest_framework_services.types.target_guard import TargetGuard
-from rest_framework_services.types.unknown_arguments import UnknownArguments
-from rest_framework_services.types.unset import UNSET
-from rest_framework_services.types.view_hooks import ViewHooks
+from django_spec_rest.service_specs.utils import EdgeCallState
+from django_spec_rest.types.argument_binding import ArgumentBinding
+from django_spec_rest.types.dispatch_result import DispatchResult
+from django_spec_rest.types.pool_seeds import DEFAULT_POOL_SEEDS, PoolSeeds
+from django_spec_rest.types.progress_reporter import ProgressReporter
+from django_spec_rest.types.selector_spec import SelectorSpec
+from django_spec_rest.types.service_spec import ServiceSpec
+from django_spec_rest.types.target_guard import TargetGuard
+from django_spec_rest.types.unknown_arguments import UnknownArguments
+from django_spec_rest.types.unset import UNSET
+from django_spec_rest.types.view_hooks import ViewHooks
 
 # As in ``dispatch_spec``: no ``AppConfig`` to register from, and an async
 # caller may import this module alone. Idempotent.
@@ -58,7 +58,7 @@ async def adispatch_spec(
     call_context: dict[str, Any] | None = None,
 ) -> DispatchResult:
     """Async
-    [`dispatch_spec`][rest_framework_services.dispatch.dispatch_spec.dispatch_spec]:
+    [`dispatch_spec`][django_spec_rest.dispatch.dispatch_spec.dispatch_spec]:
     the same arguments, the same policies and the same result.
 
     The call is prepared exactly as the sync twin prepares it, in one hop to
@@ -73,7 +73,7 @@ async def adispatch_spec(
 
     A ``LIST`` result comes back as the lazy shaped queryset, for the async
     transport to materialize or paginate in a thread
-    ([`arender_spec_output`][rest_framework_services.dispatch.arender_spec_output.arender_spec_output]
+    ([`arender_spec_output`][django_spec_rest.dispatch.arender_spec_output.arender_spec_output]
     does both).
     """
     state = EdgeCallState()

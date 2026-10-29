@@ -4,14 +4,14 @@ These classes have **no DRF imports**. The view layer is responsible for
 translating them into HTTP responses.
 """
 
-from rest_framework_services.exceptions.action_unavailable import ActionUnavailable
-from rest_framework_services.exceptions.additional_input_required import (
+from django_spec_rest.exceptions.action_unavailable import ActionUnavailable
+from django_spec_rest.exceptions.additional_input_required import (
     AdditionalInputRequired,
 )
-from rest_framework_services.exceptions.service_conflict import ServiceConflict
-from rest_framework_services.exceptions.service_error import ServiceError
-from rest_framework_services.exceptions.service_not_found import ServiceNotFound
-from rest_framework_services.exceptions.service_validation_error import (
+from django_spec_rest.exceptions.service_conflict import ServiceConflict
+from django_spec_rest.exceptions.service_error import ServiceError
+from django_spec_rest.exceptions.service_not_found import ServiceNotFound
+from django_spec_rest.exceptions.service_validation_error import (
     ServiceValidationError,
 )
 

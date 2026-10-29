@@ -23,7 +23,7 @@ carries `fields`. Off HTTP somebody has to say they exist, so a spec declares
 them itself:
 
 ```python
-from rest_framework_services import QueryParam, SelectorKind, SelectorSpec, UrlKwarg
+from django_spec_rest import QueryParam, SelectorKind, SelectorSpec, UrlKwarg
 
 list_tasks = SelectorSpec(
     kind=SelectorKind.LIST,
@@ -174,15 +174,15 @@ which is the compiled spec's. Nothing in drfs reads it; HTTP is unchanged.
 `SerializerPresenter` is the kernel's `Presenter` over an output serializer,
 with the spec's `field_audiences` layered over the serializer's own markings.
 
-::: rest_framework_services.service_specs.serializer_validator.SerializerValidator
+::: django_spec_rest.service_specs.serializer_validator.SerializerValidator
 
-::: rest_framework_services.service_specs.serializer_presenter.SerializerPresenter
+::: django_spec_rest.service_specs.serializer_presenter.SerializerPresenter
 
 ## DRF permission classes off HTTP
 
 `DRFPermissionCheck` asks each class in order against the offline request and
 view built for the principal. The first refusal raises
-[`NotPermitted`][rest_framework_services.service_specs.not_permitted.NotPermitted]
+[`NotPermitted`][django_spec_rest.service_specs.not_permitted.NotPermitted]
 with that class's `message` and `code`.
 
 Before the class-level check, `view.kwargs` is filled from the call's arguments
@@ -197,11 +197,11 @@ inside [`translate_drf_refusals`](#an-authors-drf-refusals-as-the-kernels): its
 `PermissionDenied` leaves as `NotPermitted` with its message and code, and its
 `NotAuthenticated` as `DRFNotAuthenticated`, which DRF still answers 401.
 
-::: rest_framework_services.service_specs.drf_permission_check.DRFPermissionCheck
+::: django_spec_rest.service_specs.drf_permission_check.DRFPermissionCheck
 
-::: rest_framework_services.service_specs.not_permitted.NotPermitted
+::: django_spec_rest.service_specs.not_permitted.NotPermitted
 
-::: rest_framework_services.service_specs.build_offline_context.build_offline_context
+::: django_spec_rest.service_specs.build_offline_context.build_offline_context
 
 ## The kernel's refusals as DRF's
 
@@ -227,15 +227,15 @@ A deactivated principal is `PrincipalUnavailable`, a 403.
 
 ### `translate_dispatch_errors`
 
-::: rest_framework_services.service_specs.translate_dispatch_errors.translate_dispatch_errors
+::: django_spec_rest.service_specs.translate_dispatch_errors.translate_dispatch_errors
 
 ### `InvalidArguments`
 
-::: rest_framework_services.service_specs.invalid_arguments.InvalidArguments
+::: django_spec_rest.service_specs.invalid_arguments.InvalidArguments
 
 ### `PrincipalUnavailable`
 
-::: rest_framework_services.service_specs.principal_unavailable.PrincipalUnavailable
+::: django_spec_rest.service_specs.principal_unavailable.PrincipalUnavailable
 
 ### `register_drf_row_errors`
 
@@ -244,7 +244,7 @@ A nested write's row service written for DRF refuses its row with DRF's
 imported, that refusal lands at its row, `{"books": {1: {...}}}`, with its
 codes, and is still DRF's `ValidationError`.
 
-::: rest_framework_services.service_specs.register_drf_row_errors.register_drf_row_errors
+::: django_spec_rest.service_specs.register_drf_row_errors.register_drf_row_errors
 
 ## An author's DRF refusals as the kernel's
 
@@ -300,22 +300,22 @@ kernel's `present` sees that.
 
 ### `translate_drf_refusals`
 
-::: rest_framework_services.service_specs.translate_drf_refusals.translate_drf_refusals
+::: django_spec_rest.service_specs.translate_drf_refusals.translate_drf_refusals
 
 ### `translating_drf_refusals`
 
-::: rest_framework_services.service_specs.translating_drf_refusals.translating_drf_refusals
+::: django_spec_rest.service_specs.translating_drf_refusals.translating_drf_refusals
 
 ### `DRFServiceValidationError`
 
-::: rest_framework_services.service_specs.drf_service_validation_error.DRFServiceValidationError
+::: django_spec_rest.service_specs.drf_service_validation_error.DRFServiceValidationError
 
 ### `DRFNotAuthenticated`
 
-::: rest_framework_services.service_specs.drf_not_authenticated.DRFNotAuthenticated
+::: django_spec_rest.service_specs.drf_not_authenticated.DRFNotAuthenticated
 
 ## Compiling
 
-::: rest_framework_services.service_specs.as_kernel_spec.as_kernel_spec
+::: django_spec_rest.service_specs.as_kernel_spec.as_kernel_spec
 
-::: rest_framework_services.service_specs.kernel_spec_variant.kernel_spec_variant
+::: django_spec_rest.service_specs.kernel_spec_variant.kernel_spec_variant

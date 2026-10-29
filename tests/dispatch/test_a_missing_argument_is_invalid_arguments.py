@@ -18,7 +18,7 @@ from django_service_specs.parameters.invalid_arguments import (
 )
 from rest_framework.exceptions import ValidationError
 
-from rest_framework_services import (
+from django_spec_rest import (
     ArgumentBinding,
     InputRequired,
     SelectorKind,

@@ -25,12 +25,12 @@ from django_service_specs.output.presentation_context import PresentationContext
 from django_service_specs.pool.pool_seeds import DEFAULT_POOL_SEEDS
 from rest_framework import serializers
 
-from rest_framework_services.dispatch.dispatch_spec import dispatch_spec
-from rest_framework_services.service_specs.as_kernel_spec import as_kernel_spec
-from rest_framework_services.types.selector_kind import SelectorKind
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
-from rest_framework_services.types.unset import UNSET
+from django_spec_rest.dispatch.dispatch_spec import dispatch_spec
+from django_spec_rest.service_specs.as_kernel_spec import as_kernel_spec
+from django_spec_rest.types.selector_kind import SelectorKind
+from django_spec_rest.types.selector_spec import SelectorSpec
+from django_spec_rest.types.service_spec import ServiceSpec
+from django_spec_rest.types.unset import UNSET
 from tests.testapp.models import Post
 
 

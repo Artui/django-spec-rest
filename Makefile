@@ -31,7 +31,7 @@ examples:
 
 lint:
 	uv run ruff check .
-	uv run ty check rest_framework_services
+	uv run ty check django_spec_rest
 
 lint-fix:
 	uv run ruff check --fix .
@@ -43,7 +43,7 @@ format-check:
 	uv run ruff format --check --diff .
 
 type-check:
-	uv run ty check rest_framework_services
+	uv run ty check django_spec_rest
 
 type-check-strict-fixtures:
 	@expected="$$(grep -c '^# expect-error' tests/services/strict_drift_fixtures.py)"; \

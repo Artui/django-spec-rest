@@ -17,7 +17,7 @@ from typing import Any
 import pytest
 from rest_framework.exceptions import ValidationError
 
-from rest_framework_services import (
+from django_spec_rest import (
     ChildSpec,
     ForwardRelationSpec,
     GenericRelationSpec,

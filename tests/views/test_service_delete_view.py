@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 from rest_framework.test import APIRequestFactory
 
-from rest_framework_services import SelectorKind, SelectorSpec, ServiceDeleteView, ServiceSpec
+from django_spec_rest import SelectorKind, SelectorSpec, ServiceDeleteView, ServiceSpec
 from tests.testapp.models import Author
 from tests.testapp.serializers import AuthorSerializer
 
@@ -91,7 +91,7 @@ class TestServiceDeleteView:
             _Empty.as_view()(request, pk=author.pk)
 
     def test_service_error_maps_to_422(self) -> None:
-        from rest_framework_services import ServiceError
+        from django_spec_rest import ServiceError
 
         def boom(*, instance: Author) -> None:
             raise ServiceError("nope")

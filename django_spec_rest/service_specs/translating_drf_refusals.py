@@ -9,7 +9,7 @@ from typing import Any, cast, overload
 from django_service_specs.types.is_async import is_async
 from typing_extensions import Format, get_annotations
 
-from rest_framework_services.service_specs.translate_drf_refusals import translate_drf_refusals
+from django_spec_rest.service_specs.translate_drf_refusals import translate_drf_refusals
 
 
 @overload
@@ -27,7 +27,7 @@ def translating_drf_refusals(fn: Callable[..., Any] | None) -> Callable[..., Any
     runs within a call: the service or selector, the preconditions, the
     ``kwargs`` and ``input_data`` providers and ``extend_queryset``. ``fn`` is
     called as it was, inside
-    [`translate_drf_refusals`][rest_framework_services.service_specs.translate_drf_refusals.translate_drf_refusals].
+    [`translate_drf_refusals`][django_spec_rest.service_specs.translate_drf_refusals.translate_drf_refusals].
 
     It keeps what a reader of the compiled spec takes from the callable: the
     name, qualname, module, annotations and signature, and, of a function or a

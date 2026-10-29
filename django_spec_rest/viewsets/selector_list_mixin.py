@@ -8,9 +8,9 @@ from rest_framework.mixins import ListModelMixin
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from rest_framework_services.selectors.utils import dispatch_selector_for_spec
-from rest_framework_services.views.utils import list_with_affordances
-from rest_framework_services.viewsets.utils import (
+from django_spec_rest.selectors.utils import dispatch_selector_for_spec
+from django_spec_rest.views.utils import list_with_affordances
+from django_spec_rest.viewsets.utils import (
     _ActionSpecsMixin,
     resolve_action_selector_spec,
 )
@@ -20,7 +20,7 @@ class SelectorListMixin(ListModelMixin, _ActionSpecsMixin):
     """Compose with ``GenericViewSet``.
 
     When ``action_specs["list"]`` is a
-    [`SelectorSpec`][rest_framework_services.types.selector_spec.SelectorSpec] with
+    [`SelectorSpec`][django_spec_rest.types.selector_spec.SelectorSpec] with
     a non-``None`` ``selector``, ``get_queryset()`` invokes it instead of
     returning the configured ``queryset``. The rest of DRF's list flow —
     filter backends, pagination, serialization — is unchanged.

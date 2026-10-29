@@ -28,7 +28,7 @@ def register_drf_row_errors() -> None:
     reads its own ``InvalidArguments`` before any registered class, so that
     one leaves a nested row as the kernel's class, and reaches DRF's ladders
     through
-    [`translate_dispatch_errors`][rest_framework_services.service_specs.translate_dispatch_errors.translate_dispatch_errors].
+    [`translate_dispatch_errors`][django_spec_rest.service_specs.translate_dispatch_errors.translate_dispatch_errors].
     """
     register_row_error(ValidationError, _validation_error_detail)
 

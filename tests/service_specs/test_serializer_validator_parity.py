@@ -67,10 +67,10 @@ from django_service_specs.types.unknown_arguments import UnknownArguments
 from rest_framework import serializers
 from rest_framework_dataclasses.serializers import DataclassSerializer
 
-from rest_framework_services.jsonschema.serializer_to_json_schema import serializer_to_json_schema
-from rest_framework_services.service_specs.serializer_validator import SerializerValidator
-from rest_framework_services.service_specs.utils import describe_serializer, input_parameters
-from rest_framework_services.types.json_schema_registry import JsonSchemaRegistry
+from django_spec_rest.jsonschema.serializer_to_json_schema import serializer_to_json_schema
+from django_spec_rest.service_specs.serializer_validator import SerializerValidator
+from django_spec_rest.service_specs.utils import describe_serializer, input_parameters
+from django_spec_rest.types.json_schema_registry import JsonSchemaRegistry
 from tests.testapp.models import Post
 
 

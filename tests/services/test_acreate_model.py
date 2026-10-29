@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from rest_framework_services import acreate_model
+from django_spec_rest import acreate_model
 from tests.testapp.models import Author, Post, Tag
 
 

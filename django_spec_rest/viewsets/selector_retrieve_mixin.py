@@ -8,9 +8,9 @@ from rest_framework.mixins import RetrieveModelMixin
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from rest_framework_services.selectors.utils import dispatch_selector_for_spec
-from rest_framework_services.views.utils import _JsonNullResponse, add_affordances
-from rest_framework_services.viewsets.utils import (
+from django_spec_rest.selectors.utils import dispatch_selector_for_spec
+from django_spec_rest.views.utils import _JsonNullResponse, add_affordances
+from django_spec_rest.viewsets.utils import (
     _ActionSpecsMixin,
     resolve_action_selector_spec,
 )
@@ -20,7 +20,7 @@ class SelectorRetrieveMixin(RetrieveModelMixin, _ActionSpecsMixin):
     """Compose with ``GenericViewSet``.
 
     When ``action_specs["retrieve"]`` is a
-    [`SelectorSpec`][rest_framework_services.types.selector_spec.SelectorSpec] with
+    [`SelectorSpec`][django_spec_rest.types.selector_spec.SelectorSpec] with
     a non-``None`` ``selector``, ``get_object()`` invokes it instead of
     falling through to DRF's standard lookup. The selector receives the
     URL kwargs plus the standard pool. Returning ``None`` or raising

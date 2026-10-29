@@ -58,13 +58,13 @@ repos:
         name: "forbid mypy-style '# type: ignore' (the package type-checks with ty)"
         entry: '(?<!`)# type:\s*ignore'
         language: pygrep
-        files: '^rest_framework_services/.*\.py$'
+        files: '^django_spec_rest/.*\.py$'
 
       - id: forbid-drf-import-in-exceptions
         name: "no 'rest_framework' import inside exceptions/ (framework-agnostic boundary)"
         entry: '(?:from|import) rest_framework\b'
         language: pygrep
-        files: '^rest_framework_services/exceptions/.*\.py$'
+        files: '^django_spec_rest/exceptions/.*\.py$'
 
       - id: forbid-marker-glyphs
         name: "forbid emoji / marker glyphs in code, docs and changelogs"

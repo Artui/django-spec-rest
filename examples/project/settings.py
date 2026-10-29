@@ -16,7 +16,6 @@ INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.auth",
     "rest_framework",
-    "rest_framework_services",
     "invoices",
 ]
 

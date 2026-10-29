@@ -16,7 +16,7 @@ import pytest
 from rest_framework import serializers
 from rest_framework.test import APIRequestFactory
 
-from rest_framework_services import SelectorKind, SelectorListView, SelectorSpec
+from django_spec_rest import SelectorKind, SelectorListView, SelectorSpec
 from tests.testapp.models import Post
 
 _factory = APIRequestFactory()

@@ -9,7 +9,7 @@ from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelec
 from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
 from django_service_specs.specs.spec_source import SpecSource
 
-from rest_framework_services.audience.utils import described_output
+from django_spec_rest.audience.utils import described_output
 
 
 def can_present_nothing(spec: KernelServiceSpec | KernelSelectorSpec | SpecSource) -> bool:

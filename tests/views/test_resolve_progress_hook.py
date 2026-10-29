@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from rest_framework_services.views.utils import resolve_progress_hook
+from django_spec_rest.views.utils import resolve_progress_hook
 
 
 class _NoHooks:

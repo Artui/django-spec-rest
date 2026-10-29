@@ -18,7 +18,7 @@ from rest_framework.parsers import JSONParser
 from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory, force_authenticate
 
-from rest_framework_services import (
+from django_spec_rest import (
     SelectorKind,
     SelectorRetrieveView,
     SelectorSpec,
@@ -28,8 +28,8 @@ from rest_framework_services import (
     ServiceUpdateView,
     ServiceViewSet,
 )
-from rest_framework_services.dispatch.adispatch_spec import adispatch_spec
-from rest_framework_services.service_specs.principal_unavailable import PrincipalUnavailable
+from django_spec_rest.dispatch.adispatch_spec import adispatch_spec
+from django_spec_rest.service_specs.principal_unavailable import PrincipalUnavailable
 from tests.testapp.models import Author
 from tests.testapp.serializers import AuthorSerializer
 

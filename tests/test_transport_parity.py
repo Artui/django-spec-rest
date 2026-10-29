@@ -33,7 +33,7 @@ from rest_framework import serializers
 from rest_framework.permissions import BasePermission
 from rest_framework.test import APIRequestFactory, force_authenticate
 
-from rest_framework_services import (
+from django_spec_rest import (
     PolymorphicServiceSpec,
     SelectorKind,
     SelectorListView,
@@ -49,7 +49,7 @@ from rest_framework_services import (
     render_spec_output,
     selector_action,
 )
-from rest_framework_services.viewsets.selector_viewset import SelectorViewSet
+from django_spec_rest.viewsets.selector_viewset import SelectorViewSet
 from tests.testapp.models import Post
 
 

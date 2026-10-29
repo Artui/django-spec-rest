@@ -19,7 +19,7 @@ falls through to the view default.
 
 ```python
 from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
-from rest_framework_services import (
+from django_spec_rest import (
     SelectorKind,
     SelectorSpec,
     ServiceSpec,

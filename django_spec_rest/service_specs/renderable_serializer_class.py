@@ -22,7 +22,7 @@ def renderable_serializer_class(declared: type | None) -> type[BaseSerializer[An
     """The class an ``output_serializer`` declaration renders through.
 
     A bare dataclass type is wrapped in a ``DataclassSerializer`` — the payload
-    [`output_to_json_schema`][rest_framework_services.jsonschema.output_to_json_schema.output_to_json_schema]
+    [`output_to_json_schema`][django_spec_rest.jsonschema.output_to_json_schema.output_to_json_schema]
     already describes for it, field by field — and anything else comes back
     exactly as declared, ``None`` included. Instantiating the declaration directly
     works for a serializer and fails for a dataclass, whose own ``__init__`` is
@@ -32,7 +32,7 @@ def renderable_serializer_class(declared: type | None) -> type[BaseSerializer[An
     Every render site in this package resolves through it: ``render_spec_output``,
     the selector views' and viewsets' ``get_serializer_class()``,
     ``@selector_action``, a mutation's response, and
-    [`build_audience_projection`][rest_framework_services.audience.build_audience_projection.build_audience_projection],
+    [`build_audience_projection`][django_spec_rest.audience.build_audience_projection.build_audience_projection],
     so an agent is shaped by the markings of the class it is actually rendered
     with. A transport that instantiates an output declaration itself — to render a
     resource outside ``render_spec_output``, say — calls this and instantiates what

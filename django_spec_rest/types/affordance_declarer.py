@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from rest_framework_services.types.affordance import Affordance
+from django_spec_rest.types.affordance import Affordance
 
 
 class AffordanceDeclarer:

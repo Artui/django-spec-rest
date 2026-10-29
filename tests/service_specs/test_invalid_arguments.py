@@ -19,8 +19,8 @@ from django_service_specs.services.service_error import ServiceError as KernelSe
 from django_service_specs.types.dispatch_error import DispatchError
 from rest_framework.exceptions import ErrorDetail, ValidationError
 
-from rest_framework_services.exceptions.service_error import ServiceError
-from rest_framework_services.service_specs.invalid_arguments import InvalidArguments
+from django_spec_rest.exceptions.service_error import ServiceError
+from django_spec_rest.service_specs.invalid_arguments import InvalidArguments
 from tests.service_specs.served_status import served_status
 
 

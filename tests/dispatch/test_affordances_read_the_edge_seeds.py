@@ -17,7 +17,7 @@ from django.http import HttpRequest
 from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 
-from rest_framework_services import (
+from django_spec_rest import (
     DEFAULT_POOL_SEEDS,
     ActionUnavailable,
     ServiceSpec,
@@ -27,7 +27,7 @@ from rest_framework_services import (
     enforce_affordances,
     unmet_operation_affordance,
 )
-from rest_framework_services.types.affordance import Affordance
+from django_spec_rest.types.affordance import Affordance
 
 _SEEN: list[str] = []
 

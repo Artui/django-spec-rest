@@ -7,14 +7,14 @@ from typing import Any, Protocol
 
 from django.core.exceptions import ImproperlyConfigured
 
-from rest_framework_services.types.reserved_pool_seeds import RESERVED_POOL_SEEDS
-from rest_framework_services.types.unset import UNSET
+from django_spec_rest.types.reserved_pool_seeds import RESERVED_POOL_SEEDS
+from django_spec_rest.types.unset import UNSET
 
 
 class _ChannelDeclaration(Protocol):
     """The shape shared by
-    [`UrlKwarg`][rest_framework_services.types.url_kwarg.UrlKwarg] and
-    [`QueryParam`][rest_framework_services.types.query_param.QueryParam].
+    [`UrlKwarg`][django_spec_rest.types.url_kwarg.UrlKwarg] and
+    [`QueryParam`][django_spec_rest.types.query_param.QueryParam].
 
     Members are **read-only properties**, not bare attributes. Both concrete
     types are ``@dataclass(frozen=True)``, whose fields are read-only — a bare
@@ -39,8 +39,8 @@ def validate_channel_names(
 ) -> None:
     """Raise ``ImproperlyConfigured`` on a bad channel declaration set.
 
-    A [`UrlKwarg`][rest_framework_services.types.url_kwarg.UrlKwarg] /
-    [`QueryParam`][rest_framework_services.types.query_param.QueryParam] is popped out
+    A [`UrlKwarg`][django_spec_rest.types.url_kwarg.UrlKwarg] /
+    [`QueryParam`][django_spec_rest.types.query_param.QueryParam] is popped out
     of the caller's arguments and routed to a side channel, so its name must not collide
     with a key the transport controls, and must not be declared twice.
 

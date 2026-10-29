@@ -6,7 +6,7 @@ definition moved down rather than letting ``service_specs/`` import ``dispatch/`
 
 from __future__ import annotations
 
-from rest_framework_services.service_specs.renderable_serializer_class import (
+from django_spec_rest.service_specs.renderable_serializer_class import (
     renderable_serializer_class,
 )
 

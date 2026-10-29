@@ -22,7 +22,7 @@ from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 from rest_framework.test import APIRequestFactory
 
-from rest_framework_services import (
+from django_spec_rest import (
     ChildSpec,
     ServiceSpec,
     ServiceValidationError,
@@ -31,7 +31,7 @@ from rest_framework_services import (
     create_from_input,
     dispatch_spec,
 )
-from rest_framework_services.dispatch.utils import _wire_names
+from django_spec_rest.dispatch.utils import _wire_names
 from tests.testapp.models import Catalog, Post, Section
 
 

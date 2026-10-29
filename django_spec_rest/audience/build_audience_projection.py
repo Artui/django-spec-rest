@@ -8,9 +8,9 @@ from typing import Any
 from django.core.exceptions import ImproperlyConfigured
 from rest_framework import serializers
 
-from rest_framework_services.types.audience_projection import AudienceProjection
-from rest_framework_services.types.field_audience import FieldAudience
-from rest_framework_services.types.field_marking import MARKING, FieldMarking
+from django_spec_rest.types.audience_projection import AudienceProjection
+from django_spec_rest.types.field_audience import FieldAudience
+from django_spec_rest.types.field_marking import MARKING, FieldMarking
 
 
 def build_audience_projection(
@@ -22,14 +22,14 @@ def build_audience_projection(
     """Resolve one output declaration's agent presentation, recursing into children.
 
     Reads
-    [`FieldMarking`][rest_framework_services.types.field_marking.FieldMarking] markings
+    [`FieldMarking`][django_spec_rest.types.field_marking.FieldMarking] markings
     out of each field's ``style`` bag and collects the ``ChoiceField`` labels DRF
     already holds. Pure in the serializer class, so the result is built once and
     reused — see
-    [`AudienceProjection`][rest_framework_services.types.audience_projection.AudienceProjection].
+    [`AudienceProjection`][django_spec_rest.types.audience_projection.AudienceProjection].
 
     ``serializer_cls`` is read as the class it renders through, resolved with
-    [`renderable_serializer_class`][rest_framework_services.dispatch.renderable_serializer_class.renderable_serializer_class],
+    [`renderable_serializer_class`][django_spec_rest.dispatch.renderable_serializer_class.renderable_serializer_class],
     so a bare ``@dataclass`` output is projected from the ``DataclassSerializer``
     it is rendered with. Two consequences follow, both deliberate. A marking
     given to a dataclass field — ``field(metadata={"serializer_kwargs": {"style":
@@ -39,7 +39,7 @@ def build_audience_projection(
     member names, so an agent reads ``"GOLD"`` where the browser reads
     ``"gold"``: the substitution every ``ChoiceField`` gets, and mirrored into
     the schema by
-    [`annotate_output_schema`][rest_framework_services.audience.annotate_output_schema.annotate_output_schema].
+    [`annotate_output_schema`][django_spec_rest.audience.annotate_output_schema.annotate_output_schema].
     Mark the field ``HANDLE`` to keep the value for an agent too.
 
     ``None``, or anything else that does not resolve to a DRF ``Serializer``,
@@ -48,7 +48,7 @@ def build_audience_projection(
     ``overrides`` layers a caller's markings on top, for the one case the
     serializer cannot express: a mount that needs what its sibling hides. They
     reach a transport as
-    [`OfflineContract.field_audiences`][rest_framework_services.types.offline_contract.OfflineContract],
+    [`OfflineContract.field_audiences`][django_spec_rest.types.offline_contract.OfflineContract],
     which is one declaration read by every agent transport — and the merge lives
     here, next to the clash rule it extends, so that stays true. Two copies of it
     is how one spec comes to project a different field set depending on which
@@ -66,10 +66,10 @@ def build_audience_projection(
     # Genuine circular import, deliberately local: ``dispatch`` re-exports
     # ``render_for_audience``, which imports this module, so importing anything
     # from ``dispatch`` at module scope executes a half-built package.
-    from rest_framework_services.dispatch.base_serializer_context import (
+    from django_spec_rest.dispatch.base_serializer_context import (
         base_serializer_context,
     )
-    from rest_framework_services.dispatch.renderable_serializer_class import (
+    from django_spec_rest.dispatch.renderable_serializer_class import (
         renderable_serializer_class,
     )
 

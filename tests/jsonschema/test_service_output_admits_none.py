@@ -17,7 +17,7 @@ from django.contrib.auth.models import AnonymousUser
 from jsonschema import Draft202012Validator
 from rest_framework import serializers
 
-from rest_framework_services import (
+from django_spec_rest import (
     SelectorKind,
     SelectorSpec,
     ServiceSpec,

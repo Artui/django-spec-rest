@@ -23,7 +23,7 @@ from django.db.models import QuerySet
 from rest_framework.exceptions import ValidationError
 from typing_extensions import NotRequired, TypedDict, Unpack
 
-from rest_framework_services import (
+from django_spec_rest import (
     SelectorKind,
     SelectorSpec,
     ServiceSpec,
@@ -31,9 +31,9 @@ from rest_framework_services import (
     build_offline_context,
     dispatch_spec,
 )
-from rest_framework_services.types.argument_binding import ArgumentBinding
-from rest_framework_services.types.unknown_arguments import UnknownArguments
-from rest_framework_services.types.unset import UNSET
+from django_spec_rest.types.argument_binding import ArgumentBinding
+from django_spec_rest.types.unknown_arguments import UnknownArguments
+from django_spec_rest.types.unset import UNSET
 from tests.testapp.models import Author, Post
 
 

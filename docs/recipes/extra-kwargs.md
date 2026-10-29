@@ -153,7 +153,7 @@ and the request, and returns a `TypedDict` describing the keys it adds:
 
 ```python
 from typing import TypedDict
-from rest_framework_services import ServiceView
+from django_spec_rest import ServiceView
 
 
 class PublishAuthorKwargs(TypedDict):
@@ -185,7 +185,7 @@ Protocol checks the surrounding shape (`data`, `instance`, return type):
 ```python
 from typing_extensions import Unpack, TypedDict
 
-from rest_framework_services import UpdateService, implements
+from django_spec_rest import UpdateService, implements
 
 
 class PublishAuthorKwargs(TypedDict, total=False):
@@ -213,10 +213,10 @@ catalogue and notes on type-checker support.
 ### What the return annotation declares
 
 The provider's return annotation is read before it runs, by
-[`provider_keys`][rest_framework_services.dispatch.provider_keys.provider_keys].
+[`provider_keys`][django_spec_rest.dispatch.provider_keys.provider_keys].
 That is how a transport serving a selector off HTTP, such as an MCP tool or an
 agent toolset, knows which names not to ask its caller for. Its answer is a
-[`ProviderKeys`][rest_framework_services.types.provider_keys.ProviderKeys], with
+[`ProviderKeys`][django_spec_rest.types.provider_keys.ProviderKeys], with
 `filled` and `declinable` sets of key names that also unpack as a pair. It
 reads three things:
 
@@ -308,7 +308,7 @@ instantiated:
 from dataclasses import dataclass
 from typing import Any
 from rest_framework.request import Request
-from rest_framework_services import ServiceSpec, ServiceView
+from django_spec_rest import ServiceSpec, ServiceView
 
 
 @dataclass
@@ -350,7 +350,7 @@ from dataclasses import dataclass
 
 from typing_extensions import Unpack
 
-from rest_framework_services import (
+from django_spec_rest import (
     DeleteService,
     HttpExtras,
     ServiceSpec,

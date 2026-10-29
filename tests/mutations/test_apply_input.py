@@ -6,8 +6,8 @@ from dataclasses import dataclass
 
 import pytest
 
-from rest_framework_services.mutations import apply_input
-from rest_framework_services.types import UNSET
+from django_spec_rest.mutations import apply_input
+from django_spec_rest.types import UNSET
 from tests.testapp.models import Author, Post
 
 

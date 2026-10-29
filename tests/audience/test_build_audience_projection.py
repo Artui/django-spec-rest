@@ -9,9 +9,9 @@ import pytest
 from django.core.exceptions import ImproperlyConfigured
 from rest_framework import serializers
 
-from rest_framework_services.audience.build_audience_projection import build_audience_projection
-from rest_framework_services.types.field_audience import FieldAudience
-from rest_framework_services.types.field_marking import MARKING, FieldMarking
+from django_spec_rest.audience.build_audience_projection import build_audience_projection
+from django_spec_rest.types.field_audience import FieldAudience
+from django_spec_rest.types.field_marking import MARKING, FieldMarking
 
 STATUSES = [("PENDING_REVIEW", "Awaiting review"), ("PAID", "Paid")]
 

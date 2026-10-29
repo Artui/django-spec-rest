@@ -8,7 +8,7 @@ dispatch edge's, and tested there.
 
 from __future__ import annotations
 
-from rest_framework_services.types.unknown_arguments import UnknownArguments
+from django_spec_rest.types.unknown_arguments import UnknownArguments
 
 
 def test_every_member_drfs_named_is_still_there() -> None:

@@ -17,15 +17,15 @@ import pytest
 from rest_framework import serializers
 from typing_extensions import TypedDict, Unpack
 
-from rest_framework_services.dispatch.utils import _spread_parameter_keys, declared_input_keys
-from rest_framework_services.jsonschema.spec_to_json_schema import spec_to_json_schema
-from rest_framework_services.types.argument_binding import ArgumentBinding
-from rest_framework_services.types.input_required import InputRequired
-from rest_framework_services.types.not_client_input import NotClientInput
-from rest_framework_services.types.reserved_pool_seeds import RESERVED_POOL_SEEDS
-from rest_framework_services.types.selector_kind import SelectorKind
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_spec_rest.dispatch.utils import _spread_parameter_keys, declared_input_keys
+from django_spec_rest.jsonschema.spec_to_json_schema import spec_to_json_schema
+from django_spec_rest.types.argument_binding import ArgumentBinding
+from django_spec_rest.types.input_required import InputRequired
+from django_spec_rest.types.not_client_input import NotClientInput
+from django_spec_rest.types.reserved_pool_seeds import RESERVED_POOL_SEEDS
+from django_spec_rest.types.selector_kind import SelectorKind
+from django_spec_rest.types.selector_spec import SelectorSpec
+from django_spec_rest.types.service_spec import ServiceSpec
 
 _SPREADS = pytest.mark.parametrize(
     "binding",

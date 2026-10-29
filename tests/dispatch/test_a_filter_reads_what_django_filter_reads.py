@@ -19,7 +19,7 @@ from django.http import QueryDict
 from rest_framework import serializers
 from rest_framework.test import APIRequestFactory
 
-from rest_framework_services import (
+from django_spec_rest import (
     DispatchResult,
     SelectorKind,
     SelectorListView,
@@ -28,7 +28,7 @@ from rest_framework_services import (
     adispatch_spec,
     dispatch_spec,
 )
-from rest_framework_services.service_specs.invalid_arguments import InvalidArguments
+from django_spec_rest.service_specs.invalid_arguments import InvalidArguments
 from tests.testapp.models import Post
 
 

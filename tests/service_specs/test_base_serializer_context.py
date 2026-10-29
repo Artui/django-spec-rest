@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 from rest_framework import serializers
 
-from rest_framework_services import (
+from django_spec_rest import (
     SelectorKind,
     SelectorSpec,
     base_serializer_context,

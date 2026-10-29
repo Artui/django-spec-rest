@@ -9,21 +9,21 @@ from django.core.exceptions import ImproperlyConfigured
 from rest_framework.exceptions import MethodNotAllowed, NotFound
 from rest_framework.generics import GenericAPIView
 
-from rest_framework_services.types.polymorphic_service_spec import PolymorphicServiceSpec
-from rest_framework_services.types.selector_kind import SelectorKind
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
-from rest_framework_services.views.mutation.mutation_flow_mixin import MutationFlowMixin
-from rest_framework_services.views.mutation.utils import _ServesRaisedSchema, mutation_target_source
-from rest_framework_services.views.spec_validation import (
+from django_spec_rest.types.polymorphic_service_spec import PolymorphicServiceSpec
+from django_spec_rest.types.selector_kind import SelectorKind
+from django_spec_rest.types.selector_spec import SelectorSpec
+from django_spec_rest.types.service_spec import ServiceSpec
+from django_spec_rest.views.mutation.mutation_flow_mixin import MutationFlowMixin
+from django_spec_rest.views.mutation.utils import _ServesRaisedSchema, mutation_target_source
+from django_spec_rest.views.spec_validation import (
     is_overridden,
     validate_filter_set_no_backend_conflict,
     validate_polymorphic_service_spec,
     validate_selector_spec,
     validate_service_spec,
 )
-from rest_framework_services.views.utils import layer_serializer_context
-from rest_framework_services.viewsets.resolve_polymorphic_service_spec import (
+from django_spec_rest.views.utils import layer_serializer_context
+from django_spec_rest.viewsets.resolve_polymorphic_service_spec import (
     resolve_polymorphic_service_spec,
 )
 
@@ -110,7 +110,7 @@ def resolve_action_spec(view: Any, action: str | None) -> ActionSpec | None:
     """Return the spec ``action`` routes to on ``view``, from either source.
 
     A spec reaches a viewset two ways: keyed in ``action_specs`` (read through
-    [`resolve_action_spec_entry`][rest_framework_services.viewsets.utils.resolve_action_spec_entry],
+    [`resolve_action_spec_entry`][django_spec_rest.viewsets.utils.resolve_action_spec_entry],
     fallbacks included), or stamped on the bound handler by ``@service_action`` /
     ``@selector_action``. ``get_permissions`` and the OPTIONS metadata path both
     ask through here, so a hook that reads only one of the two cannot be written
@@ -142,11 +142,11 @@ def resolve_action_service_spec(
     *,
     view: Any,
 ) -> ServiceSpec[Any, Any, Any]:
-    """Pick a [`ServiceSpec`][rest_framework_services.types.service_spec.ServiceSpec]
+    """Pick a [`ServiceSpec`][django_spec_rest.types.service_spec.ServiceSpec]
     from ``action_specs`` for a mutation action.
 
     A
-    [`PolymorphicServiceSpec`][rest_framework_services.types.polymorphic_service_spec.PolymorphicServiceSpec]
+    [`PolymorphicServiceSpec`][django_spec_rest.types.polymorphic_service_spec.PolymorphicServiceSpec]
     entry is resolved to its chosen variant via the discriminator (memoized on ``view``
     for the request). Centralised so all three mutation viewset mixins share one error
     path."""
@@ -170,7 +170,7 @@ def resolve_action_selector_spec(
     action_specs: Mapping[str, ActionSpec],
     action: str,
 ) -> SelectorSpec[Any, Any] | None:
-    """Pick a [`SelectorSpec`][rest_framework_services.types.selector_spec.SelectorSpec]
+    """Pick a [`SelectorSpec`][django_spec_rest.types.selector_spec.SelectorSpec]
     from ``action_specs`` for a read action.
 
     ``None`` means the caller must fall back to vanilla DRF
@@ -238,7 +238,7 @@ def _validate_custom_action_spec(view_cls: type, action: str, spec: object, *, l
     """Validate an entry keyed on an action none of the mixins dispatch.
 
     A custom key is not dead configuration: ``get_permissions`` and
-    [`ActionSerializerResolver`][rest_framework_services.viewsets.action_serializer_resolver.ActionSerializerResolver]
+    [`ActionSerializerResolver`][django_spec_rest.viewsets.action_serializer_resolver.ActionSerializerResolver]
     both resolve by action name, so a ``@action``-decorated method takes its
     permissions and serializer from here. It used to be the one entry nothing
     validated at all.
@@ -294,7 +294,7 @@ class _ActionSpecsMixin(_ServesRaisedSchema):
     """Declares the ``action_specs`` class attribute shared by all viewset mixins.
 
     All per-action mixins and
-    [`ActionSerializerResolver`][rest_framework_services.viewsets.action_serializer_resolver.ActionSerializerResolver]
+    [`ActionSerializerResolver`][django_spec_rest.viewsets.action_serializer_resolver.ActionSerializerResolver]
     inherit from this so the attribute is defined in exactly one place. ``as_view`` runs
     fail-fast spec validation once per view at URL-wiring time.
 
@@ -330,14 +330,14 @@ class _ActionSpecsMixin(_ServesRaisedSchema):
         ``output_serializer_context`` has to be layered on this path.
 
         Restricted to
-        [`SelectorSpec`][rest_framework_services.types.selector_spec.SelectorSpec]
+        [`SelectorSpec`][django_spec_rest.types.selector_spec.SelectorSpec]
         entries: mutations already apply their context inside
         ``dispatch_mutation_for_spec``, so layering here would double-apply it and bleed
         output context into the input direction.
 
         The ``get_output_serializer_context`` *directional* hook is deliberately not
         consulted —
-        [`MutationFlowMixin`][rest_framework_services.views.mutation.mutation_flow_mixin.MutationFlowMixin]'s
+        [`MutationFlowMixin`][django_spec_rest.views.mutation.mutation_flow_mixin.MutationFlowMixin]'s
         default implementation calls ``self.get_serializer_context()`` and would recurse
         into this override."""
         base: dict[str, Any] = dict(super().get_serializer_context())  # ty: ignore[unresolved-attribute]

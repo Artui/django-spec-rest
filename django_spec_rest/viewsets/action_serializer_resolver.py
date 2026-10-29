@@ -6,11 +6,11 @@ from typing import Any
 
 from rest_framework.serializers import BaseSerializer, Serializer
 
-from rest_framework_services.dispatch.renderable_serializer_class import renderable_serializer_class
-from rest_framework_services.types.polymorphic_service_spec import PolymorphicServiceSpec
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
-from rest_framework_services.viewsets.utils import (
+from django_spec_rest.dispatch.renderable_serializer_class import renderable_serializer_class
+from django_spec_rest.types.polymorphic_service_spec import PolymorphicServiceSpec
+from django_spec_rest.types.selector_spec import SelectorSpec
+from django_spec_rest.types.service_spec import ServiceSpec
+from django_spec_rest.viewsets.utils import (
     ActionSpec,
     _ActionSpecsMixin,
     polymorphic_inputs_disagree,
@@ -30,9 +30,9 @@ class ActionSerializerResolver(_ActionSpecsMixin):
     """Resolve ``get_serializer_class()`` from ``action_specs``.
 
     Reads the active action's entry: a
-    [`SelectorSpec`][rest_framework_services.types.selector_spec.SelectorSpec] supplies
+    [`SelectorSpec`][django_spec_rest.types.selector_spec.SelectorSpec] supplies
     ``output_serializer``, a
-    [`ServiceSpec`][rest_framework_services.types.service_spec.ServiceSpec] supplies
+    [`ServiceSpec`][django_spec_rest.types.service_spec.ServiceSpec] supplies
     ``output_selector_spec.output_serializer``. Falls back to DRF's
     ``serializer_class``, raising the usual ``AssertionError`` when neither is set.
 
@@ -47,7 +47,7 @@ class ActionSerializerResolver(_ActionSpecsMixin):
     - a ``ServiceSpec`` with an ``input_serializer`` answers with it (a bare
       dataclass wrapped as it is for rendering);
     - a
-      [`PolymorphicServiceSpec`][rest_framework_services.types.polymorphic_service_spec.PolymorphicServiceSpec]
+      [`PolymorphicServiceSpec`][django_spec_rest.types.polymorphic_service_spec.PolymorphicServiceSpec]
       answers with its variants' ``input_serializer`` when they all declare the
       same one. Its discriminator is never asked: an OPTIONS request carries no
       body to discriminate. Variants that disagree leave the method out, unless

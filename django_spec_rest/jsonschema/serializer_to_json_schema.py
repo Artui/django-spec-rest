@@ -7,12 +7,12 @@ from typing import Any
 
 from rest_framework import serializers
 
-from rest_framework_services.jsonschema.utils import (
+from django_spec_rest.jsonschema.utils import (
     dataclass_to_schema,
     serializer_for_schema,
     serializer_to_schema,
 )
-from rest_framework_services.types.json_schema_registry import (
+from django_spec_rest.types.json_schema_registry import (
     DEFAULT_JSON_SCHEMA_REGISTRY,
     JsonSchemaRegistry,
 )
@@ -38,7 +38,7 @@ def serializer_to_json_schema(
     would make schema-strict consumers reject calls the service accepts.
 
     ``registry`` supplies consumer rules for custom field / Python types — see
-    [`JsonSchemaRegistry`][rest_framework_services.types.json_schema_registry.JsonSchemaRegistry].
+    [`JsonSchemaRegistry`][django_spec_rest.types.json_schema_registry.JsonSchemaRegistry].
 
     ``max_depth`` bounds how many serializer levels are described, truncating
     deeper ones to ``{"type": "object"}``; ``None``, the default, describes them

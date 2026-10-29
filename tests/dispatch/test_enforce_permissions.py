@@ -9,12 +9,12 @@ from django.core.exceptions import ImproperlyConfigured
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import BasePermission, IsAdminUser
 
-from rest_framework_services.dispatch.build_offline_context import build_offline_context
-from rest_framework_services.dispatch.enforce_permissions import enforce_permissions
-from rest_framework_services.types.offline_context import OfflineContext
-from rest_framework_services.types.selector_kind import SelectorKind
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_spec_rest.dispatch.build_offline_context import build_offline_context
+from django_spec_rest.dispatch.enforce_permissions import enforce_permissions
+from django_spec_rest.types.offline_context import OfflineContext
+from django_spec_rest.types.selector_kind import SelectorKind
+from django_spec_rest.types.selector_spec import SelectorSpec
+from django_spec_rest.types.service_spec import ServiceSpec
 from tests.testapp.models import Tag
 
 

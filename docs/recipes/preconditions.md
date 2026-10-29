@@ -9,7 +9,7 @@ request on this object.
 with the operation to every transport instead of living in one view method.
 
 ```python
-from rest_framework_services import ServiceConflict, ServiceSpec
+from django_spec_rest import ServiceConflict, ServiceSpec
 
 
 class BudgetLocked(ServiceConflict):

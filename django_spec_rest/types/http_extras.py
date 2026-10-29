@@ -28,9 +28,10 @@ Parameterising on ``UserT`` lets each project narrow ``user`` to its own
 ``UserT = Any`` reflects the runtime shape: ``request.user`` may be a
 concrete user, an ``AnonymousUser``, or ``None`` for requests that bypassed
 authentication middleware. Annotated as ``Any`` so this module stays
-import-safe during Django app population (``rest_framework_services`` ships
-in ``INSTALLED_APPS`` and is imported during ``apps.populate()``, before
-``django.contrib.auth.models`` is loaded).
+import-safe before the app registry is ready (a project may import
+``django_spec_rest`` from an ``AppConfig`` module or before
+``django.setup()``, where importing ``django.contrib.auth.models`` raises
+``AppRegistryNotReady``).
 """
 
 from __future__ import annotations
