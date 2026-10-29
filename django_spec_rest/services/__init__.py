@@ -18,21 +18,21 @@ siblings) return ready-made service callables for the common case where the
 entire body is a one-line wrapper over the mutation helpers.
 """
 
-from rest_framework_services.services.acall_service import acall_service
-from rest_framework_services.services.acreate_model import acreate_model
-from rest_framework_services.services.adelete_collection import adelete_collection
-from rest_framework_services.services.adelete_model import adelete_model
-from rest_framework_services.services.arun_service import arun_service
-from rest_framework_services.services.aupdate_model import aupdate_model
-from rest_framework_services.services.call_service import call_service
-from rest_framework_services.services.create_model import create_model
-from rest_framework_services.services.create_service import CreateService
-from rest_framework_services.services.delete_collection import delete_collection
-from rest_framework_services.services.delete_model import delete_model
-from rest_framework_services.services.delete_service import DeleteService
-from rest_framework_services.services.run_service import run_service
-from rest_framework_services.services.update_model import update_model
-from rest_framework_services.services.update_service import UpdateService
+from django_spec_rest.services.acall_service import acall_service
+from django_spec_rest.services.acreate_model import acreate_model
+from django_spec_rest.services.adelete_collection import adelete_collection
+from django_spec_rest.services.adelete_model import adelete_model
+from django_spec_rest.services.arun_service import arun_service
+from django_spec_rest.services.aupdate_model import aupdate_model
+from django_spec_rest.services.call_service import call_service
+from django_spec_rest.services.create_model import create_model
+from django_spec_rest.services.create_service import CreateService
+from django_spec_rest.services.delete_collection import delete_collection
+from django_spec_rest.services.delete_model import delete_model
+from django_spec_rest.services.delete_service import DeleteService
+from django_spec_rest.services.run_service import run_service
+from django_spec_rest.services.update_model import update_model
+from django_spec_rest.services.update_service import UpdateService
 
 __all__ = [
     "CreateService",

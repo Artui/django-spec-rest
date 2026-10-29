@@ -13,14 +13,14 @@ from typing import Any
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 
-from rest_framework_services import (
+from django_spec_rest import (
     ManyToManySpec,
     acreate_from_input,
     aupdate_from_input,
     create_from_input,
     update_from_input,
 )
-from rest_framework_services.exceptions.service_validation_error import ServiceValidationError
+from django_spec_rest.exceptions.service_validation_error import ServiceValidationError
 from tests.testapp.models import Post, Tag
 
 _TAGS = {"tags": ManyToManySpec(model=Tag)}

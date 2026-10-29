@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from rest_framework_services.views.mutation.resolve_success_status import resolve_success_status
+from django_spec_rest.views.mutation.resolve_success_status import resolve_success_status
 
 
 def test_none_falls_back_to_default() -> None:

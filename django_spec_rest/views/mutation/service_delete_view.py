@@ -9,10 +9,10 @@ from rest_framework.generics import GenericAPIView
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from rest_framework_services.types.service_spec import ServiceSpec
-from rest_framework_services.views.mutation.mutation_flow_mixin import MutationFlowMixin
-from rest_framework_services.views.mutation.utils import resolve_mutation_instance
-from rest_framework_services.views.spec_validation import validate_mutation_view_spec
+from django_spec_rest.types.service_spec import ServiceSpec
+from django_spec_rest.views.mutation.mutation_flow_mixin import MutationFlowMixin
+from django_spec_rest.views.mutation.utils import resolve_mutation_instance
+from django_spec_rest.views.spec_validation import validate_mutation_view_spec
 
 
 class ServiceDeleteView(MutationFlowMixin, GenericAPIView):
@@ -23,7 +23,7 @@ class ServiceDeleteView(MutationFlowMixin, GenericAPIView):
     falling back to DRF's ``get_object()``.
 
     Configure by setting ``spec`` to a
-    [`ServiceSpec`][rest_framework_services.types.service_spec.ServiceSpec]. The spec's
+    [`ServiceSpec`][django_spec_rest.types.service_spec.ServiceSpec]. The spec's
     ``input_serializer`` is optional (for delete-with-payload patterns such as a
     deletion reason); ``success_status`` defaults to ``204 No Content``; set
     ``output_selector_spec`` with an ``output_serializer`` on the spec to render a body

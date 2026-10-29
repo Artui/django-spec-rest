@@ -21,7 +21,7 @@ import pkgutil
 import django_service_specs
 import pytest
 
-import rest_framework_services
+import django_spec_rest
 
 # (drfs module, kernel module, name). The kernel paths are the leaf modules
 # the kernel pins for drfs, never its package root, so a move there fails here
@@ -29,196 +29,196 @@ import rest_framework_services
 REEXPORTS: list[tuple[str, str, str]] = [
     # Exceptions.
     (
-        "rest_framework_services.exceptions.action_unavailable",
+        "django_spec_rest.exceptions.action_unavailable",
         "django_service_specs.services.action_unavailable",
         "ActionUnavailable",
     ),
     (
-        "rest_framework_services.exceptions.additional_input_required",
+        "django_spec_rest.exceptions.additional_input_required",
         "django_service_specs.services.additional_input_required",
         "AdditionalInputRequired",
     ),
     (
-        "rest_framework_services.exceptions.service_conflict",
+        "django_spec_rest.exceptions.service_conflict",
         "django_service_specs.services.service_conflict",
         "ServiceConflict",
     ),
     (
-        "rest_framework_services.exceptions.service_error",
+        "django_spec_rest.exceptions.service_error",
         "django_service_specs.services.service_error",
         "ServiceError",
     ),
     (
-        "rest_framework_services.exceptions.service_not_found",
+        "django_spec_rest.exceptions.service_not_found",
         "django_service_specs.services.service_not_found",
         "ServiceNotFound",
     ),
     (
-        "rest_framework_services.exceptions.service_validation_error",
+        "django_spec_rest.exceptions.service_validation_error",
         "django_service_specs.services.service_validation_error",
         "ServiceValidationError",
     ),
     # Values.
     (
-        "rest_framework_services.types.audience_projection",
+        "django_spec_rest.types.audience_projection",
         "django_service_specs.output.audience_projection",
         "AudienceProjection",
     ),
     (
-        "rest_framework_services.types.change_result",
+        "django_spec_rest.types.change_result",
         "django_service_specs.mutations.change_result",
         "ChangeResult",
     ),
     (
-        "rest_framework_services.types.child_collection_change",
+        "django_spec_rest.types.child_collection_change",
         "django_service_specs.mutations.child_collection_change",
         "ChildCollectionChange",
     ),
     (
-        "rest_framework_services.types.field_audience",
+        "django_spec_rest.types.field_audience",
         "django_service_specs.types.field_audience",
         "FieldAudience",
     ),
     (
-        "rest_framework_services.types.field_change",
+        "django_spec_rest.types.field_change",
         "django_service_specs.mutations.field_change",
         "FieldChange",
     ),
     (
-        "rest_framework_services.types.field_marking",
+        "django_spec_rest.types.field_marking",
         "django_service_specs.output.field_marking",
         "FieldMarking",
     ),
     (
-        "rest_framework_services.types.output_page",
+        "django_spec_rest.types.output_page",
         "django_service_specs.types.output_page",
         "OutputPage",
     ),
     (
-        "rest_framework_services.types.progress_reporter",
+        "django_spec_rest.types.progress_reporter",
         "django_service_specs.types.progress_reporter",
         "ProgressReporter",
     ),
     (
-        "rest_framework_services.types.related_object_change",
+        "django_spec_rest.types.related_object_change",
         "django_service_specs.mutations.related_object_change",
         "RelatedObjectChange",
     ),
     (
-        "rest_framework_services.types.relation_mode",
+        "django_spec_rest.types.relation_mode",
         "django_service_specs.types.relation_mode",
         "RelationMode",
     ),
     (
-        "rest_framework_services.types.relation_orphan",
+        "django_spec_rest.types.relation_orphan",
         "django_service_specs.types.relation_orphan",
         "RelationOrphan",
     ),
     (
-        "rest_framework_services.types.relation_outcome",
+        "django_spec_rest.types.relation_outcome",
         "django_service_specs.types.relation_outcome",
         "RelationOutcome",
     ),
     (
-        "rest_framework_services.types.relation_phase",
+        "django_spec_rest.types.relation_phase",
         "django_service_specs.types.relation_phase",
         "RelationPhase",
     ),
     (
-        "rest_framework_services.types.selector_kind",
+        "django_spec_rest.types.selector_kind",
         "django_service_specs.types.selector_kind",
         "SelectorKind",
     ),
-    ("rest_framework_services.types.unset", "django_service_specs.types.unset", "UNSET"),
-    ("rest_framework_services.types.unset", "django_service_specs.types.unset", "UnsetType"),
+    ("django_spec_rest.types.unset", "django_service_specs.types.unset", "UNSET"),
+    ("django_spec_rest.types.unset", "django_service_specs.types.unset", "UnsetType"),
     (
-        "rest_framework_services.types.affordance",
+        "django_spec_rest.types.affordance",
         "django_service_specs.types.affordance",
         "Affordance",
     ),
     (
-        "rest_framework_services.types.value_formatter",
+        "django_spec_rest.types.value_formatter",
         "django_service_specs.types.value_formatter",
         "ValueFormatter",
     ),
     # The relation layer's declarations.
     (
-        "rest_framework_services.types.child_spec",
+        "django_spec_rest.types.child_spec",
         "django_service_specs.relations.child_spec",
         "ChildSpec",
     ),
     (
-        "rest_framework_services.types.forward_relation_spec",
+        "django_spec_rest.types.forward_relation_spec",
         "django_service_specs.relations.forward_relation_spec",
         "ForwardRelationSpec",
     ),
     (
-        "rest_framework_services.types.generic_relation_spec",
+        "django_spec_rest.types.generic_relation_spec",
         "django_service_specs.relations.generic_relation_spec",
         "GenericRelationSpec",
     ),
     (
-        "rest_framework_services.types.many_to_many_spec",
+        "django_spec_rest.types.many_to_many_spec",
         "django_service_specs.relations.many_to_many_spec",
         "ManyToManySpec",
     ),
     (
-        "rest_framework_services.types.reverse_one_to_one_spec",
+        "django_spec_rest.types.reverse_one_to_one_spec",
         "django_service_specs.relations.reverse_one_to_one_spec",
         "ReverseOneToOneSpec",
     ),
     (
-        "rest_framework_services.types.relation_spec",
+        "django_spec_rest.types.relation_spec",
         "django_service_specs.relations.relation_spec",
         "RelationSpec",
     ),
     # The binding for a service with no body, and the answer a ``kwargs=``
     # provider reads to.
     (
-        "rest_framework_services.types.no_input",
+        "django_spec_rest.types.no_input",
         "django_service_specs.types.no_input",
         "NoInput",
     ),
     (
-        "rest_framework_services.types.provider_keys",
+        "django_spec_rest.types.provider_keys",
         "django_service_specs.types.provider_keys",
         "ProviderKeys",
     ),
     # The keyword pool's seed registry.
     (
-        "rest_framework_services.types.pool_seeds",
+        "django_spec_rest.types.pool_seeds",
         "django_service_specs.pool.pool_seeds",
         "PoolSeeds",
     ),
     (
-        "rest_framework_services.types.pool_seeds",
+        "django_spec_rest.types.pool_seeds",
         "django_service_specs.pool.pool_seeds",
         "DEFAULT_POOL_SEEDS",
     ),
     (
-        "rest_framework_services.types.reserved_pool_seeds",
+        "django_spec_rest.types.reserved_pool_seeds",
         "django_service_specs.pool.reserved_pool_seeds",
         "RESERVED_POOL_SEEDS",
     ),
     # What dispatch answers, and how it treats an argument nothing declares.
     (
-        "rest_framework_services.types.dispatch_result",
+        "django_spec_rest.types.dispatch_result",
         "django_service_specs.dispatch.dispatch_result",
         "DispatchResult",
     ),
     (
-        "rest_framework_services.types.unknown_arguments",
+        "django_spec_rest.types.unknown_arguments",
         "django_service_specs.types.unknown_arguments",
         "UnknownArguments",
     ),
     # The registry a project declares its operations in once.
     (
-        "rest_framework_services.types.registered_spec",
+        "django_spec_rest.types.registered_spec",
         "django_service_specs.registry.registered_spec",
         "RegisteredSpec",
     ),
     (
-        "rest_framework_services.registry.spec_registry",
+        "django_spec_rest.registry.spec_registry",
         "django_service_specs.registry.spec_registry",
         "SpecRegistry",
     ),
@@ -357,13 +357,11 @@ def test_the_roots_kernel_objects_are_exactly_these() -> None:
     kernel = _kernel_objects_by_name()
     owned = {
         name
-        for name in rest_framework_services.__all__
-        if any(value is getattr(rest_framework_services, name) for value in kernel.get(name, []))
+        for name in django_spec_rest.__all__
+        if any(value is getattr(django_spec_rest, name) for value in kernel.get(name, []))
     }
 
     assert owned == KERNEL_OWNED_ROOT_NAMES
     assert len(KERNEL_OWNED_ROOT_NAMES) == 77
-    source = inspect.getsource(
-        importlib.import_module("rest_framework_services.dispatch.paginate_output")
-    )
+    source = inspect.getsource(importlib.import_module("django_spec_rest.dispatch.paginate_output"))
     assert "from django_service_specs.dispatch.paginate_output import DEFAULT_PAGE_SIZE" in source

@@ -40,7 +40,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
 
-from rest_framework_services import (
+from django_spec_rest import (
     ArgumentBinding,
     SelectorKind,
     SelectorSpec,

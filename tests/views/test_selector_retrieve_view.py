@@ -11,7 +11,7 @@ from django.urls import path
 from rest_framework.renderers import BaseRenderer, JSONRenderer
 from rest_framework.test import APIClient, APIRequestFactory
 
-from rest_framework_services import SelectorKind, SelectorRetrieveView, SelectorSpec
+from django_spec_rest import SelectorKind, SelectorRetrieveView, SelectorSpec
 from tests.testapp.models import Author
 from tests.testapp.serializers import AuthorSerializer
 

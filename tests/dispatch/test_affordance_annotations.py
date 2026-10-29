@@ -19,7 +19,7 @@ from django.db.models import Count, Prefetch, Q, QuerySet
 from django.test.utils import CaptureQueriesContext
 from rest_framework.test import APIRequestFactory
 
-from rest_framework_services import (
+from django_spec_rest import (
     DEFAULT_POOL_SEEDS,
     ActionUnavailable,
     Affordance,

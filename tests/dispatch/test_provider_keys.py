@@ -32,9 +32,9 @@ from django_service_specs.pool.provider_keys import provider_keys as kernel_prov
 from typing_extensions import NotRequired, ReadOnly, Required, TypedDict
 from typing_extensions import TypeVar as TypeVarWithDefault
 
-from rest_framework_services.dispatch.provider_keys import provider_keys
-from rest_framework_services.types.provider_keys import ProviderKeys
-from rest_framework_services.types.unset import UNSET, UnsetType
+from django_spec_rest.dispatch.provider_keys import provider_keys
+from django_spec_rest.types.provider_keys import ProviderKeys
+from django_spec_rest.types.unset import UNSET, UnsetType
 from tests.dispatch.provider_keys_fixtures import passthrough
 
 if TYPE_CHECKING:
@@ -690,7 +690,7 @@ from typing import TYPE_CHECKING
 
 from typing_extensions import TypedDict
 
-from rest_framework_services.types.unset import UnsetType
+from django_spec_rest.types.unset import UnsetType
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
@@ -731,7 +731,7 @@ from __future__ import annotations
 
 from typing_extensions import TypedDict
 
-from rest_framework_services.types.unset import UnsetType
+from django_spec_rest.types.unset import UnsetType
 
 
 class Scope[T](TypedDict):

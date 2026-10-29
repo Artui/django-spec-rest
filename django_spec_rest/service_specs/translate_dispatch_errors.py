@@ -15,9 +15,9 @@ from django_service_specs.parameters.invalid_arguments import (
 from django_service_specs.types.dispatch_error import DispatchError
 from rest_framework.exceptions import APIException
 
-from rest_framework_services.service_specs.invalid_arguments import InvalidArguments
-from rest_framework_services.service_specs.not_permitted import NotPermitted
-from rest_framework_services.service_specs.principal_unavailable import PrincipalUnavailable
+from django_spec_rest.service_specs.invalid_arguments import InvalidArguments
+from django_spec_rest.service_specs.not_permitted import NotPermitted
+from django_spec_rest.service_specs.principal_unavailable import PrincipalUnavailable
 
 
 @contextmanager
@@ -31,12 +31,12 @@ def translate_dispatch_errors() -> Generator[None]:
     inside this block:
 
     - the kernel's ``InvalidArguments`` leaves as
-      [`InvalidArguments`][rest_framework_services.service_specs.invalid_arguments.InvalidArguments],
+      [`InvalidArguments`][django_spec_rest.service_specs.invalid_arguments.InvalidArguments],
       with the same tree and every message's code;
     - its ``NotPermitted`` as
-      [`NotPermitted`][rest_framework_services.service_specs.not_permitted.NotPermitted],
+      [`NotPermitted`][django_spec_rest.service_specs.not_permitted.NotPermitted],
       and its ``PrincipalUnavailable`` as
-      [`PrincipalUnavailable`][rest_framework_services.service_specs.principal_unavailable.PrincipalUnavailable],
+      [`PrincipalUnavailable`][django_spec_rest.service_specs.principal_unavailable.PrincipalUnavailable],
       each with the same message;
     - a subclass of any of the three leaves as that class's twin, with the
       subclass's message.
@@ -53,7 +53,7 @@ def translate_dispatch_errors() -> Generator[None]:
       class a validator raised itself, which both ladders already catch. An
       author callable's DRF ``PermissionDenied`` and ``NotAuthenticated`` reach
       here as such a class, translated by
-      [`translate_drf_refusals`][rest_framework_services.service_specs.translate_drf_refusals.translate_drf_refusals]
+      [`translate_drf_refusals`][django_spec_rest.service_specs.translate_drf_refusals.translate_drf_refusals]
       as the compile hands the kernel the callable, and the DRF edge restores
       the author's exception itself (its ``ValidationError`` reaches here as a
       service's refusal, not a ``DispatchError``);

@@ -9,9 +9,9 @@ from urllib.parse import urlsplit
 from django.http import HttpRequest, QueryDict
 from rest_framework.request import Request
 
-from rest_framework_services.types.offline_context import OfflineContext
-from rest_framework_services.types.offline_http_request import OfflineHttpRequest
-from rest_framework_services.types.offline_service_view import OfflineServiceView
+from django_spec_rest.types.offline_context import OfflineContext
+from django_spec_rest.types.offline_http_request import OfflineHttpRequest
+from django_spec_rest.types.offline_service_view import OfflineServiceView
 
 
 def build_offline_context(
@@ -25,13 +25,13 @@ def build_offline_context(
     host: str | None = None,
 ) -> OfflineContext:
     """Build the
-    [`OfflineContext`][rest_framework_services.types.offline_context.OfflineContext] for
+    [`OfflineContext`][django_spec_rest.types.offline_context.OfflineContext] for
     dispatching a spec outside an HTTP request.
 
-    [`dispatch_spec`][rest_framework_services.dispatch.dispatch_spec.dispatch_spec]
+    [`dispatch_spec`][django_spec_rest.dispatch.dispatch_spec.dispatch_spec]
     forwards ``request`` / ``view`` to spec callables (``kwargs`` providers,
     ``extend_queryset``, context providers) that declare them, and
-    [`enforce_permissions`][rest_framework_services.dispatch.enforce_permissions.enforce_permissions]
+    [`enforce_permissions`][django_spec_rest.dispatch.enforce_permissions.enforce_permissions]
     needs a request + view to evaluate ``permission_classes``. This synthesizes both so
     a spec written for the HTTP transport keeps working when driven from a Pydantic-AI
     toolset, the MCP server, a management command, or a task runner.
@@ -42,12 +42,12 @@ def build_offline_context(
         params: Seeds ``request.data``, straight into DRF's parsed-data cache (a
             synthetic request has no stream to parse). It is *not* validated here — that
             is
-            [`dispatch_spec`][rest_framework_services.dispatch.dispatch_spec.dispatch_spec]'s
+            [`dispatch_spec`][django_spec_rest.dispatch.dispatch_spec.dispatch_spec]'s
             job, which takes ``params`` directly and never touches ``request.data``.
             Pass both the same value.
         http_request: An ambient Django request to wrap, so its headers / ``META`` are
             available (the MCP server passes its real one); otherwise an
-            [`OfflineHttpRequest`][rest_framework_services.types.offline_http_request.OfflineHttpRequest]
+            [`OfflineHttpRequest`][django_spec_rest.types.offline_http_request.OfflineHttpRequest]
             is created. Either way the method is forced to ``POST``, because mutation
             callables often branch on it. **The caller keeps ownership: a request
             passed here is never written to.** What gets wrapped is a shallow copy,
@@ -58,10 +58,10 @@ def build_offline_context(
             for the rest of its cycle. Pass the request you are serving; dispatching
             several specs from one request is safe, and neither leaks into the next.
         action: The view action name, exposed on the
-            [`OfflineServiceView`][rest_framework_services.types.offline_service_view.OfflineServiceView].
+            [`OfflineServiceView`][django_spec_rest.types.offline_service_view.OfflineServiceView].
         kwargs: **The** channel for route-derived values — the off-HTTP counterpart of a
             view's URL captures.
-            [`dispatch_spec`][rest_framework_services.dispatch.dispatch_spec.dispatch_spec]
+            [`dispatch_spec`][django_spec_rest.dispatch.dispatch_spec.dispatch_spec]
             spreads it into the selector / target pools exactly where the HTTP path
             spreads ``extra_url_kwargs=view.kwargs``: authoritative over ``params`` on a
             key conflict, below a ``spec.kwargs`` provider, which also sees it as
@@ -86,12 +86,12 @@ def build_offline_context(
             HTTP. Accepts ``"example.com"``, ``"example.com:8000"``, or a full origin
             whose scheme decides whether links are https. There is no default: unset,
             absolute-URI building degrades to the relative URL rather than raising (see
-            [`OfflineHttpRequest`][rest_framework_services.types.offline_http_request.OfflineHttpRequest]).
+            [`OfflineHttpRequest`][django_spec_rest.types.offline_http_request.OfflineHttpRequest]).
             **Ignored when ``http_request`` is supplied**, whose own headers are
             authoritative, so a caller can pass both unconditionally.
 
     Returns: The
-        [`OfflineContext`][rest_framework_services.types.offline_context.OfflineContext]
+        [`OfflineContext`][django_spec_rest.types.offline_context.OfflineContext]
         to hand to ``dispatch_spec``.
     """
     base: HttpRequest = (
@@ -150,7 +150,7 @@ def _synthesize_request(host: str | None) -> OfflineHttpRequest:
 
     The ``META`` keys mirror what a WSGI server would set. Host and scheme resolution
     itself is
-    [`OfflineHttpRequest`][rest_framework_services.types.offline_http_request.OfflineHttpRequest]'s.
+    [`OfflineHttpRequest`][django_spec_rest.types.offline_http_request.OfflineHttpRequest]'s.
     """
     # ``HttpRequest.__new__`` in django-stubs returns ``_MutableHttpRequest``, so
     # ty resolves the subclass to the wrong type; construct via ``Any`` and cast

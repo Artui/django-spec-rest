@@ -7,8 +7,8 @@ from typing import Any
 from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
 
-from rest_framework_services.types.unset import UNSET
-from rest_framework_services.views.utils import (
+from django_spec_rest.types.unset import UNSET
+from django_spec_rest.views.utils import (
     resolve_callable_kwargs,
     resolve_extra_kwargs,
     resolve_input_extras,

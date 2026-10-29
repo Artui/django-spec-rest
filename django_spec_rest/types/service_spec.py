@@ -12,16 +12,16 @@ from django_service_specs.specs.service_spec import ServiceSpec as KernelService
 from rest_framework.permissions import BasePermission
 from rest_framework.response import Response
 
-from rest_framework_services.service_specs.as_kernel_spec import as_kernel_spec
-from rest_framework_services.types.affordance import Affordance
-from rest_framework_services.types.affordance_declarer import AffordanceDeclarer
-from rest_framework_services.types.field_marking import FieldMarking
-from rest_framework_services.types.json_schema_registry import JsonSchemaRegistry
-from rest_framework_services.types.offline_contract import OfflineContract
-from rest_framework_services.types.query_param import QueryParam
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.url_kwarg import UrlKwarg
-from rest_framework_services.types.utils import (
+from django_spec_rest.service_specs.as_kernel_spec import as_kernel_spec
+from django_spec_rest.types.affordance import Affordance
+from django_spec_rest.types.affordance_declarer import AffordanceDeclarer
+from django_spec_rest.types.field_marking import FieldMarking
+from django_spec_rest.types.json_schema_registry import JsonSchemaRegistry
+from django_spec_rest.types.offline_contract import OfflineContract
+from django_spec_rest.types.query_param import QueryParam
+from django_spec_rest.types.selector_spec import SelectorSpec
+from django_spec_rest.types.url_kwarg import UrlKwarg
+from django_spec_rest.types.utils import (
     agent_contract_for,
     is_row_condition,
     validate_metadata,
@@ -48,17 +48,17 @@ class ServiceSpec(AffordanceDeclarer, Generic[InputT, ResultT, ExtraT]):
     """All wiring for a single mutation action in one record.
 
     Used as a value in ``ServiceViewSet.action_specs`` and as the ``spec=`` argument to
-    [`service_action`][rest_framework_services.viewsets.decorators.service_action.service_action]
+    [`service_action`][django_spec_rest.viewsets.decorators.service_action.service_action]
     /
-    [`ServiceCreateView`][rest_framework_services.views.mutation.service_create_view.ServiceCreateView]
+    [`ServiceCreateView`][django_spec_rest.views.mutation.service_create_view.ServiceCreateView]
     /
-    [`ServiceUpdateView`][rest_framework_services.views.mutation.service_update_view.ServiceUpdateView]
+    [`ServiceUpdateView`][django_spec_rest.views.mutation.service_update_view.ServiceUpdateView]
     /
-    [`ServiceDeleteView`][rest_framework_services.views.mutation.service_delete_view.ServiceDeleteView].
+    [`ServiceDeleteView`][django_spec_rest.views.mutation.service_delete_view.ServiceDeleteView].
 
     Fields group into the service callable itself, the input pipeline (``input_*``), the
     output pipeline (a nested
-    [`SelectorSpec`][rest_framework_services.types.selector_spec.SelectorSpec]), and
+    [`SelectorSpec`][django_spec_rest.types.selector_spec.SelectorSpec]), and
     cross-cutting concerns. Several are **providers**: they are resolved through the
     framework keyword pool, declaring any subset of the keywords listed for them (or
     ``**kwargs``) and receiving only what they name.
@@ -118,20 +118,20 @@ class ServiceSpec(AffordanceDeclarer, Generic[InputT, ResultT, ExtraT]):
             can never be a bare array. ``"items"`` by default. HTTP never reads
             it: the request body stays the array itself. A caller that does
             passes ``many_as_argument=True`` to
-            [`dispatch_spec`][rest_framework_services.dispatch.dispatch_spec.dispatch_spec],
+            [`dispatch_spec`][django_spec_rest.dispatch.dispatch_spec.dispatch_spec],
             which reads the list out of that argument and keys every validation
             error under it, and
-            [`spec_to_json_schema`][rest_framework_services.jsonschema.spec_to_json_schema.spec_to_json_schema]
+            [`spec_to_json_schema`][django_spec_rest.jsonschema.spec_to_json_schema.spec_to_json_schema]
             describes the input as an object with that one array property. Must
             be an ASCII identifier. Declaring a name other than the default
             without ``many=True`` raises ``ImproperlyConfigured``: nothing would
             read it.
         document_service_error: OpenAPI-only — whether the schema documents the
-            422 [`ServiceError`][rest_framework_services.exceptions.service_error.ServiceError] response. No runtime effect; a service may
+            422 [`ServiceError`][django_spec_rest.exceptions.service_error.ServiceError] response. No runtime effect; a service may
             always raise. ``None`` gates it on ``input_serializer is not None``,
             so a plain delete carries no spurious 422. Only consulted when the
             ``[spectacular]`` extra is enabled through
-            [`enable_openapi`][rest_framework_services.openapi.enable_openapi.enable_openapi].
+            [`enable_openapi`][django_spec_rest.openapi.enable_openapi.enable_openapi].
         input_serializer: Validates the request body.
         input_data: Provider (pool: ``view`` / ``request`` / ``instance``,
             the latter ``None`` on create) returning a mapping merged on top of
@@ -208,7 +208,7 @@ class ServiceSpec(AffordanceDeclarer, Generic[InputT, ResultT, ExtraT]):
             output selector is never run.
         allow_none: Declare that the service may present nothing: it returns
             ``None`` and no output re-read replaces it. The output schema
-            [`spec_to_json_schema`][rest_framework_services.jsonschema.spec_to_json_schema.spec_to_json_schema]
+            [`spec_to_json_schema`][django_spec_rest.jsonschema.spec_to_json_schema.spec_to_json_schema]
             states then admits ``null`` beside the row. ``False`` by default, and
             an undeclared ``None`` is not refused: dispatch passes the service's
             return through either way, so an undeclared one is served against a
@@ -219,17 +219,17 @@ class ServiceSpec(AffordanceDeclarer, Generic[InputT, ResultT, ExtraT]):
             or without) is never ``None``, so it is not read there. The
             nested ``output_selector_spec.allow_none`` is still not read; this is
             the declaration. One answer for all of it:
-            [`can_present_nothing`][rest_framework_services.can_present_nothing.can_present_nothing].
+            [`can_present_nothing`][django_spec_rest.can_present_nothing.can_present_nothing].
         kwargs: Provider (pool: ``view`` / ``request``) of extra kwargs merged
             into the pool the service receives. Co-locating it with the spec
             lets each action declare its own contract, instead of
             ``if self.action == ...`` branching in one catch-all. See
-            [`ServiceView`][rest_framework_services.types.service_view.ServiceView] for what the ``view`` argument offers.
+            [`ServiceView`][django_spec_rest.types.service_view.ServiceView] for what the ``view`` argument offers.
         permission_classes: Override the calling view's permissions for this
             action. ``None`` inherits the view's; an empty sequence means none,
             explicitly. Forwarded through DRF's ``@action`` for
             ``@service_action`` and surfaced via ``get_permissions`` elsewhere.
-        progress_reporter: Provider returning a [`ProgressReporter`][rest_framework_services.types.progress_reporter.ProgressReporter] sink,
+        progress_reporter: Provider returning a [`ProgressReporter`][django_spec_rest.types.progress_reporter.ProgressReporter] sink,
             fanned together with whatever reporter the transport supplied. For
             sinks that do not care which transport carries the run — a task
             record, an audit trail, metrics.
@@ -245,11 +245,11 @@ class ServiceSpec(AffordanceDeclarer, Generic[InputT, ResultT, ExtraT]):
             ``APIException`` outside those three) is mapped on HTTP only.
         affordances: What must be true for this operation to be possible right
             now, as a sequence of
-            [`Affordance`][rest_framework_services.types.affordance.Affordance]
+            [`Affordance`][django_spec_rest.types.affordance.Affordance]
             declarations. Checked in declaration order after the target guard and
             input validation and **before** ``preconditions``; the first one not
             met raises
-            [`ActionUnavailable`][rest_framework_services.exceptions.action_unavailable.ActionUnavailable]
+            [`ActionUnavailable`][django_spec_rest.exceptions.action_unavailable.ActionUnavailable]
             carrying its ``code``, and the service does not run. Every condition
             on the row is answered by **one** query, however many are declared;
             a condition that is a callable runs off the event loop on the async
@@ -275,7 +275,7 @@ class ServiceSpec(AffordanceDeclarer, Generic[InputT, ResultT, ExtraT]):
             and ``result`` is the post-output-selector value.
         metadata: Consumer-owned and framework-opaque, with **exactly one
             reserved key**: ``"json_schema"``, which
-            [`spec_to_json_schema`][rest_framework_services.jsonschema.spec_to_json_schema.spec_to_json_schema]
+            [`spec_to_json_schema`][django_spec_rest.jsonschema.spec_to_json_schema.spec_to_json_schema]
             merges onto the schema it derives — see that function for the shape,
             the phase keys and the precedence. Every other key is carried and
             never read: no defaulting, no per-key validation, no effect on the
@@ -288,17 +288,17 @@ class ServiceSpec(AffordanceDeclarer, Generic[InputT, ResultT, ExtraT]):
             its own permission class or audit hook, to the spec describing the
             operation rather than to a name-keyed side table that drifts the day
             a spec is renamed. It never merges with a nested spec's metadata and
-            is stored exactly as given. See [`SelectorSpec`][rest_framework_services.types.selector_spec.SelectorSpec].
+            is stored exactly as given. See [`SelectorSpec`][django_spec_rest.types.selector_spec.SelectorSpec].
         reads: The arguments a caller with no HTTP request sends in place of
-            one: each [`UrlKwarg`][rest_framework_services.types.url_kwarg.UrlKwarg]
+            one: each [`UrlKwarg`][django_spec_rest.types.url_kwarg.UrlKwarg]
             a route would have captured and each
-            [`QueryParam`][rest_framework_services.types.query_param.QueryParam]
+            [`QueryParam`][django_spec_rest.types.query_param.QueryParam]
             a query string would have carried. HTTP never reads it, since its
             URLconf and query string are the real thing. Compiled into the
             kernel spec's ``reads``, one ``Parameter`` each, and on an
             ``OfflineServiceView`` routed back onto ``view.kwargs`` and
             ``request.query_params`` for the permission classes; see
-            [`as_kernel_spec`][rest_framework_services.service_specs.as_kernel_spec.as_kernel_spec].
+            [`as_kernel_spec`][django_spec_rest.service_specs.as_kernel_spec.as_kernel_spec].
             Kept as a tuple; anything but those two declarations, or a name
             declared twice, is refused when the spec is built. A name the pool
             fills, or one the service or a precondition marks
@@ -311,7 +311,7 @@ class ServiceSpec(AffordanceDeclarer, Generic[InputT, ResultT, ExtraT]):
             has nothing to mark, and the compile refuses it.
         json_schema_registry: The project's ``JsonSchemaRegistry``, which
             describes this spec's schemas. drfs'
-            [`spec_to_json_schema`][rest_framework_services.jsonschema.spec_to_json_schema.spec_to_json_schema]
+            [`spec_to_json_schema`][django_spec_rest.jsonschema.spec_to_json_schema.spec_to_json_schema]
             reads it when no ``registry=`` is passed, and a passed one wins.
             The compile reads its ``fields`` rules where it walks the input
             and output serializers, and its ``python_types`` rules where it
@@ -451,7 +451,7 @@ class ServiceSpec(AffordanceDeclarer, Generic[InputT, ResultT, ExtraT]):
 
         What makes it a kernel ``SpecSource``: ``dispatch``, ``authorize``, the
         registry and the schemas take it as it is and compile it once. See
-        [`as_kernel_spec`][rest_framework_services.service_specs.as_kernel_spec.as_kernel_spec].
+        [`as_kernel_spec`][django_spec_rest.service_specs.as_kernel_spec.as_kernel_spec].
         """
         # ``as_kernel_spec`` tells the two kinds apart at runtime and is typed for
         # both; a ``ServiceSpec`` always compiles to the kernel's ``ServiceSpec``.

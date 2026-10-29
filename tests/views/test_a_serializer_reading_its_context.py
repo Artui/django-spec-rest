@@ -28,7 +28,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory, force_authenticate
 
-from rest_framework_services import (
+from django_spec_rest import (
     DispatchResult,
     OfflineServiceView,
     ServiceCreateView,
@@ -39,8 +39,8 @@ from rest_framework_services import (
     dispatch_spec,
     service_action,
 )
-from rest_framework_services.registry.spec_registry import SpecRegistry
-from rest_framework_services.service_specs.utils import EDGE_CALL, EdgeCallState, offline_pair
+from django_spec_rest.registry.spec_registry import SpecRegistry
+from django_spec_rest.service_specs.utils import EDGE_CALL, EdgeCallState, offline_pair
 from tests.testapp.models import Post
 
 _factory = APIRequestFactory()

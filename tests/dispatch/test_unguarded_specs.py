@@ -6,10 +6,10 @@ from typing import Any
 
 from rest_framework.permissions import BasePermission
 
-from rest_framework_services.dispatch.unguarded_specs import unguarded_specs
-from rest_framework_services.types.selector_kind import SelectorKind
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_spec_rest.dispatch.unguarded_specs import unguarded_specs
+from django_spec_rest.types.selector_kind import SelectorKind
+from django_spec_rest.types.selector_spec import SelectorSpec
+from django_spec_rest.types.service_spec import ServiceSpec
 
 
 class _Allow(BasePermission):

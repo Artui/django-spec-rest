@@ -21,12 +21,12 @@ from django_service_specs.types.utils import (
 )
 from rest_framework import serializers
 
-from rest_framework_services.service_specs.serializer_presenter import _output
-from rest_framework_services.service_specs.utils import (
+from django_spec_rest.service_specs.serializer_presenter import _output
+from django_spec_rest.service_specs.utils import (
     describe_serializer,
     input_parameters,
 )
-from rest_framework_services.types.json_schema_registry import JsonSchemaRegistry
+from django_spec_rest.types.json_schema_registry import JsonSchemaRegistry
 
 
 class _Registered(serializers.CharField): ...

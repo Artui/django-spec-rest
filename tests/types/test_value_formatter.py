@@ -9,7 +9,7 @@ from __future__ import annotations
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 
-from rest_framework_services.types.value_formatter import ValueFormatter
+from django_spec_rest.types.value_formatter import ValueFormatter
 
 
 def test_a_timestamp_naming_no_real_moment_is_reported_as_stored() -> None:

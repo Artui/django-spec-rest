@@ -10,7 +10,7 @@ from django.core.exceptions import ImproperlyConfigured
 from django.db.models import QuerySet
 from rest_framework.test import APIRequestFactory
 
-from rest_framework_services import (
+from django_spec_rest import (
     SelectorKind,
     SelectorSpec,
     ServiceCreateView,

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from rest_framework_services import (
+from django_spec_rest import (
     ChildSpec,
     acreate_model,
     adelete_model,

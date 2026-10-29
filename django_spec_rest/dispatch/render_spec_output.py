@@ -7,12 +7,12 @@ from typing import Any
 
 from django.core.exceptions import ImproperlyConfigured
 
-from rest_framework_services.audience.utils import rendered_affordances, with_affordances
-from rest_framework_services.dispatch.renderable_serializer_class import renderable_serializer_class
-from rest_framework_services.dispatch.utils import output_serializer_for, resolve_output_context
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
-from rest_framework_services.types.view_hooks import ViewHooks
+from django_spec_rest.audience.utils import rendered_affordances, with_affordances
+from django_spec_rest.dispatch.renderable_serializer_class import renderable_serializer_class
+from django_spec_rest.dispatch.utils import output_serializer_for, resolve_output_context
+from django_spec_rest.types.selector_spec import SelectorSpec
+from django_spec_rest.types.service_spec import ServiceSpec
+from django_spec_rest.types.view_hooks import ViewHooks
 
 
 def render_spec_output(
@@ -29,7 +29,7 @@ def render_spec_output(
     """Render ``value`` to a JSON-shaped payload using ``spec``'s output serializer.
 
     The blessed render step that pairs with
-    [`dispatch_spec`][rest_framework_services.dispatch.dispatch_spec.dispatch_spec]:
+    [`dispatch_spec`][django_spec_rest.dispatch.dispatch_spec.dispatch_spec]:
     every transport renders the same way instead of re-implementing serializer + context
     plumbing. Reads the output serializer from ``spec.output_serializer`` (selector) or
     ``spec.output_selector_spec.output_serializer`` (service), a raw dataclass type
@@ -46,7 +46,7 @@ def render_spec_output(
 
     The serializer ``context`` always carries DRF's baseline — ``request`` / ``format``
     / ``view``, from
-    [`base_serializer_context`][rest_framework_services.dispatch.base_serializer_context.base_serializer_context]
+    [`base_serializer_context`][django_spec_rest.dispatch.base_serializer_context.base_serializer_context]
     — so a serializer that reads ``self.context["request"]`` renders identically here
     and behind a DRF view. The spec's ``output_serializer_context`` provider, if any, is
     resolved with ``view`` / ``request`` plus the resolved-data ``extras`` it declares
@@ -71,7 +71,7 @@ def render_spec_output(
     answers it attached to rows a selector returned directly -- so rendering them
     costs no query; ``many`` rows are materialised once so the rows walked are the
     rows rendered.
-    [`render_for_audience`][rest_framework_services.dispatch.render_for_audience.render_for_audience]
+    [`render_for_audience`][django_spec_rest.dispatch.render_for_audience.render_for_audience]
     renders the same answers, ``reason`` included. A spec declaring none renders
     exactly as before.
     """

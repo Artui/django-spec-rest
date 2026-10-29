@@ -21,7 +21,7 @@ from jsonschema import Draft202012Validator
 from rest_framework import serializers
 from rest_framework.test import APIRequestFactory
 
-from rest_framework_services import (
+from django_spec_rest import (
     MARKING,
     Affordance,
     FieldMarking,
@@ -40,7 +40,7 @@ from rest_framework_services import (
     render_spec_output,
     spec_to_json_schema,
 )
-from rest_framework_services.types.audience_projection import AudienceProjection
+from django_spec_rest.types.audience_projection import AudienceProjection
 from tests.testapp.models import Post
 
 UNPUBLISHED = Affordance(

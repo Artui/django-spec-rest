@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 from rest_framework.test import APIRequestFactory
 
-from rest_framework_services import SelectorKind, SelectorSpec, SelectorViewSet
+from django_spec_rest import SelectorKind, SelectorSpec, SelectorViewSet
 from tests.testapp.models import Author
 from tests.testapp.serializers import AuthorSerializer
 

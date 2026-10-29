@@ -18,9 +18,9 @@ from django_service_specs.specs.selector_spec import SelectorSpec
 from django_service_specs.specs.service_spec import ServiceSpec
 from django_service_specs.types.selector_kind import SelectorKind
 
-from rest_framework_services.registry.spec_registry import SpecRegistry
-from rest_framework_services.types.polymorphic_service_spec import PolymorphicServiceSpec
-from rest_framework_services.types.service_spec import ServiceSpec as DrfsServiceSpec
+from django_spec_rest.registry.spec_registry import SpecRegistry
+from django_spec_rest.types.polymorphic_service_spec import PolymorphicServiceSpec
+from django_spec_rest.types.service_spec import ServiceSpec as DrfsServiceSpec
 
 
 def _noop(**_: Any) -> None: ...

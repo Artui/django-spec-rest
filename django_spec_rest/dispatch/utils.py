@@ -27,23 +27,23 @@ from django_service_specs.specs.service_spec import ServiceSpec as KernelService
 from rest_framework.exceptions import APIException, ErrorDetail, ValidationError
 from rest_framework.settings import api_settings
 
-from rest_framework_services.dispatch.base_serializer_context import base_serializer_context
-from rest_framework_services.dispatch.combine_progress import combine_progress
-from rest_framework_services.dispatch.provider_keys import provider_keys
-from rest_framework_services.exceptions.service_validation_error import (
+from django_spec_rest.dispatch.base_serializer_context import base_serializer_context
+from django_spec_rest.dispatch.combine_progress import combine_progress
+from django_spec_rest.dispatch.provider_keys import provider_keys
+from django_spec_rest.exceptions.service_validation_error import (
     ServiceValidationError,
 )
-from rest_framework_services.service_specs.as_kernel_spec import (
+from django_spec_rest.service_specs.as_kernel_spec import (
     compiled_partial,
     lookup_keys_the_service_names,
 )
-from rest_framework_services.service_specs.invalid_arguments import InvalidArguments
-from rest_framework_services.service_specs.kernel_spec_variant import kernel_spec_variant
-from rest_framework_services.service_specs.translate_dispatch_errors import (
+from django_spec_rest.service_specs.invalid_arguments import InvalidArguments
+from django_spec_rest.service_specs.kernel_spec_variant import kernel_spec_variant
+from django_spec_rest.service_specs.translate_dispatch_errors import (
     translate_dispatch_errors,
 )
-from rest_framework_services.service_specs.translate_drf_refusals import TRANSLATED_FROM
-from rest_framework_services.service_specs.utils import (
+from django_spec_rest.service_specs.translate_drf_refusals import TRANSLATED_FROM
+from django_spec_rest.service_specs.utils import (
     EDGE_CALL,
     SERIALIZER_CONTEXT_SEED,
     UNREADABLE_WITHOUT_A_CALL,
@@ -62,28 +62,28 @@ from rest_framework_services.service_specs.utils import (
     writable_input_names,
     write_form_value,
 )
-from rest_framework_services.types.argument_binding import ArgumentBinding
-from rest_framework_services.types.dispatch_result import DispatchResult
-from rest_framework_services.types.marked_input_keys import marked_input_keys
-from rest_framework_services.types.offline_context import OfflineContext
-from rest_framework_services.types.offline_service_view import OfflineServiceView
-from rest_framework_services.types.pool_seeds import PoolSeeds
-from rest_framework_services.types.progress_reporter import ProgressReporter
-from rest_framework_services.types.query_param import QueryParam
-from rest_framework_services.types.reserved_pool_seeds import RESERVED_POOL_SEEDS
-from rest_framework_services.types.selector_kind import SelectorKind
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
-from rest_framework_services.types.target_guard import TargetGuard
-from rest_framework_services.types.typed_dict_input import typed_dict_input
-from rest_framework_services.types.unknown_arguments import UnknownArguments
-from rest_framework_services.types.unpack_typed_dict import unpack_typed_dict
-from rest_framework_services.types.unset import UNSET
-from rest_framework_services.types.url_kwarg import UrlKwarg
-from rest_framework_services.types.utils import (
+from django_spec_rest.types.argument_binding import ArgumentBinding
+from django_spec_rest.types.dispatch_result import DispatchResult
+from django_spec_rest.types.marked_input_keys import marked_input_keys
+from django_spec_rest.types.offline_context import OfflineContext
+from django_spec_rest.types.offline_service_view import OfflineServiceView
+from django_spec_rest.types.pool_seeds import PoolSeeds
+from django_spec_rest.types.progress_reporter import ProgressReporter
+from django_spec_rest.types.query_param import QueryParam
+from django_spec_rest.types.reserved_pool_seeds import RESERVED_POOL_SEEDS
+from django_spec_rest.types.selector_kind import SelectorKind
+from django_spec_rest.types.selector_spec import SelectorSpec
+from django_spec_rest.types.service_spec import ServiceSpec
+from django_spec_rest.types.target_guard import TargetGuard
+from django_spec_rest.types.typed_dict_input import typed_dict_input
+from django_spec_rest.types.unknown_arguments import UnknownArguments
+from django_spec_rest.types.unpack_typed_dict import unpack_typed_dict
+from django_spec_rest.types.unset import UNSET
+from django_spec_rest.types.url_kwarg import UrlKwarg
+from django_spec_rest.types.utils import (
     resolved_annotation,
 )
-from rest_framework_services.types.view_hooks import ViewHooks
+from django_spec_rest.types.view_hooks import ViewHooks
 
 # ---------------------------------------------------------------------------
 # The DRF edge over the kernel's ``dispatch``.

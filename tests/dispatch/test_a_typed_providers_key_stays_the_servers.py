@@ -29,7 +29,7 @@ from django_service_specs.specs.kernel_spec import kernel_spec
 from rest_framework import serializers
 from rest_framework.test import APIRequestFactory
 
-from rest_framework_services import (
+from django_spec_rest import (
     ArgumentBinding,
     DispatchResult,
     ServiceCreateView,
@@ -38,7 +38,7 @@ from rest_framework_services import (
     adispatch_spec,
     dispatch_spec,
 )
-from rest_framework_services.types.unset import UNSET
+from django_spec_rest.types.unset import UNSET
 
 _factory = APIRequestFactory()
 

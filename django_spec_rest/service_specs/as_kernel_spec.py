@@ -28,13 +28,13 @@ from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 from typing_extensions import TypedDict
 
-from rest_framework_services.service_specs.drf_permission_check import DRFPermissionCheck
-from rest_framework_services.service_specs.serializer_presenter import SerializerPresenter
-from rest_framework_services.service_specs.serializer_validator import SerializerValidator
-from rest_framework_services.service_specs.translating_drf_refusals import (
+from django_spec_rest.service_specs.drf_permission_check import DRFPermissionCheck
+from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
+from django_spec_rest.service_specs.serializer_validator import SerializerValidator
+from django_spec_rest.service_specs.translating_drf_refusals import (
     translating_drf_refusals,
 )
-from rest_framework_services.service_specs.utils import (
+from django_spec_rest.service_specs.utils import (
     SERVER_CHANNEL,
     UNREADABLE_WITHOUT_A_CALL,
     asked_of_the_caller,
@@ -46,20 +46,20 @@ from rest_framework_services.service_specs.utils import (
     values_beside_filter,
     writable_input_names,
 )
-from rest_framework_services.types.affordance_declarer import AffordanceDeclarer
-from rest_framework_services.types.field_marking import FieldMarking
-from rest_framework_services.types.json_schema_registry import JsonSchemaRegistry
-from rest_framework_services.types.marked_input_keys import marked_input_keys
-from rest_framework_services.types.query_param import QueryParam
-from rest_framework_services.types.read_input_description import read_input_description
-from rest_framework_services.types.read_schema_markers import read_schema_markers
-from rest_framework_services.types.reserved_pool_seeds import RESERVED_POOL_SEEDS
-from rest_framework_services.types.selector_kind import SelectorKind
-from rest_framework_services.types.typed_dict_input import typed_dict_input
-from rest_framework_services.types.unpack_typed_dict import unpack_typed_dict
-from rest_framework_services.types.unset import UNSET, UnsetType
-from rest_framework_services.types.url_kwarg import UrlKwarg
-from rest_framework_services.types.utils import callable_type_hints
+from django_spec_rest.types.affordance_declarer import AffordanceDeclarer
+from django_spec_rest.types.field_marking import FieldMarking
+from django_spec_rest.types.json_schema_registry import JsonSchemaRegistry
+from django_spec_rest.types.marked_input_keys import marked_input_keys
+from django_spec_rest.types.query_param import QueryParam
+from django_spec_rest.types.read_input_description import read_input_description
+from django_spec_rest.types.read_schema_markers import read_schema_markers
+from django_spec_rest.types.reserved_pool_seeds import RESERVED_POOL_SEEDS
+from django_spec_rest.types.selector_kind import SelectorKind
+from django_spec_rest.types.typed_dict_input import typed_dict_input
+from django_spec_rest.types.unpack_typed_dict import unpack_typed_dict
+from django_spec_rest.types.unset import UNSET, UnsetType
+from django_spec_rest.types.url_kwarg import UrlKwarg
+from django_spec_rest.types.utils import callable_type_hints
 
 # The per-call seeds the DRF edge registers with the kernel. A ``serializer`` is
 # not one: the Validator's own pool delivers it, and a Validator binding a name
@@ -109,7 +109,7 @@ def as_kernel_spec(
       ``returns_many=True``: the kernel presents the return row by row and
       describes it as an array of the row.
     - ``permission_classes`` becomes one
-      [`DRFPermissionCheck`][rest_framework_services.service_specs.drf_permission_check.DRFPermissionCheck];
+      [`DRFPermissionCheck`][django_spec_rest.service_specs.drf_permission_check.DRFPermissionCheck];
       an empty sequence, which drfs reads as "no permissions, explicitly",
       becomes ``[Unrestricted()]``, the kernel's spelling of the same; ``None``
       compiles to no permissions, which the kernel's registry and dispatch
@@ -117,7 +117,7 @@ def as_kernel_spec(
     - ``reads`` is what the selector and the target lookup take, and under
       ``spread`` what a service with no ``input_serializer`` takes, read off
       their signatures as
-      [`spec_to_json_schema`][rest_framework_services.jsonschema.spec_to_json_schema.spec_to_json_schema]
+      [`spec_to_json_schema`][django_spec_rest.jsonschema.spec_to_json_schema.spec_to_json_schema]
       reads them: named parameters and the keys of an ``Unpack``-ed
       ``TypedDict``, with ``InputRequired`` read as required and a
       ``NotClientInput`` key on any callable of the call left out. A named

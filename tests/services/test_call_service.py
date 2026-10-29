@@ -9,9 +9,9 @@ from rest_framework import exceptions as drf_exceptions
 from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
 
-from rest_framework_services import call_service
-from rest_framework_services.exceptions.service_error import ServiceError
-from rest_framework_services.exceptions.service_validation_error import (
+from django_spec_rest import call_service
+from django_spec_rest.exceptions.service_error import ServiceError
+from django_spec_rest.exceptions.service_validation_error import (
     ServiceValidationError,
 )
 

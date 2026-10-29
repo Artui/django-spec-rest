@@ -21,15 +21,15 @@ from typing import Any, Literal, get_args, get_origin, get_type_hints
 from rest_framework import serializers
 from rest_framework.fields import empty as _drf_empty
 
-from rest_framework_services.types.json_schema_registry import (
+from django_spec_rest.types.json_schema_registry import (
     DEFAULT_JSON_SCHEMA_REGISTRY,
     JsonSchemaRegistry,
 )
-from rest_framework_services.types.read_input_description import read_input_description
-from rest_framework_services.types.read_schema_markers import read_schema_markers
-from rest_framework_services.types.typed_dict_input import typed_dict_input
-from rest_framework_services.types.unpack_typed_dict import unpack_typed_dict
-from rest_framework_services.types.utils import callable_type_hints
+from django_spec_rest.types.read_input_description import read_input_description
+from django_spec_rest.types.read_schema_markers import read_schema_markers
+from django_spec_rest.types.typed_dict_input import typed_dict_input
+from django_spec_rest.types.unpack_typed_dict import unpack_typed_dict
+from django_spec_rest.types.utils import callable_type_hints
 
 # How many times one serializer class may appear on the walk's current path
 # before the next appearance is truncated. Counting *appearances* rather than
@@ -300,7 +300,7 @@ def serializer_for_schema(serializer_cls: type[serializers.Serializer]) -> seria
     to prevent.
 
     The baseline is the same one
-    [`build_audience_projection`][rest_framework_services.audience.build_audience_projection.build_audience_projection]
+    [`build_audience_projection`][django_spec_rest.audience.build_audience_projection.build_audience_projection]
     already synthesizes, and for the same reason.
 
     **The view and request are `None`, and cannot be otherwise.** A schema is
@@ -358,7 +358,7 @@ def _description_context() -> dict[str, Any]:
     # helpers that reach back into this package, so importing it at module
     # scope executes a half-built package. ``build_audience_projection`` records
     # the same constraint.
-    from rest_framework_services.dispatch.base_serializer_context import base_serializer_context
+    from django_spec_rest.dispatch.base_serializer_context import base_serializer_context
 
     return base_serializer_context(view=None, request=None)
 

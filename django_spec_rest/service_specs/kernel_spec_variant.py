@@ -15,12 +15,12 @@ from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelec
 from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
 from django_service_specs.types.selector_kind import SelectorKind
 
-from rest_framework_services.service_specs.as_kernel_spec import (
+from django_spec_rest.service_specs.as_kernel_spec import (
     as_kernel_spec,
     required_for_having_no_default,
 )
-from rest_framework_services.service_specs.serializer_validator import SerializerValidator
-from rest_framework_services.service_specs.utils import author_values
+from django_spec_rest.service_specs.serializer_validator import SerializerValidator
+from django_spec_rest.service_specs.utils import author_values
 
 _Variant = tuple[bool | None, bool, bool, bool, bool, bool, frozenset[str]]
 
@@ -61,7 +61,7 @@ def kernel_spec_variant(
     as the parameter it names would be.
 
     - ``partial``: the per-request flag a ``PATCH`` sets, compiled by
-      [`as_kernel_spec`][rest_framework_services.service_specs.as_kernel_spec.as_kernel_spec];
+      [`as_kernel_spec`][django_spec_rest.service_specs.as_kernel_spec.as_kernel_spec];
       ``None`` reads the spec's own.
     - ``unguarded``: no ``permissions``. An HTTP view has already run DRF's
       ``check_permissions``, so the edge hands ``dispatch`` a ``Grant`` and the

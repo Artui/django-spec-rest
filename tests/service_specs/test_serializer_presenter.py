@@ -28,11 +28,11 @@ from django_service_specs.types.field_audience import FieldAudience
 from django_service_specs.types.selector_kind import SelectorKind
 from rest_framework import serializers
 
-from rest_framework_services.audience.build_audience_projection import build_audience_projection
-from rest_framework_services.service_specs.build_offline_context import build_offline_context
-from rest_framework_services.service_specs.serializer_presenter import SerializerPresenter
-from rest_framework_services.service_specs.utils import EDGE_CALL, EdgeCallState
-from rest_framework_services.types.field_marking import MARKING
+from django_spec_rest.audience.build_audience_projection import build_audience_projection
+from django_spec_rest.service_specs.build_offline_context import build_offline_context
+from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
+from django_spec_rest.service_specs.utils import EDGE_CALL, EdgeCallState
+from django_spec_rest.types.field_marking import MARKING
 
 STATUSES = [("PENDING_REVIEW", "Awaiting review"), ("PAID", "Paid")]
 

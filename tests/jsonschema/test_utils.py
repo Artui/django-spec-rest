@@ -14,7 +14,7 @@ from typing import Any
 from rest_framework import serializers
 from typing_extensions import NotRequired, Required, TypedDict, Unpack
 
-from rest_framework_services.jsonschema.utils import (
+from django_spec_rest.jsonschema.utils import (
     _MAX_SERIALIZER_APPEARANCES,
     _python_type_to_schema,
     apply_field_override,
@@ -24,8 +24,8 @@ from rest_framework_services.jsonschema.utils import (
     field_to_schema,
     serializer_to_schema,
 )
-from rest_framework_services.types.json_schema_registry import DEFAULT_JSON_SCHEMA_REGISTRY
-from rest_framework_services.types.not_client_input import NotClientInput
+from django_spec_rest.types.json_schema_registry import DEFAULT_JSON_SCHEMA_REGISTRY
+from django_spec_rest.types.not_client_input import NotClientInput
 
 
 class _MoneyField(serializers.Field): ...

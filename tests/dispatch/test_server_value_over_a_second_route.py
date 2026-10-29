@@ -42,7 +42,7 @@ from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
 from rest_framework_dataclasses.serializers import DataclassSerializer
 
-from rest_framework_services import (
+from django_spec_rest import (
     UNSET,
     DispatchResult,
     NotClientInput,
@@ -52,7 +52,7 @@ from rest_framework_services import (
     adispatch_spec,
     dispatch_spec,
 )
-from rest_framework_services.types.argument_binding import ArgumentBinding
+from django_spec_rest.types.argument_binding import ArgumentBinding
 from tests.testapp.models import Author, Tag
 
 _factory = APIRequestFactory()

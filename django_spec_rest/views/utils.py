@@ -13,12 +13,12 @@ from rest_framework.renderers import JSONRenderer
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from rest_framework_services.audience.utils import rendered_affordances, with_affordances
-from rest_framework_services.dispatch.utils import fill_call_context
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
-from rest_framework_services.types.unset import UNSET
-from rest_framework_services.types.view_hooks import ViewHooks
+from django_spec_rest.audience.utils import rendered_affordances, with_affordances
+from django_spec_rest.dispatch.utils import fill_call_context
+from django_spec_rest.types.selector_spec import SelectorSpec
+from django_spec_rest.types.service_spec import ServiceSpec
+from django_spec_rest.types.unset import UNSET
+from django_spec_rest.types.view_hooks import ViewHooks
 
 
 def resolve_extra_kwargs(
@@ -228,7 +228,7 @@ def layer_serializer_context(
         base: The layer-1 context to build on.
         direction_hook: Directional view hook name; ``None`` skips the layer.
             That is what ``_ActionSpecsMixin.get_serializer_context`` needs:
-            [`MutationFlowMixin`][rest_framework_services.views.mutation.mutation_flow_mixin.MutationFlowMixin]'s default
+            [`MutationFlowMixin`][django_spec_rest.views.mutation.mutation_flow_mixin.MutationFlowMixin]'s default
             ``get_output_serializer_context`` would recurse back into
             ``get_serializer_context``.
     """
@@ -370,7 +370,7 @@ def resolve_progress_hook(view: Any, request: Request, *, action: str | None) ->
     a view that wants that composes them itself with
     ``combine_progress``. ``None`` when the view
     offers neither, which leaves the seed as
-    [`null_progress`][rest_framework_services.dispatch.null_progress.null_progress].
+    [`null_progress`][django_spec_rest.dispatch.null_progress.null_progress].
 
     A hook naming ``call_context`` is handed the request's dict
     (``view_call_context``), and one taking ``**kwargs`` alone is not.
@@ -405,13 +405,13 @@ def resolve_view_hooks(
     instance: Any = None,
 ) -> ViewHooks:
     """Resolve the calling view's hook chains into a
-    [`ViewHooks`][rest_framework_services.types.view_hooks.ViewHooks] carrier.
+    [`ViewHooks`][django_spec_rest.types.view_hooks.ViewHooks] carrier.
 
     **View layers only** — every ``spec_*`` argument below is deliberately ``None``. The
     chains run ``view.get_<x>`` → ``view.get_<action>_<x>`` → ``spec.<x>``, and
     ``dispatch_spec`` owns that last layer; resolving the spec provider here too would
     invoke it **twice**, which is not safe for a provider that queries the database. See
-    [`ViewHooks`][rest_framework_services.types.view_hooks.ViewHooks].
+    [`ViewHooks`][django_spec_rest.types.view_hooks.ViewHooks].
 
     Args:
         chain: Which kwargs chain to collect — ``"service"`` for mutations,

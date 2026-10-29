@@ -10,33 +10,33 @@ imports here when they bump past 0.17.
 
 from __future__ import annotations
 
-import rest_framework_services as pkg
-from rest_framework_services.can_present_nothing import can_present_nothing
-from rest_framework_services.dispatch.adispatch_spec import adispatch_spec
-from rest_framework_services.dispatch.aenforce_affordances import aenforce_affordances
-from rest_framework_services.dispatch.aunmet_operation_affordance import (
+import django_spec_rest as pkg
+from django_spec_rest.can_present_nothing import can_present_nothing
+from django_spec_rest.dispatch.adispatch_spec import adispatch_spec
+from django_spec_rest.dispatch.aenforce_affordances import aenforce_affordances
+from django_spec_rest.dispatch.aunmet_operation_affordance import (
     aunmet_operation_affordance,
 )
-from rest_framework_services.dispatch.build_offline_context import build_offline_context
-from rest_framework_services.dispatch.dispatch_spec import dispatch_spec
-from rest_framework_services.dispatch.enforce_affordances import enforce_affordances
-from rest_framework_services.dispatch.enforce_permissions import enforce_permissions
-from rest_framework_services.dispatch.operation_affordances import operation_affordances
-from rest_framework_services.dispatch.provider_keys import provider_keys
-from rest_framework_services.dispatch.render_spec_output import render_spec_output
-from rest_framework_services.dispatch.renderable_serializer_class import renderable_serializer_class
-from rest_framework_services.dispatch.unmet_operation_affordance import (
+from django_spec_rest.dispatch.build_offline_context import build_offline_context
+from django_spec_rest.dispatch.dispatch_spec import dispatch_spec
+from django_spec_rest.dispatch.enforce_affordances import enforce_affordances
+from django_spec_rest.dispatch.enforce_permissions import enforce_permissions
+from django_spec_rest.dispatch.operation_affordances import operation_affordances
+from django_spec_rest.dispatch.provider_keys import provider_keys
+from django_spec_rest.dispatch.render_spec_output import render_spec_output
+from django_spec_rest.dispatch.renderable_serializer_class import renderable_serializer_class
+from django_spec_rest.dispatch.unmet_operation_affordance import (
     unmet_operation_affordance,
 )
-from rest_framework_services.dispatch.utils import server_owned_keys
-from rest_framework_services.is_async import is_async
-from rest_framework_services.jsonschema.filterset_to_json_schema import filterset_to_json_schema
-from rest_framework_services.jsonschema.output_to_json_schema import output_to_json_schema
-from rest_framework_services.jsonschema.serializer_to_json_schema import serializer_to_json_schema
-from rest_framework_services.jsonschema.spec_to_json_schema import spec_to_json_schema
-from rest_framework_services.registry.capability_manifest import capability_manifest
-from rest_framework_services.registry.spec_registry import SpecRegistry
-from rest_framework_services.selectors.utils import (
+from django_spec_rest.dispatch.utils import server_owned_keys
+from django_spec_rest.is_async import is_async
+from django_spec_rest.jsonschema.filterset_to_json_schema import filterset_to_json_schema
+from django_spec_rest.jsonschema.output_to_json_schema import output_to_json_schema
+from django_spec_rest.jsonschema.serializer_to_json_schema import serializer_to_json_schema
+from django_spec_rest.jsonschema.spec_to_json_schema import spec_to_json_schema
+from django_spec_rest.registry.capability_manifest import capability_manifest
+from django_spec_rest.registry.spec_registry import SpecRegistry
+from django_spec_rest.selectors.utils import (
     amaterialize_retrieve,
     apply_queryset_shaping,
     arun_selector,
@@ -44,18 +44,18 @@ from rest_framework_services.selectors.utils import (
     materialize_retrieve,
     run_selector,
 )
-from rest_framework_services.services.arun_service import arun_service
-from rest_framework_services.services.run_service import run_service
-from rest_framework_services.types.provider_keys import ProviderKeys
-from rest_framework_services.types.registered_spec import RegisteredSpec
-from rest_framework_services.types.reserved_pool_seeds import RESERVED_POOL_SEEDS
-from rest_framework_services.views.mutation.utils import (
+from django_spec_rest.services.arun_service import arun_service
+from django_spec_rest.services.run_service import run_service
+from django_spec_rest.types.provider_keys import ProviderKeys
+from django_spec_rest.types.registered_spec import RegisteredSpec
+from django_spec_rest.types.reserved_pool_seeds import RESERVED_POOL_SEEDS
+from django_spec_rest.views.mutation.utils import (
     build_input_serializer,
     build_input_serializer_from_data,
     resolve_mutation_instance,
     validate_input,
 )
-from rest_framework_services.views.utils import resolve_callable_kwargs
+from django_spec_rest.views.utils import resolve_callable_kwargs
 
 # Blessed name → the leaf-module original it must alias.
 _SURFACE = {
@@ -135,7 +135,7 @@ def test_the_compat_package_is_gone() -> None:
     # rather than in a downstream release.
     import importlib.util
 
-    assert importlib.util.find_spec("rest_framework_services._compat") is None
+    assert importlib.util.find_spec("django_spec_rest._compat") is None
 
 
 def test_no_export_is_shadowed_by_its_own_submodule() -> None:
@@ -159,12 +159,12 @@ def test_no_export_is_shadowed_by_its_own_submodule() -> None:
     from types import ModuleType
 
     packages = [
-        "rest_framework_services",
-        "rest_framework_services.dispatch",
-        "rest_framework_services.mutations",
-        "rest_framework_services.selectors",
-        "rest_framework_services.services",
-        "rest_framework_services.types",
+        "django_spec_rest",
+        "django_spec_rest.dispatch",
+        "django_spec_rest.mutations",
+        "django_spec_rest.selectors",
+        "django_spec_rest.services",
+        "django_spec_rest.types",
     ]
     shadowed: list[str] = []
     for name in packages:

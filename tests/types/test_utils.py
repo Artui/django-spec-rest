@@ -10,10 +10,10 @@ import pytest
 from django.core.exceptions import ImproperlyConfigured
 from typing_extensions import Format, evaluate_forward_ref
 
-from rest_framework_services.types.input_required import InputRequired
-from rest_framework_services.types.marked_input_keys import marked_input_keys
-from rest_framework_services.types.not_client_input import NotClientInput
-from rest_framework_services.types.utils import (
+from django_spec_rest.types.input_required import InputRequired
+from django_spec_rest.types.marked_input_keys import marked_input_keys
+from django_spec_rest.types.not_client_input import NotClientInput
+from django_spec_rest.types.utils import (
     callable_type_hints,
     validate_metadata,
 )

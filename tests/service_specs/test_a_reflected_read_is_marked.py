@@ -17,8 +17,8 @@ from django_service_specs.parameters.parameters import Parameter
 from django_service_specs.specs.kernel_spec import kernel_spec
 from typing_extensions import TypedDict, Unpack
 
-from rest_framework_services import QueryParam, SelectorKind, SelectorSpec, ServiceSpec, UrlKwarg
-from rest_framework_services.service_specs.as_kernel_spec import as_kernel_spec
+from django_spec_rest import QueryParam, SelectorKind, SelectorSpec, ServiceSpec, UrlKwarg
+from django_spec_rest.service_specs.as_kernel_spec import as_kernel_spec
 
 
 class _Keys(TypedDict, total=False):

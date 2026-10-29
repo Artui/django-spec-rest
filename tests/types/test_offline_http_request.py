@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from rest_framework_services import OfflineHttpRequest, build_offline_context
+from django_spec_rest import OfflineHttpRequest, build_offline_context
 
 
 class TestWithoutAHost:

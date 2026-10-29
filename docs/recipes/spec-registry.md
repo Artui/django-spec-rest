@@ -23,7 +23,7 @@ also no single object to answer "what operations does this project expose?".
 ## One declaration site
 
 ```python
-from rest_framework_services import SpecRegistry
+from django_spec_rest import SpecRegistry
 
 registry = SpecRegistry()
 registry.register("list_orders", orders_spec, tags=("read", "public"))
@@ -59,7 +59,7 @@ most simply as a module attribute populated from an `AppConfig.ready()`:
 
 ```python
 # orders/registry.py
-from rest_framework_services import SpecRegistry
+from django_spec_rest import SpecRegistry
 
 registry = SpecRegistry()
 
@@ -179,7 +179,7 @@ its name, whether it is a mutation or a query, its tags, its declared
 guard it — as one JSON-native document:
 
 ```python
-from rest_framework_services import capability_manifest
+from django_spec_rest import capability_manifest
 
 manifest = capability_manifest(registry)
 manifest["operations"][0]

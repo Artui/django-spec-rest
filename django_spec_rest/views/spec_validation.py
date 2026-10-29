@@ -21,17 +21,17 @@ from django_service_specs.adapters.filters.filter_set_parameters import filter_s
 from rest_framework.permissions import BasePermission
 from rest_framework.serializers import Serializer
 
-from rest_framework_services.service_specs.utils import (
+from django_spec_rest.service_specs.utils import (
     UNREADABLE_WITHOUT_A_CALL,
     writable_input_names,
 )
-from rest_framework_services.types.affordance_declarer import AffordanceDeclarer
-from rest_framework_services.types.marked_input_keys import marked_input_keys
-from rest_framework_services.types.polymorphic_service_spec import PolymorphicServiceSpec
-from rest_framework_services.types.selector_kind import SelectorKind
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
-from rest_framework_services.types.utils import is_row_condition
+from django_spec_rest.types.affordance_declarer import AffordanceDeclarer
+from django_spec_rest.types.marked_input_keys import marked_input_keys
+from django_spec_rest.types.polymorphic_service_spec import PolymorphicServiceSpec
+from django_spec_rest.types.selector_kind import SelectorKind
+from django_spec_rest.types.selector_spec import SelectorSpec
+from django_spec_rest.types.service_spec import ServiceSpec
+from django_spec_rest.types.utils import is_row_condition
 
 # Keys the framework injects automatically into the pool.
 _FRAMEWORK_KEY_DATA = "data"
@@ -402,7 +402,7 @@ def _validate_output_selector_spec(
     input_serializer: type | None,
 ) -> None:
     """Validate the nested
-    [`SelectorSpec`][rest_framework_services.types.selector_spec.SelectorSpec] on
+    [`SelectorSpec`][django_spec_rest.types.selector_spec.SelectorSpec] on
     ``ServiceSpec.output_selector_spec``.
 
     ``kind=LIST`` is refused without ``collection_selector_spec``: a
@@ -442,7 +442,7 @@ def _validate_instance_selector_spec(
     has_instance: bool,
 ) -> None:
     """Validate the nested
-    [`SelectorSpec`][rest_framework_services.types.selector_spec.SelectorSpec] on
+    [`SelectorSpec`][django_spec_rest.types.selector_spec.SelectorSpec] on
     ``ServiceSpec.instance_selector_spec``.
 
     On an action with no instance the spec would silently never run, so that
@@ -484,7 +484,7 @@ def _validate_collection_selector_spec(
     label: str,
 ) -> None:
     """Validate the nested
-    [`SelectorSpec`][rest_framework_services.types.selector_spec.SelectorSpec] on
+    [`SelectorSpec`][django_spec_rest.types.selector_spec.SelectorSpec] on
     ``ServiceSpec.collection_selector_spec``.
 
     Unlike ``instance_selector_spec``, a ``selector`` is mandatory — there is no
@@ -715,7 +715,7 @@ def validate_service_spec(
     permissive_extras: bool,
 ) -> None:
     """Validate a
-    [`ServiceSpec`][rest_framework_services.types.service_spec.ServiceSpec]'s
+    [`ServiceSpec`][django_spec_rest.types.service_spec.ServiceSpec]'s
     ``service`` and nested selector specs.
 
     Shared between standalone mutation views, viewset mixins, and
@@ -780,7 +780,7 @@ def validate_polymorphic_service_spec(
     permissive_extras: bool,
 ) -> None:
     """Validate every variant of a
-    [`PolymorphicServiceSpec`][rest_framework_services.types.polymorphic_service_spec.PolymorphicServiceSpec]
+    [`PolymorphicServiceSpec`][django_spec_rest.types.polymorphic_service_spec.PolymorphicServiceSpec]
     + its strategy.
 
     Each variant is validated with the same ``has_instance`` /
@@ -818,14 +818,14 @@ def validate_selector_spec(
     expected_kind: SelectorKind | None = None,
 ) -> None:
     """Validate a
-    [`SelectorSpec`][rest_framework_services.types.selector_spec.SelectorSpec]'s
+    [`SelectorSpec`][django_spec_rest.types.selector_spec.SelectorSpec]'s
     ``selector``.
 
     Selectors are always permissive on extras (URL kwargs and ``get_selector_kwargs``
     are dynamic), so the only fatal misuses are framework-only keys absent from the
     selector pool. ``expected_kind`` catches a spec mounted on the wrong view — a
     ``LIST`` spec on
-    [`SelectorRetrieveView`][rest_framework_services.views.query.selector_retrieve_view.SelectorRetrieveView]
+    [`SelectorRetrieveView`][django_spec_rest.views.query.selector_retrieve_view.SelectorRetrieveView]
     would otherwise misbehave only at runtime."""
     _validate_permission_classes(spec.permission_classes, label=label)
     _validate_selector_shaping(spec, label=label)
@@ -879,7 +879,7 @@ def validate_mutation_view_spec(
     # Local import to avoid a module-level cycle:
     # ``views.spec_validation`` is imported by ``views.mutation.*``, but the
     # reverse coupling only matters here (to detect catch-all overrides).
-    from rest_framework_services.views.mutation.mutation_flow_mixin import (
+    from django_spec_rest.views.mutation.mutation_flow_mixin import (
         MutationFlowMixin,
     )
 
@@ -900,9 +900,9 @@ def validate_selector_view_spec(
 
     No-op when ``spec`` is unset — that means "use vanilla DRF". ``expected_kind`` is
     the kind the view is shaped for (``LIST`` for
-    [`SelectorListView`][rest_framework_services.views.query.selector_list_view.SelectorListView],
+    [`SelectorListView`][django_spec_rest.views.query.selector_list_view.SelectorListView],
     ``RETRIEVE`` for
-    [`SelectorRetrieveView`][rest_framework_services.views.query.selector_retrieve_view.SelectorRetrieveView]).
+    [`SelectorRetrieveView`][django_spec_rest.views.query.selector_retrieve_view.SelectorRetrieveView]).
     """
     spec: SelectorSpec[Any, Any] | None = getattr(view_cls, "spec", None)
     if spec is None:

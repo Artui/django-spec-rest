@@ -1,7 +1,7 @@
 """Query views — ``List`` and ``Retrieve`` backed by selector callables."""
 
-from rest_framework_services.views.query.selector_list_view import SelectorListView
-from rest_framework_services.views.query.selector_retrieve_view import (
+from django_spec_rest.views.query.selector_list_view import SelectorListView
+from django_spec_rest.views.query.selector_retrieve_view import (
     SelectorRetrieveView,
 )
 

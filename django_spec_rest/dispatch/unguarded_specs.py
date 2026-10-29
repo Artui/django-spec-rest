@@ -5,8 +5,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_spec_rest.types.selector_spec import SelectorSpec
+from django_spec_rest.types.service_spec import ServiceSpec
 
 Spec = ServiceSpec[Any, Any, Any] | SelectorSpec[Any, Any]
 
@@ -19,7 +19,7 @@ def unguarded_specs(specs: Mapping[str, Spec]) -> list[str]:
     ``DEFAULT_PERMISSION_CLASSES`` supply the answer. **Off HTTP neither exists**, so
     the same spec becomes an unguarded operation the moment a toolset or an MCP server
     exposes it, and
-    [`enforce_permissions`][rest_framework_services.dispatch.enforce_permissions.enforce_permissions]
+    [`enforce_permissions`][django_spec_rest.dispatch.enforce_permissions.enforce_permissions]
     returns early with nothing to enforce.
 
     This **raises nothing and defaults nothing, deliberately**: whether an

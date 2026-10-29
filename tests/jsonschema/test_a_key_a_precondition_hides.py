@@ -13,7 +13,7 @@ from typing import Annotated, Any
 import pytest
 from asgiref.sync import async_to_sync
 
-from rest_framework_services import (
+from django_spec_rest import (
     ArgumentBinding,
     DispatchResult,
     NotClientInput,

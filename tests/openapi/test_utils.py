@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from rest_framework_services import (
+from django_spec_rest import (
     ServiceCreateView,
     ServiceDeleteView,
     ServiceUpdateView,
 )
-from rest_framework_services.openapi.utils import default_status
+from django_spec_rest.openapi.utils import default_status
 
 
 def _bound_action(action: str) -> Any:

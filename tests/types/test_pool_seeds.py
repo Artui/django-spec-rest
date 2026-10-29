@@ -12,8 +12,8 @@ from typing import Any
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 
-from rest_framework_services.types.pool_seeds import DEFAULT_POOL_SEEDS
-from rest_framework_services.types.reserved_pool_seeds import RESERVED_POOL_SEEDS
+from django_spec_rest.types.pool_seeds import DEFAULT_POOL_SEEDS
+from django_spec_rest.types.reserved_pool_seeds import RESERVED_POOL_SEEDS
 
 
 def test_the_reserved_set_is_the_kernels() -> None:

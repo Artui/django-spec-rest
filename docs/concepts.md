@@ -545,7 +545,7 @@ narrow `ServiceView`) or `get_<action>_*_kwargs` instead. See
 
 If the callable declares `**kwargs`, the entire pool is forwarded. The
 implementation lives in
-[`rest_framework_services.views.utils.resolve_callable_kwargs`](reference/views.md#kwarg-resolution).
+[`django_spec_rest.views.utils.resolve_callable_kwargs`](reference/views.md#kwarg-resolution).
 
 ```python
 def create_author(*, data, user):  # the view passes only data + user
@@ -986,8 +986,8 @@ mutation flow. See the [service-action recipe](recipes/service-action.md).
   [filter a selector with `filter_set`](recipes/selector-filtering.md).
 - It does not own the input format. Use any DRF `Serializer` (including
   `ModelSerializer`) or a bare `@dataclass`.
-- It does not decide your project layout. The `startserviceapp`
-  scaffold is a starting point, not a contract.
+- It does not decide your project layout. Services, selectors and
+  validators can live wherever your project keeps them.
 - It does not insist every endpoint be a spec. Constant / no-logic
   endpoints (an enum map, a static config payload) are fine as plain
   DRF views — there is no service or selector to declare, so wrapping

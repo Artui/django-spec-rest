@@ -18,7 +18,7 @@ from asgiref.sync import async_to_sync
 from django.db.models import QuerySet
 from rest_framework import serializers
 
-from rest_framework_services import (
+from django_spec_rest import (
     DispatchResult,
     SelectorKind,
     SelectorSpec,
@@ -30,8 +30,8 @@ from rest_framework_services import (
     render_for_audience,
     render_spec_output,
 )
-from rest_framework_services.dispatch.utils import resolve_output_context
-from rest_framework_services.types.offline_service_view import OfflineServiceView
+from django_spec_rest.dispatch.utils import resolve_output_context
+from django_spec_rest.types.offline_service_view import OfflineServiceView
 from tests.testapp.models import Post
 
 

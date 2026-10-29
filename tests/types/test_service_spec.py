@@ -9,7 +9,7 @@ import pytest
 from django.core.exceptions import ImproperlyConfigured
 from django.db.models import Q
 
-from rest_framework_services import Affordance, SelectorKind, SelectorSpec, ServiceSpec
+from django_spec_rest import Affordance, SelectorKind, SelectorSpec, ServiceSpec
 from tests.testapp.serializers import AuthorSerializer
 
 

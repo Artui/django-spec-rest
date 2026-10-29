@@ -10,7 +10,7 @@ from django_service_specs.selectors.retrieve_selector import (
     RetrieveSelector as KernelRetrieveSelector,
 )
 
-from rest_framework_services import (
+from django_spec_rest import (
     ListSelector,
     RetrieveSelector,
     SelectorKind,

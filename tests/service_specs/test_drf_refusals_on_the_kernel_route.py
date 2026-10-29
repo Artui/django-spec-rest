@@ -46,9 +46,9 @@ from rest_framework.exceptions import (
 )
 from rest_framework.permissions import AllowAny, BasePermission
 
-from rest_framework_services import SelectorKind, SelectorSpec, ServiceSpec
-from rest_framework_services.service_specs.invalid_arguments import InvalidArguments
-from rest_framework_services.service_specs.not_permitted import NotPermitted
+from django_spec_rest import SelectorKind, SelectorSpec, ServiceSpec
+from django_spec_rest.service_specs.invalid_arguments import InvalidArguments
+from django_spec_rest.service_specs.not_permitted import NotPermitted
 from tests.testapp.models import Post
 
 pytestmark = pytest.mark.django_db

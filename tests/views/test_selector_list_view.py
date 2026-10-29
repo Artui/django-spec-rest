@@ -8,7 +8,7 @@ import pytest
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.test import APIRequestFactory
 
-from rest_framework_services import SelectorKind, SelectorListView, SelectorSpec
+from django_spec_rest import SelectorKind, SelectorListView, SelectorSpec
 from tests.testapp.models import Author
 from tests.testapp.serializers import AuthorSerializer
 

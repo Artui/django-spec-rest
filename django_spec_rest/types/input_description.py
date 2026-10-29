@@ -36,7 +36,7 @@ keep its meaning, and a kernel whose public surface is built on it inherits that
 **Why not a spec-level ``extras_descriptions={...}`` mapping.** Keying prose by
 input name puts the name in two places and lets them disagree the day one is
 renamed — the desync
-[`FieldMarking`][rest_framework_services.types.field_marking.FieldMarking]'s own
+[`FieldMarking`][django_spec_rest.types.field_marking.FieldMarking]'s own
 docstring gives as the reason markings live on the field. A marker in the
 ``Annotated`` position cannot drift from what it describes, because it is
 attached to it.
@@ -47,7 +47,7 @@ composes with ``InputRequired`` in one ``Annotated``, in either order, and with
 foreign metadata from other libraries. Two of them on one input is refused, and
 so is one beside ``NotClientInput`` — a key dropped from the schema has nowhere
 for the text to land, so the declaration would decide nothing. Both are read by
-[`read_input_description`][rest_framework_services.types.read_input_description.read_input_description].
+[`read_input_description`][django_spec_rest.types.read_input_description.read_input_description].
 """
 
 from __future__ import annotations
@@ -67,8 +67,8 @@ class InputDescription:
     key has no field to carry any of that. Borrowing the word would promise
     behaviour this does not have. ``InputDescription`` instead sits with the
     ``Input*`` markers it composes with, and with the ``description=`` argument
-    [`UrlKwarg`][rest_framework_services.types.url_kwarg.UrlKwarg] and
-    [`QueryParam`][rest_framework_services.types.query_param.QueryParam] already
+    [`UrlKwarg`][django_spec_rest.types.url_kwarg.UrlKwarg] and
+    [`QueryParam`][django_spec_rest.types.query_param.QueryParam] already
     take for exactly this — the same word for the same job, whether the input is
     declared on the callable or registered by an adapter.
 

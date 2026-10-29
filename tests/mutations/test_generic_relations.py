@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from rest_framework_services import (
+from django_spec_rest import (
     ChildSpec,
     GenericRelationSpec,
     acreate_from_input,
@@ -20,7 +20,7 @@ from rest_framework_services import (
     create_from_input,
     update_from_input,
 )
-from rest_framework_services.exceptions.service_validation_error import ServiceValidationError
+from django_spec_rest.exceptions.service_validation_error import ServiceValidationError
 from tests.testapp.models import Annotation, Attachment, Catalog, Item, Section, Tag
 
 _ATTACHMENTS = {"attachments": GenericRelationSpec(model=Attachment)}

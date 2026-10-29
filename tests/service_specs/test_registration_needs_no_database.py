@@ -24,7 +24,7 @@ from django_service_specs.specs.kernel_spec import kernel_spec
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
-from rest_framework_services import (
+from django_spec_rest import (
     QueryParam,
     ServiceSpec,
     SpecRegistry,

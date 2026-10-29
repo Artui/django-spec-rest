@@ -12,7 +12,7 @@ def unpack_typed_dict(annotation: Any) -> type | None:
 
     The blessed strict-typing idiom for a service / selector's keyword extras is
     ``**extras: Unpack[SomeExtras]`` (see
-    [`HttpExtras`][rest_framework_services.types.http_extras.HttpExtras]). Given the
+    [`HttpExtras`][django_spec_rest.types.http_extras.HttpExtras]). Given the
     resolved annotation of such a ``**kwargs`` parameter, this returns the underlying
     ``TypedDict`` so its keys can be reflected into a JSON Schema (``jsonschema``) and
     counted as the callable's declared input surface (``dispatch``). Returns ``None``

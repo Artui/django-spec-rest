@@ -21,15 +21,15 @@ from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 from rest_framework.test import APIRequestFactory, force_authenticate
 
-from rest_framework_services import (
+from django_spec_rest import (
     DispatchResult,
     ServiceCreateView,
     ServiceSpec,
     adispatch_spec,
     dispatch_spec,
 )
-from rest_framework_services.types.pool_seeds import DEFAULT_POOL_SEEDS, PoolSeeds
-from rest_framework_services.types.unknown_arguments import UnknownArguments
+from django_spec_rest.types.pool_seeds import DEFAULT_POOL_SEEDS, PoolSeeds
+from django_spec_rest.types.unknown_arguments import UnknownArguments
 
 _factory = APIRequestFactory()
 

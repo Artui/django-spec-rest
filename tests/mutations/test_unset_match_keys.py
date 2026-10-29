@@ -17,7 +17,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from rest_framework_services import (
+from django_spec_rest import (
     ChildSpec,
     ForwardRelationSpec,
     GenericRelationSpec,
@@ -28,7 +28,7 @@ from rest_framework_services import (
     create_from_input,
     update_from_input,
 )
-from rest_framework_services.types.unset import UNSET, UnsetType
+from django_spec_rest.types.unset import UNSET, UnsetType
 from tests.testapp.models import Attachment, Author, Catalog, Post, Section, Tag
 
 

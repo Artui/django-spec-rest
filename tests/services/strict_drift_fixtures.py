@@ -9,7 +9,7 @@ the matching Protocol type. ty flags the structural mismatch on the
 ``@implements`` line.
 
 Note on coverage in ``ty``: this file is intentionally outside the package's
-``ty`` scope (CI runs ``ty check rest_framework_services`` for the green
+``ty`` scope (CI runs ``ty check django_spec_rest`` for the green
 build). The ``type-check-strict-fixtures`` target invokes ``ty`` on this file
 specifically and asserts an error count.
 """
@@ -20,7 +20,7 @@ from dataclasses import dataclass
 
 from typing_extensions import NotRequired, TypedDict, Unpack
 
-from rest_framework_services import (
+from django_spec_rest import (
     CreateService,
     DeleteService,
     ListSelector,

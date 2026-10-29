@@ -31,7 +31,7 @@ from rest_framework.parsers import JSONParser, MultiPartParser
 from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory, force_authenticate
 
-from rest_framework_services import (
+from django_spec_rest import (
     DispatchResult,
     NotClientInput,
     ServiceCreateView,
@@ -40,7 +40,7 @@ from rest_framework_services import (
     adispatch_spec,
     dispatch_spec,
 )
-from rest_framework_services.types.pool_seeds import DEFAULT_POOL_SEEDS
+from django_spec_rest.types.pool_seeds import DEFAULT_POOL_SEEDS
 
 _factory = APIRequestFactory()
 

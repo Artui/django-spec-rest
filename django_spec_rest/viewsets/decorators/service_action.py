@@ -12,24 +12,24 @@ from rest_framework.decorators import action
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from rest_framework_services.types.polymorphic_service_spec import PolymorphicServiceSpec
-from rest_framework_services.types.service_spec import ServiceSpec
-from rest_framework_services.views.mutation.map_service_error import (
+from django_spec_rest.types.polymorphic_service_spec import PolymorphicServiceSpec
+from django_spec_rest.types.service_spec import ServiceSpec
+from django_spec_rest.views.mutation.map_service_error import (
     _AdditionalInputAPIException,
 )
-from rest_framework_services.views.mutation.utils import (
+from django_spec_rest.views.mutation.utils import (
     dispatch_mutation_for_spec,
     resolve_mutation_instance,
     restore_raised_schema,
 )
-from rest_framework_services.views.spec_validation import (
+from django_spec_rest.views.spec_validation import (
     validate_polymorphic_service_spec,
     validate_service_spec,
 )
-from rest_framework_services.viewsets.resolve_polymorphic_service_spec import (
+from django_spec_rest.viewsets.resolve_polymorphic_service_spec import (
     resolve_polymorphic_service_spec,
 )
-from rest_framework_services.viewsets.utils import _ActionSpecsMixin
+from django_spec_rest.viewsets.utils import _ActionSpecsMixin
 
 
 def _restore_schema_when_handled(view: Any) -> None:
@@ -103,15 +103,15 @@ def service_action(
     the handler. The method exists so that ``@service_action`` can attach
     DRF ``@action`` metadata and pick up the action name from ``__name__``.
 
-    Pass a [`ServiceSpec`][rest_framework_services.types.service_spec.ServiceSpec] (or a
-    [`PolymorphicServiceSpec`][rest_framework_services.types.polymorphic_service_spec.PolymorphicServiceSpec]
+    Pass a [`ServiceSpec`][django_spec_rest.types.service_spec.ServiceSpec] (or a
+    [`PolymorphicServiceSpec`][django_spec_rest.types.polymorphic_service_spec.PolymorphicServiceSpec]
     for one action accepting several payload shapes) for the service wiring. ``detail``,
     ``methods``, ``url_path``, ``url_name``, and any extra ``**action_kwargs`` are
     forwarded to DRF's ``@action``.
 
     A plain ``ServiceSpec`` forwards its ``permission_classes`` into DRF's
     ``@action(permission_classes=...)``, so it is enforced on any viewset. A
-    [`PolymorphicServiceSpec`][rest_framework_services.types.polymorphic_service_spec.PolymorphicServiceSpec]
+    [`PolymorphicServiceSpec`][django_spec_rest.types.polymorphic_service_spec.PolymorphicServiceSpec]
     has no single list to forward — which list applies depends on the strategy,
     and under ``"discriminate"`` on the body — so its per-variant
     ``permission_classes`` are enforced by ``_ActionSpecsMixin.get_permissions``,
@@ -123,7 +123,7 @@ def service_action(
     request is refused rather than served unguarded. Compose ``ServiceViewSet``
     (or any mixin from this package) and the check never fires.
 
-    An [`AdditionalInputRequired`][rest_framework_services.exceptions.additional_input_required.AdditionalInputRequired]
+    An [`AdditionalInputRequired`][django_spec_rest.exceptions.additional_input_required.AdditionalInputRequired]
     answers ``422`` with its ``schema`` as raised on any viewset, DRF's own
     included. The restore runs inside the exception handler the view asks for,
     so the configured ``EXCEPTION_HANDLER`` runs once, and a ``handle_exception``

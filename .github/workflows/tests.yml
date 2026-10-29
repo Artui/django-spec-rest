@@ -30,7 +30,7 @@ jobs:
       - name: ruff format check
         run: uv run ruff format --check --diff .
       - name: ty
-        run: uv run ty check rest_framework_services
+        run: uv run ty check django_spec_rest
       - name: ty drift fixtures
         run: make type-check-strict-fixtures
 
@@ -152,8 +152,8 @@ jobs:
           )
           django.setup()
 
-          import rest_framework_services
-          from rest_framework_services import dispatch_spec, SelectorSpec, ServiceSpec
+          import django_spec_rest
+          from django_spec_rest import dispatch_spec, SelectorSpec, ServiceSpec
 
           # Touch the public surface rather than only the package root: an
           # upstream symbol that moved would be imported by a leaf module, and
@@ -175,11 +175,13 @@ jobs:
     # because the test settings install the app:
     #
     #   1. importing the package, and the kernel module holding the write,
-    #      without it must work. ``ContentType`` is a Django *model* and
-    #      ``rest_framework_services`` ships in INSTALLED_APPS, so it is
-    #      imported while ``apps.populate()`` runs -- an eager import raises
-    #      AppRegistryNotReady even when the app *is* installed, and a plain
-    #      ImportError when it is not.
+    #      without it must work. ``ContentType`` is a Django *model*, and a
+    #      project may import ``django_spec_rest`` before the app registry is
+    #      ready (from an ``AppConfig`` module or an app's ``__init__``, or
+    #      before ``django.setup()``) -- an eager import raises
+    #      AppRegistryNotReady there even when the app *is* installed, and a
+    #      RuntimeError about a model in no installed app once setup has run
+    #      without it.
     #   2. writing a generic relation without it must say so. Without the
     #      gate, the lookup fails with a LookupError about an app label, which
     #      names neither INSTALLED_APPS nor the remedy.
@@ -205,17 +207,17 @@ jobs:
           # thing this job removes.
           settings.configure(
               SECRET_KEY="x",
-              INSTALLED_APPS=["rest_framework", "rest_framework_services"],
+              INSTALLED_APPS=["rest_framework"],
               DATABASES={"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"}},
           )
           django.setup()
 
           import sys
 
-          import rest_framework_services
+          import django_spec_rest
           from django_service_specs.mutations import nested_writes
           from django_service_specs.relations import generic_relation_spec
-          from rest_framework_services import GenericRelationSpec
+          from django_spec_rest import GenericRelationSpec
 
           assert "django.contrib.contenttypes.models" not in sys.modules, (
               "the package or the kernel's nested writes imported the "
@@ -349,12 +351,12 @@ jobs:
               git fetch --depth=1 origin "$before" 2>/dev/null || true
           fi
           old=""
-          if git cat-file -e "$before:rest_framework_services/version.py" 2>/dev/null; then
-              old="$(git show "$before:rest_framework_services/version.py" \
+          if git cat-file -e "$before:django_spec_rest/version.py" 2>/dev/null; then
+              old="$(git show "$before:django_spec_rest/version.py" \
                      | awk -F'"' '/^__version__/ { print $2; exit }')"
           fi
           new="$(awk -F'"' '/^__version__/ { print $2; exit }' \
-                 rest_framework_services/version.py)"
+                 django_spec_rest/version.py)"
           if [[ -n "$old" && "$old" != "$new" ]]; then
               echo "Version bumped $old → $new; release.yml will deploy gh-pages."
               echo "skip=true" >> "$GITHUB_OUTPUT"

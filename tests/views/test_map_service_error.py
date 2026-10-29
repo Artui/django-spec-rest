@@ -5,7 +5,7 @@ from __future__ import annotations
 from rest_framework import exceptions as drf_exceptions
 from rest_framework import status as drf_status
 
-from rest_framework_services.exceptions import (
+from django_spec_rest.exceptions import (
     ActionUnavailable,
     AdditionalInputRequired,
     ServiceConflict,
@@ -13,7 +13,7 @@ from rest_framework_services.exceptions import (
     ServiceNotFound,
     ServiceValidationError,
 )
-from rest_framework_services.views.mutation.map_service_error import (
+from django_spec_rest.views.mutation.map_service_error import (
     _ConflictAPIException,
     _ServiceAPIException,
     map_service_error,

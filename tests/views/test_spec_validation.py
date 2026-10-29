@@ -10,7 +10,7 @@ from django.core.exceptions import ImproperlyConfigured
 from rest_framework.permissions import BasePermission
 from rest_framework.serializers import CharField, Serializer
 
-from rest_framework_services import (
+from django_spec_rest import (
     SelectorKind,
     SelectorListView,
     SelectorRetrieveView,
@@ -18,7 +18,7 @@ from rest_framework_services import (
     SelectorViewSet,
     ServiceSpec,
 )
-from rest_framework_services.views.spec_validation import (
+from django_spec_rest.views.spec_validation import (
     _uses_django_filter_backend,
     is_overridden,
     validate_callable_signature,

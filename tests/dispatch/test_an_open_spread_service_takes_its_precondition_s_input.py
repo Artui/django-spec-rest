@@ -22,7 +22,7 @@ from django.db.models import QuerySet
 from rest_framework.exceptions import ValidationError
 from typing_extensions import Unpack
 
-from rest_framework_services import (
+from django_spec_rest import (
     ArgumentBinding,
     NotClientInput,
     SelectorKind,

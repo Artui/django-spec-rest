@@ -29,7 +29,7 @@ from rest_framework import serializers
 from rest_framework.test import APIRequestFactory
 from rest_framework.viewsets import GenericViewSet
 
-from rest_framework_services import (
+from django_spec_rest import (
     SelectorKind,
     SelectorListView,
     SelectorRetrieveView,
@@ -45,9 +45,9 @@ from rest_framework_services import (
     selector_action,
     spec_to_json_schema,
 )
-from rest_framework_services.jsonschema.output_to_json_schema import output_to_json_schema
-from rest_framework_services.openapi import enable_openapi
-from rest_framework_services.types.field_marking import MARKING, FieldMarking
+from django_spec_rest.jsonschema.output_to_json_schema import output_to_json_schema
+from django_spec_rest.openapi import enable_openapi
+from django_spec_rest.types.field_marking import MARKING, FieldMarking
 
 
 @dataclass

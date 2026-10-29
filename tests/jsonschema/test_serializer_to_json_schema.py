@@ -8,8 +8,8 @@ from decimal import Decimal
 import pytest
 from rest_framework import serializers
 
-from rest_framework_services.jsonschema.output_to_json_schema import output_to_json_schema
-from rest_framework_services.jsonschema.serializer_to_json_schema import serializer_to_json_schema
+from django_spec_rest.jsonschema.output_to_json_schema import output_to_json_schema
+from django_spec_rest.jsonschema.serializer_to_json_schema import serializer_to_json_schema
 
 
 class _S(serializers.Serializer):
@@ -63,7 +63,7 @@ def test_partial_drops_required() -> None:
 
 
 def test_registry_is_forwarded_to_fields() -> None:
-    from rest_framework_services.types.json_schema_registry import DEFAULT_JSON_SCHEMA_REGISTRY
+    from django_spec_rest.types.json_schema_registry import DEFAULT_JSON_SCHEMA_REGISTRY
 
     class _MoneyField(serializers.Field): ...
 

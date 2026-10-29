@@ -17,7 +17,6 @@ INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.auth",
     "rest_framework",
-    "rest_framework_services",
     "tests.testapp",
 ]
 
@@ -39,7 +38,5 @@ REST_FRAMEWORK = {
     # default at ``ServiceAutoSchema`` covers user-style custom viewsets
     # (plain ``GenericViewSet`` with ``@service_action``) the same way a
     # real project would.
-    "DEFAULT_SCHEMA_CLASS": (
-        "rest_framework_services.openapi.service_auto_schema.ServiceAutoSchema"
-    ),
+    "DEFAULT_SCHEMA_CLASS": ("django_spec_rest.openapi.service_auto_schema.ServiceAutoSchema"),
 }

@@ -36,8 +36,8 @@ class ArgumentBinding(Enum):
     on a wire.
 
     Attributes:
-        AUTO: The default, resolved per spec type: [`ServiceSpec`][rest_framework_services.types.service_spec.ServiceSpec] →
-            ``BUNDLE``, [`SelectorSpec`][rest_framework_services.types.selector_spec.SelectorSpec] →
+        AUTO: The default, resolved per spec type: [`ServiceSpec`][django_spec_rest.types.service_spec.ServiceSpec] →
+            ``BUNDLE``, [`SelectorSpec`][django_spec_rest.types.selector_spec.SelectorSpec] →
             ``SPREAD_AUTHOR_WINS``, so a selector takes the caller's value for
             each parameter its signature names.
         BUNDLE: A service's own parameters are never the caller's: the

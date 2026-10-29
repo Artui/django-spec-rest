@@ -13,7 +13,7 @@ service, and render the result list. The service loops itself — one call, one
 round-trip where the ORM allows it.
 
 ```python
-from rest_framework_services import ServiceSpec, SelectorKind, SelectorSpec
+from django_spec_rest import ServiceSpec, SelectorKind, SelectorSpec
 
 
 @dataclass
@@ -143,7 +143,7 @@ service as `collection`. Use it for instance-less bulk delete / update — no
 single `pk` in the URL.
 
 ```python
-from rest_framework_services import delete_collection
+from django_spec_rest import delete_collection
 
 
 def published_books(*, user) -> QuerySet[Book]:

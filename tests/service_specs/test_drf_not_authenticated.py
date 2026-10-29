@@ -13,7 +13,7 @@ from rest_framework.response import Response
 from rest_framework.test import APIRequestFactory
 from rest_framework.views import APIView
 
-from rest_framework_services.service_specs.drf_not_authenticated import DRFNotAuthenticated
+from django_spec_rest.service_specs.drf_not_authenticated import DRFNotAuthenticated
 
 
 class TestItIsBothClasses:

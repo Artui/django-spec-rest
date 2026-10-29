@@ -11,17 +11,17 @@ from django_service_specs.output.annotate_output_schema import (
 from jsonschema import Draft202012Validator
 from rest_framework import serializers
 
-import rest_framework_services
-from rest_framework_services.audience.annotate_output_schema import annotate_output_schema
-from rest_framework_services.audience.build_audience_projection import build_audience_projection
-from rest_framework_services.audience.project_payload import project_payload
-from rest_framework_services.jsonschema.output_to_json_schema import output_to_json_schema
-from rest_framework_services.types.audience_projection import AudienceProjection
-from rest_framework_services.types.field_audience import FieldAudience
-from rest_framework_services.types.field_marking import MARKING, FieldMarking
-from rest_framework_services.types.json_schema_registry import DEFAULT_JSON_SCHEMA_REGISTRY
-from rest_framework_services.types.selector_kind import SelectorKind
-from rest_framework_services.types.value_formatter import ValueFormatter
+import django_spec_rest
+from django_spec_rest.audience.annotate_output_schema import annotate_output_schema
+from django_spec_rest.audience.build_audience_projection import build_audience_projection
+from django_spec_rest.audience.project_payload import project_payload
+from django_spec_rest.jsonschema.output_to_json_schema import output_to_json_schema
+from django_spec_rest.types.audience_projection import AudienceProjection
+from django_spec_rest.types.field_audience import FieldAudience
+from django_spec_rest.types.field_marking import MARKING, FieldMarking
+from django_spec_rest.types.json_schema_registry import DEFAULT_JSON_SCHEMA_REGISTRY
+from django_spec_rest.types.selector_kind import SelectorKind
+from django_spec_rest.types.value_formatter import ValueFormatter
 
 
 class _Line(serializers.Serializer):
@@ -594,4 +594,4 @@ def test_a_formatted_property_keeps_a_null_in_every_spelling(stated: dict[str, A
 def test_annotate_output_schema_is_the_kernel_s_object_at_drfs_path_and_root() -> None:
     """The kernel owns the walk; what this file keeps is drfs' serializers feeding it."""
     assert annotate_output_schema is kernel_annotate_output_schema
-    assert rest_framework_services.annotate_output_schema is kernel_annotate_output_schema
+    assert django_spec_rest.annotate_output_schema is kernel_annotate_output_schema

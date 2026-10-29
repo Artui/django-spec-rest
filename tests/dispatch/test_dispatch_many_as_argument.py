@@ -32,7 +32,7 @@ from rest_framework.parsers import JSONParser
 from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
 
-from rest_framework_services import (
+from django_spec_rest import (
     ArgumentBinding,
     SelectorKind,
     SelectorSpec,
@@ -43,7 +43,7 @@ from rest_framework_services import (
     adispatch_spec,
     dispatch_spec,
 )
-from rest_framework_services.types.dispatch_result import DispatchResult
+from django_spec_rest.types.dispatch_result import DispatchResult
 
 _CORES = pytest.mark.parametrize("core", ["sync", "async"])
 

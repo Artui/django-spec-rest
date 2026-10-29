@@ -9,11 +9,11 @@ produces DRF serializer classes for DRF's own OpenAPI generators.
 
 ## `serializer_to_json_schema`
 
-::: rest_framework_services.jsonschema.serializer_to_json_schema.serializer_to_json_schema
+::: django_spec_rest.jsonschema.serializer_to_json_schema.serializer_to_json_schema
 
 ## `output_to_json_schema`
 
-::: rest_framework_services.jsonschema.output_to_json_schema.output_to_json_schema
+::: django_spec_rest.jsonschema.output_to_json_schema.output_to_json_schema
 
 ### A miss that is served as `null`
 
@@ -37,7 +37,7 @@ empty result in its own terms.
 
 ## `can_present_nothing`
 
-::: rest_framework_services.can_present_nothing.can_present_nothing
+::: django_spec_rest.can_present_nothing.can_present_nothing
 
 ### When a service presents nothing
 
@@ -79,7 +79,7 @@ rather than derive the answer again, so every route states the same `null`.
 
 ## `filterset_to_json_schema`
 
-::: rest_framework_services.jsonschema.filterset_to_json_schema.filterset_to_json_schema
+::: django_spec_rest.jsonschema.filterset_to_json_schema.filterset_to_json_schema
 
 ### What a filter publishes about itself
 
@@ -104,7 +104,7 @@ derived wording.
 
 ## `spec_to_json_schema`
 
-::: rest_framework_services.jsonschema.spec_to_json_schema.spec_to_json_schema
+::: django_spec_rest.jsonschema.spec_to_json_schema.spec_to_json_schema
 
 A selector's input schema reflects the **selector callable's own parameters** —
 names plus a JSON type from each annotation, skipping the `request` / `user` /
@@ -134,7 +134,7 @@ spec_to_json_schema(spec, phase="input", supplied=frozenset({"currency", "tenant
 ```
 
 The seeds every transport reserves need no listing. A name in
-[`RESERVED_POOL_SEEDS`][rest_framework_services.types.reserved_pool_seeds]
+[`RESERVED_POOL_SEEDS`][django_spec_rest.types.reserved_pool_seeds]
 (`progress`, `data`, `instance` and the rest) is one client input can never
 take: the pool's `request`, `user` and `progress` are filled over whatever a
 caller sends, and a selector's params never reach the others. So under
@@ -539,8 +539,8 @@ it is read through (a `DecimalField` for a `Decimal`).
 
 ## `JsonSchemaRegistry`
 
-::: rest_framework_services.types.json_schema_registry.JsonSchemaRegistry
+::: django_spec_rest.types.json_schema_registry.JsonSchemaRegistry
 
 ## `DEFAULT_JSON_SCHEMA_REGISTRY`
 
-::: rest_framework_services.types.json_schema_registry.DEFAULT_JSON_SCHEMA_REGISTRY
+::: django_spec_rest.types.json_schema_registry.DEFAULT_JSON_SCHEMA_REGISTRY

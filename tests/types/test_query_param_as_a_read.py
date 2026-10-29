@@ -12,9 +12,9 @@ from typing import Any
 import pytest
 from rest_framework.exceptions import ValidationError
 
-from rest_framework_services import ServiceSpec, dispatch_spec
-from rest_framework_services.types.query_param import QueryParam
-from rest_framework_services.types.unknown_arguments import UnknownArguments
+from django_spec_rest import ServiceSpec, dispatch_spec
+from django_spec_rest.types.query_param import QueryParam
+from django_spec_rest.types.unknown_arguments import UnknownArguments
 
 
 def _page(*, page: Any = None) -> Any:

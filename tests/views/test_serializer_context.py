@@ -17,7 +17,7 @@ import pytest
 from rest_framework import serializers
 from rest_framework.test import APIRequestFactory
 
-from rest_framework_services import (
+from django_spec_rest import (
     SelectorKind,
     SelectorSpec,
     ServiceCreateView,
@@ -407,7 +407,7 @@ class TestSelectorActionContext:
     def test_collection_action_default_context(self) -> None:
         from rest_framework.viewsets import GenericViewSet
 
-        from rest_framework_services import selector_action
+        from django_spec_rest import selector_action
 
         Author.objects.create(name="x")
         capturing = _capturing_serializer_factory()
@@ -436,7 +436,7 @@ class TestSelectorActionContext:
     def test_action_specific_output_hook(self) -> None:
         from rest_framework.viewsets import GenericViewSet
 
-        from rest_framework_services import selector_action
+        from django_spec_rest import selector_action
 
         Author.objects.create(name="x")
         capturing = _capturing_serializer_factory()
@@ -593,7 +593,7 @@ class TestSelectorSpecOutputContext:
     """SelectorSpec.output_serializer_context is honored by every entry point."""
 
     def test_selector_list_view_honors_spec(self) -> None:
-        from rest_framework_services import SelectorListView
+        from django_spec_rest import SelectorListView
 
         Author.objects.create(name="x")
         capturing = _capturing_serializer_factory()
@@ -610,7 +610,7 @@ class TestSelectorSpecOutputContext:
         assert capturing.captured["from_spec"] is True
 
     def test_selector_retrieve_view_honors_spec(self) -> None:
-        from rest_framework_services import SelectorRetrieveView
+        from django_spec_rest import SelectorRetrieveView
 
         author = Author.objects.create(name="x")
         capturing = _capturing_serializer_factory()
@@ -627,7 +627,7 @@ class TestSelectorSpecOutputContext:
         assert capturing.captured["from_spec"] is True
 
     def test_selector_list_mixin_honors_spec(self) -> None:
-        from rest_framework_services import SelectorViewSet
+        from django_spec_rest import SelectorViewSet
 
         Author.objects.create(name="x")
         capturing = _capturing_serializer_factory()
@@ -647,7 +647,7 @@ class TestSelectorSpecOutputContext:
         assert capturing.captured["from_spec"] is True
 
     def test_selector_retrieve_mixin_honors_spec(self) -> None:
-        from rest_framework_services import SelectorViewSet
+        from django_spec_rest import SelectorViewSet
 
         author = Author.objects.create(name="x")
         capturing = _capturing_serializer_factory()
@@ -669,7 +669,7 @@ class TestSelectorSpecOutputContext:
     def test_selector_action_decorator_honors_spec(self) -> None:
         from rest_framework.viewsets import GenericViewSet
 
-        from rest_framework_services import selector_action
+        from django_spec_rest import selector_action
 
         Author.objects.create(name="x")
         capturing = _capturing_serializer_factory()
@@ -694,7 +694,7 @@ class TestSelectorSpecOutputContext:
 
     def test_per_action_output_hook_honored_alongside_spec_on_viewset(self) -> None:
         """The action-level view hook still applies; the spec wins on overlap."""
-        from rest_framework_services import SelectorViewSet
+        from django_spec_rest import SelectorViewSet
 
         Author.objects.create(name="x")
         capturing = _capturing_serializer_factory()

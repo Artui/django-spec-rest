@@ -1,5 +1,5 @@
 """Resolve a
-[`PolymorphicServiceSpec`][rest_framework_services.types.polymorphic_service_spec.PolymorphicServiceSpec]
+[`PolymorphicServiceSpec`][django_spec_rest.types.polymorphic_service_spec.PolymorphicServiceSpec]
 to its chosen concrete spec."""
 
 from __future__ import annotations
@@ -11,11 +11,11 @@ from django_service_specs.pool.resolve_callable_kwargs import (
     resolve_callable_kwargs as bind_by_name_only,
 )
 
-from rest_framework_services.exceptions.service_error import ServiceError
-from rest_framework_services.types.polymorphic_service_spec import PolymorphicServiceSpec
-from rest_framework_services.types.service_spec import ServiceSpec
-from rest_framework_services.views.mutation.map_service_error import map_service_error
-from rest_framework_services.views.utils import view_call_context
+from django_spec_rest.exceptions.service_error import ServiceError
+from django_spec_rest.types.polymorphic_service_spec import PolymorphicServiceSpec
+from django_spec_rest.types.service_spec import ServiceSpec
+from django_spec_rest.views.mutation.map_service_error import map_service_error
+from django_spec_rest.views.utils import view_call_context
 
 _CACHE_ATTR = "_rfs_polymorphic_choices"
 

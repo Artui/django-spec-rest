@@ -8,20 +8,20 @@ from typing import Any
 
 from rest_framework import serializers
 
-from rest_framework_services.audience.annotate_output_schema import annotate_output_schema
-from rest_framework_services.audience.utils import AFFORDANCES_KEY, affordance_schema
-from rest_framework_services.jsonschema.utils import (
+from django_spec_rest.audience.annotate_output_schema import annotate_output_schema
+from django_spec_rest.audience.utils import AFFORDANCES_KEY, affordance_schema
+from django_spec_rest.jsonschema.utils import (
     dataclass_to_schema,
     serializer_for_schema,
     serializer_to_schema,
 )
-from rest_framework_services.types.affordance_declarer import AffordanceDeclarer
-from rest_framework_services.types.audience_projection import AudienceProjection
-from rest_framework_services.types.json_schema_registry import (
+from django_spec_rest.types.affordance_declarer import AffordanceDeclarer
+from django_spec_rest.types.audience_projection import AudienceProjection
+from django_spec_rest.types.json_schema_registry import (
     DEFAULT_JSON_SCHEMA_REGISTRY,
     JsonSchemaRegistry,
 )
-from rest_framework_services.types.selector_kind import SelectorKind
+from django_spec_rest.types.selector_kind import SelectorKind
 
 
 def output_to_json_schema(
@@ -54,23 +54,23 @@ def output_to_json_schema(
       ``{items, page, totalPages, hasNext}``.
 
     ``projection`` applies the serializer's field markings, mirroring what
-    [`project_payload`][rest_framework_services.audience.project_payload.project_payload]
+    [`project_payload`][django_spec_rest.audience.project_payload.project_payload]
     does to the payload — hidden fields dropped, choices re-declared in their
     display values, and a formatted field re-declared as the type its
-    [`ValueFormatter`][rest_framework_services.types.value_formatter.ValueFormatter]
+    [`ValueFormatter`][django_spec_rest.types.value_formatter.ValueFormatter]
     produces. It lands on the **item**, wherever the item sits for this
     ``kind`` — the array wrapper and the pagination envelope are this function's
     own shapes and belong to no serializer, so a projection walking them would
     look for markings that cannot exist and silently annotate nothing.
 
     ``handle_description`` is passed through to
-    [`annotate_output_schema`][rest_framework_services.audience.annotate_output_schema.annotate_output_schema]
+    [`annotate_output_schema`][django_spec_rest.audience.annotate_output_schema.annotate_output_schema]
     as the fallback wording for an unlabelled handle. It defaults to nothing:
     what a reader should *do* with an identifier depends on the reader, and the
     transport is what knows.
 
     ``registry`` supplies consumer rules for custom field / Python types — see
-    [`JsonSchemaRegistry`][rest_framework_services.types.json_schema_registry.JsonSchemaRegistry].
+    [`JsonSchemaRegistry`][django_spec_rest.types.json_schema_registry.JsonSchemaRegistry].
 
     ``max_depth`` bounds how many serializer levels the **item** describes,
     truncating deeper ones to ``{"type": "object"}``; ``None``, the default,
@@ -90,7 +90,7 @@ def output_to_json_schema(
     does. Pass it wherever the payload is
     rendered by ``render_spec_output`` or ``render_for_audience`` from a spec that
     declares them;
-    [`spec_to_json_schema`][rest_framework_services.jsonschema.spec_to_json_schema.spec_to_json_schema]
+    [`spec_to_json_schema`][django_spec_rest.jsonschema.spec_to_json_schema.spec_to_json_schema]
     does so itself.
 
     ``allow_none`` states the ``null`` an ``allow_none`` RETRIEVE presents for a
@@ -102,9 +102,9 @@ def output_to_json_schema(
     Off by default, which is the schema every caller got before it existed:
     this function takes a serializer and a ``kind``, never the spec, so the
     caller says whether a miss is presented.
-    [`spec_to_json_schema`][rest_framework_services.jsonschema.spec_to_json_schema.spec_to_json_schema]
+    [`spec_to_json_schema`][django_spec_rest.jsonschema.spec_to_json_schema.spec_to_json_schema]
     passes
-    [`can_present_nothing(spec)`][rest_framework_services.can_present_nothing.can_present_nothing]
+    [`can_present_nothing(spec)`][django_spec_rest.can_present_nothing.can_present_nothing]
     for a ``SelectorSpec`` and a ``ServiceSpec`` alike, so a ``SelectorSpec``'s
     ``allow_none`` reaches it only through that answer. A transport whose protocol
     needs an object at the root -- an MCP tool's ``outputSchema`` -- leaves it

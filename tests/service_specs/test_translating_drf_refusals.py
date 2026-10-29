@@ -23,17 +23,17 @@ from django_service_specs.types.is_async import is_async
 from rest_framework import serializers
 from typing_extensions import TypedDict, Unpack
 
-from rest_framework_services import (
+from django_spec_rest import (
     NotClientInput,
     QueryParam,
     SelectorKind,
     SelectorSpec,
     ServiceSpec,
 )
-from rest_framework_services.dispatch.utils import server_owned_keys
-from rest_framework_services.service_specs import as_kernel_spec as compiler
-from rest_framework_services.service_specs.kernel_spec_variant import kernel_spec_variant
-from rest_framework_services.service_specs.translating_drf_refusals import (
+from django_spec_rest.dispatch.utils import server_owned_keys
+from django_spec_rest.service_specs import as_kernel_spec as compiler
+from django_spec_rest.service_specs.kernel_spec_variant import kernel_spec_variant
+from django_spec_rest.service_specs.translating_drf_refusals import (
     translating_drf_refusals,
 )
 from tests.testapp.models import Post

@@ -28,7 +28,7 @@ from django.db.models import QuerySet, Value
 from django.http import QueryDict
 from rest_framework.exceptions import ErrorDetail, ValidationError
 
-from rest_framework_services import (
+from django_spec_rest import (
     DispatchResult,
     OfflineServiceView,
     QueryParam,

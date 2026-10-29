@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 
-from rest_framework_services import (
+from django_spec_rest import (
     FieldMarking,
     OfflineContract,
     QueryParam,

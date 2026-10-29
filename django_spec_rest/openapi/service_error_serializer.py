@@ -9,7 +9,7 @@ class ServiceErrorSerializer(serializers.Serializer):
     """Single-field ``detail`` serializer that mirrors ``_ServiceAPIException``.
 
     Used by
-    [`ServiceAutoSchema`][rest_framework_services.openapi.service_auto_schema.ServiceAutoSchema]
+    [`ServiceAutoSchema`][django_spec_rest.openapi.service_auto_schema.ServiceAutoSchema]
     to attach a ``422`` response to every spec-driven mutation in the generated OpenAPI
     document. It is *only* used for schema generation; runtime 422 bodies are produced
     by DRF's exception handler from ``_ServiceAPIException``."""

@@ -6,7 +6,7 @@ from typing import Any, Generic
 
 from typing_extensions import TypedDict, TypeVar, Unpack
 
-from rest_framework_services.types.unpack_typed_dict import unpack_typed_dict
+from django_spec_rest.types.unpack_typed_dict import unpack_typed_dict
 
 _UserT = TypeVar("_UserT", default=Any)
 

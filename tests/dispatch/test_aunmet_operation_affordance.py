@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from asgiref.sync import async_to_sync
 
-from rest_framework_services import ServiceSpec, aunmet_operation_affordance
-from rest_framework_services.types.affordance import Affordance
+from django_spec_rest import ServiceSpec, aunmet_operation_affordance
+from django_spec_rest.types.affordance import Affordance
 
 _FROZEN = Affordance(code="frozen", reason="Frozen.", when=lambda: False)
 
