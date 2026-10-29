@@ -167,6 +167,19 @@ def test_auth_is_none_and_reading_it_keeps_the_user() -> None:
     assert ctx.request.user is principal
 
 
+@pytest.mark.django_db
+def test_reading_the_successful_authenticator_first_keeps_the_user() -> None:
+    # ``successful_authenticator`` authenticates on first read just as ``auth``
+    # does, and a request with no authenticator answers that by replacing the
+    # user with ``AnonymousUser``; a class asking which authenticator vouched
+    # for the call before it reads the user must still see the principal.
+    principal = User.objects.create(username="signed-in")
+    ctx = build_offline_context(principal)
+
+    assert ctx.request.successful_authenticator is None
+    assert ctx.request.user is principal
+
+
 def test_a_wrapped_request_s_auth_is_set_on_the_copy_alone() -> None:
     base = HttpRequest()
     ctx = build_offline_context(_USER, http_request=base)
