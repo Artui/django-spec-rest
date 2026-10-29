@@ -134,8 +134,10 @@ def test_a_row_condition_on_a_create_view_is_refused_at_as_view() -> None:
 
 @pytest.mark.xfail(
     strict=True,
+    raises=AssertionError,
     reason="a kernel spec on the mutation views never asks the view's own DRF object "
-    "permission before its affordances, so the denied caller is answered 409; an ask on "
+    "permission before its affordances, so the denied caller is answered 409 on an "
+    "unavailable row and served 200 with the row written on an available one; an ask on "
     "views/mutation/utils.py (selectors.utils' _viewed twin is the query views' answer)",
 )
 @pytest.mark.parametrize("published", [True, False], ids=["unavailable", "available"])

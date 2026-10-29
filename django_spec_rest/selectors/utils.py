@@ -352,8 +352,8 @@ def drf_query_keys(view: Any) -> frozenset[str]:
     on DRF's three paginators, ``search_param`` and ``ordering_param`` on its
     two filters, ``version_param`` on its query-parameter versioning, and the
     same spelling on a project's own. A ``None`` or a blank, a reader's way of
-    reading no such key, names none (test_drf_query_keys, its ``_OwnFilter``
-    row holding the blank). A view-level ``DjangoFilterBackend`` reading a
+    reading no such key, names none, and nor does a non-string value (a number)
+    (test_drf_query_keys, its ``_OwnFilter`` row holding the blank and the number). A view-level ``DjangoFilterBackend`` reading a
     ``filterset_fields`` of the view's own is not read here: its keys are its
     filter set's, which only its ``get_filterset_class(view, queryset)``
     knows. Read off the classes
