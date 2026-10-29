@@ -33,3 +33,11 @@ class NotPermitted(KernelNotPermitted, PermissionDenied):
     def __init__(self, message: str | None = None, code: str | None = None) -> None:
         KernelNotPermitted.__init__(self, message)
         PermissionDenied.__init__(self, self.message, code)
+
+    @classmethod
+    def from_kernel(cls, exc: KernelNotPermitted) -> NotPermitted:
+        """The kernel's denial ``exc`` as this class, with its message.
+
+        Shared by the kernel route's refusal map and ``translate_dispatch_errors``.
+        """
+        return cls(exc.message)

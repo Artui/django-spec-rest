@@ -58,3 +58,18 @@ class TestDrfAnswersIt:
 
     def test_the_kernels_class_alone_is_a_500(self) -> None:
         assert served_status(KernelNotPermitted()) == 500
+
+
+class TestFromKernel:
+    def test_a_kernel_denial_keeps_its_message_as_message_and_detail(self) -> None:
+        twin = NotPermitted.from_kernel(KernelNotPermitted("Not for you."))
+        assert type(twin) is NotPermitted
+        assert twin.message == "Not for you."
+        assert str(twin.detail) == "Not for you."
+        assert twin.get_codes() == "permission_denied"
+
+    def test_a_subclass_of_the_kernel_s_denial_keeps_its_message(self) -> None:
+        class _Worded(KernelNotPermitted):
+            default_message = "Worded otherwise."
+
+        assert NotPermitted.from_kernel(_Worded()).message == "Worded otherwise."

@@ -59,3 +59,16 @@ class TestDrfAnswersIt:
 
     def test_the_kernels_class_alone_is_a_500(self) -> None:
         assert served_status(KernelPrincipalUnavailable()) == 500
+
+
+class TestFromKernel:
+    def test_a_kernel_refusal_keeps_its_message_as_message_and_detail(self) -> None:
+        twin = PrincipalUnavailable.from_kernel(KernelPrincipalUnavailable("Gone."))
+        assert type(twin) is PrincipalUnavailable
+        assert twin.message == "Gone."
+        assert str(twin.detail) == "Gone."
+        assert twin.get_codes() == "permission_denied"
+
+    def test_the_kernel_s_default_message_is_carried(self) -> None:
+        kernel = KernelPrincipalUnavailable()
+        assert PrincipalUnavailable.from_kernel(kernel).message == kernel.message

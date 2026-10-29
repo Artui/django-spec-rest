@@ -35,3 +35,11 @@ class PrincipalUnavailable(KernelPrincipalUnavailable, PermissionDenied):
     def __init__(self, message: str | None = None, code: str | None = None) -> None:
         KernelPrincipalUnavailable.__init__(self, message)
         PermissionDenied.__init__(self, self.message, code)
+
+    @classmethod
+    def from_kernel(cls, exc: KernelPrincipalUnavailable) -> PrincipalUnavailable:
+        """The kernel's refusal ``exc`` as this class, with its message.
+
+        Shared by the kernel route's refusal map and ``translate_dispatch_errors``.
+        """
+        return cls(exc.message)
