@@ -3,9 +3,15 @@
 A related field takes a primary key, not the row, and hands the service the
 row; a value its validators refuse is a 400 for the client; and a read-only
 field validates nothing, so a value for it reaches the service parameter as
-given. Two places give a kernel spec's call such a value: the spec's own
-``kwargs`` provider, and the view's ``get_service_kwargs`` hook. Neither is
-validated by the field on the kernel route yet; each is a strict xfail.
+given.
+
+On the kernel route the seat that fills a Validator field is ``input_data``,
+the spec's and beneath it the view's ``get_input_data``, so the validating
+cases are given there. ``kwargs`` fills the pool: its value reaches the
+service parameter as given, never through the field, which is what a
+read-only field's case asks of it. The drfs path validated a
+``get_service_kwargs`` value naming a field as well; on the kernel route that
+value is the pool's. The view's hooks reach no kernel call yet, a strict xfail.
 """
 
 from __future__ import annotations
@@ -53,32 +59,38 @@ class _KernelCreateView(ServiceCreateView):
         return [permission() for permission in self.permission_classes]
 
 
-def _by_the_spec(seen: dict[str, Any], values: dict[str, Any]) -> type[ServiceCreateView]:
-    class _View(_KernelCreateView):
-        spec = ServiceSpec(
-            service=_service(seen),
-            permissions=(Unrestricted(),),
-            validator=SerializerValidator(_PostIn),
-            kwargs=lambda: values,
-            atomic=False,
-        )
+def _view(
+    seen: dict[str, Any], *, input_data: Any = None, kwargs: Any = None, hooks: Any = None
+) -> type[ServiceCreateView]:
+    spec = ServiceSpec(
+        service=_service(seen),
+        permissions=(Unrestricted(),),
+        validator=SerializerValidator(_PostIn),
+        input_data=input_data,
+        kwargs=kwargs,
+        atomic=False,
+    )
+    return type("_View", (_KernelCreateView,), {"spec": spec, **(hooks or {})})
 
-    return _View
+
+def _validated_by_the_spec(seen: dict[str, Any], values: dict[str, Any]) -> Any:
+    """The spec's ``input_data``, the seat that fills a Validator field."""
+    return _view(seen, input_data=lambda: values)
 
 
-def _by_the_view(seen: dict[str, Any], values: dict[str, Any]) -> type[ServiceCreateView]:
-    class _View(_KernelCreateView):
-        spec = ServiceSpec(
-            service=_service(seen),
-            permissions=(Unrestricted(),),
-            validator=SerializerValidator(_PostIn),
-            atomic=False,
-        )
+def _validated_by_the_view(seen: dict[str, Any], values: dict[str, Any]) -> Any:
+    """The view's ``get_input_data``, the hook layered beneath the spec's ``input_data``."""
+    return _view(seen, hooks={"get_input_data": lambda self: values})
 
-        def get_service_kwargs(self) -> dict[str, Any]:
-            return values
 
-    return _View
+def _given_by_the_spec(seen: dict[str, Any], values: dict[str, Any]) -> Any:
+    """The spec's ``kwargs``, which fills the pool, not a Validator field."""
+    return _view(seen, kwargs=lambda: values)
+
+
+def _given_by_the_view(seen: dict[str, Any], values: dict[str, Any]) -> Any:
+    """The view's ``get_service_kwargs``, the hook layered beneath the spec's ``kwargs``."""
+    return _view(seen, hooks={"get_service_kwargs": lambda self: values})
 
 
 _HOOK_NOT_CARRIED = pytest.mark.xfail(
@@ -91,23 +103,10 @@ _HOOK_NOT_CARRIED = pytest.mark.xfail(
     ),
 )
 
-_SPEC_VALUE_NOT_VALIDATED = pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "On the kernel route a kwargs provider's value naming a validator field reaches the "
-        "service as given, never validated by the field (no server_values on EdgeCallState, "
-        "dispatch/kernel_edge.py): a gap or a decided change, to be settled with the edge's "
-        "server values."
-    ),
-)
-
 _BY = pytest.mark.parametrize(
     "given",
-    [
-        pytest.param(_by_the_spec, marks=_SPEC_VALUE_NOT_VALIDATED),
-        pytest.param(_by_the_view, marks=_HOOK_NOT_CARRIED),
-    ],
-    ids=["spec-kwargs", "view-hook"],
+    [_validated_by_the_spec, pytest.param(_validated_by_the_view, marks=_HOOK_NOT_CARRIED)],
+    ids=["spec-input-data", "view-get-input-data"],
 )
 
 
@@ -158,8 +157,8 @@ def test_a_value_the_fields_validators_refuse_is_the_clients_400(given: Callable
 @pytest.mark.django_db
 @pytest.mark.parametrize(
     "given",
-    [_by_the_spec, pytest.param(_by_the_view, marks=_HOOK_NOT_CARRIED)],
-    ids=["spec-kwargs", "view-hook"],
+    [_given_by_the_spec, pytest.param(_given_by_the_view, marks=_HOOK_NOT_CARRIED)],
+    ids=["spec-kwargs", "view-get-service-kwargs"],
 )
 def test_a_value_for_a_read_only_field_reaches_the_parameter_as_given(
     given: Callable[..., Any],

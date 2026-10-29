@@ -77,7 +77,8 @@ _SELECTOR_VIEWS_SKIP_THE_PRESENTER = (
 )
 _VIEWSETS_REFUSE_A_KERNEL_SPEC = (
     "viewsets/utils.py _validate_action_spec and viewsets/decorators read drfs fields, "
-    "so a kernel spec in action_specs or @selector_action is refused at as_view()."
+    "so a kernel spec in action_specs or @selector_action is refused at as_view(); "
+    "once accepted, the view's hook chains must reach the kernel call too."
 )
 
 
@@ -174,11 +175,7 @@ class TestTheInputSerializer:
         assert _CapturingIn.captured["tenant"] == "acme"
 
     @pytest.mark.xfail(strict=True, reason=_NO_VIEW_HOOKS)
-    def test_the_directional_hook_layers_over_drf_s_and_is_there_for_the_output(self) -> None:
-        """The input hook's key reaches the input serializer and, the context being
-        one dict per request, the output serializer after it: the drfs path's
-        "does not leak into output" inverts by design."""
-
+    def test_the_directional_hook_layers_over_drf_s(self) -> None:
         class _View(_KernelCreateView):
             spec = _spec()
 
@@ -187,6 +184,20 @@ class TestTheInputSerializer:
 
         _create(_View)
         assert _CapturingIn.captured["origin"] == "input"
+
+    @pytest.mark.xfail(strict=True, reason=f"{_NO_VIEW_HOOKS} {_A_COPY_PER_SERIALIZER}")
+    def test_the_directional_hook_s_key_is_there_for_the_output(self) -> None:
+        """The context being one dict per request, the input hook's key reaches the
+        output serializer after it: the drfs path's "does not leak into output"
+        inverts by design."""
+
+        class _View(_KernelCreateView):
+            spec = _spec()
+
+            def get_input_serializer_context(self) -> dict[str, Any]:
+                return {**super().get_input_serializer_context(), "origin": "input"}
+
+        _create(_View)
         assert _CapturingOut.captured["origin"] == "input"
 
     def test_a_dataclass_validator_s_serializer_is_built_under_it(self) -> None:
@@ -255,7 +266,8 @@ class TestTheOutputSerializer:
 
 
 class TestPerActionHooks:
-    def test_a_standalone_view_has_no_action_so_no_per_action_hook_runs(self) -> None:
+    @pytest.mark.xfail(strict=True, reason=_NO_VIEW_HOOKS)
+    def test_a_standalone_view_has_no_action_so_only_its_directional_hook_runs(self) -> None:
         author = Author.objects.create(name="orig")
 
         class _View(ServiceUpdateView):
@@ -264,7 +276,7 @@ class TestPerActionHooks:
                 instance_selector_spec=SelectorSpec(
                     kind=SelectorKind.RETRIEVE,
                     selector=lambda *, pk: Author.objects.filter(pk=pk).first(),
-                    reads=Parameters.of(Parameter("pk", "integer")),
+                    reads=Parameters.of(Parameter("pk", "integer", required=True)),
                     permissions=_OPEN,
                 ),
             )
@@ -272,11 +284,15 @@ class TestPerActionHooks:
             def get_permissions(self) -> list[Any]:
                 return [permission() for permission in self.permission_classes]
 
+            def get_input_serializer_context(self) -> dict[str, Any]:
+                return {"directional": "input"}
+
             def get_update_input_serializer_context(self) -> dict[str, Any]:
                 return {"per_action": "update-input"}
 
         response = _View.as_view()(factory.put("/", {"name": "new"}, format="json"), pk=author.pk)
         assert response.status_code == 200
+        assert _CapturingIn.captured["directional"] == "input"
         assert "per_action" not in _CapturingIn.captured
         assert getattr(_CapturingIn.captured["view"], "action", None) is None
 
@@ -415,7 +431,7 @@ class TestASelectorView:
             spec = SelectorSpec(
                 kind=SelectorKind.RETRIEVE,
                 selector=lambda *, pk: Author.objects.filter(pk=pk).first(),
-                reads=Parameters.of(Parameter("pk", "integer")),
+                reads=Parameters.of(Parameter("pk", "integer", required=True)),
                 permissions=_OPEN,
                 presenter=SerializerPresenter(
                     _CapturingOut, serializer_context=lambda: {"spec_key": "retrieve"}

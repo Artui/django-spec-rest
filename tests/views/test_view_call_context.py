@@ -137,7 +137,7 @@ def test_a_kernel_selector_is_handed_the_view_s_dict() -> None:
         spec = SelectorSpec(
             kind=SelectorKind.RETRIEVE,
             selector=one,
-            reads=Parameters.of(Parameter("pk", "integer")),
+            reads=Parameters.of(Parameter("pk", "integer", required=True)),
             permissions=_OPEN,
         )
 
