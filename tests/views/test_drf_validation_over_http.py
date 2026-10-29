@@ -23,6 +23,7 @@ import pytest
 from django.contrib.auth.models import AnonymousUser
 from django_service_specs import UNSET, ServiceSpec, Unrestricted
 from django_service_specs.dispatch.dispatch import dispatch
+from django_service_specs.parameters.invalid_arguments import InvalidArguments
 from rest_framework import serializers
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.request import Request
@@ -62,9 +63,16 @@ def _rows(*, data: Any) -> None:
     SEEN["data"] = [dict(row) for row in data]
 
 
-def _view(serializer: type | None, *, lenient: bool = True, **spec: Any) -> Any:
+def _view(
+    serializer: type | None,
+    *,
+    lenient: bool = True,
+    view_attrs: dict[str, Any] | None = None,
+    **spec: Any,
+) -> Any:
     """A create view over a kernel spec; ``get_permissions`` answers the view's own,
-    none, as the spine's views do: ``MutationFlowMixin``'s reads a drfs-only field."""
+    none, as the spine's views do: ``MutationFlowMixin``'s reads a drfs-only field.
+    ``view_attrs`` are the view's own overrides, a hook among them."""
     served = ServiceSpec(
         **{"service": _rows if spec.get("many") else _echo, **spec},
         permissions=_OPEN,
@@ -79,6 +87,7 @@ def _view(serializer: type | None, *, lenient: bool = True, **spec: Any) -> Any:
             "permission_classes": [],
             "authentication_classes": [],
             "get_permissions": lambda self: [],
+            **(view_attrs or {}),
         },
     ).as_view()
 
@@ -205,21 +214,32 @@ def test_a_bulk_row_refusal_is_drfs_own() -> None:
     assert "A valid integer is required." in str(response.data)
 
 
-@pytest.mark.parametrize("body", [[{"title": "ok"}], "x"], ids=["list", "string"])
+@pytest.mark.parametrize(
+    ("body", "served"),
+    [
+        ([{"title": "ok"}], b'{"detail":"The body must be an object; got list."}'),
+        ("x", b'{"detail":"The body must be an object; got str."}'),
+    ],
+    ids=["list", "string"],
+)
 @pytest.mark.parametrize(
     "spec",
     [{}, {"input_data": lambda: {"title": "srv"}}],
     ids=["plain", "with-an-input-data-provider"],
 )
-def test_a_single_call_body_that_is_no_object_is_refused(body: Any, spec: Any) -> None:
+def test_a_single_call_body_that_is_no_object_is_refused(
+    body: Any, served: bytes, spec: Any
+) -> None:
     """Changed by design: the edge refuses a body that is no object as a whole,
-    a ``400`` in the kernel's words, before any serializer is asked. An
-    ``input_data`` provider's keys have no object to go over, and the body is
+    a ``400`` in the kernel's words, before any serializer is asked. drfs answered
+    DRF's ``{"non_field_errors": ["Invalid data. Expected a dictionary, but got
+    list."]}``; the answer is now the ``detail`` mapping below, pinned as served.
+    An ``input_data`` provider's keys have no object to go over, and the body is
     still refused rather than raising."""
     response = _view(_Lenient, **spec)(_request(body, "json"))
+    response.render()
 
-    assert response.status_code == 400
-    assert "The body must be an object" in str(response.data)
+    assert (response.status_code, response.content) == (400, served)
     assert "data" not in SEEN
 
 
@@ -236,20 +256,36 @@ def test_a_validator_that_is_not_lenient_keeps_the_kernel_s_typed_check() -> Non
 
 
 @pytest.mark.parametrize(
-    ("body", "answer"),
+    ("body", "answer", "served"),
     [
-        pytest.param({"title": "ok"}, ("Expected an array.", "not_a_list"), id="object"),
-        pytest.param({}, ("Expected an array.", "not_a_list"), id="empty"),
-        pytest.param(None, ("This field cannot be null.", "null"), id="null"),
+        pytest.param(
+            {"title": "ok"},
+            ("Expected an array.", "not_a_list"),
+            b'{"items":["Expected an array."]}',
+            id="object",
+        ),
+        pytest.param(
+            {},
+            ("Expected an array.", "not_a_list"),
+            b'{"items":["Expected an array."]}',
+            id="empty",
+        ),
+        pytest.param(
+            None,
+            ("This field cannot be null.", "null"),
+            b'{"items":["This field cannot be null."]}',
+            id="null",
+        ),
     ],
 )
 def test_a_bulk_body_that_is_no_list_is_refused_under_the_many_argument(
-    body: Any, answer: tuple[str, str]
+    body: Any, answer: tuple[str, str], served: bytes
 ) -> None:
     """Changed by design: the edge hands a ``many`` spec's body to the kernel under
     its ``many_argument`` as sent, so the kernel's shape check refuses it there, in
     its words and with DRF's code, where drfs answered DRF's list serializer's
-    ``non_field_errors``."""
+    ``non_field_errors`` (``Expected a list of items but got type "dict".``,
+    ``No data provided``). The wire is pinned as served."""
     request = (
         _factory.generic("POST", "/", "null", content_type="application/json")
         if body is None
@@ -261,15 +297,20 @@ def test_a_bulk_body_that_is_no_list_is_refused_under_the_many_argument(
     assert response.status_code == 400
     (message,) = response.data["items"]
     assert (str(message), message.code) == answer
+    response.render()
+    assert response.content == served
     assert "data" not in SEEN
 
 
 def test_a_body_with_no_validator_that_is_no_object_is_refused() -> None:
     """Refused as a whole before any argument is read, a spec with no Validator too."""
     response = _view(None, service=_nothing)(_request([1], "json"))
+    response.render()
 
-    assert response.status_code == 400
-    assert "The body must be an object" in str(response.data)
+    assert (response.status_code, response.content) == (
+        400,
+        b'{"detail":"The body must be an object; got list."}',
+    )
     assert "data" not in SEEN
 
 
@@ -361,3 +402,115 @@ def test_a_form_body_s_repeated_keys_reach_the_serializer_whole(lenient: bool) -
         "flags": ["x", "y"],
         "note": "n",
     }
+
+
+@pytest.mark.parametrize(
+    "fmt",
+    [
+        "json",
+        # A form leaves the unsent multiple choice absent where DRF's HTML-input
+        # reading, which the flat dict the edge binds never reaches, reads it as
+        # none chosen.
+        pytest.param("multipart", marks=_HTML_INPUT),
+    ],
+)
+def test_a_hooks_none_fills_a_required_nullable_field_the_client_omitted(fmt: str) -> None:
+    """``None`` is a value the hook put, though the client sent no key to compare it with."""
+    response = _view(
+        _RepeatedIn,
+        lenient=False,
+        view_attrs={"get_service_kwargs": lambda self: {"note": None}},
+    )(_request({"tags": ["a"]}, fmt))
+
+    assert response.status_code == 204, response.data
+    # A form body reads an absent multiple choice as none chosen, as DRF does.
+    chosen = {"flags": []} if fmt == "multipart" else {}
+    data = SEEN["data"]
+    assert {**data, **({"flags": sorted(data["flags"])} if "flags" in data else {})} == {
+        "tags": ["a"],
+        **chosen,
+        "note": None,
+    }
+
+
+class _ReadsTheRequest(serializers.Serializer):
+    """Built only with a request, as a serializer scoping a field by the caller is."""
+
+    title = serializers.CharField()
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.method = self.context["request"].method
+
+
+@pytest.mark.parametrize(
+    ("many", "body", "served"),
+    [
+        pytest.param(
+            False,
+            [{"title": "a"}],
+            b'{"detail":"The body must be an object; got list."}',
+            id="single-list",
+        ),
+        pytest.param(True, {"title": "a"}, b'{"items":["Expected an array."]}', id="many-object"),
+        pytest.param(True, None, b'{"items":["This field cannot be null."]}', id="many-null"),
+    ],
+)
+def test_a_wrong_shaped_body_is_refused_for_a_serializer_needing_the_request(
+    many: bool, body: Any, served: bytes
+) -> None:
+    """The shape is refused before any field is read, so a serializer that cannot be
+    built without the call's request still answers the shape's refusal over a live
+    view, as drfs answered DRF's words. Changed by design: the words are the kernel's
+    (see the two tests above)."""
+    request = (
+        _factory.generic("POST", "/", "null", content_type="application/json")
+        if body is None
+        else _request(body, "json")
+    )
+
+    response = _view(_ReadsTheRequest, many=many)(request)
+    response.render()
+
+    assert (response.status_code, response.content) == (400, served)
+    assert "data" not in SEEN
+
+
+@pytest.mark.parametrize(
+    ("many", "arguments", "detail"),
+    [
+        pytest.param(False, {"nope": 1}, {"nope": ["Unknown argument."]}, id="single"),
+        pytest.param(True, {"items": {"title": "a"}}, {"items": ["Expected an array."]}, id="many"),
+    ],
+)
+@pytest.mark.xfail(
+    strict=True,
+    raises=AttributeError,
+    reason=(
+        "the kernel's dispatch describes a SerializerValidator's serializer for "
+        "parameters() with no request, whatever call_context carries, so a serializer "
+        "reading context['request'] in __init__ raises AttributeError off HTTP where "
+        "drfs (OfflineServiceView) refused the wrong-shaped call before building it"
+    ),
+)
+def test_a_wrong_shaped_call_off_http_is_refused_for_a_serializer_needing_the_request(
+    many: bool, arguments: dict[str, Any], detail: dict[str, Any]
+) -> None:
+    spec = ServiceSpec(
+        service=_echo,
+        permissions=_OPEN,
+        validator=SerializerValidator(_ReadsTheRequest),
+        many=many,
+        atomic=False,
+    )
+    request = Request(_factory.post("/"))
+
+    with pytest.raises(InvalidArguments) as excinfo:
+        dispatch(
+            spec,
+            principal=AnonymousUser(),
+            arguments=arguments,
+            call_context={"request": request},
+        )
+
+    assert excinfo.value.detail == detail
