@@ -34,6 +34,7 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 from rest_framework.views import APIView
 
 from django_spec_rest import ServiceUpdateView
+from django_spec_rest.service_specs.kernel_spec_variant import kernel_spec_variant
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from django_spec_rest.views.mutation import utils
@@ -168,12 +169,30 @@ class TestServiceUpdateView:
         author = Author.objects.create(name="orig")
         assert _view(spec)(factory.patch("/", {}, format="json"), pk=author.pk).status_code == 204
 
-    def test_a_patch_s_twin_is_built_once_per_spec(self) -> None:
+    def test_a_patch_dispatches_the_one_partial_variant_of_its_spec(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Every ``PATCH`` hands the kernel the spec's partial variant as
+        ``kernel_spec_variant`` holds it, the one object a drfs spec's ``PATCH``
+        compiles to as well, so there is one partial twin per spec, not two."""
+        handed: list[Any] = []
+        dispatched = utils.dispatch_kernel_spec
+
+        def recording(spec: Any, **kwargs: Any) -> Any:
+            handed.append(spec)
+            return dispatched(spec, **kwargs)
+
+        monkeypatch.setattr(utils, "dispatch_kernel_spec", recording)
         author = Author.objects.create(name="orig")
         view = _UpdateView.as_view()
         for _ in range(2):
             view(factory.patch("/", {"name": "new"}, format="json"), pk=author.pk)
-        assert utils._PARTIAL[id(_UPDATE)][1] is utils._partial(_UPDATE)
+        variant = kernel_spec_variant(_UPDATE, partial=True)
+        assert variant is not _UPDATE
+        # By identity: two equal twins would pass ``==``, a frozen dataclass
+        # comparing by its fields.
+        assert len(handed) == 2
+        assert all(spec is variant for spec in handed)
 
     def test_404_when_instance_missing(self) -> None:
         response = _UpdateView.as_view()(

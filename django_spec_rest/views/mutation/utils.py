@@ -12,8 +12,6 @@ defined here, so ``call_service`` can map errors without importing this one.
 from __future__ import annotations
 
 import dataclasses
-import threading
-import weakref
 from collections.abc import Callable, Mapping
 from dataclasses import is_dataclass
 from typing import Any, Literal, cast
@@ -42,6 +40,7 @@ from django_spec_rest.exceptions.service_error import ServiceError
 from django_spec_rest.selectors.utils import (
     check_view_object_permissions,
 )
+from django_spec_rest.service_specs.kernel_spec_variant import kernel_spec_variant
 from django_spec_rest.types.dispatch_result import DispatchResult
 from django_spec_rest.types.service_spec import ServiceSpec
 from django_spec_rest.types.unset import UNSET
@@ -537,7 +536,15 @@ def _dispatch_kernel_mutation(
       test_a_list_body_is_its_rows_and_its_output_selector_s_re_read_is_presented).
     - **The view's hook chains**, its own layers only, through the edge
       (``dispatch_kernel_spec``'s ``view_hooks``).
-    - **A ``PATCH``** dispatches the spec's partial twin (``_partial``).
+    - **A ``PATCH``** dispatches the spec's partial variant, the one
+      ``kernel_spec_variant`` holds for it: a ``PATCH`` asks for a partial call
+      wherever the spec is not one already, and ``partial=True`` forces one on
+      a ``PUT`` too; a spec cannot force a ``PATCH`` whole, as a drfs spec's
+      ``partial=False`` did. A Validator that cannot take a partial call (a
+      dataclass serializer's) or no Validator at all keeps the spec as it is,
+      and the ``PATCH`` is validated whole, as a ``PUT`` is
+      (test_service_update_view's test_a_patch_over_a_dataclass_validates_every_field,
+      test_a_patch_with_no_validator_runs).
     - **The response.** The spec's presenter presents the result through the
       kernel's ``present``. An update whose service returned ``None`` presents
       its target, as DRF's ``UpdateAPIView`` does (``render_instance_on_none``).
@@ -547,7 +554,10 @@ def _dispatch_kernel_mutation(
     """
     resolved: Any = None if instance is UNSET else instance
     result = dispatch_kernel_spec(
-        _partial(spec) if partial else spec,
+        # ``None``, not ``False``, for a ``PUT``: ``False`` would derive a whole
+        # variant of a spec declaring ``partial=True``
+        # (test_a_partial_spec_takes_a_put_partially).
+        kernel_spec_variant(spec, partial=True if partial else None),
         view=view,
         request=request,
         call_context=view_call_context(view, request),
@@ -613,41 +623,6 @@ def _object_permissions(view: Any, request: Request, found: Any) -> None:
     """
     if isinstance(found, Model):
         view.check_object_permissions(request, found)
-
-
-_PARTIAL: dict[int, tuple[weakref.ref[KernelServiceSpec], KernelServiceSpec]] = {}
-_PARTIAL_LOCK = threading.Lock()
-
-
-def _partial(spec: KernelServiceSpec) -> KernelServiceSpec:
-    """``spec``'s twin under ``partial``, for a ``PATCH``, built once per spec.
-
-    A kernel spec's ``partial`` is a plain flag, so a ``PATCH`` asks for a
-    partial call wherever the spec is not one already, and ``partial=True``
-    forces one on a ``PUT`` too; a spec cannot force a ``PATCH`` whole, as a
-    drfs spec's ``partial=False`` did. A Validator that cannot take a partial
-    call (a dataclass serializer's, built from every field) or no Validator at
-    all keeps the spec as it is, and the ``PATCH`` is validated whole, as a
-    ``PUT`` is: the kernel refuses a partial spec over the first when it is
-    built. Each condition is named: the flag is a saving (the twin of a
-    partial spec is the spec), the Validator's absence by
-    test_service_update_view's test_a_patch_with_no_validator_runs, and its
-    ``supports_partial`` by test_a_patch_over_a_dataclass_validates_every_field.
-
-    Keyed by identity and dropped with the spec, as ``recording_spec``'s
-    twins are, since ``derive`` re-runs the spec's checks.
-    """
-    validator = spec.validator
-    if spec.partial or validator is None or not validator.supports_partial:
-        return spec
-    key = id(spec)
-    with _PARTIAL_LOCK:
-        cached = _PARTIAL.get(key)
-        if cached is not None and cached[0]() is spec:
-            return cached[1]
-        twin = spec.derive(partial=True)
-        _PARTIAL[key] = (weakref.ref(spec, lambda _dead: _PARTIAL.pop(key, None)), twin)
-        return twin
 
 
 def _takes_a_partial_call(spec: ServiceSpec[Any, Any, Any]) -> bool:
