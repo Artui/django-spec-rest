@@ -51,9 +51,14 @@ class _CreateView(ServiceCreateView):
         return [permission() for permission in self.permission_classes]
 
 
-def _post(spec: ServiceSpec, body: Any, base: type[_CreateView] = _CreateView) -> Response:
+def _post(
+    spec: ServiceSpec,
+    body: Any,
+    base: type[_CreateView] = _CreateView,
+    **route_kwargs: Any,
+) -> Response:
     view = type("_View", (base,), {"spec": spec}).as_view()
-    return view(factory.post("/", body, format="json"))
+    return view(factory.post("/", body, format="json"), **route_kwargs)
 
 
 class _Seen:
@@ -137,14 +142,33 @@ class _ExtendingView(_CreateView):
 def test_a_key_the_view_s_get_serializer_context_adds_is_in_the_one_dict() -> None:
     seen = _Seen()
 
-    _post(_spec(seen), {"name": "Ada"}, base=_ExtendingView)
+    _post(_spec(seen), {"name": "Ada"}, base=_ExtendingView, format="json")
 
     call_context = seen.contexts["service"]
     assert seen.contexts["input"] is call_context
     assert call_context["extra"] == 1
-    # The view's answer goes beneath the entries the dict already holds, so
-    # every stage reads one value for each of the call's own entries.
-    assert call_context["format"] is None
+    # ``format`` is the route's suffix as DRF's view answers it (``format_kwarg``),
+    # so an override of ``get_serializer_context`` that answers another value for
+    # it does not displace it, and every stage reads one value for each of the
+    # call's own entries.
+    assert call_context["format"] == "json"
+
+
+def test_a_suffix_route_s_format_is_in_the_one_dict_the_validator_reads() -> None:
+    """DRF's ``format`` is the route's suffix, as ``get_serializer_context`` answers it.
+
+    A serializer building a hyperlink reads ``self.context["format"]`` to carry the
+    suffix of the route it was reached by; a dict holding ``None`` there builds
+    the link with none.
+    """
+    seen = _Seen()
+
+    response = _post(_spec(seen), {"name": "Ada"}, format="json")
+
+    assert response.status_code == 201
+    assert seen.contexts["input"]["format"] == "json"
+    assert seen.contexts["input"] is seen.contexts["service"]
+    assert seen.contexts["output"]["format"] == "json"
 
 
 class TestOffARequest:

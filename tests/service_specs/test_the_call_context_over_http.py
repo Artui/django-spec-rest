@@ -1,8 +1,8 @@
 """The call's context a live view hands a kernel spec: one dict per request, every stage's.
 
 The view builds the dict on first use with DRF's four standard entries,
-``request``, ``view``, ``format`` ``None`` and the view's ``action`` or
-``None``, and hands that very object to the kernel's ``dispatch`` as
+``request``, ``view``, ``format`` (the view's ``format_kwarg``, ``None`` off a
+suffix route) and the view's ``action`` or ``None``, and hands that very object to the kernel's ``dispatch`` as
 ``call_context``. Every stage declaring ``call_context`` is handed it: the
 spec's ``kwargs`` provider and ``input_data``, a target lookup, the selector,
 the service, and each seat's serializer context callable. A dict the kernel is
@@ -73,7 +73,10 @@ def test_the_view_s_dict_holds_the_standard_entries_for_a_kwargs_provider() -> N
     context = seen["kwargs"]
     assert isinstance(context["request"], Request)
     assert context["view"]._call_context is context
-    assert context["format"] is None
+    # No suffix on this route, so the view's ``format_kwarg`` is none
+    # (test_a_suffix_route_s_format_is_in_the_one_dict_the_validator_reads
+    # holds the route that carries one).
+    assert context["format"] == context["view"].format_kwarg is None
     assert context["action"] is None
 
 
