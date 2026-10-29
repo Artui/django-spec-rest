@@ -20,8 +20,8 @@ drfs put it into the body too, the case is a strict xfail.
 
 Two answers part from drfs because of how the kernel route reads a body. A
 form body's prefixed keys (``v.tenant``) are no parameter to the kernel's flat
-reader, so the unknown-argument policy answers them, and each policy's answer
-is asserted. And ``input_data``'s value is bound as the kernel merged it, so a
+reader, so under ``REJECT`` they are refused, a strict xfail, while under
+``IGNORE`` they are dropped and the server's value stands. And ``input_data``'s value is bound as the kernel merged it, so a
 form body's reading of it (one value for a list, an empty string left out) is
 a strict xfail. A field named like a seed a project registers is not ported:
 the HTTP views register none, and the kernel's dispatch holds that case.
@@ -98,7 +98,12 @@ def _owner(request: Any) -> dict[str, Any]:
 
 @FORMATS
 def test_input_data_for_a_field_named_user_outranks_the_clients_over_http(fmt: str) -> None:
-    """The server's owner is the one validated, handed on in ``data``, and seen by ``validate()``."""
+    """The server's owner is the one validated, handed on in ``data``, and seen by ``validate()``.
+
+    Beyond ``test_kernel_views``' ``test_the_provider_s_value_outranks_the_client_s``,
+    which holds the value over an ``IntegerField``: a related field resolves
+    the server's primary key to its row in ``data`` and ``validated_data``
+    both, and ``validate()`` runs once, over the server's value alone."""
     alice = User.objects.create(username="alice")
     bob = User.objects.create(username="bob")
     seen: dict[str, Any] = {}
@@ -129,7 +134,11 @@ def test_input_data_for_a_field_named_user_outranks_the_clients_on_either_core(c
 def test_the_clients_value_for_a_field_named_user_stays_the_fields_with_no_input_data(
     fmt: str,
 ) -> None:
-    """Nothing the server put, so the field validates the client's value; the seed keeps its own."""
+    """Nothing the server put, so the field validates the client's value; the seed keeps its own.
+
+    The control for the case above, over the same related field and
+    ``validate()``; ``test_a_writable_field_named_like_a_seed_validates_into_data``
+    holds the plain field."""
     alice = User.objects.create(username="alice")
     bob = User.objects.create(username="bob")
     seen: dict[str, Any] = {}
@@ -212,15 +221,24 @@ def test_input_data_is_the_value_put_however_the_field_reads_a_json_body_on_eith
     assert seen == {"v": server, "data": server, "validated": server}
 
 
-# A form body carries a nested or a list field as DRF's prefixed keys, which
-# the kernel's flat reader does not read: ``v.tenant``, ``v[0]tenant`` and
-# ``v[0]`` are keys no parameter declares, so the unknown-argument policy
-# answers them, and the server's value is the field's under the one that
-# lets the call through.
+# A form body carries a nested or a list field as DRF's prefixed keys -
+# ``v.tenant``, ``v[0]tenant``, ``v[0]`` - which are DRF's spelling of the
+# declared field ``v``. The kernel's flat reader does not read them, so to the
+# kernel they are keys no parameter declares: under ``IGNORE`` they are dropped
+# and the server's value is the field's, and under ``REJECT`` the call is
+# refused, so no nested or list field can be filled from a form body there.
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "the kernel route reads a form body through flat_arguments, which does "
+        "not read DRF's prefixed keys for a nested or list field, so under REJECT "
+        "they are unknown arguments"
+    ),
+)
 @_READ
-def test_a_prefixed_form_key_is_an_unknown_argument_under_reject(
+def test_input_data_is_the_value_put_over_a_prefixed_form_key_under_reject(
     monkeypatch: pytest.MonkeyPatch,
     serializer: Any,
     server: Any,
@@ -228,14 +246,13 @@ def test_a_prefixed_form_key_is_an_unknown_argument_under_reject(
     body: dict[str, Any],
 ) -> None:
     monkeypatch.setattr(kernel_edge, "UNKNOWN_ARGUMENTS", UnknownArguments.REJECT)
-    spec = _spec(_reads({}), serializer, input_data=lambda: {"v": server})
+    seen: dict[str, Any] = {}
+    spec = _spec(_reads(seen), serializer, input_data=lambda: {"v": server})
 
     response = post(spec, form, fmt="multipart")
 
-    assert response.status_code == 400
-    assert {name: [error.code for error in errors] for name, errors in response.data.items()} == {
-        name: ["unknown"] for name in form
-    }
+    assert response.status_code == 204, response.data
+    assert seen == {"v": server, "data": server, "validated": server}
 
 
 @_READ

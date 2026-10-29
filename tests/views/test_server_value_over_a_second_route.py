@@ -28,6 +28,21 @@ the query counts of validating a related field's server value twice, which
 measure drfs' second validation and have no counterpart while the gap stands.
 The ``kwargs`` provider's value outranking the Validator's for the service's
 parameter is ``test_author_values_outrank_the_validator``'s.
+
+Also not ported, each for the reason beside it:
+
+- ``input_data`` for a read-only field, and for a ``HiddenField``: neither is
+  a parameter, so the case is what the kernel makes of an ``input_data`` key
+  no parameter declares, and drfs' answer turned on the ``NotClientInput``
+  parameter variant above;
+- every refusal of five server values answered together, and the client's
+  refusal answered before the server's value is validated: both are orders of
+  drfs' second validation, which the kernel route does not run while the
+  ``_SECOND_ROUTE_GAP`` stands, and the second reads a key no field declares;
+- a server value for a field that skips, and a dotted or flattened field's
+  value reaching the parameter named like the field: both are the value drfs
+  laid back, the same gap;
+- a hook's ``UNSET`` declining a name: the view hooks are not asked.
 """
 
 from __future__ import annotations
@@ -182,6 +197,40 @@ def test_the_providers_value_outranks_a_second_route_in_data_too(
     response = post(_spec(_plain(seen), serializer, kwargs=_server), body)
 
     assert response.status_code == 204, response.data
+    assert seen == _SERVER
+
+
+def _authored() -> dict[str, Any]:
+    return {"tenant": "authored"}
+
+
+@CORES
+def test_input_data_and_the_provider_naming_one_field_split_its_value(core: Core) -> None:
+    """Two author values for one field. drfs made ``input_data``'s the field's
+    everywhere; the kernel hands each seat its own: ``input_data``'s value is
+    what the field validated, in ``data`` and ``validated_data``, and the
+    ``kwargs`` provider's, merged into the service's pool after the Validator,
+    is the parameter's. The drfs answer is the xfail below."""
+    seen: dict[str, Any] = {}
+
+    core(_spec(_plain(seen), _Alias, input_data=_server, kwargs=_authored), {})
+
+    assert seen == {"tenant": "authored", "data": "server", "validated": "server"}
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "the kernel merges the kwargs provider's answer into the service's pool "
+        "after the validated values, so it outranks input_data's for the parameter"
+    ),
+)
+@CORES
+def test_input_data_outranks_the_providers_value_for_the_same_field(core: Core) -> None:
+    seen: dict[str, Any] = {}
+
+    core(_spec(_plain(seen), _Alias, input_data=_server, kwargs=_authored), {})
+
     assert seen == _SERVER
 
 
