@@ -48,19 +48,7 @@ _UNAVAILABLE = {"detail": "The acting principal is unavailable."}
 _ACTIVE = pytest.mark.parametrize("active", [True, False], ids=["active", "deactivated"])
 _OPEN = (Unrestricted(),)
 
-# Gaps in files this module does not own, each a strict xfail naming it.
-_ROW_GAP = pytest.mark.xfail(
-    strict=True,
-    raises=TypeError,
-    reason=(
-        "the mutation views hand the row get_object() found as target= to a kernel spec "
-        "declaring no instance_selector_spec, which the kernel refuses"
-    ),
-)
-_ROW_ACTIVE = pytest.mark.parametrize(
-    "active",
-    [pytest.param(True, marks=_ROW_GAP, id="active"), pytest.param(False, id="deactivated")],
-)
+# A gap in a file this module does not own, a strict xfail naming it.
 _VIEWSET_GAP = pytest.mark.xfail(
     strict=True,
     reason="ServiceViewSet.action_specs refuses a kernel ServiceSpec at as_view()",
@@ -110,12 +98,21 @@ def _read(*, pk: int) -> Any:
     return Author.objects.filter(pk=pk).first()
 
 
-def _writes(service: Any) -> ServiceSpec:
+_BY_PK = SelectorSpec(
+    kind=SelectorKind.RETRIEVE,
+    selector=lambda *, pk: Author.objects.filter(pk=pk).first(),
+    reads=Parameters.of(Parameter("pk", "integer", required=True)),
+    permissions=_OPEN,
+)
+
+
+def _writes(service: Any, **fields: Any) -> ServiceSpec:
     return ServiceSpec(
         service=service,
         permissions=_OPEN,
         validator=SerializerValidator(AuthorSerializer),
         presenter=SerializerPresenter(AuthorSerializer),
+        **fields,
     )
 
 
@@ -142,12 +139,12 @@ class _ACreate(_ViewPermissions, ServiceCreateView):
 
 class _Update(_ViewPermissions, ServiceUpdateView):
     queryset = Author.objects.all()
-    spec = _writes(_update)
+    spec = _writes(_update, instance_selector_spec=_BY_PK)
 
 
 class _Delete(_ViewPermissions, ServiceDeleteView):
     queryset = Author.objects.all()
-    spec = ServiceSpec(service=_delete, permissions=_OPEN)
+    spec = ServiceSpec(service=_delete, permissions=_OPEN, instance_selector_spec=_BY_PK)
 
 
 class _Retrieve(SelectorRetrieveView):
@@ -156,7 +153,7 @@ class _Retrieve(SelectorRetrieveView):
     spec = SelectorSpec(
         kind=SelectorKind.RETRIEVE,
         selector=_read,
-        reads=Parameters.of(Parameter("pk", "integer")),
+        reads=Parameters.of(Parameter("pk", "integer", required=True)),
         permissions=_OPEN,
     )
 
@@ -189,14 +186,14 @@ def test_an_async_service_behind_a_create_view(active: bool) -> None:
     _answered(_ACreate.as_view()(request), active, 201, "acreate")
 
 
-@_ROW_ACTIVE
+@_ACTIVE
 def test_an_update_view_with_no_permission_classes(active: bool) -> None:
     author = Author.objects.create(name="a")
     request = _as(_factory.put("/", {"name": "n"}, format="json"), active)
     _answered(_Update.as_view()(request, pk=author.pk), active, 200, "update")
 
 
-@_ROW_ACTIVE
+@_ACTIVE
 def test_a_delete_view_with_no_permission_classes(active: bool) -> None:
     author = Author.objects.create(name="a")
     request = _as(_factory.delete("/"), active)

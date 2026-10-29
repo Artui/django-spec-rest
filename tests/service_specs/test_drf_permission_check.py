@@ -41,7 +41,7 @@ from django_spec_rest.service_specs.not_permitted import NotPermitted
 from tests.testapp.models import Post
 
 _SEEN: list[dict[str, Any]] = []
-_PK = Parameters.of(Parameter("pk", "integer"))
+_PK = Parameters.of(Parameter("pk", "integer", required=True))
 
 
 class _OnlySeven(BasePermission):
