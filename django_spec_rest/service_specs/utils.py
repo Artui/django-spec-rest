@@ -660,9 +660,12 @@ def call_base_context(*, view: Any, request: Any) -> dict[str, Any]:
     The call's input serializer is described, and bound by its Validator, each
     with this baseline, and the view's ``get_serializer_context`` is asked for
     it once in the call, as DRF's view asks it once for the one serializer it
-    builds (test_each_layer_is_asked_once_per_call). Each serializer is handed
-    its own copy, so one writing to its context leaves the next as the view
-    answered it (test_each_serializer_of_the_call_has_its_own_context).
+    builds (test_each_layer_is_asked_once_per_call). Each caller is handed its
+    own copy: on drfs' edge that copy is the serializer's context, so one
+    writing to its context leaves the next as the view answered it
+    (test_each_serializer_of_the_call_has_its_own_context), while a serializer
+    sharing the call's dict has the copy laid beneath that dict
+    (``serializer_context``).
 
     Held for the request and view it was asked for, and reused only for both:
     a kernel call made inside the service with another request, or another
@@ -678,6 +681,24 @@ def call_base_context(*, view: Any, request: Any) -> dict[str, Any]:
     if state is not None:
         state.base_context = (request, view, context)
     return dict(context)
+
+
+def _context_for(call_context: dict[str, Any] | None, *, view: Any, request: Any) -> dict[str, Any]:
+    """The dict a serializer of the call is built with: ``call_context`` itself, else a copy.
+
+    ``call_context`` is the call's dict where its serializers share it, else
+    ``None``. Shared, the view's ``get_serializer_context`` answer goes beneath what the
+    call's context already holds, so a key the view adds is there while the
+    call's own entries, and whatever a stage of the call wrote, keep one value
+    for every stage (test_a_key_the_view_s_get_serializer_context_adds_is_in_the_one_dict,
+    whose ``format`` assertion fails were the view's answer laid over them).
+    """
+    base = call_base_context(view=view, request=request)
+    if call_context is None:
+        return base
+    for key, value in base.items():
+        call_context.setdefault(key, value)
+    return call_context
 
 
 def validator_input(validator: Any, arguments: Any) -> Any:
@@ -862,11 +883,24 @@ def serializer_context(
        as on every transport drfs has (test_an_unset_value_declines_the_key_and_keeps_the_layer_beneath).
        ``call_context`` is the call's own dict, so a callable reads what an
        earlier stage left there (test_the_output_callable_may_name_the_call_s_context)
-       and writes to the one object the call shares; a serializer's context
-       stays its own copy. It is offered only when the call has one, so a
-       description made without the call's context leaves a callable that
-       declares it with no default to the serializer that validates, rather
-       than asking it with a dict that serializer would not share.
+       and writes to the one object the call shares. It is offered only when
+       the call has one, so a description made without the call's context
+       leaves a callable that declares it with no default to the serializer
+       that validates, rather than asking it with a dict that serializer would
+       not share.
+
+    **Which dict the layers are written into.** Where the call's context
+    carries a request DRF built, as a view hands the kernel's ``dispatch`` the
+    request's one dict, every serializer of the call is built with that very
+    dict and the layers are written into it, so a key one serializer's
+    ``validate()`` writes is there for the service and for the output
+    serializer (test_a_key_validate_writes_reaches_the_service_and_the_output_serializer,
+    test_every_serializer_s_context_is_the_request_s_one_dict). The view's
+    ``get_serializer_context`` answer goes beneath the entries the dict
+    already holds (``_context_for``). Anywhere else each serializer is built
+    with a dict of its own: on drfs' edge, which registers the request and
+    view as seeds, and off a request, where the offline pair is the
+    serializer's and never the transport's (``TestOffARequest``).
 
     One branch to coverage for the offline pair: a request alone is held
     by test_a_registered_request_alone_is_kept_beside_no_view, a view
@@ -882,6 +916,17 @@ def serializer_context(
     request = carried("request", ambient, call_context)
     view = carried("view", ambient, call_context)
     plain = request if isinstance(request, HttpRequest) else None
+    # Three conjuncts, one branch to coverage. The request must come from the
+    # call's context rather than a seed: drfs' edge registers both as seeds and
+    # hands each serializer its own copy
+    # (test_the_input_hooks_do_not_reach_the_output_and_the_output_hooks_not_the_input,
+    # which fails without the ambient check). And it must be one DRF built, kept as it is
+    # rather than replaced by the offline pair, which is never written into a
+    # transport's dict: none at all is held by
+    # test_no_request_stays_none_and_each_serializer_has_its_own_context, and
+    # a Django request DRF has not wrapped by
+    # test_a_carried_django_request_stays_the_transport_s.
+    shared = "request" not in ambient and request is not None and plain is None
     # One branch to coverage: a plain request is held by
     # test_a_carried_django_request_is_wrapped_with_the_shapes_as_its_query_string,
     # which fails if it is used unwrapped, neither carried by
@@ -898,7 +943,7 @@ def serializer_context(
         )
         request = offline.request
         view = offline.view if view is None else view
-    context = call_base_context(view=view, request=request)
+    context = _context_for(call_context if shared else None, view=view, request=request)
     context.update(view_layers or {})
     if provider is not None:
         pool: dict[str, Any] = {
