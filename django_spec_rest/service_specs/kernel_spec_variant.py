@@ -1,4 +1,4 @@
-"""``kernel_spec_variant`` - a drfs spec's compiled form, as the DRF edge needs it per request."""
+"""``kernel_spec_variant`` - a spec's compiled form, as the DRF edge needs it per request."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import dataclasses
 import sys
 import threading
 import weakref
+from collections.abc import Callable
 from typing import Any
 
 from django.core.exceptions import ImproperlyConfigured
@@ -101,10 +102,51 @@ def kernel_spec_variant(
       for (``SerializerValidator(excluded=...)``): the edge compiles the
       names a seed of the call takes, so a serializer field of that name is
       the serializer's alone rather than a parameter the kernel refuses.
+
+    **A kernel spec** is dispatched as declared, so it takes two of these,
+    each built through its own ``derive`` and so checked as a fresh
+    declaration, and derived once per source and held as the compiles are, so
+    a ``Grant`` minted for a variant covers the next request's
+    (test_a_grant_for_a_variant_covers_the_next_request_s_variant):
+
+    - ``partial``: the spec with that flag, which the kernel's
+      ``relax_partial`` relaxes when it is dispatched. A selector spec has no
+      ``partial``, and a service spec with no Validator has nothing a partial
+      call may leave out, which is why the kernel refuses ``partial=True`` on
+      one, so a ``PATCH`` runs it whole, as a drfs spec with no
+      ``input_serializer`` compiles. A Validator that cannot take a partial
+      call (``supports_partial`` false, a dataclass's) is validated whole, so
+      the variant is the spec itself, as drfs validated a ``PATCH`` to a
+      dataclass.
+    - ``lenient``: the spec's ``SerializerValidator`` declared lenient, every
+      other keyword of it carried over, so the kernel's shape check passes
+      each value through to the serializer as above. A ``many`` spec keeps its
+      ``many_min_length`` and ``many_max_length``: a kernel spec declares
+      them itself, so the kernel's cap stays the one its author left in place
+      (test_a_lenient_variant_keeps_a_many_spec_s_bounds). Any other Validator
+      declares what it takes as it validates it, so has nothing to relax.
+
+    A spec neither would change is answered as itself and held by nothing
+    (test_a_variant_with_nothing_to_change_is_the_spec_itself). Every other
+    keyword names a seat a kernel spec declares itself - its
+    ``permissions``, its ``instance_selector_spec``, its providers and its
+    Validator's ``excluded`` - and asking for one raises ``TypeError``
+    (test_a_drfs_only_variant_of_a_kernel_spec_is_refused).
     """
     key: _Variant = (partial, unguarded, target, server_input, spread, lenient, excluded)
     if key == (None, False, False, True, False, False, frozenset()):
         return kernel_spec(spec)
+    if isinstance(spec, KernelServiceSpec | KernelSelectorSpec):
+        return _derived(spec, key)
+    return _held(
+        spec,
+        key,
+        lambda: _compile(spec, partial, unguarded, target, server_input, spread, lenient, excluded),
+    )
+
+
+def _held(spec: Any, key: _Variant, build: Callable[[], Any]) -> Any:
+    """The variant ``key`` of ``spec``, built by ``build`` on first use and held while ``spec`` lives."""
     with _LOCK:
         held = _VARIANTS.get(id(spec))
         if held is None:
@@ -114,10 +156,77 @@ def kernel_spec_variant(
         variants = held[1]
         compiled = variants.get(key)
         if compiled is None:
-            compiled = variants[key] = _compile(
-                spec, partial, unguarded, target, server_input, spread, lenient, excluded
-            )
+            compiled = variants[key] = build()
     return compiled
+
+
+def _derived(
+    spec: KernelServiceSpec | KernelSelectorSpec, key: _Variant
+) -> KernelServiceSpec | KernelSelectorSpec:
+    """A kernel spec's variant: ``partial`` and ``lenient`` derived, and nothing else asked of it.
+
+    The variant is never ``spec`` itself once held, or ``_VARIANTS`` would
+    hold the source alive and its weak reference would never fire, so a spec
+    neither flag changes returns before anything is held
+    (test_a_variant_with_nothing_to_change_is_the_spec_itself asserts it is
+    held by nothing).
+    """
+    partial, unguarded, target, server_input, spread, lenient, excluded = key
+    if (unguarded, target, server_input, spread, excluded) != _NOTHING_BUT_KERNEL_VARIANTS:
+        raise TypeError(
+            "kernel_spec_variant takes only partial= and lenient= for a kernel spec, which "
+            "declares the rest on itself: its permissions, instance_selector_spec, providers "
+            "or its Validator's excluded."
+        )
+    changes = _kernel_changes(spec, partial, lenient) if isinstance(spec, KernelServiceSpec) else {}
+    if not changes:
+        return spec
+    return _held(spec, key, lambda: spec.derive(**changes))
+
+
+def _kernel_changes(spec: KernelServiceSpec, partial: bool | None, lenient: bool) -> dict[str, Any]:
+    """What ``partial`` and ``lenient`` change about a kernel service spec, which may be nothing."""
+    changes: dict[str, Any] = {}
+    validator = spec.validator
+    # One arc to coverage, so each conjunct is named by its case of
+    # test_a_variant_with_nothing_to_change_is_the_spec_itself: ``already-lenient``
+    # without the first (``None`` reads the spec's own, so derives nothing),
+    # ``no-validator`` without the second (the kernel refuses ``partial=True``
+    # there), ``already-whole`` / ``already-partial`` without the third, and, for
+    # the fourth, test_a_partial_variant_over_a_validator_that_cannot_be_partial_is_the_spec_itself
+    # (a Validator that builds every field is validated whole, as drfs validated a
+    # ``PATCH`` to a dataclass, where ``derive`` would refuse ``partial=True``).
+    if (
+        partial is not None
+        and validator is not None
+        and spec.partial is not partial
+        and validator.supports_partial
+    ):
+        changes["partial"] = partial
+    # One arc to coverage, so each conjunct is named: without the first, every
+    # partial variant's Validator is relaxed too
+    # (test_a_partial_variant_is_derived_and_the_spec_is_untouched holds it is
+    # the spec's own); without the second, ``lenient-over-another-validator``
+    # of test_a_variant_with_nothing_to_change_is_the_spec_itself raises, a
+    # DataclassValidator having no serializer to redeclare; and without the
+    # third, its ``already-lenient`` case is derived again.
+    if lenient and isinstance(validator, SerializerValidator) and not validator.lenient:
+        changes["validator"] = SerializerValidator(
+            validator.serializer,
+            serializer_context=validator.serializer_context,
+            lenient=True,
+            # Each carried over, or the variant's call answers otherwise than
+            # the spec's on what the edge never asked it to change
+            # (test_a_lenient_variant_carries_the_validator_s_other_keywords).
+            excluded=validator.excluded,
+            server_owned=validator.server_owned,
+            json_schema_registry=validator.json_schema_registry,
+        )
+    return changes
+
+
+# ``unguarded``, ``target``, ``server_input``, ``spread`` and ``excluded``, at their defaults.
+_NOTHING_BUT_KERNEL_VARIANTS = (False, False, True, False, frozenset())
 
 
 def _compile(
