@@ -44,3 +44,17 @@ class InvalidArguments(KernelInvalidArguments, ValidationError):
         # here replaces with the same tree as ``ErrorDetail``s.
         KernelInvalidArguments.__init__(self, detail)
         ValidationError.__init__(self, self.detail, code)
+
+    @classmethod
+    def from_kernel(cls, exc: KernelInvalidArguments) -> InvalidArguments:
+        """The kernel's ``exc`` as this class: the same tree, every message's code and ``message``.
+
+        The kernel's class takes no message, so one a subclass declares is
+        carried across by hand
+        (test_a_kernel_refusal_keeps_a_subclass_s_message). Shared by the
+        kernel route's refusal map and ``translate_dispatch_errors``, so the
+        two cannot build the twin differently.
+        """
+        twin = cls(exc.detail)
+        twin.message = exc.message
+        return twin

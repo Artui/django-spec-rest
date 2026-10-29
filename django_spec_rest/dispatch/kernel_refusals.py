@@ -52,23 +52,6 @@ def _as_raised(exc: Any) -> APIException:
     return exc
 
 
-def _invalid_arguments(exc: KernelInvalidArguments) -> APIException:
-    """DRF's ``400``, the same tree and every message's code, and a subclass's message carried."""
-    twin = InvalidArguments(exc.detail)
-    twin.message = exc.message
-    return twin
-
-
-def _not_permitted(exc: KernelNotPermitted) -> APIException:
-    """DRF's ``403``, with the kernel's message."""
-    return NotPermitted(exc.message)
-
-
-def _principal_unavailable(exc: KernelPrincipalUnavailable) -> APIException:
-    """DRF's ``403``, with the kernel's message."""
-    return PrincipalUnavailable(exc.message)
-
-
 def _dispatch_refused(exc: DispatchError) -> APIException:
     """A bare ``DispatchError`` as a ``400``, its sentence under ``detail``."""
     return KernelDispatchRefused(str(exc))
@@ -78,21 +61,32 @@ KERNEL_REFUSALS: tuple[tuple[type[BaseException], Callable[[Any], APIException]]
     # Read top to bottom, the first ``isinstance`` match winning, so each
     # subclass's row sits above its base's. Each row is held by a test in
     # tests/views/test_kernel_refusals.py asserting its own answer and that it
-    # is not the answer of the row the refusal falls to with that row deleted.
+    # is not the answer of the row the refusal falls to with that row deleted
+    # (the module docstring of the test names them).
     #
     # A DRF exception first: the dual-base ``InvalidArguments`` a
     # ``SerializerValidator`` or ``SerializerPresenter`` raises is the
     # kernel's class as well, and is already DRF's answer.
     (APIException, _as_raised),
-    (KernelInvalidArguments, _invalid_arguments),
-    (KernelNotPermitted, _not_permitted),
-    (KernelPrincipalUnavailable, _principal_unavailable),
+    (KernelInvalidArguments, InvalidArguments.from_kernel),
+    (KernelNotPermitted, NotPermitted.from_kernel),
+    (KernelPrincipalUnavailable, PrincipalUnavailable.from_kernel),
     (DispatchError, _dispatch_refused),
-    # Every ``ServiceError`` - ``ServiceValidationError`` 400, ``ServiceNotFound``
-    # 404, ``ActionUnavailable`` and ``ServiceConflict`` 409,
-    # ``AdditionalInputRequired`` 422 with its schema and any other 422 - as
-    # the drfs path answers it, so the schema ``restore_raised_schema`` puts
-    # back into the body is recognised on this route too.
+    # Every ``ServiceError`` is one row on purpose, answered by
+    # ``map_service_error``, which is the drfs answer and carries as its own
+    # public function (spec-twins reads it): ``ServiceValidationError`` 400,
+    # ``ServiceNotFound`` 404, ``ActionUnavailable`` and ``ServiceConflict``
+    # 409, ``AdditionalInputRequired`` 422 with its schema, any other 422. A
+    # row per subclass pointing at that function would be one answer written
+    # twice, and no test could hold a subclass row apart from the base row it
+    # falls to, since that row would answer the same. The order of that
+    # function is the mapping, so its branches are held by
+    # tests/views/test_map_service_error.py, one test per branch, and what the
+    # view serves for each subclass by
+    # test_a_service_s_refusal_is_answered_as_on_the_drfs_path, one case per
+    # subclass. The class ``AdditionalInputRequired`` answers with is the one
+    # ``restore_raised_schema`` recognises, so the schema is restored on this
+    # route too.
     (ServiceError, map_service_error),
 )
 """How the kernel route answers each refusal the kernel's ``dispatch`` raises, in order.

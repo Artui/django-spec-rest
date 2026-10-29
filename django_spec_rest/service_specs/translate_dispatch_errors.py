@@ -83,13 +83,9 @@ def _drf_twin(exc: DispatchError) -> DispatchError | None:
     if isinstance(exc, APIException):
         return None
     if isinstance(exc, KernelInvalidArguments):
-        # The kernel's class takes no message, so one a subclass declares is
-        # carried across by hand (test_an_invalid_arguments_subclass_keeps_its_message).
-        twin = InvalidArguments(exc.detail)
-        twin.message = exc.message
-        return twin
+        return InvalidArguments.from_kernel(exc)
     if isinstance(exc, KernelNotPermitted):
-        return NotPermitted(exc.message)
+        return NotPermitted.from_kernel(exc)
     if isinstance(exc, KernelPrincipalUnavailable):
-        return PrincipalUnavailable(exc.message)
+        return PrincipalUnavailable.from_kernel(exc)
     return None
