@@ -903,18 +903,19 @@ def _serves_the_other_kind(view_cls: type, spec: Any, served: type) -> str:
 def _check_kernel_seeds(spec: KernelServiceSpec | KernelSelectorSpec) -> None:
     """Refuse at ``as_view()`` what the kernel's ``check_seeds`` refuses of ``spec``.
 
-    Every check ``validate_service_spec`` and ``validate_selector_spec`` make
+    Most of what ``validate_service_spec`` and ``validate_selector_spec`` check
     of a drfs spec's signatures is a question this one answers for a kernel
     spec: a keyword nothing fills, a positional-only parameter, an optional
-    read over a keyword that requires it, a parameter a seed occupies. It is
-    asked with the kernel's default seeds because those are the seeds the
-    edge dispatches with (``dispatch_kernel_spec`` registers none), and it
-    may be asked at all because the edge hands ``dispatch`` no
-    ``extra_kwargs`` overlay - the view's ``get_*_kwargs`` hooks never reach
-    a kernel spec - so no keyword is filled where ``check_seeds`` cannot see
-    it (test_a_view_hook_s_value_never_reaches_the_selector holds the hooks'
-    absence over HTTP, and test_a_view_hook_fills_nothing_for_a_kernel_spec
-    the refusal it leads to).
+    read over a keyword that requires it, a parameter a seed occupies. Not
+    all of it: ``check_seeds`` reads no output selector, so a keyword an
+    ``output_selector_spec``'s selector requires and nothing fills, which drfs
+    refused here, is met only when the call reaches the re-read, after the
+    service has run. It is asked with the kernel's default seeds because
+    those are the seeds the edge dispatches with (``dispatch_kernel_spec``
+    registers none), and only where nothing fills a keyword it cannot see:
+    a mutation view overriding a service-kwargs hook hands the edge's
+    overlay keys ``check_seeds`` never reads, so such a view is not asked it
+    (``validate_mutation_view_spec``).
     The fields a kernel spec declares are checked when it is built, by its own
     ``__post_init__``, so nothing of a drfs spec's field checks is owed here.
     Held on a mutation view by test_a_keyword_nothing_fills_is_refused and on
@@ -946,9 +947,6 @@ def validate_mutation_view_spec(
         raise ImproperlyConfigured(_serves_the_other_kind(view_cls, spec, KernelServiceSpec))
     if spec is None:
         return
-    if runs_on_kernel(spec):
-        _check_kernel_seeds(spec)
-        return
     # Local import to avoid a module-level cycle:
     # ``views.spec_validation`` is imported by ``views.mutation.*``, but the
     # reverse coupling only matters here (to detect catch-all overrides).
@@ -956,12 +954,37 @@ def validate_mutation_view_spec(
         MutationFlowMixin,
     )
 
+    hooked = is_overridden(view_cls, MutationFlowMixin, "get_service_kwargs")
+    if runs_on_kernel(spec):
+        # A view hook's keys reach the service through the edge's overlay,
+        # which ``check_seeds`` cannot see and its own docstring says not to
+        # be asked beside, so a hooked view is not asked it, as drfs read an
+        # overridden hook as ``permissive_extras``. One arc to coverage, so
+        # each disjunct is named: the catch-all hook by test_spec_validation_e2e's
+        # test_a_view_hook_fills_a_keyword_check_seeds_cannot_see, the
+        # per-action one by test_a_per_action_hook_fills_a_keyword_check_seeds_cannot_see.
+        if not (hooked or _overrides_the_action_hook(view_cls, "service")):
+            _check_kernel_seeds(spec)
+        return
     validate_service_spec(
         spec,
         label=f"{view_cls.__name__}.spec",
         has_instance=has_instance,
-        permissive_extras=is_overridden(view_cls, MutationFlowMixin, "get_service_kwargs"),
+        permissive_extras=hooked,
     )
+
+
+def _overrides_the_action_hook(view_cls: type, chain: str) -> bool:
+    """Whether ``view_cls`` defines ``get_<action>_<chain>_kwargs`` for the ``action`` it sets.
+
+    A standalone view has no ``action`` unless its class sets one, and the
+    view's hook chain asks the per-action hook only for that action
+    (``resolve_view_hooks``), so a hook named for any other is never asked
+    and fills nothing (test_spec_validation_e2e's
+    test_a_per_action_hook_for_another_action_fills_nothing).
+    """
+    action = getattr(view_cls, "action", None)
+    return isinstance(action, str) and hasattr(view_cls, f"get_{action}_{chain}_kwargs")
 
 
 def validate_selector_view_spec(

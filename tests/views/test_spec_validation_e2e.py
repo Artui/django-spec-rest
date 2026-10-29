@@ -6,16 +6,19 @@ the kind of operation it does not serve, a selector spec of the other
 DRF's own filter backend - and hands the rest to the kernel's ``check_seeds``,
 which refuses a declaration that cannot hold on a mount as written: a keyword
 nothing fills, a positional-only parameter, an optional read over a keyword
-that requires it, a parameter a seed occupies. The view dispatches with the
-kernel's default seeds and no overlay of its own, so ``check_seeds`` sees every
-keyword the call can fill. Every refusal here is asserted in the kernel's own
-words, so a change of wording there is seen here.
+that requires it, a parameter a seed occupies. Every refusal here is asserted
+in the kernel's own words, so a change of wording there is seen here.
+
+``check_seeds`` sees every keyword a call fills but those the edge's overlay
+fills from a mutation view's ``get_service_kwargs`` or
+``get_<action>_service_kwargs``, so a view overriding either is not asked it,
+as drfs read an overridden hook as a source of keys it could not see. It reads
+no output selector, so a keyword an ``output_selector_spec`` requires and
+nothing fills is no longer refused here, where drfs refused it.
 
 Where drfs answered differently the test says so, and whether a plan
-decision names the change: the view's ``get_*_kwargs`` hooks never reach a
-kernel spec, only the spec's own providers do (the carry-over list rewrites
-``resolve_extra_kwargs`` onto them), an undeclared route capture is no argument
-(D2), and the kernel hands every service ``data``, which no decision names.
+decision names the change: an undeclared route capture is no argument (D2),
+and the kernel hands every service ``data``, which no decision names.
 """
 
 from __future__ import annotations
@@ -34,6 +37,7 @@ from django_service_specs import (
     Unrestricted,
 )
 from rest_framework import serializers
+from rest_framework.test import APIRequestFactory
 
 from django_spec_rest import (
     SelectorListView,
@@ -45,6 +49,7 @@ from django_spec_rest import (
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 
 _OPEN = (Unrestricted(),)
+_factory = APIRequestFactory()
 
 _NOTHING_FILLS = r"requires the keyword\(s\) \['{name}'\], which nothing fills"
 
@@ -149,19 +154,58 @@ class TestAMutationView:
 
         assert callable(_build(ServiceCreateView, spec))
 
-    def test_a_view_hook_fills_nothing_for_a_kernel_spec(self) -> None:
-        """Changed by design (the carry-over list rewrites ``resolve_extra_kwargs``
-        onto the spec's providers): drfs passed this, reading an overridden
-        ``get_service_kwargs`` as a source of keys it could not see. A kernel
-        spec's call is handed its own providers' values and never a view
-        hook's, so the keyword is unfilled on every call and refused here."""
+    @pytest.mark.django_db
+    def test_a_view_hook_fills_a_keyword_check_seeds_cannot_see(self) -> None:
+        """An overridden ``get_service_kwargs`` reaches the service through the
+        edge's overlay, which ``check_seeds`` cannot see, so the view is not
+        asked it and mounts, as drfs read an overridden hook as a source of
+        keys it could not see; the request fills the keyword."""
+        received: dict[str, Any] = {}
+
+        def service(*, tenant: str) -> None:
+            received["tenant"] = tenant
+
+        class _View(ServiceCreateView):
+            spec = ServiceSpec(service=service, permissions=_OPEN, atomic=False)
+
+            def get_service_kwargs(self) -> dict[str, Any]:
+                return {"tenant": "acme"}
+
+        response = _View.as_view()(_factory.post("/", {}, format="json"))
+        assert response.status_code == 204
+        assert received == {"tenant": "acme"}
+
+    @pytest.mark.django_db
+    def test_a_per_action_hook_fills_a_keyword_check_seeds_cannot_see(self) -> None:
+        """The same for ``get_<action>_service_kwargs``, read for the view's own
+        ``action``, which a standalone view sets on its class to have one."""
+        received: dict[str, Any] = {}
+
+        def service(*, tenant: str) -> None:
+            received["tenant"] = tenant
+
+        class _View(ServiceCreateView):
+            action = "create"
+            spec = ServiceSpec(service=service, permissions=_OPEN, atomic=False)
+
+            def get_create_service_kwargs(self) -> dict[str, Any]:
+                return {"tenant": "acme"}
+
+        response = _View.as_view()(_factory.post("/", {}, format="json"))
+        assert response.status_code == 204
+        assert received == {"tenant": "acme"}
+
+    def test_a_per_action_hook_for_another_action_fills_nothing(self) -> None:
+        """A hook named for an action the view does not take is never asked, so
+        the keyword is unfilled and still refused."""
 
         def service(*, tenant: str) -> None: ...
 
         class _View(ServiceCreateView):
+            action = "create"
             spec = ServiceSpec(service=service, permissions=_OPEN)
 
-            def get_service_kwargs(self) -> dict[str, Any]:
+            def get_update_service_kwargs(self) -> dict[str, Any]:
                 return {"tenant": "acme"}
 
         with pytest.raises(ImproperlyConfigured, match=_nothing_fills("tenant")):
