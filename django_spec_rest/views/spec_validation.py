@@ -912,7 +912,9 @@ def _check_kernel_seeds(spec: KernelServiceSpec | KernelSelectorSpec) -> None:
     may be asked at all because the edge hands ``dispatch`` no
     ``extra_kwargs`` overlay - the view's ``get_*_kwargs`` hooks never reach
     a kernel spec - so no keyword is filled where ``check_seeds`` cannot see
-    it (test_spec_validation_e2e's test_a_view_hook_fills_nothing_for_a_kernel_spec).
+    it (test_a_view_hook_s_value_never_reaches_the_selector holds the hooks'
+    absence over HTTP, and test_a_view_hook_fills_nothing_for_a_kernel_spec
+    the refusal it leads to).
     The fields a kernel spec declares are checked when it is built, by its own
     ``__post_init__``, so nothing of a drfs spec's field checks is owed here.
     Held on a mutation view by test_a_keyword_nothing_fills_is_refused and on
