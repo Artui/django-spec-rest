@@ -7,6 +7,14 @@ surface the same misconfiguration at ``as_view()`` time with a precise message.
 
 Deliberately lenient on extras: a ``kwargs`` provider or an overridden
 ``get_*_kwargs`` may be feeding the callable keys the validator cannot see.
+
+A kernel spec is checked differently, and more strictly. It checks its own
+fields when it is built, so ``as_view()`` asks only what the view knows: that
+the spec is of the kind of operation the view serves, the ``SelectorKind`` its
+mount point is shaped for, and no ``filter_set`` beside DRF's own filter
+backend on a list; then the kernel's ``check_seeds``, against the seeds the
+edge dispatches with, refuses whatever no call could fill. No view hook reaches
+a kernel spec, so nothing is lenient on extras there.
 """
 
 from __future__ import annotations
@@ -18,6 +26,7 @@ from typing import Any
 
 from django.core.exceptions import ImproperlyConfigured
 from django_service_specs.adapters.filters.filter_set_parameters import filter_set_parameters
+from django_service_specs.dispatch.check_seeds import check_seeds
 from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelectorSpec
 from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
 from rest_framework.permissions import BasePermission
@@ -891,6 +900,27 @@ def _serves_the_other_kind(view_cls: type, spec: Any, served: type) -> str:
     )
 
 
+def _check_kernel_seeds(spec: KernelServiceSpec | KernelSelectorSpec) -> None:
+    """Refuse at ``as_view()`` what the kernel's ``check_seeds`` refuses of ``spec``.
+
+    Every check ``validate_service_spec`` and ``validate_selector_spec`` make
+    of a drfs spec's signatures is a question this one answers for a kernel
+    spec: a keyword nothing fills, a positional-only parameter, an optional
+    read over a keyword that requires it, a parameter a seed occupies. It is
+    asked with the kernel's default seeds because those are the seeds the
+    edge dispatches with (``dispatch_kernel_spec`` registers none), and it
+    may be asked at all because the edge hands ``dispatch`` no
+    ``extra_kwargs`` overlay - the view's ``get_*_kwargs`` hooks never reach
+    a kernel spec - so no keyword is filled where ``check_seeds`` cannot see
+    it (test_spec_validation_e2e's test_a_view_hook_fills_nothing_for_a_kernel_spec).
+    The fields a kernel spec declares are checked when it is built, by its own
+    ``__post_init__``, so nothing of a drfs spec's field checks is owed here.
+    Held on a mutation view by test_a_keyword_nothing_fills_is_refused and on
+    a selector view by test_a_list_selector_requiring_data_is_refused.
+    """
+    check_seeds(spec)
+
+
 def validate_mutation_view_spec(
     view_cls: type,
     *,
@@ -912,17 +942,10 @@ def validate_mutation_view_spec(
     # every kernel service spec (test_a_kernel_spec_passes_as_view).
     if runs_on_kernel(spec) and not isinstance(spec, KernelServiceSpec):
         raise ImproperlyConfigured(_serves_the_other_kind(view_cls, spec, KernelServiceSpec))
-    # Every check ``validate_service_spec`` makes is of a drfs spec's own
-    # fields - ``success_status``, ``input_serializer``, ``permission_classes``
-    # and the signatures over them - none of which a kernel spec has; the
-    # kernel's ``__post_init__`` checks its own signatures against its seats
-    # when the spec is built. What a kernel spec still owes this view at
-    # mount - a target selector where the view hands over a row - is not
-    # checked here yet, and fails per request. One arc
-    # to coverage, so each disjunct is named: the ``None`` is held by
-    # test_spec_validation_e2e's test_no_spec_does_not_raise, and the kernel
-    # spec by test_kernel_views' test_a_kernel_spec_passes_as_view.
-    if spec is None or runs_on_kernel(spec):
+    if spec is None:
+        return
+    if runs_on_kernel(spec):
+        _check_kernel_seeds(spec)
         return
     # Local import to avoid a module-level cycle:
     # ``views.spec_validation`` is imported by ``views.mutation.*``, but the
@@ -970,6 +993,7 @@ def validate_selector_view_spec(
         # and, below, a ``filter_set`` beside DRF's own filter backend
         # (test_a_filter_set_beside_django_filter_s_backend_is_refused_at_as_view).
         _validate_selector_kind(spec, label=label, expected_kind=expected_kind)
+        _check_kernel_seeds(spec)
     else:
         validate_selector_spec(spec, label=label, expected_kind=expected_kind)
     if expected_kind is SelectorKind.LIST:

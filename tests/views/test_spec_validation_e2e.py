@@ -1,528 +1,375 @@
-"""End-to-end tests that ``as_view()`` trips spec validation."""
+"""What ``as_view()`` refuses for a kernel spec set on a view's ``spec``.
+
+A view builds no spec, so it refuses three things only it can know - a spec of
+the kind of operation it does not serve, a selector spec of the other
+``SelectorKind``, and (in ``test_spec_validation``) a ``filter_set`` beside
+DRF's own filter backend - and hands the rest to the kernel's ``check_seeds``,
+which refuses a declaration that cannot hold on a mount as written: a keyword
+nothing fills, a positional-only parameter, an optional read over a keyword
+that requires it, a parameter a seed occupies. The view dispatches with the
+kernel's default seeds and no overlay of its own, so ``check_seeds`` sees every
+keyword the call can fill. Every refusal here is asserted in the kernel's own
+words, so a change of wording there is seen here.
+
+Where drfs answered differently, by design, the test says so: the view's
+``get_*_kwargs`` hooks never reach a kernel spec, only the spec's own providers
+do, and the kernel hands every service ``data``.
+"""
 
 from __future__ import annotations
 
-import re
-from dataclasses import dataclass
-from typing import Annotated, Any
+from collections.abc import Sequence
+from typing import Any, TypedDict
 
 import pytest
 from django.core.exceptions import ImproperlyConfigured
-from django.db.models import Q
+from django_service_specs import (
+    Parameter,
+    Parameters,
+    SelectorKind,
+    SelectorSpec,
+    ServiceSpec,
+    Unrestricted,
+)
+from rest_framework import serializers
 
 from django_spec_rest import (
-    Affordance,
-    NotClientInput,
-    SelectorKind,
     SelectorListView,
     SelectorRetrieveView,
-    SelectorSpec,
     ServiceCreateView,
     ServiceDeleteView,
-    ServiceSpec,
     ServiceUpdateView,
-    ServiceViewSet,
-    service_action,
 )
+from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 
+_OPEN = (Unrestricted(),)
 
-@dataclass
-class _AuthorIn:
-    name: str
+_NOTHING_FILLS = r"requires the keyword\(s\) \['{name}'\], which nothing fills"
 
 
-class TestServiceCreateViewValidation:
-    def test_data_required_without_input_serializer_fails(self) -> None:
-        def fn(*, data: _AuthorIn) -> None:
-            return None
+def _nothing_fills(name: str, *, seat: str = "ServiceSpec.service") -> str:
+    return rf"{seat} " + _NOTHING_FILLS.format(name=name)
 
-        class _View(ServiceCreateView):
-            spec = ServiceSpec(service=fn)
 
-        with pytest.raises(ImproperlyConfigured, match="requires `data`"):
-            _View.as_view()
+def _build(base: type, spec: ServiceSpec | SelectorSpec) -> Any:
+    return type("_View", (base,), {"spec": spec}).as_view()
 
-    def test_instance_required_in_create_fails(self) -> None:
-        def fn(*, instance: object) -> None:
-            return None
 
-        class _View(ServiceCreateView):
-            spec = ServiceSpec(service=fn)
+class _TitleIn(serializers.Serializer):
+    title = serializers.CharField()
 
-        with pytest.raises(ImproperlyConfigured, match="requires `instance`"):
-            _View.as_view()
 
-    def test_unknown_required_kwarg_fails(self) -> None:
-        def fn(*, tenant_id: int) -> None:
-            return None
+class _FillsTenant(TypedDict):
+    tenant: str
 
-        class _View(ServiceCreateView):
-            spec = ServiceSpec(service=fn)
 
-        with pytest.raises(ImproperlyConfigured, match="tenant_id"):
-            _View.as_view()
+def _typed_tenant() -> _FillsTenant:
+    return {"tenant": "acme"}
 
-    def test_unknown_kwarg_passes_when_spec_kwargs_supplied(self) -> None:
-        def fn(*, tenant_id: int) -> None:
-            return None
 
-        def provider(view: Any, request: Any) -> dict[str, int]:
-            return {"tenant_id": 1}
+def _reads(*parameters: Parameter) -> Parameters:
+    return Parameters(parameters)
 
-        class _View(ServiceCreateView):
-            spec = ServiceSpec(service=fn, kwargs=provider)
 
-        _View.as_view()  # does not raise
-
-    def test_unknown_kwarg_passes_when_get_service_kwargs_overridden(self) -> None:
-        def fn(*, tenant_id: int) -> None:
-            return None
-
-        class _View(ServiceCreateView):
-            spec = ServiceSpec(service=fn)
-
-            def get_service_kwargs(self) -> dict[str, Any]:
-                return {"tenant_id": 1}
-
-        _View.as_view()  # does not raise
-
-    def test_output_selector_signature_validated(self) -> None:
-        def fn(*, data: _AuthorIn) -> str:
-            return data.name
-
-        def selector(*, instance: object) -> str:
-            return ""
-
-        class _View(ServiceCreateView):
-            spec = ServiceSpec(
-                service=fn,
-                input_serializer=_AuthorIn,
-                output_selector_spec=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=selector),
-            )
-
-        with pytest.raises(ImproperlyConfigured, match="requires `instance`"):
-            _View.as_view()
-
-    def test_no_spec_does_not_raise(self) -> None:
-        # spec=None on the base class shouldn't crash as_view().
-        ServiceCreateView.as_view()
-
-
-class TestServiceUpdateViewValidation:
-    def test_instance_required_passes(self) -> None:
-        def fn(*, instance: object, data: _AuthorIn) -> None:
-            return None
-
-        class _View(ServiceUpdateView):
-            spec = ServiceSpec(service=fn, input_serializer=_AuthorIn)
-
-        _View.as_view()
-
-    def test_unknown_kwarg_fails(self) -> None:
-        def fn(*, instance: object, missing: int) -> None:
-            return None
-
-        class _View(ServiceUpdateView):
-            spec = ServiceSpec(service=fn)
-
-        with pytest.raises(ImproperlyConfigured, match="missing"):
-            _View.as_view()
-
-    def test_no_spec_does_not_raise(self) -> None:
-        ServiceUpdateView.as_view()
-
-
-class TestServiceDeleteViewValidation:
-    def test_instance_required_passes(self) -> None:
-        def fn(*, instance: object) -> None:
-            return None
-
-        class _View(ServiceDeleteView):
-            spec = ServiceSpec(service=fn)
-
-        _View.as_view()
-
-    def test_data_required_without_input_serializer_fails(self) -> None:
-        def fn(*, instance: object, data: _AuthorIn) -> None:
-            return None
-
-        class _View(ServiceDeleteView):
-            spec = ServiceSpec(service=fn)
-
-        with pytest.raises(ImproperlyConfigured, match="requires `data`"):
-            _View.as_view()
-
-    def test_no_spec_does_not_raise(self) -> None:
-        ServiceDeleteView.as_view()
-
-    def test_output_selector_validated(self) -> None:
-        def fn(*, instance: object) -> object:
-            return None
-
-        def selector(*, data: object) -> object:
-            return None
-
-        class _View(ServiceDeleteView):
-            spec = ServiceSpec(
-                service=fn,
-                output_selector_spec=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=selector),
-            )
-
-        with pytest.raises(ImproperlyConfigured, match="requires `data`"):
-            _View.as_view()
-
-
-class TestSelectorViewValidation:
-    def test_list_selector_with_data_fails(self) -> None:
-        def fn(*, data: object) -> Any:
-            return []
-
-        class _View(SelectorListView):
-            spec = SelectorSpec(kind=SelectorKind.LIST, selector=fn)
-
-        with pytest.raises(ImproperlyConfigured, match="requires `data`"):
-            _View.as_view()
-
-    def test_retrieve_selector_with_instance_fails(self) -> None:
-        def fn(*, instance: object) -> Any:
-            return None
-
-        class _View(SelectorRetrieveView):
-            spec = SelectorSpec(kind=SelectorKind.RETRIEVE, selector=fn)
-
-        with pytest.raises(ImproperlyConfigured, match="requires `instance`"):
-            _View.as_view()
-
-    def test_retrieve_selector_with_unknown_kwarg_passes_due_to_url_kwargs(self) -> None:
-        # URL kwargs are dynamic; the validator can't know what's available, so
-        # selectors are permissive on unknown names.
-        def fn(*, pk: int, tenant_id: int) -> Any:
-            return None
-
-        class _View(SelectorRetrieveView):
-            spec = SelectorSpec(kind=SelectorKind.RETRIEVE, selector=fn)
-
-        _View.as_view()
-
-    def test_no_spec_does_not_raise(self) -> None:
-        SelectorListView.as_view()
-        SelectorRetrieveView.as_view()
-
-    def test_spec_with_no_selector_does_not_raise(self) -> None:
-        class _View(SelectorListView):
-            spec = SelectorSpec(kind=SelectorKind.LIST)
-
-        _View.as_view()
-
-    def test_kind_mismatch_at_mount_point_fails(self) -> None:
-        """A RETRIEVE spec on SelectorListView (or LIST on retrieve) is fail-fast."""
-
-        class _List(SelectorListView):
-            spec = SelectorSpec(kind=SelectorKind.RETRIEVE)
-
-        with pytest.raises(ImproperlyConfigured, match=r"spec.kind"):
-            _List.as_view()
-
-        class _Retrieve(SelectorRetrieveView):
-            spec = SelectorSpec(kind=SelectorKind.LIST)
-
-        with pytest.raises(ImproperlyConfigured, match=r"spec.kind"):
-            _Retrieve.as_view()
-
-    def test_action_kind_mismatch_in_viewset_fails(self) -> None:
-        """In a viewset, the "list" / "retrieve" entries must carry the matching kind."""
-
-        class _View(ServiceViewSet):
-            action_specs = {"list": SelectorSpec(kind=SelectorKind.RETRIEVE)}
-
-        with pytest.raises(ImproperlyConfigured, match=r"spec.kind"):
-            _View.as_view({"get": "list"})
-
-    def test_output_selector_spec_list_kind_requires_collection(self) -> None:
-        """output_selector_spec.kind=LIST is only valid alongside collection_selector_spec."""
-
-        def fn(**_: Any) -> None:
-            return None
-
-        class _View(ServiceCreateView):
-            spec = ServiceSpec(
-                service=fn,
-                output_selector_spec=SelectorSpec(kind=SelectorKind.LIST),
-            )
-
-        with pytest.raises(ImproperlyConfigured, match=r"output_selector_spec.kind=LIST"):
-            _View.as_view()
-
-
-class TestServiceViewSetValidation:
-    def test_create_with_instance_required_fails(self) -> None:
-        def fn(*, instance: object, data: _AuthorIn) -> None:
-            return None
-
-        class _View(ServiceViewSet):
-            action_specs = {
-                "create": ServiceSpec(service=fn, input_serializer=_AuthorIn),
-            }
-
-        with pytest.raises(ImproperlyConfigured, match="requires `instance`"):
-            _View.as_view({"post": "create"})
-
-    def test_update_with_instance_passes(self) -> None:
-        def fn(*, instance: object, data: _AuthorIn) -> None:
-            return None
-
-        class _View(ServiceViewSet):
-            action_specs = {
-                "update": ServiceSpec(service=fn, input_serializer=_AuthorIn),
-            }
-
-        _View.as_view({"put": "update"})
-
-    def test_unknown_kwarg_passes_when_per_action_hook_present(self) -> None:
-        def fn(*, data: _AuthorIn, tenant_id: int) -> None:
-            return None
-
-        class _View(ServiceViewSet):
-            action_specs = {
-                "create": ServiceSpec(service=fn, input_serializer=_AuthorIn),
-            }
-
-            def get_create_service_kwargs(self) -> dict[str, Any]:
-                return {"tenant_id": 1}
-
-        _View.as_view({"post": "create"})
-
-    def test_unknown_kwarg_fails_without_overrides(self) -> None:
-        def fn(*, data: _AuthorIn, tenant_id: int) -> None:
-            return None
-
-        class _View(ServiceViewSet):
-            action_specs = {
-                "create": ServiceSpec(service=fn, input_serializer=_AuthorIn),
-            }
-
-        with pytest.raises(ImproperlyConfigured, match="tenant_id"):
-            _View.as_view({"post": "create"})
-
-    def test_list_selector_invalid_signature_fails(self) -> None:
-        def fn(*, data: object) -> Any:
-            return []
-
-        class _View(ServiceViewSet):
-            action_specs = {"list": SelectorSpec(kind=SelectorKind.LIST, selector=fn)}
-
-        with pytest.raises(ImproperlyConfigured, match="requires `data`"):
-            _View.as_view({"get": "list"})
-
-
-class TestServiceActionValidation:
-    def test_data_required_without_input_serializer_fails(self) -> None:
-        with pytest.raises(ImproperlyConfigured, match="requires `data`"):
-
-            def fn(*, data: _AuthorIn) -> None:
-                return None
-
-            class _View:  # noqa: D401
-                @service_action(ServiceSpec(service=fn), detail=False, methods=["post"])
-                def go(self, request):  # type: ignore[no-untyped-def]
-                    ...
-
-    def test_instance_required_on_non_detail_fails(self) -> None:
-        with pytest.raises(ImproperlyConfigured, match="requires `instance`"):
-
-            def fn(*, instance: object) -> None:
-                return None
-
-            class _View:  # noqa: D401
-                @service_action(ServiceSpec(service=fn), detail=False, methods=["post"])
-                def go(self, request):  # type: ignore[no-untyped-def]
-                    ...
-
-    def test_detail_action_with_instance_passes(self) -> None:
-        def fn(*, instance: object) -> None:
-            return None
-
-        class _View:  # noqa: D401
-            @service_action(ServiceSpec(service=fn), detail=True, methods=["post"])
-            def go(self, request, pk=None):  # type: ignore[no-untyped-def]
-                ...
-
-    def test_output_selector_validated(self) -> None:
-        with pytest.raises(ImproperlyConfigured, match="requires `data`"):
-
-            def fn() -> int:
-                return 1
-
-            def selector(*, data: object) -> object:
-                return None
-
-            class _View:  # noqa: D401
-                @service_action(
-                    ServiceSpec(
-                        service=fn,
-                        output_selector_spec=SelectorSpec(
-                            kind=SelectorKind.RETRIEVE, selector=selector
-                        ),
-                    ),
-                    detail=False,
-                    methods=["post"],
-                )
-                def go(self, request):  # type: ignore[no-untyped-def]
-                    ...
-
-
-# Module level, so ``from __future__ import annotations`` leaves every hint below
-# resolvable: a hint that cannot be resolved is read only as far as it evaluates
-# (see test_schema_markers_beside_unresolved_annotations.py).
-def _misplaced(*, team: list[Annotated[int, NotClientInput]] | None = None) -> list[Any]:
-    """A marker inside a container: read by nothing, refused wherever it is read."""
-    return []
-
-
-def _in_the_one_optional(*, team: Annotated[int, NotClientInput] | None = None) -> None:
+def _row(**_: Any) -> None:
     return None
 
 
-def _plain() -> list[Any]:
-    return []
+class TestAMutationView:
+    def test_a_keyword_nothing_fills_is_refused(self) -> None:
+        def service(*, tenant: str) -> None: ...
 
+        spec = ServiceSpec(service=service, permissions=_OPEN)
 
-def _misplaced_affordance() -> Affordance:
-    return Affordance(code="closed", reason="Closed.", when=_misplaced)
+        with pytest.raises(ImproperlyConfigured, match=_nothing_fills("tenant")):
+            _build(ServiceCreateView, spec)
 
+    def test_instance_on_a_create_is_refused(self) -> None:
+        """A create has no target selector, so nothing hands the service a row."""
 
-class _NotedQ(Q):
-    """A condition on the row whose class carries an annotation.
+        def service(*, instance: Any) -> None: ...
 
-    Reading it as a callable gets past resolving its hints, as far as asking for
-    the signature of an object that has none, and fails there.
-    """
+        spec = ServiceSpec(service=service, permissions=_OPEN)
 
-    note: str
+        with pytest.raises(ImproperlyConfigured, match=_nothing_fills("instance")):
+            _build(ServiceCreateView, spec)
 
+    def test_result_is_refused_too(self) -> None:
+        """``result`` is an output selector's, never a service's."""
 
-def _schema_marker_refusal(where: str) -> str:
-    return rf"^{re.escape(where)}: .*a schema marker \(InputRequired, NotClientInput"
+        def service(*, result: Any) -> None: ...
 
+        with pytest.raises(ImproperlyConfigured, match=_nothing_fills("result")):
+            _build(ServiceCreateView, ServiceSpec(service=service, permissions=_OPEN))
 
-class TestMisplacedSchemaMarkerValidation:
-    """A schema marker the dispatch read refuses is refused by ``as_view()``.
+    @pytest.mark.parametrize("base", [ServiceUpdateView, ServiceDeleteView])
+    def test_instance_beside_its_target_selector_passes(self, base: type) -> None:
+        def service(*, instance: Any) -> None: ...
 
-    Dispatch reads every callable's markers on every call, so a misplaced one left
-    to it is an endpoint that fails each request rather than an app that fails to
-    start.
-    """
+        spec = ServiceSpec(
+            service=service,
+            permissions=_OPEN,
+            instance_selector_spec=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_row),
+        )
 
-    def test_a_mutation_view_refuses_it(self) -> None:
-        class _View(ServiceCreateView):
-            spec = ServiceSpec(service=_misplaced)
+        assert callable(_build(base, spec))
 
-        with pytest.raises(
-            ImproperlyConfigured, match=_schema_marker_refusal("_View.spec.service")
-        ):
-            _View.as_view()
+    def test_a_target_selector_s_keyword_nothing_fills_is_refused(self) -> None:
+        def selector(*, tenant: str) -> None: ...
 
-    def test_a_selector_view_refuses_it(self) -> None:
-        class _View(SelectorListView):
-            spec = SelectorSpec(kind=SelectorKind.LIST, selector=_misplaced)
+        def service(*, instance: Any) -> None: ...
 
-        with pytest.raises(
-            ImproperlyConfigured, match=_schema_marker_refusal("_View.spec.selector")
-        ):
-            _View.as_view()
-
-    def test_a_viewset_refuses_it(self) -> None:
-        class _View(ServiceViewSet):
-            action_specs = {"create": ServiceSpec(service=_misplaced)}
+        spec = ServiceSpec(
+            service=service,
+            permissions=_OPEN,
+            instance_selector_spec=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=selector),
+        )
 
         with pytest.raises(
             ImproperlyConfigured,
-            match=_schema_marker_refusal("_View.action_specs['create'].service"),
+            match=_nothing_fills("tenant", seat=r"ServiceSpec\.instance_selector_spec\.selector"),
         ):
-            _View.as_view({"post": "create"})
+            _build(ServiceDeleteView, spec)
 
-    @pytest.mark.parametrize(
-        ("fields", "where"),
-        [
-            ({"preconditions": [_misplaced]}, "preconditions[0]"),
-            (
-                {
-                    "instance_selector_spec": SelectorSpec(
-                        kind=SelectorKind.RETRIEVE, selector=_misplaced
-                    )
-                },
-                "instance_selector_spec.selector",
-            ),
-            (
-                {
-                    "collection_selector_spec": SelectorSpec(
-                        kind=SelectorKind.LIST, selector=_misplaced
-                    )
-                },
-                "collection_selector_spec.selector",
-            ),
-            (
-                {
-                    "output_selector_spec": SelectorSpec(
-                        kind=SelectorKind.RETRIEVE, selector=_misplaced
-                    )
-                },
-                "output_selector_spec.selector",
-            ),
-            ({"affordances": [_misplaced_affordance()]}, "affordances[0].when"),
-        ],
-        ids=["precondition", "instance-lookup", "collection-lookup", "output-re-read", "when"],
-    )
-    def test_every_callable_a_service_dispatch_reads_is_checked(
-        self, fields: dict[str, Any], where: str
-    ) -> None:
-        class _View(ServiceUpdateView):
-            spec = ServiceSpec(service=_plain, **fields)
+    def test_a_typed_provider_fills_the_keyword(self) -> None:
+        def service(*, tenant: str) -> None: ...
 
-        with pytest.raises(
-            ImproperlyConfigured, match=_schema_marker_refusal(f"_View.spec.{where}")
-        ):
-            _View.as_view()
+        spec = ServiceSpec(service=service, permissions=_OPEN, kwargs=_typed_tenant)
 
-    @pytest.mark.parametrize(
-        ("fields", "where"),
-        [
-            ({"preconditions": [_misplaced]}, "preconditions[0]"),
-            (
-                {
-                    "affordances": {
-                        "close": ServiceSpec(service=_plain, affordances=[_misplaced_affordance()])
-                    }
-                },
-                "affordances['close'].affordances[0].when",
-            ),
-        ],
-        ids=["precondition", "row-affordance-when"],
-    )
-    def test_every_callable_a_selector_dispatch_reads_is_checked(
-        self, fields: dict[str, Any], where: str
-    ) -> None:
-        class _View(SelectorListView):
-            spec = SelectorSpec(kind=SelectorKind.LIST, selector=_plain, **fields)
+        assert callable(_build(ServiceCreateView, spec))
 
-        with pytest.raises(
-            ImproperlyConfigured, match=_schema_marker_refusal(f"_View.spec.{where}")
-        ):
-            _View.as_view()
+    def test_an_untyped_provider_may_fill_any_keyword(self) -> None:
+        """A provider whose return names no keys is left to dispatch."""
 
-    def test_a_condition_on_the_row_is_not_read(self) -> None:
-        # Compiled into the query rather than called, so no pool binds it and it
-        # carries no markers to read.
-        class _View(ServiceUpdateView):
-            spec = ServiceSpec(
-                service=_plain,
-                affordances=[Affordance(code="open", reason="Open.", when=_NotedQ(title="a"))],
-            )
+        def service(*, tenant: str) -> None: ...
 
-        _View.as_view()
+        spec = ServiceSpec(service=service, permissions=_OPEN, kwargs=lambda: {"tenant": "x"})
 
-    def test_a_marker_inside_the_one_optional_is_accepted(self) -> None:
+        assert callable(_build(ServiceCreateView, spec))
+
+    def test_a_view_hook_fills_nothing_for_a_kernel_spec(self) -> None:
+        """Changed by design: drfs passed this, reading an overridden
+        ``get_service_kwargs`` as a source of keys it could not see. A kernel
+        spec's call is handed its own providers' values and never a view
+        hook's, so the keyword is unfilled on every call and refused here."""
+
+        def service(*, tenant: str) -> None: ...
+
         class _View(ServiceCreateView):
-            spec = ServiceSpec(service=_in_the_one_optional)
+            spec = ServiceSpec(service=service, permissions=_OPEN)
 
-        _View.as_view()
+            def get_service_kwargs(self) -> dict[str, Any]:
+                return {"tenant": "acme"}
+
+        with pytest.raises(ImproperlyConfigured, match=_nothing_fills("tenant")):
+            _View.as_view()
+
+    def test_a_service_beside_a_validator_is_left_to_dispatch(self) -> None:
+        """A Validator may hand the service a value it does not declare."""
+
+        def service(*, tenant: str, data: Any) -> None: ...
+
+        spec = ServiceSpec(
+            service=service, permissions=_OPEN, validator=SerializerValidator(_TitleIn)
+        )
+
+        assert callable(_build(ServiceCreateView, spec))
+
+    def test_data_is_handed_to_every_service(self) -> None:
+        """Changed by design: drfs refused ``data`` on a spec with no
+        ``input_serializer``. The kernel hands every service ``data``, the
+        caller's checked arguments, Validator or not."""
+
+        def service(*, data: Any) -> None: ...
+
+        assert callable(_build(ServiceCreateView, ServiceSpec(service=service, permissions=_OPEN)))
+
+    def test_a_positional_only_parameter_is_refused(self) -> None:
+        def service(tenant: str, /) -> None: ...
+
+        with pytest.raises(
+            ImproperlyConfigured,
+            match=r"ServiceSpec\.service takes the positional-only parameter\(s\) \['tenant'\]",
+        ):
+            _build(ServiceCreateView, ServiceSpec(service=service, permissions=_OPEN))
+
+    def test_an_optional_read_over_a_required_keyword_is_refused(self) -> None:
+        def service(*, q: str) -> None: ...
+
+        spec = ServiceSpec(
+            service=service, permissions=_OPEN, reads=_reads(Parameter("q", "string"))
+        )
+
+        with pytest.raises(
+            ImproperlyConfigured,
+            match=r"ServiceSpec\.service requires the keyword\(s\) \['q'\], declared as "
+            r"optional reads",
+        ):
+            _build(ServiceCreateView, spec)
+
+    @pytest.mark.parametrize("base", [ServiceCreateView, ServiceUpdateView, ServiceDeleteView])
+    def test_no_spec_does_not_raise(self, base: type) -> None:
+        assert callable(base.as_view())
+
+
+class TestASelectorView:
+    def test_a_list_selector_requiring_data_is_refused(self) -> None:
+        """The kernel seeds ``data`` for a service only."""
+
+        def selector(*, data: Any) -> list[Any]:
+            return []
+
+        spec = SelectorSpec(kind=SelectorKind.LIST, selector=selector, permissions=_OPEN)
+
+        with pytest.raises(
+            ImproperlyConfigured, match=_nothing_fills("data", seat=r"SelectorSpec\.selector")
+        ):
+            _build(SelectorListView, spec)
+
+    def test_a_retrieve_selector_requiring_instance_is_refused(self) -> None:
+        def selector(*, instance: Any) -> None: ...
+
+        spec = SelectorSpec(kind=SelectorKind.RETRIEVE, selector=selector, permissions=_OPEN)
+
+        with pytest.raises(
+            ImproperlyConfigured, match=_nothing_fills("instance", seat=r"SelectorSpec\.selector")
+        ):
+            _build(SelectorRetrieveView, spec)
+
+    def test_a_route_capture_the_spec_does_not_declare_is_refused(self) -> None:
+        """Changed by design: drfs let a retrieve selector require any
+        keyword, because a route capture might fill it. The kernel route reads
+        only a capture the spec declares, so an undeclared one fills nothing
+        (``kernel_arguments``) and the selector is refused here."""
+
+        def selector(*, pk: int) -> None: ...
+
+        spec = SelectorSpec(kind=SelectorKind.RETRIEVE, selector=selector, permissions=_OPEN)
+
+        with pytest.raises(
+            ImproperlyConfigured, match=_nothing_fills("pk", seat=r"SelectorSpec\.selector")
+        ):
+            _build(SelectorRetrieveView, spec)
+
+    def test_a_route_capture_declared_as_a_required_read_passes(self) -> None:
+        def selector(*, pk: int) -> None: ...
+
+        spec = SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=selector,
+            permissions=_OPEN,
+            reads=_reads(Parameter("pk", "integer", required=True)),
+        )
+
+        assert callable(_build(SelectorRetrieveView, spec))
+
+    def test_a_read_named_like_a_call_seed_is_refused(self) -> None:
+        """``request`` and ``view`` are the call's own, seeded off its context."""
+        spec = SelectorSpec(
+            kind=SelectorKind.LIST,
+            selector=_row,
+            permissions=_OPEN,
+            reads=_reads(Parameter("request", "string")),
+        )
+
+        with pytest.raises(
+            ImproperlyConfigured,
+            match=r"SelectorSpec declares the parameter\(s\) \['request'\], which a registered "
+            r"pool seed occupies",
+        ):
+            _build(SelectorListView, spec)
+
+    def test_a_typed_provider_fills_the_keyword(self) -> None:
+        def selector(*, tenant: str) -> list[Any]:
+            return []
+
+        spec = SelectorSpec(
+            kind=SelectorKind.LIST, selector=selector, permissions=_OPEN, kwargs=_typed_tenant
+        )
+
+        assert callable(_build(SelectorListView, spec))
+
+    @pytest.mark.parametrize(
+        ("base", "kind"),
+        [(SelectorListView, SelectorKind.RETRIEVE), (SelectorRetrieveView, SelectorKind.LIST)],
+    )
+    def test_a_kind_mismatch_at_the_mount_point_is_refused(
+        self, base: type, kind: SelectorKind
+    ) -> None:
+        spec = SelectorSpec(kind=kind, selector=_row, permissions=_OPEN)
+
+        with pytest.raises(ImproperlyConfigured, match=r"spec\.kind is"):
+            _build(base, spec)
+
+    def test_the_kind_is_refused_before_the_seeds_are_checked(self) -> None:
+        """The view's own question first: a spec on the wrong mount is told so,
+        not told about a keyword it would be handed on the right one."""
+
+        def selector(*, tenant: str) -> list[Any]:
+            return []
+
+        spec = SelectorSpec(kind=SelectorKind.LIST, selector=selector, permissions=_OPEN)
+
+        with pytest.raises(ImproperlyConfigured, match=r"spec\.kind is") as refused:
+            _build(SelectorRetrieveView, spec)
+        assert "nothing fills" not in str(refused.value)
+
+    @pytest.mark.parametrize("base", [SelectorListView, SelectorRetrieveView])
+    def test_no_spec_does_not_raise(self, base: type) -> None:
+        assert callable(base.as_view())
+
+
+class TestAnArrayReadWithNoItems:
+    """An array read with no ``items`` over a keyword annotated with its element type.
+
+    A kernel array ``Parameter`` with no ``items`` takes any element, so a
+    selector annotated ``pks: list[int]`` behind one is handed the query
+    string's strings. The kernel's ``check_seeds`` is to refuse it, naming
+    ``items``; until it does, ``as_view()`` passes it.
+    """
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "kernel item 14: check_seeds refuses an array read with no items over a "
+            "keyword annotated as a parametrised sequence"
+        ),
+    )
+    @pytest.mark.parametrize(
+        "annotation",
+        [list[int], Sequence[int], tuple[int, ...], list[int] | None],
+        ids=["list", "Sequence", "tuple", "optional-list"],
+    )
+    def test_it_is_refused_at_as_view(self, annotation: Any) -> None:
+        def selector(*, pks: Any) -> list[Any]:
+            return []
+
+        selector.__annotations__["pks"] = annotation
+        spec = SelectorSpec(
+            kind=SelectorKind.LIST,
+            selector=selector,
+            permissions=_OPEN,
+            reads=_reads(Parameter("pks", "array", required=True)),
+        )
+
+        with pytest.raises(ImproperlyConfigured, match=r"\['pks'\].*items"):
+            _build(SelectorListView, spec)
+
+    @pytest.mark.parametrize(
+        ("annotation", "items"),
+        [(list[Any], None), (list, None), (list[int], "integer")],
+        ids=["list-of-any", "bare-list", "declared-items"],
+    )
+    def test_what_it_cannot_misread_passes(self, annotation: Any, items: str | None) -> None:
+        def selector(*, pks: Any) -> list[Any]:
+            return []
+
+        selector.__annotations__["pks"] = annotation
+        spec = SelectorSpec(
+            kind=SelectorKind.LIST,
+            selector=selector,
+            permissions=_OPEN,
+            reads=_reads(Parameter("pks", "array", required=True, items=items)),
+        )
+
+        assert callable(_build(SelectorListView, spec))
