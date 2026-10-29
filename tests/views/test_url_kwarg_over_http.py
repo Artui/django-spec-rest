@@ -61,7 +61,7 @@ class _NestedPosts(SelectorListView):
     spec = SelectorSpec(
         kind=SelectorKind.LIST,
         selector=_posts_of,
-        reads=Parameters.of(Parameter("author_pk", "integer")),
+        reads=Parameters.of(Parameter("author_pk", "integer", required=True)),
         permissions=_OPEN,
         presenter=SerializerPresenter(_PostOut),
     )

@@ -41,7 +41,7 @@ def test_the_spec_s_provider_outranks_the_route() -> None:
     spec = SelectorSpec(
         kind=SelectorKind.LIST,
         selector=_posts_of,
-        reads=Parameters.of(Parameter("author_pk", "integer")),
+        reads=Parameters.of(Parameter("author_pk", "integer", required=True)),
         kwargs=scope,
         permissions=(Unrestricted(),),
         presenter=SerializerPresenter(_PostOut),

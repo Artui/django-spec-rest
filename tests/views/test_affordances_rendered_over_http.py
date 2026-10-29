@@ -63,7 +63,7 @@ _LISTING = SelectorSpec(
 _DETAIL = SelectorSpec(
     kind=SelectorKind.RETRIEVE,
     selector=lambda *, pk: Post.objects.filter(pk=pk),
-    reads=Parameters.of(Parameter("pk", "integer")),
+    reads=Parameters.of(Parameter("pk", "integer", required=True)),
     permissions=_OPEN,
     presenter=SerializerPresenter(_PostOut),
     affordances={"publish": PUBLISH},

@@ -51,7 +51,7 @@ def _view(**attrs: Any) -> Any:
     spec = SelectorSpec(
         kind=SelectorKind.LIST,
         selector=_posts,
-        reads=Parameters.of(Parameter("published", "boolean")),
+        reads=Parameters.of(Parameter("published", "boolean", required=True)),
         permissions=_OPEN,
         presenter=SerializerPresenter(_PostOut),
     )
@@ -93,7 +93,7 @@ def test_a_missing_row_beside_an_unknown_key(
     spec = SelectorSpec(
         kind=SelectorKind.RETRIEVE,
         selector=lambda *, pk: Post.objects.filter(pk=pk).first(),
-        reads=Parameters.of(Parameter("pk", "integer")),
+        reads=Parameters.of(Parameter("pk", "integer", required=True)),
         permissions=_OPEN,
         presenter=SerializerPresenter(_PostOut),
     )

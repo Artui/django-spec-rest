@@ -40,7 +40,7 @@ pytestmark = pytest.mark.django_db
 
 factory = APIRequestFactory()
 _OPEN = (Unrestricted(),)
-_PK = Parameters.of(Parameter("pk", "integer"))
+_PK = Parameters.of(Parameter("pk", "integer", required=True))
 
 
 class _NameOnly(serializers.Serializer):

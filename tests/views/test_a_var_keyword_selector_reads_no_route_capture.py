@@ -24,7 +24,7 @@ from tests.testapp.models import Post
 pytestmark = pytest.mark.django_db
 
 _OPEN = (Unrestricted(),)
-_PK = Parameters.of(Parameter("pk", "integer"))
+_PK = Parameters.of(Parameter("pk", "integer", required=True))
 
 
 class _PostOut(serializers.ModelSerializer):
@@ -71,7 +71,9 @@ class _ListDeclared(SelectorListView):
 
 
 class _StringRead(SelectorRetrieveView):
-    spec = _spec(SelectorKind.RETRIEVE, _by_kwargs, Parameters.of(Parameter("pk", "string")))
+    spec = _spec(
+        SelectorKind.RETRIEVE, _by_kwargs, Parameters.of(Parameter("pk", "string", required=True))
+    )
 
 
 urlpatterns = [

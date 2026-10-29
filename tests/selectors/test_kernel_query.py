@@ -84,7 +84,7 @@ def test_kernel_query_drops_drf_s_keys_and_keeps_the_rest() -> None:
 def test_a_read_named_like_a_drf_key_is_still_the_spec_s() -> None:
     query = kernel_query(
         _View(PageNumberPagination()),
-        _spec(Parameter("page", "integer")),
+        _spec(Parameter("page", "integer", required=True)),
         _request("page=2&format=json"),
     )
     assert dict(query.lists()) == {"page": ["2"]}

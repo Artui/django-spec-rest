@@ -152,7 +152,7 @@ class TestTheArguments:
 
         spec = _listing(
             by_author,
-            reads=Parameters.of(Parameter("author_id", "integer")),
+            reads=Parameters.of(Parameter("author_id", "integer", required=True)),
             presenter=SerializerPresenter(_NameOnly),
         )
         assert _body(_get(spec, author_id=str(three[1].pk))) == [{"name": "b"}]

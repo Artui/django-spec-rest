@@ -60,7 +60,7 @@ def _view(permissions: Any = _OPEN) -> Any:
         instance_selector_spec=SelectorSpec(
             kind=SelectorKind.RETRIEVE,
             selector=lambda *, pk: Post.objects.filter(pk=pk).first(),
-            reads=Parameters.of(Parameter("pk", "integer")),
+            reads=Parameters.of(Parameter("pk", "integer", required=True)),
             permissions=_OPEN,
         ),
         presenter=SerializerPresenter(PostSerializer),
