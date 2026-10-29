@@ -1,11 +1,9 @@
-"""A service whose ``LIST`` output re-reads nothing presents its own return as rows.
+"""A service whose output re-reads nothing presents its own return as rows.
 
-drfs declares that by an ``output_selector_spec`` of ``kind=LIST`` with no
-``selector``: the output serializer presents each row the service returns. The
-kernel's spelling of the same is ``returns_many=True`` beside no output
-selector, so its own ``dispatch`` answers a list, and its output schema is an
-array of the item. ``allow_none`` stays off, as the edge refuses a ``None``
-return as the author's error.
+The kernel spells it ``returns_many=True`` beside no output selector: its own
+``dispatch`` answers a list, ``present`` hands each row to the
+``SerializerPresenter``, and the output schema is an array of the row. Over
+HTTP a create view serving such a spec answers the presented rows.
 """
 
 from __future__ import annotations
@@ -14,17 +12,15 @@ from typing import Any
 
 import pytest
 from django.contrib.auth.models import AnonymousUser
+from django_service_specs import ServiceSpec, Unrestricted
 from django_service_specs.dispatch.dispatch import dispatch
 from django_service_specs.dispatch.present import present
 from django_service_specs.schema.spec_output_schema import spec_output_schema
-from django_service_specs.specs.kernel_spec import kernel_spec
-from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
 from rest_framework import serializers
-from rest_framework.permissions import AllowAny
+from rest_framework.test import APIRequestFactory
 
-from django_spec_rest.types.selector_kind import SelectorKind
-from django_spec_rest.types.selector_spec import SelectorSpec
-from django_spec_rest.types.service_spec import ServiceSpec
+from django_spec_rest import ServiceCreateView
+from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 
 pytestmark = pytest.mark.django_db
 
@@ -33,42 +29,19 @@ class _Row(serializers.Serializer):
     title = serializers.CharField()
 
 
-class _Rows(serializers.Serializer):
-    titles = serializers.ListField(child=serializers.CharField())
-
-
 def _rows() -> list[dict[str, str]]:
     return [{"title": "first"}, {"title": "second"}]
 
 
-def _rerun(*, result: Any) -> Any:
-    return result
-
-
-def _listed(**overrides: Any) -> ServiceSpec[Any, Any, Any]:
+def _listed(**overrides: Any) -> ServiceSpec:
     fields: dict[str, Any] = {
         "service": _rows,
-        "permission_classes": [AllowAny],
-        "output_selector_spec": SelectorSpec(
-            kind=SelectorKind.LIST, selector=None, output_serializer=_Row
-        ),
+        "permissions": (Unrestricted(),),
+        "returns_many": True,
+        "presenter": SerializerPresenter(_Row),
     }
     fields.update(overrides)
     return ServiceSpec(**fields)
-
-
-def _compiled(spec: ServiceSpec[Any, Any, Any]) -> KernelServiceSpec:
-    compiled = kernel_spec(spec)
-    assert isinstance(compiled, KernelServiceSpec)
-    return compiled
-
-
-def test_a_list_output_with_no_re_read_compiles_to_returns_many() -> None:
-    compiled = _compiled(_listed(allow_none=True))
-
-    assert compiled.returns_many is True
-    assert compiled.output_selector_spec is None
-    assert compiled.allow_none is False
 
 
 def test_the_kernel_s_own_dispatch_answers_the_rows() -> None:
@@ -89,61 +62,35 @@ def test_the_kernel_s_own_dispatch_answers_a_list_for_a_return_that_is_no_rows(
 ) -> None:
     """The kernel's ``dispatch`` does not refuse a ``returns_many`` return that is no rows.
 
-    It records a gap in the kernel rather than a behaviour drfs relies on: drfs'
-    own edge refuses a mapping or a ``str`` as the author's error, and the
-    kernel's ``dispatch`` answers either as a list. When the kernel refuses
-    them, this test should flip to assert the refusal.
+    It records a gap in the kernel rather than a behaviour this package relies
+    on. When the kernel refuses them, this test should flip to assert the
+    refusal.
     """
-    spec = _listed(service=lambda: returned)
-
-    result = dispatch(kernel_spec(spec), principal=AnonymousUser(), arguments={})
+    result = dispatch(_listed(service=lambda: returned), principal=AnonymousUser(), arguments={})
 
     assert result.kind == "list"
 
 
 def test_the_kernel_s_output_schema_is_an_array_of_the_row() -> None:
-    schema = spec_output_schema(_compiled(_listed()))
+    schema = spec_output_schema(_listed())
 
     assert schema["type"] == "array"
     assert schema["items"]["properties"] == {"title": {"type": "string"}}
 
 
-@pytest.mark.parametrize(
-    "spec",
-    [
-        # Each case holds one condition of the declaration ``_service`` reads,
-        # and fails without it.
-        pytest.param(
-            _listed(
-                many=True,
-                input_serializer=_Row,
-                service=lambda *, data: data,
-            ),
-            # The kernel refuses ``returns_many`` beside ``many``, which lists
-            # the return already.
-            id="many",
-        ),
-        pytest.param(
-            _listed(
-                output_selector_spec=SelectorSpec(
-                    kind=SelectorKind.RETRIEVE, selector=None, output_serializer=_Rows
-                )
-            ),
-            id="retrieve-output",
-        ),
-        pytest.param(
-            _listed(
-                output_selector_spec=SelectorSpec(
-                    kind=SelectorKind.LIST, selector=_rerun, output_serializer=_Row
-                )
-            ),
-            # The kernel refuses ``returns_many`` beside an output selector.
-            id="list-re-read",
-        ),
-        pytest.param(_listed(output_selector_spec=None), id="no-output"),
-    ],
-)
-def test_only_a_list_output_with_no_re_read_and_no_many_returns_many(
-    spec: ServiceSpec[Any, Any, Any],
-) -> None:
-    assert _compiled(spec).returns_many is False
+class _CreateView(ServiceCreateView):
+    """``get_permissions`` answers the view's own classes, as the spine's views do."""
+
+    permission_classes: Any = []
+
+    def get_permissions(self) -> list[Any]:
+        return [permission() for permission in self.permission_classes]
+
+
+def test_a_live_view_answers_the_presented_rows() -> None:
+    view = type("_View", (_CreateView,), {"spec": _listed()}).as_view()
+
+    response = view(APIRequestFactory().post("/", {}, format="json"))
+
+    assert response.status_code == 201
+    assert response.data == [{"title": "first"}, {"title": "second"}]
