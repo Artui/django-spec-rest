@@ -82,7 +82,9 @@ def test_the_class_level_check_still_refuses_a_list() -> None:
 def test_a_collection_selector_s_own_classes_are_not_what_answers() -> None:
     # The kernel asks the spec being dispatched, never the selector resolving
     # its target, so classes a port moves onto the nested selector refuse
-    # nothing: they belong on the service.
+    # nothing: they belong on the service. drfs refused them at ``as_view()``;
+    # that refusal is owed, held as a strict xfail in
+    # test_what_the_edge_owes_a_kernel_spec.
     Tag.objects.create(name="a")
     spec = ServiceSpec(
         service=lambda *, collection: collection.count(),

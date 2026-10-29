@@ -15,6 +15,13 @@ the views that call it, which this module's directory does not own.
   layer reach the call.** The edge carries no view hooks onto the kernel route,
   so a hook value for a service keyword, and the view's input context layer,
   never arrive.
+- **A nested selector's ``permissions`` are refused at ``as_view()``.** The
+  kernel asks the spec being dispatched, never the selector resolving its
+  target, so checks declared there guard nothing. drfs refused a nested
+  spec's ``permission_classes`` at ``as_view()`` for that reason; a kernel
+  spec declaring them is accepted, and they silently refuse nothing
+  (``test_enforce_permissions``'s
+  ``test_a_collection_selector_s_own_classes_are_not_what_answers``).
 """
 
 from __future__ import annotations
@@ -23,12 +30,15 @@ from typing import Any
 
 import pytest
 from django.contrib.auth.models import User
-from django_service_specs import ServiceSpec, Unrestricted
+from django.core.exceptions import ImproperlyConfigured
+from django_service_specs import SelectorKind, SelectorSpec, ServiceSpec, Unrestricted
 from rest_framework import serializers
+from rest_framework.permissions import BasePermission
 from rest_framework.response import Response
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from django_spec_rest import ServiceCreateView
+from django_spec_rest.service_specs.drf_permission_check import DRFPermissionCheck
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 
 pytestmark = pytest.mark.django_db
@@ -127,3 +137,32 @@ def test_the_view_s_input_context_layer_reaches_the_input_serializer() -> None:
     _post(spec, {"name": "Ada"}, **_hooked("get_input_serializer_context", {"tenant": "acme"}))
 
     assert seen == ["acme"]
+
+
+class _Deny(BasePermission):
+    def has_permission(self, request: Any, view: Any) -> bool:
+        return False
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "neither as_view() nor the kernel refuses permissions on a kernel spec's "
+        "collection_selector_spec, which the kernel never asks, where drfs refused a "
+        "nested spec's permission_classes at as_view()"
+    ),
+)
+def test_a_collection_selector_s_permissions_are_refused_at_as_view() -> None:
+    spec = ServiceSpec(
+        service=lambda *, collection: None,
+        collection_selector_spec=SelectorSpec(
+            kind=SelectorKind.LIST,
+            selector=lambda: [],
+            permissions=(DRFPermissionCheck((_Deny,)),),
+        ),
+        permissions=_OPEN,
+    )
+    view = type("_View", (_CreateView,), {"spec": spec})
+
+    with pytest.raises(ImproperlyConfigured, match="collection_selector_spec"):
+        view.as_view()
