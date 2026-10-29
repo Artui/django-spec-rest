@@ -10,10 +10,12 @@ kernel's two seats: ``input_data``'s ``tenant`` is the field's, validated into
 the service's own, outranking what the Validator returns.
 
 drfs read both from one view hook, whose value named like a field was the
-serializer's as well. A kernel spec's ``kwargs`` seat feeds the callable alone,
-on every transport, so a ``kwargs`` value named like a field never reaches the
-serializer and the field validates what the client sent: a change by design,
-asserted here, and why a value the serializer must see goes on ``input_data``.
+serializer's as well, over what the body sent. A kernel spec's ``kwargs`` seat
+feeds the callable alone, on every transport, so a ``kwargs`` value named like
+a field never reaches the serializer, and the field validates what the client
+sent. That is the kernel's answer, asserted here as it stands; no decision of
+the carry-over list names it, and a value the serializer must see goes on
+``input_data``.
 """
 
 from __future__ import annotations
@@ -116,8 +118,9 @@ def test_each_key_reaches_its_own_parameter_off_http(
 def test_a_kwargs_value_named_like_a_field_is_the_service_s_alone(fmt: str) -> None:
     """The field validates the client's value; the parameter takes the provider's.
 
-    drfs' hook value was the field's too. The kernel's ``kwargs`` seat never
-    feeds the Validator, so ``data`` carries what the body sent.
+    drfs' hook value was the field's too, over the body's. The kernel's
+    ``kwargs`` seat never feeds the Validator, so ``data`` carries what the
+    body sent while the service's ``tenant`` is the provider's.
     """
     seen: dict[str, Any] = {}
     spec = _spec(seen, kwargs=lambda: dict(_BOTH))

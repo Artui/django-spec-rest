@@ -14,18 +14,19 @@ The test of that default is a strict xfail until the kernel declares it.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Mapping
 from typing import Any
 
 import pytest
 from django.contrib.auth.models import AnonymousUser, User
 from django_service_specs import (
-    DataclassValidator,
     Grant,
     InvalidArguments,
+    Parameters,
     ServiceSpec,
     UnknownArguments,
     Unrestricted,
+    ValidationContext,
     Validator,
     dispatch,
 )
@@ -199,25 +200,33 @@ def test_a_reader_holding_the_seat_reads_the_override() -> None:
     assert getattr(seat, "unsendable", frozenset()) == frozenset({"user"})
 
 
-@dataclass
-class _Plain:
-    title: str
+class _Bare(Validator):
+    """A Validator defining only what the ABC requires, as a third party's would."""
+
+    def parameters(self) -> Parameters:
+        return Parameters.of()
+
+    def validate(self, arguments: Mapping[str, Any], context: ValidationContext) -> dict[str, Any]:
+        return dict(arguments)
 
 
 @pytest.mark.xfail(
     strict=True,
     raises=AttributeError,
     reason=(
-        "kernel item 13: Validator.unsendable is not on the kernel's Validator yet, "
-        "so a kernel validator has no empty default to answer"
+        "kernel item 13: Validator.unsendable is not on the kernel's Validator ABC yet, "
+        "so a Validator that does not define it has no empty default to answer"
     ),
 )
-def test_a_kernel_validator_answers_the_empty_default() -> None:
-    """Once the kernel declares the default, a reader stops needing ``getattr``.
+def test_a_validator_that_does_not_define_it_answers_the_empty_default() -> None:
+    """Once the kernel's ABC declares the default, a reader stops needing ``getattr``.
 
-    Strict, so the kernel minor that declares it turns this green and fails
-    the suite until the xfail is lifted and ``getattr`` readers move.
+    Asked of a subclass defining only the abstract methods, so a kernel
+    release that adds the property to its own validators alone still fails
+    here. Strict, so the release that declares it on the ABC turns this green
+    and fails the suite until the xfail is lifted and the ``getattr`` readers
+    move.
     """
-    validator: Any = DataclassValidator(_Plain)
+    validator: Any = _Bare()
 
     assert validator.unsendable == frozenset()
