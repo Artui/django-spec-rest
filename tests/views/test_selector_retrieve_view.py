@@ -9,7 +9,9 @@ preconditions and before anything is presented.
 from __future__ import annotations
 
 import dataclasses
+import gc
 import json
+import weakref
 from typing import Any
 
 import pytest
@@ -33,7 +35,7 @@ from rest_framework.response import Response
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from django_spec_rest import SelectorRetrieveView
-from django_spec_rest.selectors.utils import _viewed
+from django_spec_rest.selectors.utils import _VIEWED, _viewed
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from tests.testapp.models import Author, Post
 from tests.testapp.serializers import AuthorSerializer
@@ -187,6 +189,30 @@ class TestTheViewsObjectPermission:
         assert _viewed(spec) is _viewed(spec)
         assert _viewed(spec) is not spec
         assert _viewed(spec).permissions[1:] == spec.permissions
+
+    def test_a_dead_spec_leaves_no_twin_behind(self) -> None:
+        """The weakref callback drops the entry when its spec dies, so an
+        ``id`` Python reuses is never found holding a dead spec's twin."""
+        spec = _detail(presenter=SerializerPresenter(_NameOnly))
+        key = id(spec)
+        _viewed(spec)
+        assert key in _VIEWED
+        del spec
+        gc.collect()
+        assert key not in _VIEWED
+
+    def test_a_stale_entry_under_a_live_spec_s_id_is_not_its_twin(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """An entry whose weak reference names another spec, as a reused ``id``
+        would leave one, is rebuilt rather than served."""
+        spec = _detail(presenter=SerializerPresenter(_NameOnly))
+        other = _detail(presenter=SerializerPresenter(_NameOnly))
+        stale = _viewed(other)
+        monkeypatch.setitem(_VIEWED, id(spec), (weakref.ref(other), stale))
+        twin = _viewed(spec)
+        assert twin is not stale
+        assert twin.permissions[1:] == spec.permissions
 
     def test_a_row_that_is_no_model_is_not_asked_of_the_view(self) -> None:
         @dataclasses.dataclass

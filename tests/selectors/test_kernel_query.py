@@ -15,7 +15,13 @@ from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.pagination import CursorPagination, LimitOffsetPagination, PageNumberPagination
 from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory, override_settings
-from rest_framework.versioning import QueryParameterVersioning
+from rest_framework.versioning import (
+    AcceptHeaderVersioning,
+    HostNameVersioning,
+    NamespaceVersioning,
+    QueryParameterVersioning,
+    URLPathVersioning,
+)
 
 from django_spec_rest.selectors.utils import drf_query_keys, kernel_query
 
@@ -36,11 +42,18 @@ class _SizedPages(PageNumberPagination):
     page_size_query_param = "size"
 
 
+class _RenamedVersion(QueryParameterVersioning):
+    version_param = "v"
+
+
 class _OwnFilter:
     """A project's backend, spelling its key DRF's way."""
 
     tenant_param = "tenant"
     blank_param = ""
+    # Truthy and spelled ``*_param``, but no key: holds the ``isinstance(value, str)``
+    # conjunct in ``drf_query_keys``, which a bare truthiness test would let through.
+    page_limit_param = 25
     unrelated = "not a key"
 
 
@@ -55,11 +68,21 @@ class _OwnFilter:
         (_View(filter_backends=(OrderingFilter, SearchFilter)), {"format", "ordering", "search"}),
         (_View(filter_backends=(_OwnFilter,)), {"format", "tenant"}),
         (_View(versioning_class=QueryParameterVersioning), {"format", "version"}),
+        (_View(versioning_class=_RenamedVersion), {"format", "v"}),
+        # ``version_param`` sits on ``BaseVersioning``, so every class reports it,
+        # but only the query-parameter one reads it: on the others an undeclared
+        # ``?version`` is no DRF key and stays the kernel's to refuse
+        # (the rows below hold the ``issubclass`` gate in ``drf_query_keys``).
+        (_View(versioning_class=URLPathVersioning), {"format"}),
+        (_View(versioning_class=AcceptHeaderVersioning), {"format"}),
+        (_View(versioning_class=NamespaceVersioning), {"format"}),
+        (_View(versioning_class=HostNameVersioning), {"format"}),
     ],
 )
 def test_drf_query_keys(view: _View, keys: set[str]) -> None:
     """A ``None`` key, ``PageNumberPagination``'s unset ``page_size_query_param``,
-    names none, and an attribute not spelled ``*_param`` is no key."""
+    names none, an attribute not spelled ``*_param`` is no key, and a ``*_param`` that is
+    no string (a truthy number) is none either."""
     assert drf_query_keys(view) == keys
 
 

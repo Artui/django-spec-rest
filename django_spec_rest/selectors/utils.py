@@ -31,6 +31,7 @@ from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelec
 from rest_framework.exceptions import NotFound
 from rest_framework.request import Request
 from rest_framework.settings import api_settings
+from rest_framework.versioning import QueryParameterVersioning
 
 from django_spec_rest.dispatch.dispatch_spec import dispatch_spec
 from django_spec_rest.dispatch.kernel_edge import KernelSpec, dispatch_kernel_spec, runs_on_kernel
@@ -329,6 +330,11 @@ def _viewed(spec: KernelSpec) -> KernelSpec:
         return spec
     key = id(spec)
     cached = _VIEWED.get(key)
+    # Two conjuncts, one branch arc: ``cached[0]() is spec`` refuses an entry a
+    # reused ``id`` left under another spec (held by
+    # test_a_stale_entry_under_a_live_spec_s_id_is_not_its_twin), and the weakref
+    # callback below is what normally keeps such an entry from existing
+    # (test_a_dead_spec_leaves_no_twin_behind).
     if cached is not None and cached[0]() is spec:
         return cached[1]
     twin = spec.derive(permissions=(_VIEW_OBJECT_PERMISSION, *spec.permissions))
@@ -358,11 +364,16 @@ def drf_query_keys(view: Any) -> frozenset[str]:
     keys: set[str] = set()
     if api_settings.URL_FORMAT_OVERRIDE:
         keys.add(api_settings.URL_FORMAT_OVERRIDE)
-    readers = [
-        getattr(view, "paginator", None),
-        getattr(view, "versioning_class", None),
-        *getattr(view, "filter_backends", ()),
-    ]
+    readers = [getattr(view, "paginator", None), *getattr(view, "filter_backends", ())]
+    # ``version_param`` sits on ``BaseVersioning``, so URL path, header, namespace
+    # and host name versioning all report it without reading it: only the
+    # query-parameter class does, and an undeclared ``?version`` on the others
+    # stays the kernel's to refuse. ``isinstance(.., type)`` keeps a view with no
+    # versioning (``None``) out of ``issubclass``; both conjuncts are held by
+    # test_drf_query_keys (its ``_View()`` row and its non-query versioning rows).
+    versioning = getattr(view, "versioning_class", None)
+    if isinstance(versioning, type) and issubclass(versioning, QueryParameterVersioning):
+        readers.append(versioning)
     for reader in readers:
         for name in dir(reader):
             value = getattr(reader, name, None) if name.endswith("_param") else None

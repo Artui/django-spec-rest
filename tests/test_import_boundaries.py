@@ -120,6 +120,9 @@ ALLOWED_DRF_IMPORTS: dict[str, frozenset[str]] = {
             # ``URL_FORMAT_OVERRIDE``: ``?format`` is one of DRF's own query
             # keys, which ``kernel_query`` keeps off a kernel spec's arguments.
             "rest_framework.settings",
+            # ``QueryParameterVersioning``: of DRF's versioning classes only
+            # this one reads ``?version``, so only it names a query key.
+            "rest_framework.versioning",
         }
     ),
     "services/acall_service.py": frozenset({"rest_framework.request"}),

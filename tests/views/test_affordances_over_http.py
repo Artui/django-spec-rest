@@ -138,9 +138,17 @@ def test_a_row_condition_on_a_create_view_is_refused_at_as_view() -> None:
     "permission before its affordances, so the denied caller is answered 409; an ask on "
     "views/mutation/utils.py (selectors.utils' _viewed twin is the query views' answer)",
 )
-def test_a_caller_the_view_denies_the_row_learns_nothing_about_its_state() -> None:
-    """The drfs subject: the view's own DRF ``has_object_permission``."""
-    post = Post.objects.create(title="t", published=True)
+@pytest.mark.parametrize("published", [True, False], ids=["unavailable", "available"])
+def test_a_caller_the_view_denies_the_row_learns_nothing_about_its_state(published: bool) -> None:
+    """The drfs subject: the view's own DRF ``has_object_permission``.
+
+    Both rows are answered 403 and leave the row as it was: the unavailable one
+    must not hear its affordance's 409, and the available one must not be
+    written before the view's refusal is asked.
+    """
+    post = Post.objects.create(title="t", published=published)
     response = _patch(_view(permission_classes=[_DenyObject]), post.pk)
     assert response.status_code == 403
     assert json.loads(response.content) == {"detail": "You may not touch this post."}
+    post.refresh_from_db()
+    assert (post.title, post.published) == ("t", published)

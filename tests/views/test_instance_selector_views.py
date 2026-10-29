@@ -22,6 +22,7 @@ from django_service_specs import (
     Unrestricted,
 )
 from rest_framework import serializers
+from rest_framework.permissions import BasePermission
 from rest_framework.test import APIRequestFactory
 
 from django_spec_rest import ServiceDeleteView, ServiceUpdateView
@@ -136,6 +137,14 @@ class _ByName(django_filters.FilterSet):
         fields: list[str] = []
 
 
+class _ScopeIsMine(BasePermission):
+    """Admits a request whose query string says ``?scope=mine``: the guard a
+    body-supplied scope walks past."""
+
+    def has_permission(self, request: Any, view: Any) -> bool:
+        return request.query_params.get("scope") == "mine"
+
+
 class TestALookupsFilterSet:
     @pytest.mark.xfail(
         strict=True,
@@ -149,13 +158,31 @@ class TestALookupsFilterSet:
         )
         assert response.status_code == 404
 
-    def test_what_the_body_sends_for_the_filter(self, author: Author) -> None:
-        """The kernel has one argument namespace, so a body key named like
-        the lookup's filter is that filter's value: the client's body sets
-        the scope a mutation may reach, where drfs read it off the query
-        string alone. Recorded here as the answer served today."""
-        request = factory.patch("/", {"name": "new", "scope": "someone-else"}, format="json")
-        response = _view(ServiceUpdateView, _update_spec(filter_set=_ByName))(
-            request, pk=str(author.pk)
-        )
+    @pytest.mark.xfail(
+        strict=True,
+        raises=AssertionError,
+        reason="open owner decision: on a mutation a body key sets the lookup's filter_set "
+        "scope, past a permission reading the query string",
+    )
+    def test_what_the_body_sends_for_the_filter(self) -> None:
+        """The kernel has one argument namespace, so a body key named like the
+        lookup's filter is that filter's value: the client's body picks the row
+        a mutation reaches, where drfs read the scope off the query string alone.
+        A permission class that checks ``?scope`` is then no guard, since the
+        body names another tenant's row. The safe answer, asserted here: the
+        body's ``scope`` does not choose the row, so ``?scope=mine`` finds none
+        (404) and the victim's row is unchanged."""
+        victim = Author.objects.create(name="victim")
+        view = type(
+            "_View",
+            (_StandIn, ServiceUpdateView),
+            {
+                "spec": _update_spec(filter_set=_ByName),
+                "permission_classes": [_ScopeIsMine],
+            },
+        ).as_view()
+        request = factory.patch("/?scope=mine", {"name": "pwned", "scope": "victim"}, format="json")
+        response = view(request, pk=str(victim.pk))
         assert response.status_code == 404
+        victim.refresh_from_db()
+        assert victim.name == "victim"
