@@ -1,16 +1,16 @@
-"""Registering a spec never needs the database, and what it cannot check there is checked at dispatch.
+"""Declaring and registering a kernel spec never needs the database.
 
-A spec declaring a read describes its input serializer as it compiles, to
-refuse a read named like a writable field. A spec registered at import,
-before ``migrate`` has made a table, may have a serializer whose fields query
-one, or look up a row that is not there yet; it is taken to declare no name,
-as a serializer reading a request no import has is, and registers. The
-refusal it could not make then is made when the call describes it.
+A kernel spec asks its Validator's ``parameters()`` when the spec's own are
+read, by a schema or a dispatch, and never as it is declared or registered.
+So a spec declared at import, before ``migrate`` has made a table, whose
+serializer's fields query one, look up a row that is not there yet or read a
+request no import has, registers; the refusal a description makes is made
+when the call describes it.
 
-A ``many`` spec reads its list bounds off the list serializer DRF builds for
-its input, which builds the row serializer too. One that cannot be built with
-no call registers with no bound of its own, and the list serializer that
-validates the call still holds the list to the bound it declares.
+A ``many`` spec's rows are bound by the list serializer DRF builds for its
+input, which builds the row serializer too. One that cannot be built with no
+call still registers, and the list serializer that validates the call holds the
+list to the bound it declares.
 """
 
 from __future__ import annotations
@@ -18,18 +18,16 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ImproperlyConfigured
 from django.db import connection
-from django_service_specs.specs.kernel_spec import kernel_spec
+from django_service_specs import Parameter, Parameters, ServiceSpec, SpecRegistry, Unrestricted
+from django_service_specs.dispatch.dispatch import dispatch
+from django_service_specs.parameters.invalid_arguments import InvalidArguments
+from django_service_specs.parameters.non_field_errors import NON_FIELD_ERRORS
 from rest_framework import serializers
-from rest_framework.exceptions import ValidationError
 
-from django_spec_rest import (
-    QueryParam,
-    ServiceSpec,
-    SpecRegistry,
-    dispatch_spec,
-)
+from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from tests.testapp.models import Tag
 
 FAILING: dict[str, str | None] = {"how": None}
@@ -45,11 +43,19 @@ _FAILURES: dict[str, Any] = {
     "missing-table": _missing_table,
     # A row no fixture has loaded yet: the model's ``DoesNotExist``.
     "missing-row": lambda: Tag.objects.get(name="absent"),
-    # The request a compile has not got, read three ways.
+    # The request a declaration has not got, read three ways.
     "attribute": lambda context: context["request"].user,
     "key": lambda context: context["absent"],
     "subscript": lambda context: context["request"]["user"],
 }
+
+
+def _fail(context: Any) -> None:
+    how = FAILING["how"]
+    if how in ("missing-table", "missing-row"):
+        _FAILURES[how]()
+    elif how is not None:
+        _FAILURES[how](context)
 
 
 class _FieldsFromTheDatabase(serializers.Serializer):
@@ -57,11 +63,7 @@ class _FieldsFromTheDatabase(serializers.Serializer):
 
     def get_fields(self) -> dict[str, serializers.Field]:
         fields = super().get_fields()
-        how = FAILING["how"]
-        if how in ("missing-table", "missing-row"):
-            _FAILURES[how]()
-        elif how is not None:
-            _FAILURES[how](self.context)
+        _fail(self.context)
         return fields
 
 
@@ -74,11 +76,7 @@ class _BuiltFromTheDatabase(serializers.Serializer):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
-        how = FAILING["how"]
-        if how in ("missing-table", "missing-row"):
-            _FAILURES[how]()
-        elif how is not None:
-            _FAILURES[how](self.context)
+        _fail(self.context)
 
 
 def _service(*, data: Any) -> Any:
@@ -89,24 +87,24 @@ def _rows(*, data: Any) -> Any:
     return list(data)
 
 
-def _many_spec() -> ServiceSpec[Any, Any, Any]:
+def _many_spec() -> ServiceSpec:
     return ServiceSpec(
         service=_rows,
-        input_serializer=_BuiltFromTheDatabase,
+        permissions=(Unrestricted(),),
+        validator=SerializerValidator(_BuiltFromTheDatabase),
         many=True,
-        permission_classes=[],
         atomic=False,
     )
 
 
-def _spec() -> ServiceSpec[Any, Any, Any]:
+def _spec() -> ServiceSpec:
     # A read named like the writable field ``title``: refused where the
     # serializer's fields can be read.
     return ServiceSpec(
         service=_service,
-        input_serializer=_FieldsFromTheDatabase,
-        reads=(QueryParam("title"),),
-        permission_classes=[],
+        permissions=(Unrestricted(),),
+        validator=SerializerValidator(_FieldsFromTheDatabase),
+        reads=Parameters.of(Parameter("title", "string")),
         atomic=False,
     )
 
@@ -126,21 +124,25 @@ def test_a_spec_whose_fields_cannot_be_read_without_a_call_registers(how: str) -
 
 
 @pytest.mark.django_db
-def test_with_its_fields_read_the_read_is_refused_at_registration() -> None:
-    with pytest.raises(ImproperlyConfigured, match="also takes as a writable field"):
-        SpecRegistry().register("titled", _spec())
+def test_with_its_fields_read_the_read_is_refused_by_its_parameters() -> None:
+    """The kernel reads a Validator's ``parameters()`` when the spec's are asked,
+    not when it is declared or registered, so the refusal is there."""
+    spec = _spec()
+    SpecRegistry().register("titled", spec)
+
+    with pytest.raises(ImproperlyConfigured, match=r"\['title'\] are declared by two sources"):
+        spec.parameters()
 
 
 @pytest.mark.django_db
-def test_registered_before_the_table_exists_it_is_refused_at_dispatch() -> None:
-    spec = _spec()
+def test_declared_before_the_table_exists_it_is_refused_at_dispatch() -> None:
     FAILING["how"] = "missing-table"
+    spec = _spec()
     SpecRegistry().register("titled", spec)
 
     FAILING["how"] = None
-    # The kernel's own refusal of a name two sources declare answers first.
     with pytest.raises(ImproperlyConfigured, match=r"\['title'\] are declared by two sources"):
-        dispatch_spec(spec, user=None, params={"title": "a"})
+        dispatch(spec, principal=AnonymousUser(), arguments={"title": "a"})
 
 
 @pytest.mark.django_db
@@ -152,15 +154,21 @@ def test_a_many_spec_whose_serializer_cannot_be_built_without_a_call_registers(h
 
 
 @pytest.mark.django_db
-def test_registered_before_the_table_exists_its_list_is_still_bounded() -> None:
-    spec = _many_spec()
+def test_declared_before_the_table_exists_its_list_is_still_bounded() -> None:
     FAILING["how"] = "missing-table"
+    spec = _many_spec()
     SpecRegistry().register("rows", spec)
 
     FAILING["how"] = None
-    # The compile registration kept has no bound, so the list serializer that
+    # The spec declares no bound of its own, so the list serializer that
     # validates the call is what refuses the third row.
-    assert kernel_spec(spec).many_max_length is None
+    assert spec.many_max_length is None
     rows = [{"title": "a"}, {"title": "b"}, {"title": "c"}]
-    with pytest.raises(ValidationError, match="no more than 2"):
-        dispatch_spec(spec, user=None, params=rows)
+    with pytest.raises(InvalidArguments) as excinfo:
+        dispatch(spec, principal=AnonymousUser(), arguments={"items": rows})
+    # The list serializer's own refusal, under the spec's ``many_argument``.
+    (message,) = excinfo.value.detail["items"][NON_FIELD_ERRORS]
+    assert (str(message), message.code) == (
+        "Ensure this field has no more than 2 elements.",
+        "max_length",
+    )
