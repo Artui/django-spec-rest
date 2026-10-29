@@ -78,8 +78,8 @@ release-bump:
 # a `… = "X.Y.Z"` line. `pyproject.toml` declares `dynamic = ["version"]` and
 # hatchling reads the value from `version.py` at build time, so there is one
 # source of truth.
-RELEASE_PACKAGE_NAME := djangorestframework-services
-RELEASE_VERSION_FILES := rest_framework_services/version.py|^__version__[^=]*= *
+RELEASE_PACKAGE_NAME := django-spec-rest
+RELEASE_VERSION_FILES := django_spec_rest/version.py|^__version__[^=]*= *
 
 release-publish:
 	@PACKAGE_NAME='$(RELEASE_PACKAGE_NAME)' \

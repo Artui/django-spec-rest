@@ -1,5 +1,5 @@
 [project]
-name = "djangorestframework-services"
+name = "django-spec-rest"
 dynamic = ["version"]
 description = "A service-oriented layer for Django REST Framework: precise, controllable side effects for mutating endpoints."
 requires-python = ">=3.10"
@@ -80,9 +80,9 @@ spectacular = ["drf-spectacular>=0.27,<1.0"]
 filter = ["django-filter>=23.1"]
 
 [project.urls]
-Homepage = "https://github.com/Artui/djangorestframework-services"
-Repository = "https://github.com/Artui/djangorestframework-services"
-Issues = "https://github.com/Artui/djangorestframework-services/issues"
+Homepage = "https://github.com/Artui/django-spec-rest"
+Repository = "https://github.com/Artui/django-spec-rest"
+Issues = "https://github.com/Artui/django-spec-rest/issues"
 
 [dependency-groups]
 dev = [
@@ -123,11 +123,11 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.version]
-path = "rest_framework_services/version.py"
+path = "django_spec_rest/version.py"
 pattern = "^__version__(?:\\s*:\\s*[A-Za-z][A-Za-z0-9_]*)?\\s*=\\s*[\"'](?P<version>[^\"']+)[\"']"
 
 [tool.hatch.build.targets.wheel]
-packages = ["rest_framework_services"]
+packages = ["django_spec_rest"]
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "tests.conftest_settings"
@@ -224,18 +224,18 @@ line-ending = "auto"
 root = ["./rest_framework_services"]
 
 # bump-my-version drives `make release-bump` — it rewrites the version in
-# rest_framework_services/version.py (the single source of truth; hatchling
+# django_spec_rest/version.py (the single source of truth; hatchling
 # picks it up at build time via [tool.hatch.version]) and promotes the
 # CHANGELOG [Unreleased] block under a new dated heading. Run via
 # `uvx bump-my-version` (no permanent dependency added to the project).
 [tool.bumpversion]
-current_version = "0.62.0"
+current_version = "0.0.0"
 allow_dirty = false
 commit = false
 tag = false
 
 [[tool.bumpversion.files]]
-filename = "rest_framework_services/version.py"
+filename = "django_spec_rest/version.py"
 search = '__version__: str = "{current_version}"'
 replace = '__version__: str = "{new_version}"'
 
@@ -248,6 +248,6 @@ replace = """## [Unreleased]
 
 [[tool.bumpversion.files]]
 filename = "CHANGELOG.md"
-search = "[Unreleased]: https://github.com/Artui/djangorestframework-services/compare/v{current_version}...HEAD"
-replace = """[Unreleased]: https://github.com/Artui/djangorestframework-services/compare/v{new_version}...HEAD
-[{new_version}]: https://github.com/Artui/djangorestframework-services/compare/v{current_version}...v{new_version}"""
+search = "[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v{current_version}...HEAD"
+replace = """[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v{new_version}...HEAD
+[{new_version}]: https://github.com/Artui/django-spec-rest/compare/v{current_version}...v{new_version}"""
