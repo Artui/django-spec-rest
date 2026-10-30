@@ -294,7 +294,7 @@ class SerializerValidator(Validator):
     def _walk(self) -> Parameters:
         """Every input field of the described serializer as a Parameter, seed-named ones included."""
         return input_parameters(
-            describe_serializer(self.serializer), registry=self.json_schema_registry
+            describe_serializer(self.serializer, self), registry=self.json_schema_registry
         )
 
     def validate(self, arguments: Mapping[str, Any], context: ValidationContext) -> dict[str, Any]:

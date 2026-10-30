@@ -82,25 +82,28 @@ fields do not subclass one another across rows, so the order matters only
 within the CharField family, which ends the string rows."""
 
 
-def describe_serializer(declaration: Any) -> serializers.Serializer:
+def describe_serializer(declaration: Any, validator: Any = None) -> serializers.Serializer:
     """The serializer ``declaration`` describes its fields with: the call's own, inside one.
 
     ``declaration`` is what a drfs spec's ``input_serializer`` takes: a
     ``Serializer`` subclass, or a dataclass, which is read through a
     ``DataclassSerializer`` exactly as dispatch validates it. Anything else is
-    refused with ``ImproperlyConfigured``.
+    refused with ``ImproperlyConfigured``. ``validator`` is the Validator
+    asking, whose ``serializer`` it is, or ``None`` for a reader that is no
+    Validator's.
 
-    Inside an edge call, the declaration of the edge's own spec is built once
-    for the call (``EdgeCallState.described``) and every description of the
-    call reads that one. It is built with the call's context - the call's
+    Inside an edge call, the declaration of the edge's own spec, read by one
+    of the edge's own Validators (``EdgeCallState.describing``), is built once
+    for the call (``EdgeCallState.described``) and every such description of
+    the call reads that one. It is built with the call's context - the call's
     request and view, its view's input layers and the Validator's
     ``serializer_context`` - so a ``get_fields`` reading
     ``self.context["request"]`` describes the fields the call validates with
     (test_a_live_view_scopes_the_field_to_the_caller), and with no body and no
     row, so one reading ``initial_data``, ``instance`` or ``partial`` reads
     none of the call's (the strict xfails of
-    test_the_input_serializer_is_built_once_per_call). Any other declaration,
-    and every one outside a call, as a schema or a registration describes it,
+    test_the_input_serializer_is_built_once_per_call). Any other Validator's,
+    the same declaration's included, and every one outside a call, as a schema or a registration describes it,
     is built unbound, with the context DRF builds on HTTP with no view and no
     request: a ``get_fields`` reading ``self.context["request"]`` finds the
     key and reads ``None``, rather than raising ``KeyError`` from a schema
@@ -112,13 +115,23 @@ def describe_serializer(declaration: Any) -> serializers.Serializer:
     description, which holds none of the call's seeds.
     """
     state = EDGE_CALL.get()
-    # Only the edge's own declaration reads the edge's request and view: one a
+    # Only the edge's own Validators read the edge's request and view: one a
     # kernel call inside the service describes, for whichever principal, is
-    # described as outside a call
-    # (test_a_kernel_call_for_another_principal_is_never_described_under_the_view_s_request).
-    # The edge sets ``declaration`` and ``describe_context`` together, so the
-    # middle condition holds no case of its own: it narrows the type.
-    if state is None or state.describe_context is None or state.declaration is not declaration:
+    # described as outside a call, another spec's
+    # (test_a_kernel_call_for_another_principal_is_never_described_under_the_view_s_request)
+    # and another spec's declaring the very serializer class, which the
+    # edge's description, scoped to the edge's request, would otherwise answer
+    # (test_a_kernel_call_of_another_spec_declaring_the_serializer_is_not_described_as_the_edge_s).
+    # The edge sets ``describing`` and ``describe_context`` together, so the
+    # middle condition holds no case of its own: it narrows the type. A kernel
+    # call of the edge's own spec reaches the edge's own Validator, and is
+    # described as the edge's: ``parameters()`` is asked with no principal
+    # and no call, so nothing here tells the two apart.
+    if (
+        state is None
+        or state.describe_context is None
+        or not any(validator is own for own in state.describing)
+    ):
         return bind_serializer(
             declaration, context=base_serializer_context(view=None, request=None)
         )
@@ -204,11 +217,11 @@ class EdgeCallState:
       annotated to fill, which no client's value becomes, declined or not:
       the Validator hands the client's value for one on in ``data`` alone
       (``provider_owned``).
-    - ``declaration``: the input serializer the edge's own spec declares, the
-      one ``describe_context`` is for: another a kernel call inside the
-      service describes is described as outside any call
-      (``describe_serializer``). Keyed by the declaration, so a kernel call
-      whose spec declares this same serializer reads the edge's description.
+    - ``describing``: the edge's own ``SerializerValidator``s, the spec's and
+      the recording twin's, a lenient copy for a form body, the ones
+      ``describe_context`` is for: another Validator a kernel call inside the
+      service describes is described as outside any call, one declaring the
+      same serializer included (``describe_serializer``).
     - ``describe_context``: builds the serializer context the call's input
       serializer is described with, its request, its view, the view's input
       layers and the spec's own context callable where the description can ask
@@ -227,7 +240,8 @@ class EdgeCallState:
       query string, the view's action and the Django request it copies, so the descriptions of one call with neither share one
       pair (``offline_pair``).
     - ``described``: the serializer the edge's own declaration is described
-      with in the call, built once (``describe_serializer``).
+      with in the call for the Validators in ``describing``, built once and
+      keyed by the declaration they share (``describe_serializer``).
 
     Mutable, so the edge can set it before the sync step it hops to a thread
     for and fill it there, and the Validator can fill it during the kernel's
@@ -242,7 +256,7 @@ class EdgeCallState:
     server_values: Mapping[str, Any] = dataclasses.field(default_factory=dict)
     author_keys: Mapping[str, str] = dataclasses.field(default_factory=dict)
     provider_owned: frozenset[str] = frozenset()
-    declaration: Any = None
+    describing: tuple[Any, ...] = ()
     describe_context: Callable[[], dict[str, Any]] | None = None
     base_context: tuple[Any, Any, dict[str, Any]] | None = None
     context_answers: dict[tuple[Any, ...], tuple[Any, Mapping[str, Any]]] = dataclasses.field(
@@ -370,7 +384,7 @@ def read_form_spellings(validator: Any, body: Any, flat: Mapping[str, Any]) -> d
     declares (test_a_spelling_its_field_does_not_read_is_an_unknown_argument).
     """
     read = dict(flat)
-    for name, field in describe_serializer(validator.serializer).fields.items():
+    for name, field in describe_serializer(validator.serializer, validator).fields.items():
         prefixes = (f"{name}.", f"{name}[")
         spellings = [key for key in flat if key.startswith(prefixes)]
         if not spellings:

@@ -22,7 +22,7 @@ from typing import Any
 
 import pytest
 from django.contrib.auth.models import User
-from django_service_specs import ServiceSpec, Unrestricted
+from django_service_specs import InvalidArguments, ServiceSpec, UnknownArguments, Unrestricted
 from django_service_specs.dispatch.dispatch import dispatch
 from django_service_specs.dispatch.present import present
 from rest_framework import serializers
@@ -115,8 +115,10 @@ class _KernelCreateView(ServiceCreateView):
         return [permission() for permission in self.permission_classes]
 
 
-def _create(spec: ServiceSpec, body: dict[str, Any], user: User, url: str = "/") -> Any:
-    request = _factory.post(url, body, format="json")
+def _create(
+    spec: ServiceSpec, body: dict[str, Any], user: User, url: str = "/", fmt: str = "json"
+) -> Any:
+    request = _factory.post(url, body, format=fmt)
     force_authenticate(request, user=user)
     return type("_View", (_KernelCreateView,), {"spec": spec}).as_view()(request)
 
@@ -156,6 +158,23 @@ def test_a_live_view_scopes_the_field_to_the_caller(
     assert seen == {"data": {"post": own_post}}
 
     refused = _create(spec, {"post": other_post.pk}, owner)
+    assert refused.status_code == 400
+    assert refused.data["post"][0].code == "does_not_exist"
+
+
+def test_a_live_view_scopes_the_field_to_the_caller_on_a_form_body(
+    owner: User, own_post: Post, other_post: Post
+) -> None:
+    """A form body is dispatched through a lenient copy of the spec's Validator,
+    which describes the serializer as the edge's own too, with the call's
+    request."""
+    seen: dict[str, Any] = {}
+    spec = _spec(_ScopedToTheCaller, seen)
+
+    assert _create(spec, {"post": own_post.pk}, owner, fmt="multipart").status_code == 204
+    assert seen == {"data": {"post": own_post}}
+
+    refused = _create(spec, {"post": other_post.pk}, owner, fmt="multipart")
     assert refused.status_code == 400
     assert refused.data["post"][0].code == "does_not_exist"
 
@@ -500,3 +519,60 @@ def test_a_kernel_call_of_another_spec_for_the_edge_s_own_principal_reads_none_o
     assert isinstance(outer_view, ServiceCreateView)
     assert inner_request.user == owner
     assert not isinstance(inner_view, ServiceCreateView)
+
+
+class _SecretToTheOwner(serializers.Serializer):
+    """A field only the owner's request declares; described with no request, it has none."""
+
+    title = serializers.CharField()
+
+    def get_fields(self) -> dict[str, Any]:
+        fields = super().get_fields()
+        request = self.context["request"]
+        if request is not None and request.user.username == "owner":
+            fields["secret"] = serializers.CharField(required=False)
+        return fields
+
+
+_ANOTHER_DECLARING_IT = ServiceSpec(
+    service=lambda *, title: None,
+    permissions=_OPEN,
+    validator=SerializerValidator(_SecretToTheOwner),
+    atomic=False,
+)
+
+_REFUSED: list[Any] = []
+
+
+def _dispatches_another_declaring_it(*, title: str) -> None:
+    other = User.objects.get(username="other")
+    try:
+        dispatch(
+            _ANOTHER_DECLARING_IT,
+            principal=other,
+            arguments={"title": "t", "secret": "s"},
+            unknown_arguments=UnknownArguments.REJECT,
+        )
+    except InvalidArguments as refused:
+        _REFUSED.append(refused)
+
+
+def test_a_kernel_call_of_another_spec_declaring_the_serializer_is_not_described_as_the_edge_s(
+    owner: User,
+) -> None:
+    """Another spec declaring the same serializer class, dispatched by the
+    service for another principal, is described as outside any call, never
+    with the edge's description, which the owner's request scoped: a field only
+    the owner declares is no parameter of that call."""
+    _REFUSED.clear()
+    User.objects.create(username="other")
+    spec = ServiceSpec(
+        service=_dispatches_another_declaring_it,
+        permissions=_OPEN,
+        validator=SerializerValidator(_SecretToTheOwner),
+        atomic=False,
+    )
+
+    assert _create(spec, {"title": "outer", "secret": "mine"}, owner).status_code == 204
+    (refused,) = _REFUSED
+    assert list(refused.detail) == ["secret"]

@@ -479,7 +479,17 @@ def _read_call(
     # call the service makes validates without them (``input_view_layers``).
     # The twin, not the spec's: a form body's is lenient, so another object
     # (test_the_directional_hook_layers_over_drf_s[multipart]).
-    edge_call_state().validator = getattr(dispatched, "validator", None)
+    state = edge_call_state()
+    state.validator = getattr(dispatched, "validator", None)
+    # And the one it describes its serializer through as the edge's own, beside
+    # the spec's, which described it while the twin was built
+    # (``describe_serializer``): a form body's twin is another object
+    # (test_a_live_view_scopes_the_field_to_the_caller_on_a_form_body). Only a
+    # serializer's: the check holds no case of its own, every caller handing
+    # ``describe_serializer`` its Validator, and keeps ``None``, the default
+    # it takes, out of the edge's own.
+    if isinstance(state.validator, SerializerValidator):
+        state.describing = (*state.describing, state.validator)
     arguments, held = kernel_arguments(
         dispatched, view=view, request=request, input_data=server, query=query
     )
@@ -491,7 +501,6 @@ def _read_call(
         # own test: test_a_view_hook_s_value_outranks_a_second_route_over_http
         # (the hooks') and test_input_data_outranks_a_second_route_over_http
         # (``input_data``'s, which ``recording_spec`` adds when it answers).
-        state = edge_call_state()
         state.server_values = dict(server)
         # A ``get_service_kwargs`` value named the parameter of its key, which
         # the Validator hands the value to as well (test_server_value_the_edge_put's
@@ -549,7 +558,11 @@ def _edge_state(
     return EdgeCallState(
         view_hooks=hooks,
         principal=request.user,
-        declaration=getattr(validator, "serializer", None),
+        # The spec's own, which describes the serializer before the twin is
+        # built (test_a_live_view_scopes_the_field_to_the_caller); the twin's
+        # joins it once built (``_read_call``). Only a serializer's, for the
+        # reason ``_read_call`` gives: the check holds no case of its own.
+        describing=(validator,) if isinstance(validator, SerializerValidator) else (),
         describe_context=describe_context,
     )
 
