@@ -120,9 +120,8 @@ class SerializerValidator(Validator):
     ``user``, or a key a ``validate()`` adds named ``result``, stays in
     ``validated_data`` as the serializer built it, and the service's ``user``
     is the call's principal, as drfs always handed them (see ``_unseeded``).
-    **So is a key named in** ``server_owned``, the names a callable of the call
-    marks ``NotClientInput``, which the compiled spec hands it: the client's
-    value is the service's in ``data`` alone, unless the edge put the server's
+    **So is a key named in** ``server_owned``, the names the caller declares
+    the server's: the client's value is the service's in ``data`` alone, unless the edge put the server's
     value into the field it comes from (see ``_unowned``). **Where the edge did,
     that field's validation of the value the edge put is the key's value**,
     validated on its own once the serializer has accepted the body, never read
@@ -193,8 +192,8 @@ class SerializerValidator(Validator):
         self.lenient = lenient
         self.excluded = excluded
         self.server_owned = server_owned
-        # The spec's, whose ``fields`` rules declare the fields they match
-        # (test_a_compiled_spec_s_input_fields_take_its_rules).
+        # Its ``fields`` rules declare the fields they match
+        # (test_a_spec_s_input_fields_take_the_validator_s_rules).
         self.json_schema_registry = json_schema_registry
         # The kernel reads this per instance: the answer belongs to the
         # declaration. A dataclass read through a DataclassSerializer, and a
@@ -211,17 +210,16 @@ class SerializerValidator(Validator):
         Read off ``describe_serializer``: inside an edge call, the serializer
         the call builds once and validates with, so a serializer that queries
         as it is built queries once in the call
-        (test_its_queries_run_once_off_http); outside one, a serializer built
+        (test_its_queries_run_once); outside one, a serializer built
         afresh for each read, as a schema or a registration reads it.
 
         A field named like a seed of the call is no parameter: one of the
-        dispatcher's own names (``RESERVED_POOL_SEEDS``,
-        test_a_writable_field_named_user_validates_off_http) and the
+        dispatcher's own names (``RESERVED_POOL_SEEDS``, the ``user`` case of
+        test_a_writable_field_named_like_a_seed_validates_into_data) and the
         ``serializer`` this Validator binds (``BOUND``,
         test_an_input_field_named_serializer_validates_into_data) always, and each of
-        ``excluded``, which the DRF edge compiles with the names the call's
-        registered seeds take
-        (test_a_writable_field_named_like_a_registered_seed_validates). The
+        ``excluded``, the names a caller's registered seeds take
+        (test_a_field_the_validator_excludes_is_unsendable_when_required). The
         kernel refuses a parameter a seed occupies, where a serializer was
         always free to declare such a field: the client sent its value, the
         serializer validated it into ``data``, and the seed kept its own. So
@@ -259,8 +257,7 @@ class SerializerValidator(Validator):
         - **Only what ``parameters()`` omits.** A field the Validator declares
           a parameter for is never named, even one a seed, a server argument or
           a call seed then fills: a field named like a *registered* seed is
-          one, since the compiled spec leaves ``excluded`` empty and only the
-          DRF edge's variant fills it. A required field called ``serializer``
+          one unless the caller names it in ``excluded``. A required field called ``serializer``
           or ``user`` is named.
         - **Required only.** An optional field, one with a default, a
           ``read_only`` field and a ``HiddenField`` are no input to require
@@ -271,7 +268,7 @@ class SerializerValidator(Validator):
           so a row's required ``user`` is named and a row's ``tenant`` is not
           (test_a_many_specs_row_fields_are_read_through_the_row_serializer).
         - **Not partial.** Whether a call may leave a required field out is
-          the compiled spec's ``partial``, not this attribute's question; it
+          the spec's ``partial``, not this attribute's question; it
           names the field whether or not the spec is partial
           (test_a_partial_spec_names_the_same_fields).
         - **Not ``lenient``.** The declaration relaxes what each parameter
@@ -280,7 +277,7 @@ class SerializerValidator(Validator):
 
         Computed on each read, from the serializer ``parameters()`` describes,
         for the reason ``parameters()`` is: a ``ModelSerializer`` cannot read
-        its model when specs are built. HTTP is unchanged: nothing in drfs reads it.
+        its model when specs are built.
         """
         seeded = self._seeded()
         # One branch to coverage, so each conjunct is held by its own test: a
@@ -350,11 +347,9 @@ class SerializerValidator(Validator):
         values = _values(data)
         # Each server value is its parameter's, whatever ``data`` became: a
         # ``validate()`` that dropped the key
-        # (test_a_key_validate_drops_still_reaches_the_parameter_off_http), a
-        # dataclass instance it rewrote
-        # (test_a_dataclass_validate_copy_never_reaches_the_parameter_off_http),
-        # or a dotted ``source``, which has no key of the field's own
-        # (test_a_dotted_fields_server_value_reaches_the_parameter_named_like_the_field_off_http).
+        # (test_a_key_validate_drops_still_reaches_the_parameter), a
+        # dataclass instance it rewrote, or a dotted ``source``, which has no
+        # key of the field's own.
         handed = _handed(serializer, held, author_keys(self))
         values.update(handed)
         values = _unseeded(values, context)
@@ -369,41 +364,35 @@ class SerializerValidator(Validator):
     ) -> dict[str, Any]:
         """``values`` less each ``server_owned`` key the client's input became.
 
-        A name a callable of the call marks ``NotClientInput`` is the server's
-        for the whole call, so the client's value for a field of that name is
+        A name in ``server_owned`` is the server's for the whole call, so the client's value for a field of that name is
         handed on in ``data`` alone and the parameter gets the server's value
-        or its default, as drfs always handed it
-        (test_a_client_value_for_a_hidden_parameter_stays_in_data). That holds
-        whatever made the key: a field's ``source``, a dataclass field, a
-        flattened ``source="*"`` field or a key ``validate()`` adds
-        (test_a_validated_key_named_like_a_hidden_parameter_stays_in_data).
+        or its default
+        (test_the_clients_value_for_an_owned_name_is_data_and_never_the_parameter).
+        That holds whatever made the key: a field's ``source``
+        (test_an_owned_name_owns_its_fields_source), a dataclass field, a
+        flattened ``source="*"`` field or a key ``validate()`` adds.
         So is a key the spec's typed ``kwargs`` provider is annotated to fill,
         declined or not, which no client's value becomes: whichever field the
         client's value came in through, its own name, a ``source`` naming the
         key, or a list, dict or nested field a form body fills through prefixed
         keys, the parameter keeps its default and ``data`` the client's value,
-        as 0.57.0 handed them
-        (test_a_declined_key_is_never_the_clients_over_http,
-        test_a_declined_key_is_never_the_clients_off_http).
+        (test_a_declined_owned_source_hands_its_parameter_none_of_the_clients_value,
+        test_a_key_the_typed_provider_owns_is_never_a_view_hook_s).
 
         The key stays a value where it is ``kept``: the name a field holding the
         server's value is handed under (``_handed``), whose value the edge put
         there - a view hook's, the spec's ``kwargs`` provider's or
         ``input_data``'s - and the field validated on its own (``_server_values``)
-        (test_a_hooks_value_for_a_hidden_field_reaches_the_parameter,
-        test_a_hooks_value_naming_a_hidden_fields_source_reaches_the_parameter,
-        test_input_data_for_a_hidden_field_reaches_the_parameter). Which field
-        that is, is read off where the value came from, never off whether it
-        equals the client's (test_a_hooks_value_equal_to_the_clients_is_still_the_servers).
-        A field the server named that never took the value, a read-only one,
-        keeps nothing
-        (test_input_data_for_a_read_only_field_holds_no_server_value_off_http),
-        and a flattened field keeps its own name alone, never a key it spreads
-        (test_a_server_value_for_a_flattened_field_keeps_none_of_the_keys_it_spreads).
-        What is kept is taken off after an owned name's ``source`` is added, so a
-        provider owning a wire name and filling its ``source`` keeps that
-        (test_a_source_the_provider_fills_is_kept_when_it_owns_the_wire_name_off_http,
-        which fails with the two steps the other way round).
+        (test_input_data_for_the_field_of_a_declined_source_reaches_its_parameter).
+        Which field that is, is read off where the value came from, never off
+        whether it equals the client's. A field the server named that never took
+        the value, a read-only one, keeps nothing
+        (test_input_data_for_a_read_only_field_with_a_default_holds_no_server_value),
+        and a flattened field keeps its own name alone, never a key it spreads.
+        What is kept is taken off after an owned name's ``source`` is added, so
+        the server's value for an owned name reaches its ``source``
+        (test_the_servers_value_for_an_owned_name_reaches_its_source, which
+        fails with the two steps the other way round).
         """
         owned = self.server_owned | provider_owned(self)
         owned = owned.union(*(_sources(serializer, name) for name in owned)).difference(kept)
@@ -466,17 +455,15 @@ def _server_values(serializer: serializers.Serializer, put: Mapping[str, Any]) -
     dict or a nested ``many`` reading a form's ``v.tenant`` or ``v[0]tenant``, a
     list falling back to them for an empty list, a field whose ``get_value``
     reads another key - would read the client's
-    (test_the_servers_value_is_the_one_put_however_the_field_reads_the_body_off_http,
-    test_a_field_reading_another_key_validates_the_value_put_off_http), and a
-    ``to_internal_value`` override can write the client's value over the
-    field's in the body it validates
-    (test_a_to_internal_value_override_never_hands_the_parameter_the_clients_value_off_http).
+    (test_input_data_is_the_value_put_however_the_field_reads_a_json_body,
+    test_a_field_reading_another_key_validates_the_value_put_under_ignore), and
+    a ``to_internal_value`` override can write the client's value over the
+    field's in the body it validates.
     A field named like a seed of the call is no argument, but its value is the
     server's all the same
-    (test_input_data_for_a_field_named_like_a_registered_seed_outranks_the_clients_off_http).
+    (test_input_data_for_a_field_named_user_outranks_the_clients_over_http).
     The walk is over the serializer's fields, so a name that is no field of the
-    serializer is never visited and holds nothing
-    (test_input_data_naming_no_field_keeps_nothing); a field the edge put no
+    serializer is never visited and holds nothing; a field the edge put no
     value for is passed over by the ``name not in put`` check, without which
     the walk reads a key that is not there. Nor does a read-only field hold
     one, which takes no value in DRF's loop
@@ -492,27 +479,23 @@ def _server_values(serializer: serializers.Serializer, put: Mapping[str, Any]) -
     server's value for the field wherever the call reads it (``_handed``,
     ``_lay_back``), whatever the serializer's own pass did with the key: a
     later field of the same ``source``, a ``source="*"`` nested serializer, a
-    ``validate()`` copying or dropping it, or the field's validation run again
-    on another value
-    (test_a_reuse_of_the_fields_validation_is_not_the_servers_value_off_http).
+    ``validate()`` copying or dropping it
+    (test_a_view_hook_s_value_outranks_a_second_route_over_http), or the
+    field's validation run again on another value.
     It runs after the serializer has accepted the body, so a refusal of the
-    client's input is the answer, as the serializer gave it
-    (test_a_refusal_of_the_clients_input_is_answered_before_the_servers_value_is_validated),
-    and it is separate from the serializer's pass: the field's validation runs
+    client's input is the answer, as the serializer gave it, and it is separate from the serializer's pass: the field's validation runs
     once more for the server's value, so a related field queries once more, a
     validator that queries (``UniqueValidator``) queries once more, and a
     ``validate_<field>`` runs once more, as do a nested serializer's
-    ``validate()`` and its own fields' ``validate_<field>``
-    (test_a_server_value_for_a_nested_serializer_runs_its_validation_twice).
+    ``validate()`` and its own fields' ``validate_<field>``.
 
     Answered as the loop answers its fields: each refusal, DRF's
     ``ValidationError``
-    (test_a_server_value_its_field_refuses_is_refused_in_drfs_words_off_http)
+    (test_a_server_value_its_field_refuses_is_a_400_keyed_by_the_field)
     or Django's from ``validate_<field>``
     (test_a_django_refusal_of_the_server_value_is_answered_as_drfs_loop_answers_it),
     is keyed by its field in DRF's shape, every refused field in one
-    ``DRFInvalidArguments``, in the serializer's field order
-    (test_every_server_value_its_field_refuses_is_answered_together), and a
+    ``DRFInvalidArguments``, in the serializer's field order, and a
     field that skips - a partial call's ``HiddenField`` - holds nothing (the
     ``get_input_data-partial`` case of
     test_a_hidden_field_takes_its_default_whatever_the_server_or_the_client_puts).
@@ -520,9 +503,7 @@ def _server_values(serializer: serializers.Serializer, put: Mapping[str, Any]) -
     fields = serializer.fields
     held: dict[str, Any] = {}
     errors: dict[str, Any] = {}
-    # In the serializer's field order, as DRF's loop answers its refusals
-    # (test_every_server_value_its_field_refuses_is_answered_together asserts
-    # the order the keys come back in).
+    # In the serializer's field order, as DRF's loop answers its refusals.
     for name, field in fields.items():
         if name not in put or field.read_only:
             continue
@@ -567,22 +548,20 @@ def _handed(
     """Each value of ``held``, by the names its field's value is handed to a parameter under.
 
     A field's ``source`` where it is one key, as ``validated_data`` keys it
-    (test_a_hooks_value_naming_a_hidden_fields_source_reaches_the_parameter).
+    (test_a_kwargs_value_named_like_a_source_is_the_service_s).
     Any other field's value has no key of its own in ``data``, so it is
     handed under the field's name, which is the name the author gave it, as
     0.57.0 handed a hook's: a dotted ``source``, nested in ``data``
-    (test_a_dotted_fields_server_value_reaches_the_parameter_named_like_the_field_off_http),
-    and a ``source="*"`` field, spread into the serializer's own keys
-    (test_a_flattened_fields_server_value_reaches_the_parameter_named_like_the_field_off_http).
+    (test_a_dotted_fields_server_value_reaches_the_parameter_named_like_the_field,
+    which fails with any non-empty ``source`` read as one key), and a
+    ``source="*"`` field, spread into the serializer's own keys.
 
     A view hook or the spec's ``kwargs`` provider naming a field by a key that
     is not its ``source`` - its wire name, where the ``source`` differs -
     named the parameter of that key too, which 0.57.0 handed the value, so it
     is handed under that key as well
-    (test_an_author_value_by_wire_name_reaches_the_parameter_of_that_name_off_http,
-    whose ``without-default`` cases fail without it), and a value named by its
-    ``source`` is handed under that alone
-    (test_an_author_value_by_source_reaches_the_parameter_of_that_name_alone). ``input_data`` names the
+    (test_a_get_service_kwargs_value_by_wire_name_reaches_the_parameter_of_that_name),
+    and a value named by its ``source`` is handed under that alone. ``input_data`` names the
     body's keys, never a parameter, so it is handed by ``source`` alone
     (test_input_data_by_wire_name_leaves_the_parameter_of_that_name_its_default).
     """
@@ -601,12 +580,9 @@ def _sources(serializer: serializers.Serializer, name: str) -> tuple[str, ...]:
     A field's own name and its ``source`` are one value under two names: the
     client sends ``tenant``, the service is handed ``org``. So a key owned by
     the field's name owns its ``source`` too, and the client's value reaches
-    neither parameter (test_a_declined_owned_name_hands_neither_parameter_the_clients_value_off_http,
-    test_a_client_value_for_a_hidden_wire_name_reaches_neither_parameter). A
+    neither parameter (test_an_owned_name_owns_its_fields_source). A
     dotted ``source`` owns the key its value is nested under, as 0.57.0 left
-    that parameter its default
-    (test_an_owned_wire_name_over_a_dotted_source_owns_the_key_it_nests_under),
-    and no deeper one, which another field may take from the client
+    that parameter its default, and no deeper one, which another field may take from the client
     (test_a_dotted_source_owns_the_key_it_nests_under_and_no_deeper_one, which
     fails without the slice).
     A name no field has adds none
@@ -623,8 +599,8 @@ def _lay_back(data: Any, serializer: serializers.Serializer, held: Mapping[str, 
     So the server's value for a field is that field's value in the call's
     ``data`` and the bound serializer's ``validated_data``, which ``data`` is,
     as it is for the service's parameter (``_handed``)
-    (test_the_servers_value_outranks_a_second_route_off_http and its HTTP and
-    form-body twins). A dotted ``source`` is written where it nests
+    (test_a_view_hook_s_value_outranks_a_second_route_over_http and its
+    form-body and either-core twins). A dotted ``source`` is written where it nests
     (test_a_dotted_source_is_laid_back_where_it_nests), and not at all where a
     ``validate()`` replaced the nesting with something other than a mapping
     (test_a_dotted_source_a_validate_replaced_is_left_as_built).
@@ -634,13 +610,11 @@ def _lay_back(data: Any, serializer: serializers.Serializer, held: Mapping[str, 
     something other than a mapping is the call's as built, a ``validate()``
     rewriting the instance included, while the parameter still takes the
     field's value
-    (test_a_dataclass_input_holds_the_servers_value_its_field_validated,
-    test_a_dataclass_validate_copy_never_reaches_the_parameter_off_http), a
+    (test_a_dataclass_input_holds_the_servers_value_its_field_validated), a
     key the serializer no longer holds - a ``validate()`` moved it - is not put
     back, though the parameter still takes it
     (test_a_key_validate_removed_is_not_put_back), and a ``source="*"``
-    field has no key of its own
-    (test_a_server_value_for_a_flattened_field_keeps_none_of_the_keys_it_spreads).
+    field has no key of its own.
     """
     for name, value in held.items():
         # A ``source="*"`` field's ``source_attrs`` are empty; ``None`` is no
@@ -680,11 +654,11 @@ def _unseeded(values: Mapping[str, Any], context: ValidationContext) -> dict[str
     name. So such a key is handed on in ``data`` alone, and the seed is never
     replaced. Each part of the set is held by the test that fails without it:
     ``RESERVED_POOL_SEEDS`` by
-    test_a_key_a_validate_adds_named_like_a_seed_stays_in_data (``result`` is
+    test_keys_a_validate_adds_named_like_seeds_stay_in_data (``result`` is
     no seed of the call's base pool), the call's own seeds by
-    test_a_key_named_like_a_registered_seed_stays_in_data, and ``serializer``,
-    which this Validator binds for the call, by
-    test_a_key_a_validate_adds_named_like_the_bound_serializer_stays_in_data.
+    test_a_key_a_validate_adds_named_like_a_registered_seed_stays_in_data, and
+    ``serializer``, which this Validator binds for the call, by
+    test_an_input_field_named_serializer_validates_into_data.
     """
     seeded = RESERVED_POOL_SEEDS | context.ambient.keys() | BOUND
     return {name: value for name, value in values.items() if name not in seeded}

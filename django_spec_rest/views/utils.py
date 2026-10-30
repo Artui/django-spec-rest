@@ -44,7 +44,7 @@ def resolve_extra_kwargs(
     """
     extras: dict[str, Any] = {}
     # The request's one dict, for every layer. Its hand-off to the two view
-    # hooks is held by test_a_create_hands_every_provider_the_request_s_context.
+    # hooks is held by test_every_viewset_hook_naming_the_call_context_is_handed_the_view_s_dict.
     context = view_call_context(view, request)
     catch_all = getattr(view, catch_all_hook, None)
     if catch_all is not None:
@@ -82,7 +82,7 @@ def resolve_input_extras(
     payload: Mapping[str, Any] = extras if extras is not None else {}
     collected: dict[str, Any] = {}
     # As in ``resolve_extra_kwargs``: the hand-off is held by
-    # test_a_create_hands_every_provider_the_request_s_context.
+    # test_every_viewset_hook_naming_the_call_context_is_handed_the_view_s_dict.
     context = view_call_context(view, request)
     catch_all = getattr(view, catch_all_hook, None)
     if catch_all is not None:
@@ -108,12 +108,11 @@ def view_call_context(view: Any, request: Request) -> dict[str, Any]:
     Built on first use with the edge's four standard entries (``request``,
     ``view``, ``format``, the route's suffix or ``None``, and the view's
     ``action`` or ``None``) and kept on the view, which DRF builds afresh for every request, so a second request
-    is a second dict (test_each_request_is_a_call_of_its_own). Kept rather than
+    is a second dict (test_each_request_is_a_dict_of_its_own). Kept rather than
     rebuilt: a dict per caller fails the identity assertions of
-    test_a_create_hands_every_provider_the_request_s_context. Two dispatches in
-    one request, the retrieve spec finding an update's row and then the update
-    spec, are one call and share it
-    (test_an_update_and_the_retrieve_that_finds_its_row_share_the_request_s_dict).
+    test_every_callable_of_a_kernel_service_is_handed_the_view_s_dict. Two
+    dispatches in one request, the retrieve spec finding an update's row and
+    then the update spec, are one call and share it.
 
     A view hands this object to the kernel's ``dispatch`` as its ``call_context=`` and
     to ``render_spec_output``, so the spec's own callables are offered it as
@@ -132,7 +131,7 @@ def view_call_context(view: Any, request: Request) -> dict[str, Any]:
     declaring a ``call_context`` parameter is handed this dict, and one taking
     ``**kwargs`` alone never is, so its keys, and a serializer context built
     from them, carry no ``call_context``
-    (test_a_catch_all_callable_on_a_live_view_is_never_handed_the_call_context).
+    (test_a_view_hook_taking_kwargs_alone_is_never_handed_the_call_context).
     ``success_status`` and ``response_finalizer`` are not offered it, and one
     declaring it is refused when the view is built, by
     ``validate_mutation_view_spec``: a standalone mutation view's over its
@@ -173,14 +172,13 @@ def _invoke_provider(
     ``call_context`` is the request's dict (``view_call_context``), the one
     object the edge hands its own stages; every caller in the package passes
     it, so a provider naming it is answered on every view
-    (tests/test_transport_parity.py's live-view cases). Left out, the pool has
+    (test_every_viewset_hook_naming_the_call_context_is_handed_the_view_s_dict). Left out, the pool has
     no such name. It is offered by name only, through the kernel's binder
     rather than ``resolve_callable_kwargs``, so a provider taking ``**kwargs``
     sees the keys it always did
-    (test_a_catch_all_callable_on_a_live_view_is_never_handed_the_call_context
-    fails with the local binder) and one naming it beside ``**kwargs`` is
-    handed it
-    (test_a_catch_all_hook_naming_the_call_context_is_handed_the_request_s_dict).
+    (test_a_view_hook_taking_kwargs_alone_is_never_handed_the_call_context
+    fails with the local binder) and one naming it is handed it
+    (test_every_viewset_hook_naming_the_call_context_is_handed_the_view_s_dict).
 
     A returned key whose value is ``UNSET`` is
     **dropped** — the provider is declining to set it rather than setting it to
@@ -223,9 +221,8 @@ def layer_serializer_context(
     """
     payload: Mapping[str, Any] = extras if extras is not None else {}
     # The request's one dict, the object the edge handed its own stages. Each
-    # layer's hand-off is held: the directional hook's by
-    # test_a_selector_action_hands_its_providers_the_request_s_context and the
-    # action hook's by test_a_selector_viewset_hands_its_providers_the_request_s_context.
+    # layer's hand-off, the directional hook's and the action hook's, is held
+    # by test_every_viewset_hook_naming_the_call_context_is_handed_the_view_s_dict.
     call: dict[str, Any] = view_call_context(view, request)
     context: dict[str, Any] = dict(base)
     direction = getattr(view, direction_hook, None)
@@ -299,9 +296,9 @@ def resolve_progress_hook(view: Any, request: Request, *, action: str | None) ->
     (``view_call_context``), and one taking ``**kwargs`` alone is not.
     """
     # The request's dict, offered by name only through the kernel's binder.
-    # test_a_progress_hook_naming_the_call_context_is_handed_the_request_s_dict
-    # fails without the entry, and
-    # test_a_catch_all_progress_hook_is_never_handed_the_call_context with the
+    # test_every_viewset_hook_naming_the_call_context_is_handed_the_view_s_dict
+    # fails without the entry, and the ``get_progress_reporter`` case of
+    # test_a_view_hook_taking_kwargs_alone_is_never_handed_the_call_context with the
     # local binder.
     pool: dict[str, Any] = {
         "view": view,

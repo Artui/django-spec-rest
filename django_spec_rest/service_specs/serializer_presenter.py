@@ -192,8 +192,8 @@ class SerializerPresenter(Presenter):
         self.serializer_context = serializer_context
         self.value_keyword = value_keyword
         self.shaped = shaped
-        # The spec's, whose ``fields`` rules declare the fields they match
-        # (test_a_compiled_spec_s_output_fields_take_its_rules).
+        # Its ``fields`` rules declare the fields they match
+        # (test_a_spec_s_output_fields_take_the_presenter_s_rules).
         self.json_schema_registry = json_schema_registry
 
     def output(self) -> Output:

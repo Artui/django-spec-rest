@@ -1,9 +1,8 @@
 """The kernel route's edge: the predicate, and its sync and async cores agreeing.
 
-``tests/test_sync_async_parity.py`` holds the drfs cores against each other;
-the kernel route's pair is held here the same way, each case driven through
-``dispatch_kernel_spec`` and ``adispatch_kernel_spec`` with one outcome
-expected, and the two signatures compared.
+Each case is driven through ``dispatch_kernel_spec`` and
+``adispatch_kernel_spec`` with one outcome expected, and the two signatures
+are compared.
 """
 
 from __future__ import annotations

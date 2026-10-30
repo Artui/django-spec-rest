@@ -99,7 +99,7 @@ def resolve_action_spec(view: Any, action: str | None) -> ActionSpec | None:
     ``handle_exception`` would re-raise it and every OPTIONS request (CORS
     preflights included) would 500 before permissions are evaluated. So is the
     ``action is None`` check, for a method the action map does not route: held
-    by test_a_method_the_viewset_does_not_route_is_refused_rather_than_crashing.
+    by the ``None`` case of test_a_kernel_entry_resolves_to_the_view_s_serializer_class.
     """
     spec = resolve_action_spec_entry(view.action_specs, action)
     if spec is not None or action is None:
