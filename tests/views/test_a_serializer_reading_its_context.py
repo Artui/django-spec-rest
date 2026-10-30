@@ -329,3 +329,21 @@ def test_a_kernel_call_inside_the_service_presents_every_row_under_one_offline_r
 
 def _spec_of(service: Any) -> ServiceSpec:
     return ServiceSpec(service=service, permissions=_OPEN, atomic=False)
+
+
+def test_a_kernel_call_for_another_principal_is_presented_under_its_own_offline_request(
+    owner: User,
+) -> None:
+    """Two kernel calls the service makes with one arguments object, for two
+    principals: each is presented under an offline request for its own, so a
+    serializer reading ``request.user`` never reads the other's."""
+    _PRESENTED_UNDER.clear()
+    other = User.objects.create(username="other")
+    arguments: dict[str, Any] = {}
+
+    def service(*, data: Any) -> None:
+        for principal in (owner, other):
+            present(_ROWS, dispatch(_ROWS, principal=principal, arguments=arguments))
+
+    assert _create(_spec_of(service), {}, owner).status_code == 204
+    assert [request.user for request in _PRESENTED_UNDER] == [owner, owner, other, other]

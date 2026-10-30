@@ -748,8 +748,10 @@ def offline_pair(
     with the offline pair its serializer is built with, so its context
     callable, handed the same pair, is asked once for them all
     (test_a_kernel_call_inside_the_service_presents_every_row_under_one_offline_request,
-    which fails if no pair is reused). Reused only for the same principal and
-    the same arguments, which the request carries as its data.
+    which fails if no pair is reused). Reused only for the same principal
+    (test_a_kernel_call_for_another_principal_is_presented_under_its_own_offline_request,
+    which fails without it) and the same arguments, which the request carries
+    as its data.
 
     ``shapes`` are the request's query string, stringified as
     ``build_offline_context(query_params=)`` stringifies a value, and so a
