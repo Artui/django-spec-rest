@@ -80,6 +80,7 @@ from rest_framework import serializers
 
 from django_spec_rest import ServiceCreateView
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
+from lines.models import Line
 
 
 def create_lines(*, data):
