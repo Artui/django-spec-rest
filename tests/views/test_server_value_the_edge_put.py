@@ -14,13 +14,10 @@ A field named like a seed of the call is the serializer's alone, and
 ``validate()`` all hold the server's value, while the service's parameter of
 that name stays the seed's.
 
-The spec's untyped ``kwargs`` provider fills a service keyword and never the
-Validator, so its value for a field's name reaches the parameter alone, the
-client's value validating into ``data``. That answer is held by
-``test_a_kwargs_value_named_like_a_field_is_the_service_s_alone`` in
-``tests/service_specs/``, and drfs' answer, the provider's value laid into the
-body too, waits on where the view's hooks map; only the wire-name half, which
-parameter the provider's value reaches, is asserted here.
+The spec's ``kwargs`` provider fills a service keyword and never the
+Validator, so over HTTP its answer naming a field's wire name is refused on the
+request that gets it (``test_a_kwargs_value_named_like_a_field_is_refused`` in
+``tests/service_specs/``); the wire-name case is asserted here too.
 
 Two answers part from drfs because of how the kernel route reads a body. A
 form body's prefixed keys (``v.tenant``) are no parameter to the kernel's flat
@@ -38,6 +35,7 @@ from typing import Any
 
 import pytest
 from django.contrib.auth.models import User
+from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import ServiceSpec, UnknownArguments
 from rest_framework import serializers
 from rest_framework.fields import empty
@@ -371,33 +369,18 @@ def _with_default(seen: dict[str, Any]) -> Callable[..., None]:
     return service
 
 
-def _without_default(seen: dict[str, Any]) -> Callable[..., None]:
-    def service(*, data: Any, tenant: str) -> None:
-        seen.update(tenant=tenant, data=data.get("tenant_id"))
-
-    return service
-
-
-_DEFAULTED = pytest.mark.parametrize(
-    "service_for", [_with_default, _without_default], ids=["with-default", "without-default"]
-)
-
-
 @FORMATS
-@_DEFAULTED
-def test_the_providers_value_by_wire_name_reaches_the_parameter_of_that_name(
-    fmt: str, service_for: Callable[..., Any]
-) -> None:
-    """The author named the parameter, so the provider's ``tenant`` is the
-    service's ``tenant``, defaulted or not. What ``data`` holds is
-    ``test_a_kwargs_value_named_like_a_field_is_the_service_s_alone``'s."""
+def test_the_providers_value_by_wire_name_is_refused(fmt: str) -> None:
+    """The wire name is a parameter of the Validator, so the provider's value
+    would reach the service unvalidated: the request is refused, pointing at
+    ``input_data``, the seat that fills a field."""
     seen: dict[str, Any] = {}
-    spec = _spec(service_for(seen), _Sourced, kwargs=lambda: {"tenant": "srv"})
+    spec = _spec(_with_default(seen), _Sourced, kwargs=lambda: {"tenant": "srv"})
 
-    response = post(spec, {"tenant": "evil"}, fmt=fmt)
+    with pytest.raises(ImproperlyConfigured, match="ServiceSpec.input_data"):
+        post(spec, {"tenant": "evil"}, fmt=fmt)
 
-    assert response.status_code == 204, response.data
-    assert seen["tenant"] == "srv"
+    assert seen == {}
 
 
 @FORMATS

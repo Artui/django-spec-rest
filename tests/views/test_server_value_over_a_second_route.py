@@ -30,9 +30,9 @@ no reader on a kernel spec (a typed provider owning a key is its spelling,
 ``test_a_typed_provider_owning_a_wire_name``); and the query counts of validating a related field's server value twice, which
 measure drfs' second validation and have no counterpart while the gap stands.
 The ``kwargs`` provider's value outranking the Validator's for the service's
-parameter is ``test_author_values_outrank_the_validator``'s, and its value never
-reaching ``data`` is ``test_a_kwargs_value_named_like_a_field_is_the_service_s_alone``'s
-(``tests/service_specs/``).
+parameter is ``test_author_values_outrank_the_validator``'s, and its value
+named like a field's wire name, refused over HTTP, is
+``test_a_kwargs_value_named_like_a_field_is_refused``'s (``tests/service_specs/``).
 
 Also not ported, each for the reason beside it:
 
@@ -58,6 +58,7 @@ from collections.abc import Callable
 from typing import Any
 
 import pytest
+from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import ServiceSpec, UnknownArguments
 from rest_framework import serializers
 
@@ -222,17 +223,15 @@ def _authored() -> dict[str, Any]:
 
 
 @CORES
-def test_input_data_and_the_provider_naming_one_field_split_its_value(core: Core) -> None:
-    """Two author values for one field. drfs made ``input_data``'s the field's
-    everywhere; the kernel hands each seat its own: ``input_data``'s value is
-    what the field validated, in ``data`` and ``validated_data``, and the
-    ``kwargs`` provider's, merged into the service's pool after the Validator,
-    is the parameter's."""
+def test_a_provider_naming_the_field_input_data_fills_is_refused(core: Core) -> None:
+    """``input_data`` is the seat that fills a field. A ``kwargs`` answer naming
+    the same wire name would reach the service unvalidated, so it is refused."""
     seen: dict[str, Any] = {}
 
-    core(_spec(_plain(seen), _Alias, input_data=_server, kwargs=_authored), {})
+    with pytest.raises(ImproperlyConfigured, match="ServiceSpec.input_data"):
+        core(_spec(_plain(seen), _Alias, input_data=_server, kwargs=_authored), {})
 
-    assert seen == {"tenant": "authored", "data": "server", "validated": "server"}
+    assert seen == {}
 
 
 class _Shouting(_Alias):

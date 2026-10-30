@@ -139,7 +139,7 @@ def test_a_declined_owned_source_hands_its_parameter_none_of_the_clients_value_o
 @FORMATS
 def test_a_filled_owned_source_is_the_providers_value_in_data_too(fmt: str) -> None:
     """A typed provider owning a ``source`` no field is named for: a key named
-    like a field is ``test_a_kwargs_value_named_like_a_field_is_the_service_s_alone``'s
+    like a field is ``test_a_kwargs_value_named_like_a_field_is_refused``'s
     (``tests/service_specs/``), and this case waits on the same decision."""
     seen: dict[str, Any] = {}
 

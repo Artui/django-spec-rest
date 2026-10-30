@@ -1,8 +1,10 @@
-"""``recording_spec`` - a kernel spec whose ``input_data`` records its answer for the seed-named fields.
+"""``recording_spec`` - the twin of a kernel spec the HTTP edge dispatches in its place.
 
 The kernel route (``dispatch/kernel_edge.py``) dispatches it in the spec's
-place, so the serializer binds the provider's value for a field the kernel
-never hands a Validator (``seed_named_fields``).
+place. Its ``input_data`` records its answer for the seed-named fields, so the
+serializer binds the provider's value for a field the kernel never hands a
+Validator (``seed_named_fields``), and its ``kwargs`` refuses an answer naming a
+field's wire name, which would reach the service unvalidated.
 """
 
 from __future__ import annotations
@@ -13,11 +15,13 @@ import weakref
 from collections.abc import Callable, Mapping
 from typing import Any, cast
 
+from django.core.exceptions import ImproperlyConfigured
 from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelectorSpec
 from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
 from django_service_specs.types.unset import UNSET
 
 from django_spec_rest.service_specs.seed_named_fields import seed_named_fields
+from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from django_spec_rest.service_specs.utils import edge_call_state
 
 KernelSpec = KernelServiceSpec | KernelSelectorSpec
@@ -42,7 +46,12 @@ _LOCK = threading.Lock()
 
 
 def recording_spec(spec: KernelSpec) -> KernelSpec:
-    """``spec``, or its twin whose ``input_data`` records its answer for the seed-named fields.
+    """``spec``, or its twin whose providers the edge watches.
+
+    Two seats, each wrapped only where it has something to watch:
+    ``input_data``, which records its answer for the seed-named fields, and
+    ``kwargs``, whose answer naming a parameter of a ``SerializerValidator``
+    is refused (``_refuse_parameters``).
 
     The kernel hands a Validator only the ``input_data`` keys its
     ``parameters()`` declare, and a seed-named field is none of them, so the
@@ -65,10 +74,11 @@ def recording_spec(spec: KernelSpec) -> KernelSpec:
     may query (test_the_async_core_builds_the_twin_off_the_loop).
 
     Built once per spec and set of names, since ``derive`` re-runs the spec's
-    checks. Only a single-object service spec with a provider and a
-    seed-named field has one; the kernel refuses an ``async`` provider when
+    checks. Only a single-object service spec with a ``kwargs`` provider over
+    a ``SerializerValidator``, or an ``input_data`` provider and a seed-named
+    field, has one; the kernel refuses an ``async`` provider when
     the spec is built, so the wrapper is sync alone. The twin shares every
-    seat but the provider, so presenting the result through the view's own
+    seat but those two, so presenting the result through the view's own
     spec is unchanged. A kernel ``Grant`` covers a call only for the spec it
     was minted for, by identity, so a caller passing one must mint it for, or
     compare it against, the twin.
@@ -77,10 +87,21 @@ def recording_spec(spec: KernelSpec) -> KernelSpec:
     # ``many`` spec by test_kernel_edge's
     # test_a_spec_with_nothing_to_record_is_dispatched_as_it_is, which also
     # holds a spec with no provider and one with no seed-named field.
-    if not isinstance(spec, KernelServiceSpec) or spec.many or spec.input_data is None:
+    if not isinstance(spec, KernelServiceSpec) or spec.many:
         return spec
-    names = seed_named_fields(spec.validator)
-    if not names:
+    changes: dict[str, Any] = {}
+    names = frozenset[str]()
+    if spec.input_data is not None:
+        names = seed_named_fields(spec.validator)
+        if names:
+            changes["input_data"] = _recording(spec.input_data, names)
+    # One arc to coverage, so each conjunct is named: a spec with no ``kwargs``
+    # provider by test_a_spec_with_nothing_to_record_is_dispatched_as_it_is,
+    # and a Validator that is no serializer's, which declares what it takes
+    # itself, by test_another_validator_s_kwargs_provider_is_not_checked.
+    if spec.kwargs is not None and isinstance(spec.validator, SerializerValidator):
+        changes["kwargs"] = _refusing_parameters(spec.kwargs, spec.validator)
+    if not changes:
         return spec
     key = id(spec)
     with _LOCK:
@@ -97,8 +118,54 @@ def recording_spec(spec: KernelSpec) -> KernelSpec:
             )
         twin = held[1].get(names)
         if twin is None:
-            twin = held[1][names] = spec.derive(input_data=_recording(spec.input_data, names))
+            twin = held[1][names] = spec.derive(**changes)
     return twin
+
+
+def _refusing_parameters(provider: Callable[..., Any], validator: SerializerValidator) -> Any:
+    @functools.wraps(provider)
+    def refusing(*args: Any, **kwargs: Any) -> Any:
+        answer = provider(*args, **kwargs)
+        _refuse_parameters(provider, answer, validator)
+        return answer
+
+    return refusing
+
+
+def _refuse_parameters(
+    provider: Callable[..., Any], answer: Any, validator: SerializerValidator
+) -> None:
+    """Refuse ``answer`` where it names a parameter of ``validator``, a field's wire name.
+
+    The kernel merges a ``kwargs`` provider's answer into the service's pool
+    alone, after the Validator, so a value under a field's wire name reaches
+    the service unvalidated, where drfs validated it as the field's: another
+    user's primary key under a queryset scoped to the caller was taken. The
+    kernel refuses a typed provider annotated to fill such a key when the spec
+    is built; an untyped one shows its keys only when it is called, so the
+    first request answering one is refused, loudly, as the author's error
+    (test_a_kwargs_value_named_like_a_field_is_refused). A key it declines
+    with ``UNSET`` names nothing (test_a_declined_wire_name_is_not_refused),
+    and a key named like a field's ``source`` is no parameter, so it stays the
+    service's (test_a_kwargs_value_named_like_a_source_is_the_service_s). An
+    answer that is no mapping is left for the kernel to refuse in its own words
+    (test_a_kwargs_answer_that_is_no_mapping_is_the_kernel_s_to_refuse).
+    """
+    if not isinstance(answer, Mapping):
+        return
+    named = sorted(
+        name
+        for name in validator.parameters().names().intersection(answer)
+        if answer[name] is not UNSET
+    )
+    if named:
+        label = getattr(provider, "__qualname__", repr(provider))
+        raise ImproperlyConfigured(
+            f"ServiceSpec.kwargs ({label}) answered {', '.join(map(repr, named))}, which "
+            f"{'names a field' if len(named) == 1 else 'name fields'} of the spec's Validator: "
+            "a kwargs value reaches the service unvalidated. Fill a Validator field from "
+            "ServiceSpec.input_data, which the Validator validates."
+        )
 
 
 def _recording(provider: Callable[..., Any], names: frozenset[str]) -> Any:
