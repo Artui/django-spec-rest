@@ -208,6 +208,26 @@ The query string is read by the kernel's flat reader:
   principal validates under that principal's own context, but its declared
   parameter set is still the one described under the view's request, until
   the kernel passes the asking call to `parameters()`.
+- The input serializer is first built with no body and no row, to describe its
+  fields, so one reading `self.initial_data` or `self.instance.<attr>` in
+  `__init__` or `get_fields` raises `AttributeError` on every request, a 500,
+  while `as_view()` accepts it. Guard the read, as
+  `getattr(self, "initial_data", {})` or `if self.instance is not None:`:
+  the serializer that validates is bound to the body and the row, so a field
+  the guarded read adds there is required and validated.
+- A `many` spec's row field named like a dispatcher seed, such as `user` or
+  `result`, is dropped from each row: refused as missing where it is required,
+  and validated without the value the client sent where it is optional. Name
+  the field otherwise and give it `source="user"` where the row must still
+  carry that key.
+- The input serializer is built more than once per call, once to describe its
+  fields and once to validate, so the queries its `__init__` or `get_fields`
+  makes run more than once. Where their count matters, move them to the
+  service, or to a validator method, which only the validating build runs.
+- A row condition among a create spec's `affordances` is refused only when the
+  view dispatches, with `ImproperlyConfigured` on the first request, not at
+  `as_view()`. Declare row conditions only on a spec with an
+  `instance_selector_spec`.
 
 ## Authenticating MCP calls through DRF
 

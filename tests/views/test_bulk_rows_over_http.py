@@ -40,6 +40,11 @@ class _UserRow(serializers.Serializer):
     user = serializers.IntegerField()
 
 
+class _OptionalUserRow(serializers.Serializer):
+    title = serializers.CharField()
+    user = serializers.IntegerField(required=False)
+
+
 ran: list[Any] = []
 
 
@@ -123,6 +128,34 @@ def test_a_bulk_row_s_writable_user_validates_from_the_body() -> None:
     response = _post(_view(_UserRow), [{"title": "a", "user": 3}])
     assert response.status_code == 201
     assert response.data == [{"title": "a", "user": 3}]
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason=(
+        "service_specs/serializer_validator.py: a bulk row's optional writable field named "
+        "like a dispatcher seed is an unknown argument, dropped under the edge's IGNORE, so "
+        "the row validates without the value the client sent"
+    ),
+)
+def test_a_bulk_row_s_optional_writable_user_keeps_its_value() -> None:
+    response = _post(_view(_OptionalUserRow), [{"title": "a", "user": 3}])
+    assert response.status_code == 201, response.data
+    assert response.data == [{"title": "a", "user": 3}]
+
+
+class _OwnerAsUserRow(serializers.Serializer):
+    title = serializers.CharField()
+    owner = serializers.IntegerField(source="user")
+
+
+def test_a_bulk_row_field_sourced_onto_user_keeps_its_value() -> None:
+    """The way through the two cases above: a wire name that is no seed, whose
+    ``source`` puts the value under ``user`` in the row the service is handed."""
+    response = _post(_view(_OwnerAsUserRow), [{"title": "a", "owner": 3}])
+    assert response.status_code == 201, response.data
+    assert ran == [[{"title": "a", "user": 3}]]
 
 
 class _DistinctTitles(serializers.ListSerializer):

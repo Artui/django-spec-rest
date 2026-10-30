@@ -72,6 +72,18 @@ class InitialDataInInit(_Counted):
         self.kind_sent = self.initial_data["kind"]
 
 
+class GuardedInitialDataKind(_Counted):
+    """``InitialDataKind`` reading ``initial_data`` only where the serializer was handed one."""
+
+    kind = serializers.CharField()
+
+    def get_fields(self) -> dict[str, serializers.Field]:
+        fields = super().get_fields()
+        if getattr(self, "initial_data", {}).get("kind") == "long":
+            fields["extra"] = serializers.CharField()
+        return fields
+
+
 class InstancePk(_Counted):
     """The row's ``pk`` read as the fields are built."""
 
@@ -286,6 +298,18 @@ class TestOverALiveView:
         response = _create(_spec(InitialDataInInit), {"kind": "k"})
 
         assert response.status_code == 201, response.data
+
+    def test_a_guarded_body_read_validates_the_field_it_adds(self, db: Any) -> None:
+        """The way through the gap the cases above name: the description reads
+        no body and adds no field, and the serializer that validates is bound
+        to the body, so the field it adds there is required and validated."""
+        response = _create(_spec(GuardedInitialDataKind), {"kind": "long", "extra": "x"})
+
+        assert response.status_code == 201, response.data
+        assert response.data == {"got": {"kind": "long", "extra": "x"}}
+        response = _create(_spec(GuardedInitialDataKind), {"kind": "long"})
+        assert response.status_code == 400
+        assert response.data["extra"][0].code == "required"
 
     def test_a_field_only_a_partial_call_takes_validates(self, post: Post) -> None:
         response = _lookup_update(_by_lookup(PartialAddsField, partial=True), {"note": "n"}, post)
