@@ -296,10 +296,10 @@ def test_a_bulk_put_with_no_target_is_described() -> None:
     assert _described(response) == {"PUT": {spec.many_argument}}
 
 
-def test_a_post_s_target_reads_stay_described() -> None:
-    """Only an update's target lookup is kept off the body: a custom POST
-    acting on a row still asks the caller for its lookup where the route
-    does not carry it."""
+def test_a_post_s_target_reads_are_not_described() -> None:
+    """The edge drops a target lookup's reads from the body whatever the
+    method, so a custom POST acting on a row does not ask for its lookup
+    either, even on a route that does not carry it."""
 
     class _ViewSet(ServiceViewSet):
         queryset = Author.objects.all()
@@ -308,7 +308,7 @@ def test_a_post_s_target_reads_stay_described() -> None:
         def publish(self, request: Any, pk: Any = None) -> Any: ...
 
     response = _options(_ViewSet, {"post": "publish"})
-    assert _described(response) == {"POST": {"name", "pk"}}
+    assert _described(response) == {"POST": {"name"}}
 
 
 # ----- what drfs' metadata could not describe -----
