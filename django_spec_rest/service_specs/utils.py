@@ -793,7 +793,8 @@ def context_answer(
     for the same callable handed the same objects under the same names: a
     callable reading an argument the edge put a server's value over is asked
     again for it, and another spec's callable handed the same objects is asked
-    itself, and so is one handed the same object under another name
+    itself (test_another_callable_handed_the_same_objects_is_asked_itself), and
+    so is one handed the same object under another name
     (test_a_context_answer_is_held_for_the_names_its_objects_came_under). The
     objects are held with the answer, so none is freed and its identity reused while
     the call lasts.

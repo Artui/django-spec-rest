@@ -35,3 +35,18 @@ def test_a_context_answer_is_held_for_the_names_its_objects_came_under() -> None
     assert again is first
     assert other == {"owner": shared}
     assert asked == ["scope", "owner"]
+
+
+def test_another_callable_handed_the_same_objects_is_asked_itself() -> None:
+    """The answer is held by the callable as well as its objects, so another
+    spec's callable handed the very same request is asked for its own."""
+    request = object()
+
+    def first(*, request: Any) -> dict[str, Any]:
+        return {"from": "first"}
+
+    def second(*, request: Any) -> dict[str, Any]:
+        return {"from": "second"}
+
+    assert context_answer(first, {"request": request}) == {"from": "first"}
+    assert context_answer(second, {"request": request}) == {"from": "second"}
