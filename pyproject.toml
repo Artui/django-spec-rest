@@ -54,8 +54,7 @@ dependencies = [
     # instance, the call's pool seeds on ``ValidationContext.ambient``, a
     # presentation context on ``Presenter.presented``, ``extra_kwargs=`` on
     # ``dispatch``, the ``arguments`` channel on ``PermissionCheck`` and an
-    # ``any`` output type. Its module graph has no ring either, and its
-    # ``tests/test_drfs_surface.py`` pins every name re-exported here.
+    # ``any`` output type. Its module graph has no ring either.
     # 0.14.0 adds the call's own context: one ``call_context`` dict per call,
     # handed to every stage and reserved as a pool name, which is what DRF's
     # serializer ``context`` is fed from. It also adds the ``shapes`` group of

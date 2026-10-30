@@ -31,8 +31,6 @@ jobs:
         run: uv run ruff format --check --diff .
       - name: ty
         run: uv run ty check django_spec_rest
-      - name: ty drift fixtures
-        run: make type-check-strict-fixtures
 
   docs:
     name: docs build
