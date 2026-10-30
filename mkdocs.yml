@@ -108,18 +108,10 @@ nav:
   - Reference:
       - reference/index.md
       - Views: reference/views.md
-      - Dispatch (stable surface): reference/dispatch.md
       - Viewsets: reference/viewsets.md
-      - Mutations: reference/mutations.md
-      - Services: reference/services.md
-      - Selectors: reference/selectors.md
+      - DRF seats: reference/service-specs.md
       - Types: reference/types.md
-      - Spec registry: reference/registry.md
-      - Service specs on the kernel: reference/service-specs.md
-      - JSON Schema: reference/jsonschema.md
-      - Audience projection: reference/audience.md
       - OpenAPI: reference/openapi.md
-      - Exceptions: reference/exceptions.md
 
 # Anchor drift is silent otherwise: a rename moves a heading, every in-page link
 # to its old id still resolves to the page and lands at the top, and nothing says

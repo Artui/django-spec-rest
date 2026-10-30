@@ -1,5 +1,8 @@
 # Views
 
+Each view takes a kernel spec on `spec`. See [Concepts](../concepts.md) for
+what the edge reads from the request and how a refusal is answered.
+
 ## Mutation views
 
 ::: django_spec_rest.views.mutation.service_create_view.ServiceCreateView
@@ -18,18 +21,6 @@
 
 ::: django_spec_rest.views.mutation.mutation_flow_mixin.MutationFlowMixin
 
-## ServiceView Protocol
+## The write's target
 
-::: django_spec_rest.types.service_view.ServiceView
-
-## OfflineServiceView
-
-::: django_spec_rest.types.offline_service_view.OfflineServiceView
-
-## Kwarg resolution
-
-::: django_spec_rest.views.utils
-
-## Spec validation
-
-::: django_spec_rest.views.spec_validation
+::: django_spec_rest.views.mutation.utils.resolve_mutation_instance
