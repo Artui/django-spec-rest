@@ -5,9 +5,6 @@ here is the kernel's own ``ServiceSpec`` or ``SelectorSpec``, with the DRF seats
 ``SerializerValidator`` and ``SerializerPresenter``, and every test drives a
 view through ``as_view()`` with nothing imported that the kernel route added,
 so each one fails against a tree without it.
-
-The selector views here set ``serializer_class``, and what they render is
-DRF's, not the spec's presenter.
 """
 
 from __future__ import annotations

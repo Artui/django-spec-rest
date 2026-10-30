@@ -7,9 +7,8 @@ calls the kernel's ``dispatch``: under ``REJECT`` the key is refused as
 ``IGNORE`` it is dropped unseen, and a callable declaring ``request`` is handed
 the view's own.
 
-Which policy HTTP runs under is an open question, decided by one line,
-``UNKNOWN_ARGUMENTS`` in ``dispatch/kernel_edge.py``, so each test sets it and
-asserts both answers.
+HTTP runs under ``IGNORE``, set by one line, ``UNKNOWN_ARGUMENTS`` in
+``dispatch/kernel_edge.py``; each test sets it and asserts both answers.
 """
 
 from __future__ import annotations
