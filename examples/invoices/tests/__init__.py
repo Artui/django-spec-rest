@@ -43,6 +43,22 @@ class SpecOnAViewSetTests(APITestCase):
         invoice.refresh_from_db()
         self.assertEqual(invoice.notes, "Net 30")
 
+    def test_a_patch_body_naming_the_lookup_key_cannot_move_the_update(self) -> None:
+        """The row an update reaches is read from the route alone: a ``pk`` in
+        the body is dropped, never the update's lookup."""
+        routed, other = _invoice(), _invoice(customer="Globex")
+
+        response = self.client.patch(
+            f"/invoices/{routed.pk}/", {"notes": "Net 30", "pk": other.pk}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.data["id"], routed.pk)
+        routed.refresh_from_db()
+        other.refresh_from_db()
+        self.assertEqual(routed.notes, "Net 30")
+        self.assertEqual(other.notes, "")
+
     def test_a_put_validates_every_required_field(self) -> None:
         invoice = _invoice()
 
