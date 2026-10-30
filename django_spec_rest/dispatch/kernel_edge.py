@@ -520,7 +520,7 @@ def _edge_state(
     ``spec.parameters()``, which describes the input serializer: with the
     state's ``describe_context`` it is built with the call's request and
     view, the view's input layers and the Validator's own context callable,
-    as the Validator binds it, so a ``get_fields`` reading
+    and with no body and no row, so a ``get_fields`` reading
     ``self.context["request"]`` declares the fields the call validates
     (test_service_create_view's
     test_a_request_scoped_serializer_declares_the_fields_the_call_validates;

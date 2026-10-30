@@ -204,11 +204,12 @@ class EdgeCallState:
     - ``declaration``: the input serializer the edge's own spec declares, the
       one ``describe_context`` is for: another a kernel call inside the
       service describes is described as outside any call
-      (``describe_serializer``).
+      (``describe_serializer``). Keyed by the declaration, so a kernel call
+      whose spec declares this same serializer reads the edge's description.
     - ``describe_context``: builds the serializer context the call's input
       serializer is described with, its request, its view, the view's input
       layers and the spec's own context callable where the description can ask
-      it, as the Validator binds it (``describe_serializer``). Built when a
+      it, with no body and no row (``describe_serializer``). Built when a
       description asks, so a call describing nothing builds none.
     - ``base_context``: the request and view a serializer of the call was last
       built for, and the baseline context the view answered for them, so the
@@ -222,8 +223,8 @@ class EdgeCallState:
       a principal, the arguments they carry, the shapes on the request's
       query string, the view's action and the Django request it copies, so the descriptions of one call with neither share one
       pair (``offline_pair``).
-    - ``described``: the serializer each declaration is described with in
-      the call, built once (``describe_serializer``).
+    - ``described``: the serializer the edge's own declaration is described
+      with in the call, built once (``describe_serializer``).
 
     Mutable, so the edge can set it before the sync step it hops to a thread
     for and fill it there, and the Validator can fill it during the kernel's
