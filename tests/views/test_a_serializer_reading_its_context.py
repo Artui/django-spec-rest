@@ -21,7 +21,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from django.contrib.auth.models import User
+from django.contrib.auth.models import AnonymousUser, User
 from django_service_specs import InvalidArguments, ServiceSpec, UnknownArguments, Unrestricted
 from django_service_specs.dispatch.dispatch import dispatch
 from django_service_specs.dispatch.present import present
@@ -475,6 +475,54 @@ def test_a_kernel_call_of_the_view_s_own_spec_for_another_principal_binds_its_ow
 
     assert _create(_SAME, {"title": "outer"}, owner).status_code == 204
     assert [title for title, _, _ in _SAME_SEEN] == ["outer", "inner"]
+
+
+@pytest.mark.parametrize(
+    ("authenticated", "equal_principal"),
+    [
+        pytest.param(
+            True, lambda user: User.objects.get(pk=user.pk), id="the-same-row-fetched-again"
+        ),
+        pytest.param(False, lambda user: AnonymousUser(), id="another-anonymous-user"),
+    ],
+)
+def test_a_kernel_call_of_the_view_s_own_spec_for_an_equal_principal_is_not_the_edge_s(
+    owner: User, authenticated: bool, equal_principal: Any
+) -> None:
+    """The edge's call is told apart by its principal's identity, not equality:
+    a row fetched again and a fresh ``AnonymousUser`` each equal the edge's
+    principal, yet the service's call for one binds the arguments it was handed
+    and validates under its own offline pair, never the view's."""
+    _SAME_SEEN.clear()
+    inner: list[Any] = []
+
+    def service(*, title: str, user: Any) -> None:
+        # Once only, guarded on neither the title nor the principal: a call taken
+        # for the edge's binds the edge's body, so both would read as the outer
+        # call's, and the inner call would dispatch again without end.
+        if not inner:
+            principal = equal_principal(user)
+            inner.append(principal)
+            assert principal == user and principal is not user
+            dispatch(spec, principal=principal, arguments={"title": "inner"})
+
+    spec = ServiceSpec(
+        service=service,
+        permissions=_OPEN,
+        validator=SerializerValidator(_ReadsItsCaller),
+        atomic=False,
+    )
+    request = _factory.post("/", {"title": "outer"}, format="json")
+    if authenticated:
+        force_authenticate(request, user=owner)
+
+    response = type("_View", (_KernelCreateView,), {"spec": spec}).as_view()(request)
+
+    assert response.status_code == 204, response.data
+    assert [title for title, _, _ in _SAME_SEEN] == ["outer", "inner"]
+    (_, _, outer_view), (_, _, inner_view) = _SAME_SEEN
+    assert isinstance(outer_view, ServiceCreateView)
+    assert not isinstance(inner_view, ServiceCreateView)
 
 
 _ANOTHER_READING_ITS_CALLER = ServiceSpec(
