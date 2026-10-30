@@ -37,6 +37,10 @@ is the route's.
   `success_status` and `response_finalizer` belong to the route. Put what the
   operation needs everywhere on the spec.
 
+A kernel dispatch a service makes for another principal runs under that
+principal's offline request and view as well: neither the outer request nor the
+view reaches its validation or the description of its serializer.
+
 ## DRF's seats without a request
 
 - **`DRFPermissionCheck`** asks its classes against an offline request and view

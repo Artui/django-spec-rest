@@ -43,6 +43,10 @@ lists each with what a project rewrites.
 - **OPTIONS describes a route from its specs.** It runs no stage of a spec,
   `actions[METHOD]` is a JSON Schema object, and `Allow` names only the
   methods a spec serves.
+- **`as_view()` refuses a `success_status` callable or `response_finalizer`
+  that takes `**kwargs` beside a name the view cannot supply.** `**kwargs` is
+  handed the names the view has and no others, so such a callable raised
+  `TypeError` on every request, after the service had committed.
 - **A bare `DispatchError` answers 400**, where it answered 500.
 - **A `many` spec with an `output_selector_spec` presents the re-read's
   rows.**
@@ -64,16 +68,25 @@ lists each with what a project rewrites.
 - **The DRF refusal classes are `DRFInvalidArguments`, `DRFNotPermitted` and
   `DRFPrincipalUnavailable`.**
 
+### Security
+
+- **A kernel dispatch a service makes for another principal** is validated and
+  described under the offline request for that principal, no longer under the
+  view's request and view of the call being served.
+
 ### Removed
 
+- **`get_selector_kwargs`** on `SelectorListView`, `SelectorRetrieveView` and
+  the two selector viewset mixins. A view that defines it, or the per-action
+  `get_<action>_selector_kwargs`, beside a kernel spec is refused at
+  `as_view()`: a selector's keywords come from the spec's own `kwargs`
+  provider.
 - **The previous package's declaration types**: `ServiceSpec`, `SelectorSpec`,
   `PolymorphicServiceSpec`, `UrlKwarg`, `QueryParam`, `ArgumentBinding`,
   `OfflineContract`, `TargetGuard` and the input markers. A kernel spec
   declares its reads, shapes, providers and permissions itself.
 - **`dispatch_spec` and `adispatch_spec`**, the `jsonschema/`, `audience/` and
   `registry/` modules, and every re-export of a kernel name.
-- **A selector view's `get_selector_kwargs` beside a kernel spec** is refused at
-  `as_view()`: return those keys from the spec's `kwargs` provider.
 - **The `startserviceapp` management command** and its app template.
 - **The package is no longer a Django app.** It has no models, migrations,
   templates, static files or URLs, so it needs no `INSTALLED_APPS` entry.
