@@ -341,7 +341,7 @@ class SerializerValidator(Validator):
         if not serializer.is_valid():
             raise DRFInvalidArguments(serializer.errors)
         data: Any = serializer.validated_data
-        held = _server_values(serializer, server_values(self))
+        held = _server_values(serializer, server_values(self, context.principal))
         _lay_back(data, serializer, held)
         values = _values(data)
         # Each server value is its parameter's, whatever ``data`` became: a
@@ -349,17 +349,21 @@ class SerializerValidator(Validator):
         # (test_a_key_validate_drops_still_reaches_the_parameter), a
         # dataclass instance it rewrote, or a dotted ``source``, which has no
         # key of the field's own.
-        handed = _handed(serializer, held, author_keys(self))
+        handed = _handed(serializer, held, author_keys(self, context.principal))
         values.update(handed)
         values = _unseeded(values, context)
         return Validated(
-            values=self._unowned(serializer, values, handed.keys()),
+            values=self._unowned(serializer, values, handed.keys(), context.principal),
             data=data,
             pool={"serializer": serializer},
         )
 
     def _unowned(
-        self, serializer: serializers.Serializer, values: dict[str, Any], kept: Iterable[str]
+        self,
+        serializer: serializers.Serializer,
+        values: dict[str, Any],
+        kept: Iterable[str],
+        principal: Any,
     ) -> dict[str, Any]:
         """``values`` less each ``server_owned`` key the client's input became.
 
@@ -393,7 +397,7 @@ class SerializerValidator(Validator):
         (test_the_servers_value_for_an_owned_name_reaches_its_source, which
         fails with the two steps the other way round).
         """
-        owned = self.server_owned | provider_owned(self)
+        owned = self.server_owned | provider_owned(self, principal)
         owned = owned.union(*(_sources(serializer, name) for name in owned)).difference(kept)
         return {name: value for name, value in values.items() if name not in owned}
 
@@ -417,7 +421,7 @@ class SerializerValidator(Validator):
         """The serializer, bound to the call's input: the edge's body for it, else ``arguments``."""
         return self._serializer(
             context,
-            data=validator_input(self, arguments),
+            data=validator_input(self, arguments, context.principal),
             # The collection a collection selector resolves is no row to update.
             instance=bound_instance(context.target),
             partial=context.partial,
@@ -437,7 +441,7 @@ class SerializerValidator(Validator):
             context.principal,
             context.ambient,
             arguments,
-            view_layers=input_view_layers(self),
+            view_layers=input_view_layers(self, context.principal),
             provider=self.serializer_context,
             call_context=context.call_context,
         )

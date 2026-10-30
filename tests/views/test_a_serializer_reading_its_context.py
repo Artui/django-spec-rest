@@ -31,6 +31,7 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 from django_spec_rest import ServiceCreateView
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
+from django_spec_rest.service_specs.utils import edge_call_state
 from tests.testapp.models import Post
 
 _factory = APIRequestFactory()
@@ -406,3 +407,96 @@ def test_a_kernel_call_for_another_principal_is_never_described_under_the_view_s
     assert _create(_spec_of(service), {}, owner).status_code == 204
     assert _DESCRIBED_UNDER
     assert all(pair == (None, None) for pair in _DESCRIBED_UNDER)
+
+
+_SAME_SEEN: list[tuple[Any, Any, Any]] = []
+
+
+class _ReadsItsCaller(serializers.Serializer):
+    title = serializers.CharField()
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        _SAME_SEEN.append((attrs["title"], self.context["request"], self.context["view"]))
+        return attrs
+
+
+def _dispatches_itself_for_another(*, title: str, user: Any) -> None:
+    # The edge dispatches this very spec, Validator and all: a JSON body and
+    # nothing for the recording twin to wrap, so the twin is the spec itself.
+    assert edge_call_state().validator is _SAME.validator
+    if user.username == "owner":
+        other = User.objects.get(username="other")
+        dispatch(_SAME, principal=other, arguments={"title": "inner"})
+
+
+_SAME = ServiceSpec(
+    service=_dispatches_itself_for_another,
+    permissions=_OPEN,
+    validator=SerializerValidator(_ReadsItsCaller),
+    atomic=False,
+)
+
+
+def test_a_kernel_call_of_the_view_s_own_spec_for_another_principal_validates_offline(
+    owner: User,
+) -> None:
+    """The service dispatches the view's own spec, the very Validator the edge
+    dispatched, for another principal: that call is not the edge's, so it
+    validates under the offline pair for its own principal, never the view's
+    request and view."""
+    _SAME_SEEN.clear()
+    other = User.objects.create(username="other")
+
+    assert _create(_SAME, {"title": "outer"}, owner).status_code == 204
+    (_, outer_request, outer_view), (_, inner_request, inner_view) = _SAME_SEEN
+    assert outer_request.user == owner
+    assert isinstance(outer_view, ServiceCreateView)
+    assert inner_request.user == other
+    assert not isinstance(inner_view, ServiceCreateView)
+
+
+def test_a_kernel_call_of_the_view_s_own_spec_for_another_principal_binds_its_own_arguments(
+    owner: User,
+) -> None:
+    """Nor does that call bind the edge's body: it validates the arguments its
+    caller handed it, never the client's request body."""
+    _SAME_SEEN.clear()
+    User.objects.create(username="other")
+
+    assert _create(_SAME, {"title": "outer"}, owner).status_code == 204
+    assert [title for title, _, _ in _SAME_SEEN] == ["outer", "inner"]
+
+
+_ANOTHER_READING_ITS_CALLER = ServiceSpec(
+    service=lambda *, title: None,
+    permissions=_OPEN,
+    validator=SerializerValidator(_ReadsItsCaller),
+    atomic=False,
+)
+
+
+def _dispatches_another_for_its_own_principal(*, title: str, user: Any) -> None:
+    dispatch(_ANOTHER_READING_ITS_CALLER, principal=user, arguments={"title": "inner"})
+
+
+def test_a_kernel_call_of_another_spec_for_the_edge_s_own_principal_reads_none_of_the_edge_s(
+    owner: User,
+) -> None:
+    """The service hands another spec the edge's very principal: that call's
+    Validator is not the one the edge dispatched, so it validates its own
+    arguments under the offline pair, never the client's body under the view's
+    request and view."""
+    _SAME_SEEN.clear()
+    spec = ServiceSpec(
+        service=_dispatches_another_for_its_own_principal,
+        permissions=_OPEN,
+        validator=SerializerValidator(_ReadsItsCaller),
+        atomic=False,
+    )
+
+    assert _create(spec, {"title": "outer"}, owner).status_code == 204
+    (outer_title, _, outer_view), (inner_title, inner_request, inner_view) = _SAME_SEEN
+    assert (outer_title, inner_title) == ("outer", "inner")
+    assert isinstance(outer_view, ServiceCreateView)
+    assert inner_request.user == owner
+    assert not isinstance(inner_view, ServiceCreateView)

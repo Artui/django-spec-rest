@@ -548,6 +548,7 @@ def _edge_state(
 
     return EdgeCallState(
         view_hooks=hooks,
+        principal=request.user,
         declaration=getattr(validator, "serializer", None),
         describe_context=describe_context,
     )

@@ -178,6 +178,9 @@ class EdgeCallState:
       the Validator reads (``input_view_layers``).
     - ``validator``: the Validator of the spec the edge dispatches, the
       recording twin's, the one the view's input layers and request are for.
+    - ``principal``: the principal the edge dispatches for, the request's
+      user: the Validator above validating for any other is a kernel call the
+      service makes, which reads none of the edge's (``_own_principal``).
     - ``validator_input``: the Validator the edge dispatches, and the body it
       binds rather than the kernel's checked arguments (``validator_input``):
       the caller's own, a ``QueryDict`` kept one, with what the edge put over
@@ -234,6 +237,7 @@ class EdgeCallState:
     author_values: Mapping[str, Any] = dataclasses.field(default_factory=dict)
     view_hooks: ViewHooks = dataclasses.field(default_factory=ViewHooks)
     validator: Any = None
+    principal: Any = None
     validator_input: tuple[Any, Any] | None = None
     server_values: Mapping[str, Any] = dataclasses.field(default_factory=dict)
     author_keys: Mapping[str, str] = dataclasses.field(default_factory=dict)
@@ -304,22 +308,25 @@ def _context_for(call_context: dict[str, Any] | None, *, view: Any, request: Any
     return call_context
 
 
-def validator_input(validator: Any, arguments: Any) -> Any:
+def validator_input(validator: Any, arguments: Any, principal: Any) -> Any:
     """What ``validator`` binds for the call: the edge's body for it, else ``arguments``.
 
-    Only the Validator the edge call names reads the edge's body, so a kernel
-    call made inside the service, of another spec or of this one, binds its
-    own arguments (test_a_kernel_call_inside_the_service_binds_its_own_arguments).
+    Only the edge's own call reads the edge's body (``_names``), so a kernel
+    call made inside the service binds its own arguments: of another spec
+    (test_a_kernel_call_inside_the_service_binds_its_own_arguments), and of
+    this one for another principal
+    (test_a_kernel_call_of_the_view_s_own_spec_for_another_principal_binds_its_own_arguments).
     Never set for a ``many`` call, and ``validated_many`` never asks: it binds
     the rows the kernel hands it.
     """
-    held = edge_call_state().validator_input
-    if held is None or held[0] is not validator:
-        return arguments
-    return held[1]
+    state = edge_call_state()
+    held = state.validator_input
+    # ``_names`` answers no where nothing is held, so the first condition holds
+    # no case of its own: it narrows the type.
+    return held[1] if held is not None and _names(state, validator, principal) else arguments
 
 
-def server_values(validator: Any) -> Mapping[str, Any]:
+def server_values(validator: Any, principal: Any) -> Mapping[str, Any]:
     """The server's value for each field of the body ``validator`` binds the edge put one into.
 
     Read as ``validator_input`` reads the body: only the Validator the edge call
@@ -330,7 +337,7 @@ def server_values(validator: Any) -> Mapping[str, Any]:
     held.
     """
     state = edge_call_state()
-    return state.server_values if _names(state, validator) else {}
+    return state.server_values if _names(state, validator, principal) else {}
 
 
 def write_form_value(body: QueryDict, name: str, value: Any) -> None:
@@ -376,13 +383,13 @@ def read_form_spellings(validator: Any, body: Any, flat: Mapping[str, Any]) -> d
     return read
 
 
-def author_keys(validator: Any) -> Mapping[str, str]:
+def author_keys(validator: Any, principal: Any) -> Mapping[str, str]:
     """The key an author gave each of ``server_values`` under, read as ``server_values`` is."""
     state = edge_call_state()
-    return state.author_keys if _names(state, validator) else {}
+    return state.author_keys if _names(state, validator, principal) else {}
 
 
-def provider_owned(validator: Any) -> frozenset[str]:
+def provider_owned(validator: Any, principal: Any) -> frozenset[str]:
     """The keys the spec's typed ``kwargs`` provider fills, read as ``server_values`` is.
 
     Only for the Validator the edge call names, so a spec the service dispatches
@@ -391,26 +398,58 @@ def provider_owned(validator: Any) -> frozenset[str]:
     without the identity check).
     """
     state = edge_call_state()
-    return state.provider_owned if _names(state, validator) else frozenset()
+    return state.provider_owned if _names(state, validator, principal) else frozenset()
 
 
-def _names(state: EdgeCallState, validator: Any) -> bool:
+def _names(state: EdgeCallState, validator: Any, principal: Any) -> bool:
+    """Whether ``validator``, validating for ``principal``, is the edge's own call, which holds a body.
+
+    One arc to coverage, so each condition is named: no body held, outside
+    an edge call, by test_a_provider_naming_a_field_twice's
+    test_each_key_reaches_its_own_parameter_off_http; another spec's
+    Validator handed the edge's very principal by
+    test_a_kernel_call_of_another_spec_for_the_edge_s_own_principal_reads_none_of_the_edge_s;
+    and the edge's very Validator dispatched by the service for another
+    principal by
+    test_a_kernel_call_of_the_view_s_own_spec_for_another_principal_binds_its_own_arguments.
+    """
     held = state.validator_input
-    return held is not None and held[0] is validator
+    return held is not None and held[0] is validator and _own_principal(state, principal)
 
 
-def input_view_layers(validator: Any) -> Mapping[str, Any] | None:
+def _own_principal(state: EdgeCallState, principal: Any) -> bool:
+    """Whether ``principal`` is the edge call's, the very object it dispatched for.
+
+    By identity: ``AnonymousUser`` instances are all equal, and two model
+    instances of one row compare equal, so equality would take another
+    caller's anonymous call, or a row fetched afresh, for the edge's. A kernel
+    call the service makes for the edge's own principal, handed the very
+    object, reads what the edge's call reads: nothing at the Validator tells
+    the two apart.
+    """
+    return principal is state.principal
+
+
+def input_view_layers(validator: Any, principal: Any) -> Mapping[str, Any] | None:
     """The input half of the view hooks the edge call carries, for its own Validator alone.
 
     The layers answer the view's ``get_serializer_context``, so they carry the
     view's request and view. Only the Validator of the spec the edge
     dispatches reads them: a kernel call the service makes, for another
     principal or none, validates under what it would outside the view, the
-    offline pair for its own principal
-    (test_a_kernel_call_for_another_principal_never_validates_under_the_view_s_request).
+    offline pair for its own principal: of another spec
+    (test_a_kernel_call_for_another_principal_never_validates_under_the_view_s_request)
+    and of the edge's very spec, whose Validator is the one the edge
+    dispatched
+    (test_a_kernel_call_of_the_view_s_own_spec_for_another_principal_validates_offline,
+    which fails without the principal's check). Another spec's Validator
+    handed the edge's very principal reads none either
+    (test_a_kernel_call_of_another_spec_for_the_edge_s_own_principal_reads_none_of_the_edge_s,
+    which fails without the Validator's).
     """
     state = edge_call_state()
-    return state.view_hooks.input_serializer_context if state.validator is validator else None
+    own = state.validator is validator and _own_principal(state, principal)
+    return state.view_hooks.input_serializer_context if own else None
 
 
 def output_view_layers(ambient: Mapping[str, Any], value: Any) -> Mapping[str, Any] | None:
