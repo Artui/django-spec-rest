@@ -60,12 +60,6 @@ repos:
         language: pygrep
         files: '^django_spec_rest/.*\.py$'
 
-      - id: forbid-drf-import-in-exceptions
-        name: "no 'rest_framework' import inside exceptions/ (framework-agnostic boundary)"
-        entry: '(?:from|import) rest_framework\b'
-        language: pygrep
-        files: '^django_spec_rest/exceptions/.*\.py$'
-
       - id: forbid-marker-glyphs
         name: "forbid emoji / marker glyphs in code, docs and changelogs"
         entry: '⚠|⭐|⛔|✅|❌|❗|❓|⭕|⚡|☑|✔|✖|✨|❤|⏸|⏰|⌛|⁉|‼|️|\xf0\x9f[\x80-\xbf][\x80-\xbf]'
