@@ -169,6 +169,16 @@ class TestACollectionAction:
         viewset = _viewset(_collection(), detail=False, base=ServiceViewSet, success_status=202)
         assert _post(viewset, {"note": "go"}).status_code == 202
 
+    def test_the_viewset_s_response_finalizer_runs(self) -> None:
+        def finalize(*, response: Response) -> Response:
+            response["X-Done"] = "yes"
+            return response
+
+        viewset = _viewset(
+            _collection(), detail=False, base=ServiceViewSet, response_finalizer=finalize
+        )
+        assert _post(viewset, {"note": "go"})["X-Done"] == "yes"
+
     def test_a_viewset_hook_fills_a_keyword_at_the_request(self) -> None:
         seen: list[str] = []
 
