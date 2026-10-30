@@ -150,7 +150,7 @@ def bind_serializer(declaration: Any, **kwargs: Any) -> serializers.Serializer:
         return DataclassSerializer(dataclass=declaration, **kwargs)
     raise ImproperlyConfigured(
         f"{declaration!r} cannot be read as a serializer: declare a Serializer subclass or a "
-        "dataclass, as an input_serializer takes."
+        "dataclass, as SerializerValidator and SerializerPresenter take."
     )
 
 

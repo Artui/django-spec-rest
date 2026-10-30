@@ -81,7 +81,10 @@ def test_a_dataclass_is_described_through_a_dataclass_serializer() -> None:
     ],
 )
 def test_anything_but_a_serializer_class_or_a_dataclass_is_refused(declaration: Any) -> None:
-    with pytest.raises(ImproperlyConfigured, match="Serializer subclass or a dataclass"):
+    with pytest.raises(
+        ImproperlyConfigured,
+        match="Serializer subclass or a dataclass, as SerializerValidator and SerializerPresenter take",
+    ):
         describe_serializer(declaration)
 
 
