@@ -204,6 +204,10 @@ The query string is read by the kernel's flat reader:
   action whose spec has no serializer.
 - A service's `ServiceValidationError` keyed by a model field is answered under
   that name, not renamed to the serializer field whose `source` it is.
+- A kernel `dispatch` a service makes of the view's own spec for another
+  principal validates under that principal's own context, but its declared
+  parameter set is still the one described under the view's request, until
+  the kernel passes the asking call to `parameters()`.
 
 ## Authenticating MCP calls through DRF
 

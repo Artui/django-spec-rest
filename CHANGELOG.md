@@ -47,6 +47,11 @@ lists each with what a project rewrites.
   that takes `**kwargs` beside a name the view cannot supply.** `**kwargs` is
   handed the names the view has and no others, so such a callable raised
   `TypeError` on every request, after the service had committed.
+- **A `success_status` callable or `response_finalizer` with a
+  positional-only parameter that has no default is refused at `as_view()`.**
+  Every value is handed by keyword, so such a parameter was never supplied and
+  the callable raised `TypeError` on every request; one with a default is left
+  to it.
 - **A bare `DispatchError` answers 400**, where it answered 500.
 - **A `many` spec with an `output_selector_spec` presents the re-read's
   rows.**
@@ -72,7 +77,8 @@ lists each with what a project rewrites.
 
 - **A kernel dispatch a service makes for another principal** is validated and
   described under the offline request for that principal, no longer under the
-  view's request and view of the call being served.
+  view's request and view of the call being served. Another principal means
+  another principal object: the same user fetched again counts as another.
 
 ### Removed
 
