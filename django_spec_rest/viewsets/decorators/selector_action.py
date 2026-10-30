@@ -22,16 +22,13 @@ def _validate_kernel_spec(spec: KernelSelectorSpec, *, label: str) -> None:
 
     ``validate_selector_view_spec`` reads the spec and the view's hooks off a
     class, and the decorated class does not exist yet, so it is handed one
-    carrying the spec alone, named for the action so a refusal names it. Its
-    ``hooks_base`` is ``object``, which declares no ``get_selector_kwargs``,
-    so the class carrying none is not read as overriding it. The kernel's
+    carrying the spec alone, named for the action so a refusal names it, and
+    declaring no ``get_selector_kwargs`` to be refused. The kernel's
     ``check_seeds`` is asked in full: the edge hands a kernel selector no
     view hook, so nothing of the viewset's can fill a keyword it refuses
     (test_selector_action's test_a_keyword_nothing_fills_is_refused).
     """
-    validate_selector_view_spec(
-        type(label, (), {"spec": spec}), expected_kind=spec.kind, hooks_base=object
-    )
+    validate_selector_view_spec(type(label, (), {"spec": spec}), expected_kind=spec.kind)
 
 
 def selector_action(

@@ -344,7 +344,7 @@ def _refuse_a_detail_spec_with_no_target(
         )
 
 
-def _refuse_selector_hooks(view_cls: type, hooks_base: type) -> None:
+def _refuse_selector_hooks(view_cls: type) -> None:
     """Refuse a selector view's ``get_selector_kwargs`` hooks beside a kernel spec.
 
     A kernel selector spec is handed its own ``kwargs`` provider's values and
@@ -360,7 +360,7 @@ def _refuse_selector_hooks(view_cls: type, hooks_base: type) -> None:
     """
     action = getattr(view_cls, "action", None)
     for hook, overridden in (
-        ("get_selector_kwargs", is_overridden(view_cls, hooks_base, "get_selector_kwargs")),
+        ("get_selector_kwargs", hasattr(view_cls, "get_selector_kwargs")),
         (f"get_{action}_selector_kwargs", _overrides_the_action_hook(view_cls, "selector")),
     ):
         if overridden:
@@ -389,7 +389,6 @@ def validate_selector_view_spec(
     view_cls: type,
     *,
     expected_kind: SelectorKind,
-    hooks_base: type,
 ) -> None:
     """Validate ``view_cls.spec`` on a standalone selector view.
 
@@ -398,9 +397,8 @@ def validate_selector_view_spec(
     [`SelectorListView`][django_spec_rest.views.query.selector_list_view.SelectorListView],
     ``RETRIEVE`` for
     [`SelectorRetrieveView`][django_spec_rest.views.query.selector_retrieve_view.SelectorRetrieveView]),
-    and ``hooks_base`` the view class declaring the default ``get_selector_kwargs``
-    that an override of is refused beside a kernel spec: each view passes its own,
-    since the two declare one each.
+    A ``get_selector_kwargs`` the view has is the author's, since no
+    selector view or mixin declares one, and is refused beside a kernel spec.
     """
     spec: KernelSelectorSpec | KernelServiceSpec | None = getattr(view_cls, "spec", None)
     if spec is None:
@@ -416,7 +414,7 @@ def validate_selector_view_spec(
     # and, below, a ``filter_set`` beside DRF's own filter backend
     # (test_a_filter_set_beside_django_filter_s_backend_is_refused_at_as_view).
     _validate_selector_kind(spec, label=label, expected_kind=expected_kind)
-    _refuse_selector_hooks(view_cls, hooks_base)
+    _refuse_selector_hooks(view_cls)
     _check_kernel_seeds(spec)
     if expected_kind is SelectorKind.LIST:
         validate_filter_set_no_backend_conflict(view_cls, spec, label=label)

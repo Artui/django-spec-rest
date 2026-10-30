@@ -34,19 +34,8 @@ class SelectorListView(ListModelMixin, GenericAPIView):
 
     @classmethod
     def as_view(cls, **initkwargs: Any) -> Any:
-        validate_selector_view_spec(
-            cls, expected_kind=SelectorKind.LIST, hooks_base=SelectorListView
-        )
+        validate_selector_view_spec(cls, expected_kind=SelectorKind.LIST)
         return super().as_view(**initkwargs)
-
-    def get_selector_kwargs(self) -> dict[str, Any]:
-        """The default an override is read against, and never called.
-
-        A view overriding it beside a kernel spec is refused at ``as_view()``
-        (test_get_selector_kwargs_beside_a_kernel_spec_is_refused_at_as_view):
-        the kernel route has no selector overlay to hand its value to.
-        """
-        return {}
 
     def get_queryset(self) -> Any:
         s: SelectorSpec | None = get_class_attr(self, "spec")

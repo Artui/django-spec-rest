@@ -155,27 +155,6 @@ def resolve_action_selector_spec(
     return entry
 
 
-class _SelectorHooks:
-    """The default ``get_selector_kwargs`` both selector mixins inherit.
-
-    One definition, so ``as_view()`` can tell a viewset's own override from
-    the default whichever selector mixin comes first in its MRO: with one
-    default per mixin, a ``retrieve`` entry asked against the retrieve mixin's
-    would read the list mixin's, listed first on ``ServiceViewSet``, as an
-    override, and every kernel retrieve spec would be refused
-    (test_service_viewset's test_retrieve_is_presented_by_the_spec).
-    """
-
-    def get_selector_kwargs(self) -> dict[str, Any]:
-        """The default an override is read against, and never called.
-
-        A view overriding it beside a kernel spec is refused at ``as_view()``
-        (test_get_selector_kwargs_beside_a_kernel_spec_is_refused_at_as_view):
-        the kernel route has no selector overlay to hand its value to.
-        """
-        return {}
-
-
 def _as_mounted(view_cls: type, action: str, spec: object, *, label: str) -> type:
     """``view_cls`` as a standalone view would carry ``spec``: on ``spec``, serving ``action``.
 
@@ -215,16 +194,9 @@ def _validate_kernel_action_spec(
     if action in _MUTATION_ACTIONS:
         validate_mutation_view_spec(mounted, has_instance=_MUTATION_ACTIONS[action]["has_instance"])
     elif action in _SELECTOR_ACTION_KIND:
-        # A viewset composing neither selector mixin has no default to
-        # override, so any ``get_selector_kwargs`` it has is its own:
-        # ``is_overridden`` answers ``hasattr`` against a base declaring none.
-        # Each arm is held by test_selector_viewset: ``object`` by
-        # test_a_viewset_with_no_selector_mixin_and_no_hook_passes,
-        # ``_SelectorHooks`` by test_the_default_selector_hook_is_not_an_override.
         validate_selector_view_spec(
             mounted,
             expected_kind=_SELECTOR_ACTION_KIND[action],
-            hooks_base=_SelectorHooks if issubclass(view_cls, _SelectorHooks) else object,
         )
     else:
         raise ImproperlyConfigured(
