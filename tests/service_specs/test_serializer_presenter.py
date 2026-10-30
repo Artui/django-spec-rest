@@ -89,6 +89,7 @@ class _Flat(serializers.Serializer):
     at = serializers.DateTimeField()
     on = serializers.DateField()
     when = serializers.TimeField()
+    lasts = serializers.DurationField()
     uid = serializers.UUIDField()
     email = serializers.EmailField()
     active = serializers.BooleanField(default=True)
@@ -110,6 +111,7 @@ def test_output_reads_order_types_formats_labels_and_presence() -> None:
         "at",
         "on",
         "when",
+        "lasts",
         "uid",
         "email",
         "active",
@@ -131,6 +133,7 @@ def test_output_reads_order_types_formats_labels_and_presence() -> None:
         "on": ("string", "date", False, None, True),
         # Formats the kernel does not name are left off rather than refused.
         "when": ("string", None, False, None, True),
+        "lasts": ("string", None, False, None, True),
         "uid": ("string", None, False, None, True),
         "email": ("string", None, False, None, True),
         # A default is substituted, so the key is always there.

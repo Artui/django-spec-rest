@@ -48,6 +48,7 @@ _SCALARS: Final[tuple[tuple[type[serializers.Field], str, str | None], ...]] = (
     (serializers.DateTimeField, "string", "date-time"),
     (serializers.DateField, "string", "date"),
     (serializers.TimeField, "string", None),
+    (serializers.DurationField, "string", None),
     (serializers.UUIDField, "string", None),
     (serializers.CharField, "string", None),
     (serializers.DictField, "object", None),
