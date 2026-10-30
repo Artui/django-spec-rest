@@ -70,7 +70,7 @@ class TestMapServiceError:
         assert isinstance(exc, _ServiceAPIException)
         assert exc.status_code == drf_status.HTTP_422_UNPROCESSABLE_ENTITY
 
-    def test_the_detail_keeps_drfs_shape_and_the_schema_is_kept_as_raised(self) -> None:
+    def test_the_detail_keeps_drf_s_shape_and_the_schema_is_kept_as_raised(self) -> None:
         """Every leaf of ``.detail`` is an ``ErrorDetail``, as on any other DRF
         exception, so a configured ``EXCEPTION_HANDLER`` walking it for codes
         still can. The schema as raised rides on ``.schema`` for whoever renders

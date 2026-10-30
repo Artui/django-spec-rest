@@ -21,7 +21,7 @@ from tests.service_specs.served_status import served_status
 
 
 class TestItIsBothClasses:
-    def test_it_is_the_kernels_denial_and_drfs(self) -> None:
+    def test_it_is_the_kernels_denial_and_drf_s(self) -> None:
         assert issubclass(DRFNotPermitted, KernelNotPermitted)
         assert issubclass(DRFNotPermitted, DispatchError)
         assert issubclass(DRFNotPermitted, PermissionDenied)
@@ -39,13 +39,13 @@ class TestBothInitsRan:
         assert exc.message == KernelNotPermitted.default_message
         assert exc.detail == KernelNotPermitted.default_message
 
-    def test_a_message_is_both_the_kernels_message_and_drfs_detail(self) -> None:
+    def test_a_message_is_both_the_kernels_message_and_drf_s_detail(self) -> None:
         exc = DRFNotPermitted("Only the owner may archive this.")
         assert exc.message == "Only the owner may archive this."
         assert isinstance(exc.detail, ErrorDetail)
         assert exc.detail == "Only the owner may archive this."
 
-    def test_get_codes_is_drfs_denial_code(self) -> None:
+    def test_get_codes_is_drf_s_denial_code(self) -> None:
         assert DRFNotPermitted().get_codes() == "permission_denied"
 
     def test_a_code_given_is_kept(self) -> None:

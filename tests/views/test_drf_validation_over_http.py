@@ -139,7 +139,7 @@ _JSON_REFUSED = {
 
 
 @pytest.mark.parametrize("body", _JSON_REFUSED.values(), ids=_JSON_REFUSED.keys())
-def test_json_drf_refuses_is_refused_in_drfs_words(body: dict[str, Any]) -> None:
+def test_json_drf_refuses_is_refused_in_drf_s_words(body: dict[str, Any]) -> None:
     response = _view(_Lenient)(_request(body, "json"))
 
     assert response.status_code == 400
@@ -192,7 +192,7 @@ def test_a_bulk_row_is_read_as_drf_reads_it() -> None:
     assert SEEN["data"] == _drf_answer(_Lenient, body, "json", many=True)
 
 
-def test_a_bulk_row_refusal_is_drfs_own() -> None:
+def test_a_bulk_row_refusal_is_drf_s_own() -> None:
     """A list body is the shape DRF takes, so its rows are refused as they always were."""
     response = _view(_Lenient, many=True)(_request([{"views": "x"}], "json"))
 

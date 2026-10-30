@@ -684,7 +684,7 @@ class _PlainViewSet(GenericViewSet):
     def plain(self, request: Any) -> Any: ...
 
 
-def test_an_operation_with_no_service_spec_documents_drfs_own_request_body() -> None:
+def test_an_operation_with_no_service_spec_documents_drf_s_own_request_body() -> None:
     router = DefaultRouter()
     router.register("plain", _PlainViewSet, basename="plain")
     generated = SchemaGenerator(patterns=router.urls).get_schema(request=None, public=True)

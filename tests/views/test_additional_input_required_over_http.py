@@ -170,7 +170,7 @@ def _recording(exc: Exception, context: dict[str, Any]) -> Response | None:
 
 
 @pytest.mark.parametrize("entry", list(_VIEWS))
-def test_the_handler_runs_once_and_sees_drfs_error_details(entry: str) -> None:
+def test_the_handler_runs_once_and_sees_drf_s_error_details(entry: str) -> None:
     """The configured handler is handed the exception with DRF's ``ErrorDetail``
     leaves, once, whichever view the error comes through."""
     _seen.clear()
@@ -184,7 +184,7 @@ def test_the_handler_runs_once_and_sees_drfs_error_details(entry: str) -> None:
     assert leaf == "False"
 
 
-def test_the_exception_keeps_drfs_shape_after_the_body_is_restored() -> None:
+def test_the_exception_keeps_its_details_after_the_body_is_restored() -> None:
     """DRF's default handler answers with ``exc.detail`` itself, so restoring the
     schema in place would rewrite the exception too, and anything reading it after the
     response (a logger, an error tracker) would see a different shape from the one the

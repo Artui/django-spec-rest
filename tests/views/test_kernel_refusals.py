@@ -17,7 +17,7 @@ row out fails a named test even where the map stays total:
 - ``DispatchError`` (unanswered without it, with the totality test):
   ``test_a_bare_dispatch_error_is_400_with_its_sentence``;
 - ``ServiceError`` (unanswered without it, with the totality test):
-  ``test_a_service_s_refusal_is_answered_as_on_the_drfs_path``, one case per
+  ``test_a_service_s_refusal_is_answered_by_map_service_error``, one case per
   subclass. The subclasses are one row on purpose: ``map_service_error`` is
   the answer for all of them and a row each pointing at it could not be told
   from the base row it falls to, so each subclass's answer is held by its
@@ -164,7 +164,7 @@ def test_a_bare_dispatch_error_is_400_with_its_sentence() -> None:
     ],
     ids=["validation", "not-found", "unavailable", "conflict", "input-required", "service"],
 )
-def test_a_service_s_refusal_is_answered_as_on_the_drfs_path(
+def test_a_service_s_refusal_is_answered_by_map_service_error(
     raised: BaseException, status: int, body: dict[str, Any]
 ) -> None:
     """``map_service_error``'s answers, the schema served as raised, ``False``

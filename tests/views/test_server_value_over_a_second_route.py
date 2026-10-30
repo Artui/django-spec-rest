@@ -492,7 +492,7 @@ class _BuildsAndChecks(_BuildsTheKey):
         raise DjangoValidationError("Not a tenant of yours.", code="foreign")
 
 
-def test_a_django_refusal_of_the_server_value_is_answered_as_drfs_loop_answers_it() -> None:
+def test_a_django_refusal_of_the_server_value_is_a_400_keyed_by_the_field() -> None:
     """``_BuildsAndChecks`` never runs its field, so only the server's value,
     validated on its own, meets ``validate_tenant``: its Django refusal is a
     400 keyed by the field, its code kept, as DRF's own field loop answers one."""

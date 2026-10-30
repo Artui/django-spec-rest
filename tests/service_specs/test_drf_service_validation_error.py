@@ -19,7 +19,7 @@ from tests.service_specs.served_status import served_status
 
 
 class TestItIsBothClasses:
-    def test_it_is_the_kernels_service_validation_error_and_drfs(self) -> None:
+    def test_it_is_the_kernels_service_validation_error_and_drf_s(self) -> None:
         assert issubclass(DRFServiceValidationError, KernelServiceValidationError)
         assert issubclass(DRFServiceValidationError, ValidationError)
 
