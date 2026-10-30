@@ -691,10 +691,8 @@ def _context_for(call_context: dict[str, Any] | None, *, view: Any, request: Any
     call's context already holds, so a key the view adds is there while the
     call's own entries, and whatever a stage of the call wrote, keep one value
     for every stage (test_a_key_the_view_s_get_serializer_context_adds_is_in_the_one_dict).
-    A view's input hook, whose default answers ``get_serializer_context()`` whole,
-    is laid over this dict afterwards, so for ``format`` the view's answer wins
-    today; the route's suffix winning is a strict xfail,
-    test_the_route_s_suffix_outranks_an_overriding_get_serializer_context_for_format.
+    The view's hook layers are laid over this dict afterwards, all but ``format``
+    (``serializer_context``).
     """
     base = call_base_context(view=view, request=request)
     if call_context is None:
@@ -871,7 +869,9 @@ def serializer_context(
        per-action hooks the view resolved, one direction's half of what the
        edge carries: the input half from the call's ``EdgeCallState``, the
        output half from the result's presentation context, under
-       ``SERIALIZER_CONTEXT_SEED``.
+       ``SERIALIZER_CONTEXT_SEED``. Written into the call's one dict, they
+       leave its ``format`` alone: that is the route's suffix, which an
+       override of the view's ``get_serializer_context()`` does not displace.
     4. **The spec's own callable**, ``provider``, which has the final say. It
        is called through the kernel's declared-kwargs resolver, as every other
        spec callable is, from a pool of the call's ``arguments`` (a mapping's
@@ -947,7 +947,14 @@ def serializer_context(
         request = offline.request
         view = offline.view if view is None else view
     context = _context_for(call_context if shared else None, view=view, request=request)
-    context.update(view_layers or {})
+    # ``format`` is the layer beneath's: in the call's one dict the route's
+    # suffix, which the view answered when the call began. A view's hook layer
+    # defaults to its ``get_serializer_context()`` answered whole, so an
+    # override of that answering another ``format`` would replace the suffix
+    # for every stage of the call
+    # (test_the_route_s_suffix_outranks_an_overriding_get_serializer_context_for_format).
+    # A dict of a serializer's own already took ``format`` from that very answer.
+    context.update({key: value for key, value in (view_layers or {}).items() if key != "format"})
     if provider is not None:
         pool: dict[str, Any] = {
             **(arguments if isinstance(arguments, Mapping) else {}),

@@ -149,16 +149,6 @@ def test_a_key_the_view_s_get_serializer_context_adds_is_in_the_one_dict() -> No
     assert call_context["extra"] == 1
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "the view's input hook layer is laid over the call's dict: "
-        "MutationFlowMixin.get_input_serializer_context defaults to get_serializer_context(), "
-        "resolved by resolve_view_hooks (views/utils.py) and applied over the call context, so "
-        "an overriding get_serializer_context() answer for 'format' replaces the route's "
-        "suffix (view.format_kwarg) in the one dict"
-    ),
-)
 def test_the_route_s_suffix_outranks_an_overriding_get_serializer_context_for_format() -> None:
     seen = _Seen()
 
@@ -166,12 +156,11 @@ def test_the_route_s_suffix_outranks_an_overriding_get_serializer_context_for_fo
 
     call_context = seen.contexts["service"]
     # ``format`` is the route's suffix as DRF's view answers it (``format_kwarg``), so an
-    # override of ``get_serializer_context`` that answers another value for it should not
-    # displace it, and every stage reads one value for each of the call's own entries.
-    # Whether the suffix or the override wins is an owner question; the suffix winning is
-    # the answer as it stands today (the ``_context_for`` docstring in
-    # ``service_specs/utils.py`` states it).
+    # override of ``get_serializer_context`` answering another value for it does not
+    # displace it: the view's input and output hook layers both default to that answer,
+    # and both are written into this one dict, which is read here after the output's.
     assert call_context["format"] == "json"
+    assert call_context["extra"] == 1
 
 
 def test_a_suffix_route_s_format_is_in_the_one_dict_the_validator_reads() -> None:
