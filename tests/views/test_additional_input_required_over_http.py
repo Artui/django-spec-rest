@@ -14,9 +14,8 @@ alone (the exception type), a handler answering with a ``str`` body is left alon
 dict), a handler whose body has no ``schema`` key of its own is left alone (the key),
 and a body of ``None`` or a Django response with no ``.data`` is left alone.
 
-One difference is by design: an update or delete view that loads its row with
-``get_object()`` over a kernel spec naming no selector, where the drfs one answered
-422 with the schema, is refused when the view is built, since a kernel spec's target
+An update or delete view that loads its row with ``get_object()`` over a kernel
+spec naming no selector is refused when the view is built, since a kernel spec's target
 is its own lookup's and ``get_object()`` is never asked for one. The update and delete
 cases declare ``instance_selector_spec`` instead, its ``pk`` read required, since the
 kernel's ``check_seeds`` refuses an optional read over a keyword with no default.
@@ -93,28 +92,15 @@ _PURGE_ONE_SPEC = ServiceSpec(
 )
 
 
-class _KernelSpecView:
-    """Answers ``get_permissions`` as a view over a spec setting no DRF classes does.
-
-    ``MutationFlowMixin.get_permissions`` reads ``spec.permission_classes`` off the
-    spec, which a kernel spec does not have: it declares its checks as
-    ``permissions``. This answers what that method answers for a spec setting none,
-    the view's own classes.
-    """
-
-    def get_permissions(self) -> list[Any]:
-        return [permission() for permission in self.permission_classes]  # ty: ignore[unresolved-attribute]
-
-
-class _PurgeCreate(_KernelSpecView, ServiceCreateView):
+class _PurgeCreate(ServiceCreateView):
     spec = _PURGE_SPEC
 
 
-class _PurgeUpdate(_KernelSpecView, ServiceUpdateView):
+class _PurgeUpdate(ServiceUpdateView):
     spec = _PURGE_ONE_SPEC
 
 
-class _PurgeDelete(_KernelSpecView, ServiceDeleteView):
+class _PurgeDelete(ServiceDeleteView):
     spec = _PURGE_ONE_SPEC
 
 
@@ -127,14 +113,14 @@ _VIEWS: dict[str, tuple[type, str, bool]] = {
 }
 
 
-# The shape a drfs update or delete view was written in: the view loads the row with
-# ``get_object()`` and the spec names no selector. It answered 422 with the schema.
-class _PurgeUpdateByGetObject(_KernelSpecView, ServiceUpdateView):
+# An update or delete view that loads the row with ``get_object()`` over a spec
+# naming no selector.
+class _PurgeUpdateByGetObject(ServiceUpdateView):
     queryset = Author.objects.all()
     spec = _PURGE_SPEC
 
 
-class _PurgeDeleteByGetObject(_KernelSpecView, ServiceDeleteView):
+class _PurgeDeleteByGetObject(ServiceDeleteView):
     queryset = Author.objects.all()
     spec = _PURGE_SPEC
 
@@ -168,8 +154,7 @@ def test_the_http_body_carries_the_schema_as_it_was_raised(entry: str) -> None:
     ids=["ServiceUpdateView", "ServiceDeleteView"],
 )
 def test_a_view_that_loads_its_row_with_get_object_is_refused_at_as_view(view: type) -> None:
-    """Changed by design: the drfs view answered 422 with the schema. A kernel spec's
-    target is its own lookup's, so one naming none would run on no row, and the view is
+    """A kernel spec's target is its own lookup's, so one naming none would run on no row, and the view is
     refused when it is built rather than answering anything."""
     with pytest.raises(ImproperlyConfigured, match="declares no target selector"):
         view.as_view()
@@ -185,7 +170,7 @@ def _recording(exc: Exception, context: dict[str, Any]) -> Response | None:
 
 
 @pytest.mark.parametrize("entry", list(_VIEWS))
-def test_the_handler_runs_once_and_sees_drfs_error_details(entry: str) -> None:
+def test_the_handler_runs_once_and_sees_drf_s_error_details(entry: str) -> None:
     """The configured handler is handed the exception with DRF's ``ErrorDetail``
     leaves, once, whichever view the error comes through."""
     _seen.clear()
@@ -199,7 +184,7 @@ def test_the_handler_runs_once_and_sees_drfs_error_details(entry: str) -> None:
     assert leaf == "False"
 
 
-def test_the_exception_keeps_drfs_shape_after_the_body_is_restored() -> None:
+def test_the_exception_keeps_its_details_after_the_body_is_restored() -> None:
     """DRF's default handler answers with ``exc.detail`` itself, so restoring the
     schema in place would rewrite the exception too, and anything reading it after the
     response (a logger, an error tracker) would see a different shape from the one the
@@ -387,7 +372,7 @@ def test_a_handler_answering_with_a_django_response_is_left_alone() -> None:
     assert set(json.loads(response.content)) == {"error"}
 
 
-class _RejectView(_KernelSpecView, ServiceCreateView):
+class _RejectView(ServiceCreateView):
     spec = ServiceSpec(service=_reject_schema_field, permissions=_OPEN, atomic=False)
 
 

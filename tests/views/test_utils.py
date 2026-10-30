@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
 from django_service_specs.types.unset import UNSET
 from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
@@ -77,42 +78,6 @@ class _BareView: ...
 
 
 class TestResolveExtraKwargs:
-    def test_returns_empty_when_no_layers_present(self) -> None:
-        result = resolve_extra_kwargs(
-            _BareView(),
-            _request(),
-            action_hook=None,
-            catch_all_hook="get_service_kwargs",
-        )
-        assert result == {}
-
-    def test_catch_all_hook_only(self) -> None:
-        result = resolve_extra_kwargs(
-            _ViewWithCatchAll(),
-            _request(),
-            action_hook=None,
-            catch_all_hook="get_service_kwargs",
-        )
-        assert result == {"a": "catch", "shared": "catch"}
-
-    def test_action_hook_overrides_catch_all(self) -> None:
-        result = resolve_extra_kwargs(
-            _ViewWithActionHook(),
-            _request(),
-            action_hook="get_create_service_kwargs",
-            catch_all_hook="get_service_kwargs",
-        )
-        assert result == {"a": "catch", "b": "action", "shared": "action"}
-
-    def test_action_hook_missing_method_falls_back(self) -> None:
-        result = resolve_extra_kwargs(
-            _ViewWithCatchAll(),
-            _request(),
-            action_hook="get_nonexistent_service_kwargs",
-            catch_all_hook="get_service_kwargs",
-        )
-        assert result == {"a": "catch", "shared": "catch"}
-
     def test_provider_declines_a_key_with_unset(self) -> None:
         # A provider returning ``UNSET`` for a key is declining it — the key is
         # dropped, so an earlier layer's real value survives instead of being
@@ -141,42 +106,6 @@ class _ViewWithInputAction(_ViewWithInputCatchAll):
 
 
 class TestResolveInputExtras:
-    def test_returns_empty_when_no_layers_present(self) -> None:
-        result = resolve_input_extras(
-            _BareView(),
-            _request(),
-            action_hook=None,
-            catch_all_hook="get_input_data",
-        )
-        assert result == {}
-
-    def test_catch_all_hook_only(self) -> None:
-        result = resolve_input_extras(
-            _ViewWithInputCatchAll(),
-            _request(),
-            action_hook=None,
-            catch_all_hook="get_input_data",
-        )
-        assert result == {"a": "catch", "shared": "catch"}
-
-    def test_action_hook_overrides_catch_all(self) -> None:
-        result = resolve_input_extras(
-            _ViewWithInputAction(),
-            _request(),
-            action_hook="get_create_input_data",
-            catch_all_hook="get_input_data",
-        )
-        assert result == {"a": "catch", "b": "action", "shared": "action"}
-
-    def test_action_hook_missing_method_falls_back(self) -> None:
-        result = resolve_input_extras(
-            _ViewWithInputCatchAll(),
-            _request(),
-            action_hook="get_nonexistent_input_data",
-            catch_all_hook="get_input_data",
-        )
-        assert result == {"a": "catch", "shared": "catch"}
-
     def test_extras_offered_only_to_providers_that_declare_them(self) -> None:
         sentinel = object()
 
@@ -198,3 +127,45 @@ class TestResolveInputExtras:
             "hook_instance": sentinel,
             "legacy": "untouched",
         }
+
+
+_HOOKS = {
+    "service_kwargs": (resolve_extra_kwargs, _ViewWithCatchAll, _ViewWithActionHook),
+    "input_data": (resolve_input_extras, _ViewWithInputCatchAll, _ViewWithInputAction),
+}
+
+
+@pytest.mark.parametrize("hook", list(_HOOKS))
+@pytest.mark.parametrize(
+    ("layers", "action", "expected"),
+    [
+        pytest.param("none", None, {}, id="returns_empty_when_no_layers_present"),
+        pytest.param(
+            "catch_all", None, {"a": "catch", "shared": "catch"}, id="catch_all_hook_only"
+        ),
+        pytest.param(
+            "action",
+            "create",
+            {"a": "catch", "b": "action", "shared": "action"},
+            id="action_hook_overrides_catch_all",
+        ),
+        pytest.param(
+            "catch_all",
+            "nonexistent",
+            {"a": "catch", "shared": "catch"},
+            id="action_hook_missing_method_falls_back",
+        ),
+    ],
+)
+def test_an_action_hook_layers_over_the_catch_all(
+    hook: str, layers: str, action: str | None, expected: dict[str, Any]
+) -> None:
+    resolve, catch_all_view, action_view = _HOOKS[hook]
+    view = {"none": _BareView, "catch_all": catch_all_view, "action": action_view}[layers]
+    result = resolve(
+        view(),
+        _request(),
+        action_hook=None if action is None else f"get_{action}_{hook}",
+        catch_all_hook=f"get_{hook}",
+    )
+    assert result == expected

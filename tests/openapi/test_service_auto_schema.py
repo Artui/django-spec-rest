@@ -2,9 +2,8 @@
 
 Every view here carries the kernel's own ``ServiceSpec`` or ``SelectorSpec``,
 with no ``serializer_class``: the request body is read off the spec's
-Validator and the response off its presenter, so each test fails against a
-schema that reads only drfs specs, which falls back to the view's missing
-``serializer_class`` and documents no body at all.
+Validator and the response off its presenter, never off the view's missing
+``serializer_class``.
 
 - **A ``SerializerValidator``** is documented by its serializer, under the
   component name drf-spectacular gives that class; **any other Validator** by
@@ -685,7 +684,7 @@ class _PlainViewSet(GenericViewSet):
     def plain(self, request: Any) -> Any: ...
 
 
-def test_an_operation_with_no_service_spec_documents_drfs_own_request_body() -> None:
+def test_an_operation_with_no_service_spec_documents_drf_s_own_request_body() -> None:
     router = DefaultRouter()
     router.register("plain", _PlainViewSet, basename="plain")
     generated = SchemaGenerator(patterns=router.urls).get_schema(request=None, public=True)

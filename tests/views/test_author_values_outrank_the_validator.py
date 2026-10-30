@@ -8,14 +8,14 @@ became: a key a serializer's ``validate()`` derives from the body, or one a
 client's value stays where it was validated, in ``data``.
 
 A view's ``get_service_kwargs`` hook, the other author, outranks the Validator
-too, as on drfs: the edge lays the hook's values beneath the spec's provider in
+too: the edge lays the hook's values beneath the spec's provider in
 its seat rather than in the kernel's overlay, which sits beneath what the
 Validator computes. Beneath the provider it answers as the kernel's overlay
 does: the provider's value wins a key both give, a key a typed provider owns is
 never the hook's, and one it declines falls to the hook.
 
-Not ported: drfs kept the bound serializer over an author's value named
-``serializer``. On the kernel route the ``kwargs`` provider's answer is merged
+An author's value named ``serializer`` is not kept from the bound serializer:
+the ``kwargs`` provider's answer is merged
 after what the Validator binds, so a provider key of that name replaces the
 bound serializer. Only the author's own values meet there, never a client's,
 so it is no server-value gap; the kernel could refuse such a key as it refuses
@@ -33,7 +33,7 @@ from rest_framework import serializers
 from typing_extensions import TypedDict
 
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
-from tests.views.server_value_calls import CORES, OPEN, Core, post
+from tests.views.server_value_calls import CORES, OPEN, Core, open_spec, post
 from tests.views.test_kernel_views import _CreateView
 
 pytestmark = pytest.mark.django_db
@@ -98,13 +98,7 @@ def _recording(seen: dict[str, Any]) -> Callable[..., None]:
 
 
 def _spec(seen: dict[str, Any], serializer: Any, **fields: Any) -> ServiceSpec:
-    return ServiceSpec(
-        service=_recording(seen),
-        permissions=OPEN,
-        validator=SerializerValidator(serializer),
-        atomic=False,
-        **fields,
-    )
+    return open_spec(_recording(seen), serializer, **fields)
 
 
 @_SHAPE

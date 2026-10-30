@@ -1,7 +1,6 @@
 """A kernel selector spec's ``filter_set`` runs off the event loop under the async edge.
 
-Ported from the drfs dispatch suite's loop-safety rows, its ``filter_set``
-case: a filter method that evaluates a queryset is sync ORM work, and
+A filter method that evaluates a queryset is sync ORM work, and
 ``adispatch_kernel_spec`` must run it in the kernel's executor hop rather than
 on the loop, where Django refuses it with ``SynchronousOnlyOperation``. The
 sync edge runs the same spec as a control.

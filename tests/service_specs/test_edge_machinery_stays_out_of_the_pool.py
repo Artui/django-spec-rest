@@ -90,9 +90,6 @@ class _CreateView(ServiceCreateView):
 
     spec = _SERVICE
 
-    def get_permissions(self) -> list[Any]:
-        return [permission() for permission in self.permission_classes]
-
     def get_input_serializer_context(self) -> dict[str, Any]:
         return {"layer": 1}
 

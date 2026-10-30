@@ -61,19 +61,6 @@ class _PostWithTagsSerializer(serializers.ModelSerializer):
         return instance
 
 
-class _OwnPermissions:
-    """``get_permissions`` answers the view's own classes, as for a spec setting none.
-
-    ``MutationFlowMixin.get_permissions`` reads ``spec.permission_classes``,
-    which a kernel spec has no attribute for.
-    """
-
-    permission_classes: Any
-
-    def get_permissions(self) -> list[Any]:
-        return [permission() for permission in self.permission_classes]
-
-
 def _spec(service: Any, **extra: Any) -> ServiceSpec:
     return ServiceSpec(
         service=service,
@@ -84,7 +71,7 @@ def _spec(service: Any, **extra: Any) -> ServiceSpec:
 
 
 def _create(service: Any, body: dict[str, Any]) -> Any:
-    view = type("_View", (_OwnPermissions, ServiceCreateView), {"spec": _spec(service)})
+    view = type("_View", (ServiceCreateView,), {"spec": _spec(service)})
     return view.as_view()(factory.post("/", body, format="json"))
 
 
@@ -128,7 +115,7 @@ def test_an_update_s_serializer_is_bound_to_the_row_and_saves_it() -> None:
             reads=Parameters.of(Parameter("pk", "integer", required=True)),
         ),
     )
-    view = type("_View", (_OwnPermissions, ServiceUpdateView), {"spec": spec})
+    view = type("_View", (ServiceUpdateView,), {"spec": spec})
     post = Post.objects.create(title="orig")
 
     response = view.as_view()(factory.put("/", {"title": "renamed"}, format="json"), pk=post.pk)
@@ -154,8 +141,7 @@ def test_a_body_key_named_serializer_never_stands_in_for_it(
     policy: UnknownArguments, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Refused as an unknown argument under ``REJECT``; dropped unseen under
-    ``IGNORE``, the service still handed the bound serializer. On the drfs path
-    the edge stripped the key and the call went on, which ``IGNORE`` keeps."""
+    ``IGNORE``, the service still handed the bound serializer."""
     monkeypatch.setattr(kernel_edge, "UNKNOWN_ARGUMENTS", policy)
     captured: dict[str, Any] = {}
 

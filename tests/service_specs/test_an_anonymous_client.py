@@ -2,9 +2,9 @@
 
 The view hands the kernel ``request.user``, which DRF sets to the project's
 ``UNAUTHENTICATED_USER`` for a client no authenticator recognised, read when
-the request is served. drfs' edge acted as Django's ``AnonymousUser`` for a
-project setting ``UNAUTHENTICATED_USER = None``; the kernel route hands the
-kernel that ``None``, which it takes, and that is the decided answer.
+the request is served. For a project setting ``UNAUTHENTICATED_USER = None``
+the kernel route hands the kernel that ``None``, which it takes, rather than
+acting as Django's ``AnonymousUser``.
 """
 
 from __future__ import annotations
@@ -33,9 +33,6 @@ class _CreateView(ServiceCreateView):
     """A create view over a kernel spec, its own permission classes answering for it."""
 
     permission_classes: Any = []
-
-    def get_permissions(self) -> list[Any]:
-        return [permission() for permission in self.permission_classes]
 
 
 def _served(**settings: Any) -> tuple[Response, list[Any]]:

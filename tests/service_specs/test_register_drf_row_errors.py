@@ -66,8 +66,7 @@ class TestARowsDrfRefusal:
     def test_the_dual_class_leaves_a_row_as_the_kernels_class(self) -> None:
         # Recorded, not chosen: the kernel reads its own ``DRFInvalidArguments``
         # before any registered class, so the dual class leaves a nested write
-        # as the kernel's bare one, which DRF does not answer. A drfs path
-        # calling a kernel write has to go through ``translate_dispatch_errors``.
+        # as the kernel's bare one, which DRF does not answer.
         register_drf_row_errors()
         with pytest.raises(KernelInvalidArguments) as excinfo:
             create_from_input(
@@ -84,7 +83,7 @@ class TestTheRegistration:
         register_drf_row_errors()
         register_drf_row_errors()
 
-    def test_it_registered_drfs_validation_error_with_its_own_reader(self) -> None:
+    def test_it_registered_drf_s_validation_error_with_its_own_reader(self) -> None:
         # The kernel refuses a second reader for a registered class, so the
         # refusal proves the registration happened without reading the
         # kernel's private registry.

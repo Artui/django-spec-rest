@@ -7,8 +7,8 @@ declaration names, an integer and a boolean parsed from their string, an array
 as every value the key repeats, and a value that does not convert is a 400
 naming it. A ``reads`` entry on the target lookup is a parameter of the spec,
 so its type is the one the value is read against. A body's value for a read,
-typed or not, is no read at all. A name both the spec and its lookup read,
-which drfs gave to the spec, is refused, since a kernel spec declares one
+typed or not, is no read at all. A name both the spec and its lookup read
+is refused, since a kernel spec declares one
 source per name.
 """
 
@@ -55,11 +55,6 @@ class _BodyIn(serializers.Serializer):
 
 class _UpdateView(ServiceUpdateView):
     permission_classes = []
-
-    def get_permissions(self) -> list[Any]:
-        # ``MutationFlowMixin``'s reads a drfs-only field; the spine's views
-        # answer the view's own classes the same way.
-        return [permission() for permission in self.permission_classes]
 
 
 def _spec(seen: dict[str, Any], *, lookup_reads: Parameters = _READS, **fields: Any) -> ServiceSpec:

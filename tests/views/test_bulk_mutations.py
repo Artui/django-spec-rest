@@ -1,7 +1,6 @@
 """Bulk mutations through the HTTP views over kernel specs: ``many`` bodies and collection targets.
 
-Changed by design: a drfs collection spec read its filters from the query
-string beside the body; a kernel service spec's arguments are its body and the
+A kernel service spec's arguments are its body and the
 route captures it declares, so a collection selector's reads come from those
 and the query string is no argument of a write.
 """

@@ -2,8 +2,7 @@
 
 The decorated action dispatches through the standalone mutation views' own
 edge (``dispatch_mutation_for_spec``), and the spec is asked at decoration what
-``validate_mutation_view_spec`` asks of a standalone view's, so each test fails
-against a tree whose decorator reads drfs fields off the spec.
+``validate_mutation_view_spec`` asks of a standalone view's.
 """
 
 from __future__ import annotations

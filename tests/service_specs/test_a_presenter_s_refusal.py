@@ -153,22 +153,15 @@ def test_any_other_exception_leaves_exactly_as_raised() -> None:
 
 
 class _CreateView(ServiceCreateView):
-    """A create view over a kernel spec, whose answer the spec's presenter renders.
-
-    ``get_permissions`` answers the view's own classes, as the spine's views do:
-    ``MutationFlowMixin``'s reads a drfs-only spec field."""
+    """A create view over a kernel spec, whose answer the spec's presenter renders."""
 
     permission_classes: Any = []
-
-    def get_permissions(self) -> list[Any]:
-        return [permission() for permission in self.permission_classes]
 
 
 @pytest.mark.parametrize(
     ("error", "body"),
     [
-        # Changed by design: drfs answered a message as DRF's bare list,
-        # ``["Cannot render."]``. A kernel spec presents through the kernel's
+        # Not DRF's bare list, ``["Cannot render."]``: a kernel spec presents through the kernel's
         # ``present``, where the refusal is the dual class with the message
         # under the kernel's non-field key, and that mapping is the body.
         (ValidationError("Cannot render."), b'{"non_field_errors":["Cannot render."]}'),

@@ -1,7 +1,6 @@
 """A ``many`` kernel spec's rows over HTTP: what reaches the service and what is refused.
 
-Changed by design: drfs bound a live view's list body whole through the list
-serializer, in DRF's words; the kernel validates each row through the spec's
+The kernel validates each row through the spec's
 Validator and refuses every failing row in one ``InvalidArguments`` addressed
 by the row's index under ``many_argument``. That error tree's shape is the
 refusal map's; this module holds which rows are refused and that nothing runs.

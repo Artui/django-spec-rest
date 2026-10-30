@@ -1,7 +1,6 @@
 """Over HTTP, a key the server fills is the route's and never the body's, on a kernel spec.
 
-drfs marked such a key ``NotClientInput`` on the callable's signature. A kernel
-spec declares no parameter for it and fills it through a ``kwargs`` provider,
+A kernel spec declares no parameter for it and fills it through a ``kwargs`` provider,
 which may read the route through the seeded ``view``: the URLconf is the
 author's, so a route capture fills it, and a body naming it is a key the spec
 declares no argument for, answered by the edge's unknown-argument policy.
@@ -71,14 +70,10 @@ _LOOKUP = SelectorSpec(
 
 
 class _Open:
-    """No permission classes, answered as the spine's views answer them:
-    ``MutationFlowMixin.get_permissions`` reads a drfs-only spec field."""
+    """No permission or authentication classes of the view's own."""
 
     permission_classes: Any = []
     authentication_classes: Any = []
-
-    def get_permissions(self) -> list[Any]:
-        return []
 
 
 class _View(_Open, ServiceUpdateView):
@@ -296,14 +291,14 @@ def test_a_route_capture_fills_a_collection_lookup_s_server_owned_key(
 
 
 class _HookHandingTheViewOver(_SeedView):
-    """Hands itself to the selector through a kwargs hook, as drfs allowed and dropped for the seed."""
+    """Hands itself to the selector through a kwargs hook."""
 
     def get_selector_kwargs(self) -> dict[str, Any]:
         return {"view": self}
 
 
 class _HookFillingTheKey(_TeamRetrieveView):
-    """Fills the server-owned key through a kwargs hook, which outranked the route's capture on drfs."""
+    """Fills the server-owned key through a kwargs hook, over the route's capture."""
 
     def get_selector_kwargs(self) -> dict[str, Any]:
         return {"team": "hook-team"}
@@ -315,8 +310,7 @@ class _HookFillingTheKey(_TeamRetrieveView):
 def test_a_selector_view_s_kwargs_hook_is_refused_when_the_view_is_built(
     seen: list[Any], view: type
 ) -> None:
-    """Changed by design: drfs asked ``get_selector_kwargs`` and layered its answer over
-    the route's capture; a kernel selector spec is handed its own ``kwargs`` provider's
+    """A kernel selector spec is handed its own ``kwargs`` provider's
     values and no view hook's, so an override would be silently unasked. It is refused
     at ``as_view()``, naming the hook and the provider to move it to, before any
     request runs the selector."""

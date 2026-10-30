@@ -1,9 +1,6 @@
 """A key the spec's typed ``kwargs`` provider is annotated to fill is never the client's, on the kernel route.
 
-On a drfs spec the provider could own any field's key, and declining it left
-the service's parameter its default whatever field the client's value came in
-through. On a kernel spec the kernel decides most of that before a request
-arrives: a key that names a ``SerializerValidator`` parameter - a list, dict,
+The kernel decides most of that before a request arrives: a key that names a ``SerializerValidator`` parameter - a list, dict,
 nested or nested ``many`` field, or a plain required one - is refused when the
 spec's parameters are assembled, because the provider's values reach the
 service's pool and never the Validator, and ``input_data`` is the seat that

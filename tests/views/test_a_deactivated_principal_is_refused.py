@@ -110,16 +110,9 @@ def _writes(service: Any, **fields: Any) -> ServiceSpec:
 
 
 class _ViewPermissions:
-    """The view's own ``permission_classes`` answer for a kernel spec.
-
-    ``MutationFlowMixin.get_permissions`` reads a drfs spec's
-    ``permission_classes``, which a kernel spec has no attribute for.
-    """
+    """No permission classes of the view's own."""
 
     permission_classes: Any = []
-
-    def get_permissions(self) -> list[Any]:
-        return [permission() for permission in self.permission_classes]
 
 
 class _Create(_ViewPermissions, ServiceCreateView):

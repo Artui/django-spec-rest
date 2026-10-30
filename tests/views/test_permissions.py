@@ -1,8 +1,6 @@
 """A kernel spec's ``permissions`` and its view's ``permission_classes`` on the mutation views.
 
-Changed by design: a drfs spec's ``permission_classes`` replaced the view's, so
-a spec could open a view the view's classes closed. A kernel spec has no
-``permission_classes``; its checks are its ``permissions``, which the kernel's
+A kernel spec has no ``permission_classes``; its checks are its ``permissions``, which the kernel's
 ``dispatch`` asks, and the view's own classes are DRF's, asked first. Both
 hold, so neither can open what the other closes. DRF's classes reach a spec's
 ``permissions`` through ``DRFPermissionCheck``. The selector views' cases are
@@ -76,7 +74,7 @@ class TestServiceCreateViewPermissions:
         assert _post(_create_view(_DENY, permission_classes=[AllowAny])).status_code == 403
 
     def test_the_view_s_classes_deny_where_the_spec_allows(self) -> None:
-        """Changed by design: an open spec no longer opens a closed view."""
+        """An open spec does not open a closed view."""
         assert _post(_create_view(_OPEN, permission_classes=[_DenyAll])).status_code == 403
         assert not Author.objects.exists()
 

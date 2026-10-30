@@ -72,18 +72,8 @@ def _update_spec(**lookup: Any) -> ServiceSpec:
     )
 
 
-class _StandIn:
-    """``get_permissions`` stands in for ``MutationFlowMixin``'s, which reads a
-    drfs spec's ``permission_classes``, as the spine's views do."""
-
-    permission_classes: Any
-
-    def get_permissions(self) -> list[Any]:
-        return [permission() for permission in self.permission_classes]
-
-
 def _view(base: type, spec: ServiceSpec) -> Any:
-    return type("_View", (_StandIn, base), {"spec": spec}).as_view()
+    return type("_View", (base,), {"spec": spec}).as_view()
 
 
 @pytest.fixture
@@ -172,7 +162,7 @@ class TestALookupsFilterSet:
         victim = Author.objects.create(name="victim")
         view = type(
             "_View",
-            (_StandIn, ServiceUpdateView),
+            (ServiceUpdateView,),
             {
                 "spec": _update_spec(filter_set=_ByName),
                 "permission_classes": [_ScopeIsMine],

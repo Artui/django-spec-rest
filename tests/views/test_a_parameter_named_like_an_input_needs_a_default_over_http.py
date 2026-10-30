@@ -10,13 +10,9 @@ missing value is a 400 naming it, a sent one is handed over. A parameter with a
 default is handed the value the call sends. A selector takes its arguments
 from its reads, so a required read is a required argument.
 
-The kernel route's answer today, which no plan decision names yet: a service spec's reads are the body's on the kernel route
-(``kernel_arguments``), where drfs read a ``QueryParam`` off the query string,
-so each value here is sent in the body.
-
-drfs refused the field case at ``as_view()`` as well, and let a ``kwargs``
-provider of any shape waive both; a kernel spec is judged by its provider's
-annotated keys instead (``test_spec_validation_e2e``).
+A service spec's reads are the body's on the kernel route
+(``kernel_arguments``), so each value here is sent in the body. A ``kwargs``
+provider waives a keyword by its annotated keys (``test_spec_validation_e2e``).
 """
 
 from __future__ import annotations
@@ -50,13 +46,7 @@ class _In(serializers.Serializer):
 
 
 class _CreateView(ServiceCreateView):
-    """``get_permissions`` answers the view's own classes, as the spine's
-    ``_CreateView`` does: ``MutationFlowMixin``'s reads a drfs-only field."""
-
     permission_classes = []
-
-    def get_permissions(self) -> list[Any]:
-        return [permission() for permission in self.permission_classes]
 
 
 def _titled(*, data: Any, title: str) -> dict[str, Any]:

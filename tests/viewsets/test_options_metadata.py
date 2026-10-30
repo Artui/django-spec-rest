@@ -5,12 +5,8 @@ handler behind it, and a CORS preflight is an OPTIONS request too, so every
 route must answer one. A route serving a kernel spec is described from its
 specs (``tests/views/test_spec_options.py`` holds the answer on every base);
 this file holds what is particular to a viewset: which methods its routing
-serves, the ``Allow`` it states, and the shapes drfs' metadata could not
-describe, ported to kernel specs.
-
-The drfs rows with no kernel counterpart are not ported: a
-``PolymorphicServiceSpec`` is drfs' alone, and so are the overrides of
-``get_serializer_class`` and ``get_serializer`` that described its variants.
+serves, the ``Allow`` it states, and the shapes a metadata pass probing the
+view's serializer could not describe.
 """
 
 from __future__ import annotations
@@ -282,22 +278,22 @@ def test_a_post_s_target_reads_are_not_described() -> None:
     assert _described(response) == {"POST": {"name"}}
 
 
-# ----- what drfs' metadata could not describe -----
+# ----- what a serializer-probing metadata pass could not describe -----
 
 
 def test_a_put_on_a_list_route_is_described_without_a_lookup() -> None:
-    """drfs' metadata probed ``get_object()`` for a PUT routed on a URL with
-    no lookup kwarg and ended in DRF's ``URL keyword argument`` assertion. The
-    target is the spec's own selector, which OPTIONS never runs."""
+    """A PUT routed on a URL with no lookup kwarg is described without
+    ``get_object()``, which would end in DRF's ``URL keyword argument``
+    assertion. The target is the spec's own selector, which OPTIONS never runs."""
     response = _options(_viewset(action_specs={"update": _update()}), {"put": "update"})
     assert response.status_code == 200
     assert "PUT" in _described(response)
 
 
 def test_a_context_dependent_input_is_left_out_rather_than_a_500() -> None:
-    """drfs' metadata built the input with DRF's base context and ended in the
-    serializer's ``KeyError``. The method stays routed and is not described:
-    its fields are known only to the call its view's input layer adds to."""
+    """Built with DRF's base context, the input would end in the serializer's
+    ``KeyError``. The method stays routed and is not described: its fields are
+    known only to the call its view's input layer adds to."""
 
     class _ViewSet(ServiceViewSet):
         queryset = Author.objects.all()
@@ -313,8 +309,8 @@ def test_a_context_dependent_input_is_left_out_rather_than_a_500() -> None:
 
 
 def test_a_spec_only_viewset_without_a_serializer_class_is_described() -> None:
-    """drfs' metadata reached ``GenericAPIView.get_serializer_class``'s
-    assertion for a ``create`` it could not resolve a serializer for."""
+    """A ``create`` with no serializer to resolve is described from its spec,
+    never reaching ``GenericAPIView.get_serializer_class``'s assertion."""
     viewset = type("_ViewSet", (ServiceViewSet,), {"action_specs": {"create": _create()}})
     response = _options(viewset, {"post": "create"})
     assert response.status_code == 200

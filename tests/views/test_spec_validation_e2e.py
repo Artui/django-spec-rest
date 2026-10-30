@@ -11,13 +11,11 @@ in the kernel's own words, so a change of wording there is seen here.
 
 ``check_seeds`` sees every keyword a call fills but those the edge's overlay
 fills from a mutation view's ``get_service_kwargs`` or
-``get_<action>_service_kwargs``, so a view overriding either is not asked it,
-as drfs read an overridden hook as a source of keys it could not see. It reads
-no output selector, so a keyword an ``output_selector_spec`` requires and
-nothing fills is no longer refused here, where drfs refused it.
-
-Where drfs answered differently the test says so: an undeclared route capture
-is no argument, and the kernel hands every service ``data``.
+``get_<action>_service_kwargs``, so a view overriding either is not asked it:
+an overridden hook is a source of keys it cannot see. It reads no output
+selector, so a keyword an ``output_selector_spec`` requires and nothing fills
+is not refused here. An undeclared route capture is no argument, and the kernel
+hands every service ``data``.
 """
 
 from __future__ import annotations
@@ -157,8 +155,7 @@ class TestAMutationView:
     def test_a_view_hook_fills_a_keyword_check_seeds_cannot_see(self) -> None:
         """An overridden ``get_service_kwargs`` reaches the service through the
         edge's overlay, which ``check_seeds`` cannot see, so the view is not
-        asked it and mounts, as drfs read an overridden hook as a source of
-        keys it could not see; the request fills the keyword."""
+        asked it and mounts; the request fills the keyword."""
         received: dict[str, Any] = {}
 
         def service(*, tenant: str) -> None:
@@ -222,9 +219,8 @@ class TestAMutationView:
         assert callable(_build(ServiceCreateView, spec))
 
     def test_data_is_handed_to_every_service(self) -> None:
-        """The kernel route's answer today, which no plan decision names yet: drfs refused ``data`` on a spec with no
-        ``input_serializer``. The kernel hands every service ``data``, the
-        caller's checked arguments, Validator or not."""
+        """The kernel hands every service ``data``, the caller's checked
+        arguments, Validator or not."""
 
         def service(*, data: Any) -> None: ...
 
@@ -383,10 +379,9 @@ class TestASelectorView:
             _build(SelectorRetrieveView, spec)
 
     def test_a_route_capture_the_spec_does_not_declare_is_refused(self) -> None:
-        """Changed by design (a route capture nothing declares is no
-        argument): drfs let a retrieve selector require any
-        keyword, because a route capture might fill it. The kernel route reads
-        only a capture the spec declares, so an undeclared one fills nothing
+        """A route capture nothing declares is no argument, so a retrieve
+        selector cannot require a keyword in the hope that a route capture fills
+        it. The kernel route reads only a capture the spec declares, so an undeclared one fills nothing
         (``kernel_arguments``) and the selector is refused here."""
 
         def selector(*, pk: int) -> None: ...

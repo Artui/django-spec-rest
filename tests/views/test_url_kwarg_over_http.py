@@ -4,8 +4,8 @@ A capture the spec declares as a read is its argument, coerced to the read's
 type and over whatever the query string sends under the same name. A capture
 it does not declare is no argument: the selector is not handed it, it stays on
 ``view.kwargs`` for DRF's own machinery (a permission class, a queryset), and
-nothing refuses it, under either unknown-argument policy. drfs' ``UrlKwarg``
-declaration drops with its spec types; a kernel read is the declaration.
+nothing refuses it, under either unknown-argument policy. A kernel read is the
+declaration.
 """
 
 from __future__ import annotations

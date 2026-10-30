@@ -172,8 +172,7 @@ class TestServiceUpdateView:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Every ``PATCH`` hands the kernel the spec's partial variant as
-        ``kernel_spec_variant`` holds it, the one object a drfs spec's ``PATCH``
-        compiles to as well, so there is one partial twin per spec, not two."""
+        ``kernel_spec_variant`` holds it, so there is one partial twin per spec."""
         handed: list[Any] = []
         dispatched = utils.dispatch_kernel_spec
 
@@ -281,8 +280,7 @@ class TestTheTarget:
     def test_a_detail_view_s_kernel_spec_with_no_target_selector_is_refused_at_as_view(
         self, base: type
     ) -> None:
-        """Changed by design: a drfs update or delete scoped its call with the
-        view's ``get_object()``, which a kernel spec never asks, so a spec
+        """A kernel spec never asks the view's ``get_object()``, so a spec
         naming no target would run on no row. It is refused when the view is
         built, before ``check_seeds`` answers anything of it."""
 

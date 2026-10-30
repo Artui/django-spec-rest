@@ -223,8 +223,8 @@ def test_nested_serializers_and_lists_nest_their_output() -> None:
     assert by_name["grid"] == OutputField("grid", "array", items="array")
     # An element with no JSON type is left undeclared, which an array allows.
     assert by_name["anything"] == OutputField("anything", "array")
-    # drfs' own walk reads no choices off a list's element, so neither does this:
-    # declaring them here would have the kernel substitute displays drfs never did.
+    # No choices are read off a list's element: declaring them here would have the
+    # kernel substitute displays for the element's values.
     assert by_name["picks"] == OutputField("picks", "array", items="string")
     assert by_name["related"] == OutputField("related", "array", always_present=False)
 
@@ -244,7 +244,7 @@ def test_a_serializer_that_nests_itself_is_truncated_rather_than_recursing() -> 
         field = field.fields.get("child")
         depth += 1
 
-    # Four appearances on the path are described, as drfs' schema walk allows;
+    # Four appearances on the path are described;
     # the next is a bare object, which is the one thing still known to be true.
     assert depth == 4
     assert field == OutputField("child", "object", always_present=False)

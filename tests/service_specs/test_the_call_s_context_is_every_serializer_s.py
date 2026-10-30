@@ -5,8 +5,7 @@ The view builds one call context per request and hands it to the kernel's
 ``SerializerPresenter``'s are built with that very object as their ``context``,
 not a copy, so a key the input serializer's ``validate()`` writes is there for
 the service and for the output serializer, as one serializer validating and
-rendering in a stock ``ModelViewSet`` already sees it. drfs handed each
-serializer its own copy; its tests of that stay with the drfs path.
+rendering in a stock ``ModelViewSet`` already sees it.
 
 Off a request - a kernel ``dispatch`` with no request in its context, or with
 the Django request a run arrived on - the serializers are built over the
@@ -40,21 +39,10 @@ factory = APIRequestFactory()
 _OPEN = (Unrestricted(),)
 
 
-class _CreateView(ServiceCreateView):
-    """A create view over a kernel spec, its own permission classes answering for it.
-
-    ``MutationFlowMixin.get_permissions`` reads a drfs spec's
-    ``permission_classes``, which a kernel spec has no attribute for.
-    """
-
-    def get_permissions(self) -> list[Any]:
-        return [permission() for permission in self.permission_classes]
-
-
 def _post(
     spec: ServiceSpec,
     body: Any,
-    base: type[_CreateView] = _CreateView,
+    base: type[ServiceCreateView] = ServiceCreateView,
     **route_kwargs: Any,
 ) -> Response:
     view = type("_View", (base,), {"spec": spec}).as_view()
@@ -132,7 +120,7 @@ def test_the_spec_s_context_callable_writes_into_the_one_dict() -> None:
     assert seen.contexts["output"] is seen.contexts["service"]
 
 
-class _ExtendingView(_CreateView):
+class _ExtendingView(ServiceCreateView):
     """A view adding a key to DRF's serializer context, as a project's view does."""
 
     def get_serializer_context(self) -> dict[str, Any]:

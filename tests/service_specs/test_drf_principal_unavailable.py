@@ -21,7 +21,7 @@ from tests.service_specs.served_status import served_status
 
 
 class TestItIsBothClasses:
-    def test_it_is_the_kernels_refusal_and_drfs_denial(self) -> None:
+    def test_it_is_the_kernels_refusal_and_drf_s_denial(self) -> None:
         assert issubclass(DRFPrincipalUnavailable, KernelPrincipalUnavailable)
         assert issubclass(DRFPrincipalUnavailable, DispatchError)
         assert issubclass(DRFPrincipalUnavailable, PermissionDenied)
@@ -32,7 +32,7 @@ class TestItIsBothClasses:
 
 
 class TestBothInitsRan:
-    def test_the_default_is_the_kernels_message_not_drfs(self) -> None:
+    def test_the_default_is_the_kernels_message_not_a_permission_denial(self) -> None:
         # DRF's default reads as a permission refusal; this one says there is
         # nobody to refuse, and the kernel's wording is the one kept.
         exc = DRFPrincipalUnavailable()
@@ -40,13 +40,13 @@ class TestBothInitsRan:
         assert exc.detail == KernelPrincipalUnavailable.default_message
         assert exc.detail != PermissionDenied.default_detail
 
-    def test_a_message_is_both_the_kernels_message_and_drfs_detail(self) -> None:
+    def test_a_message_is_both_the_kernels_message_and_drf_s_detail(self) -> None:
         exc = DRFPrincipalUnavailable("That account is deactivated.")
         assert exc.message == "That account is deactivated."
         assert isinstance(exc.detail, ErrorDetail)
         assert exc.detail == "That account is deactivated."
 
-    def test_get_codes_is_drfs_denial_code(self) -> None:
+    def test_get_codes_is_drf_s_denial_code(self) -> None:
         assert DRFPrincipalUnavailable().get_codes() == "permission_denied"
 
     def test_a_code_given_is_kept(self) -> None:

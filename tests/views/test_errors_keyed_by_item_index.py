@@ -11,19 +11,19 @@ keys.
 A refusal of a read beside the rows keeps its own key beside the argument's
 rather than being unwrapped into a bare list.
 
-**Client-visible changes.** A drfs ``many`` view answered three things differently, and
-the tests assert the kernel's answer for each:
+**What a client sees.** A ``many`` view answers three things in the kernel's
+shape rather than DRF's list serializer's, and the tests assert each:
 
-* A refusal of the rows was the bare tree, ``{"1": {...}, "3": {...}}``; the kernel
-  answers it under the argument, ``{"items": {"1": {...}}}``.
-* A body that was no list was ``{"non_field_errors": ["Expected a list of items but
-  got type \"dict\"."]}``; the kernel answers ``{"items": ["Expected an array."]}``.
-* A body that is a list holding a row that is no object was
+* A refusal of the rows is answered under the argument, ``{"items": {"1": {...}}}``,
+  rather than as the bare tree, ``{"1": {...}, "3": {...}}``.
+* A body that is no list is ``{"items": ["Expected an array."]}``, rather than
+  ``{"non_field_errors": ["Expected a list of items but got type \"dict\"."]}``.
+* For a body that is a list holding a row that is no object, rather than
   ``{"1": {"non_field_errors": ["Invalid data. Expected a dictionary, but got
-  str."]}}``; the kernel answers ``{"items": {"1": {"non_field_errors": ["Expected an
+  str."]}}``, the kernel answers ``{"items": {"1": {"non_field_errors": ["Expected an
   object."]}}}``.
 
-Unwrapping the first two to the drfs shape would need the spec inside
+Unwrapping the first two to DRF's shape would need the spec inside
 ``answering_refusals``. The third is the kernel's own wording for a row that is no
 object, against DRF's; the bulk body as a whole is awaiting an owner decision
 (the kernel's wording and nesting, or DRF's), and until it is made the tests pin the

@@ -33,7 +33,7 @@ def _tree() -> dict[object, object]:
 
 
 class TestItIsBothClasses:
-    def test_it_is_the_kernels_refusal_and_drfs(self) -> None:
+    def test_it_is_the_kernels_refusal_and_drf_s(self) -> None:
         assert issubclass(DRFInvalidArguments, KernelInvalidArguments)
         assert issubclass(DRFInvalidArguments, DispatchError)
         assert issubclass(DRFInvalidArguments, ValidationError)
@@ -68,7 +68,7 @@ class TestDrfsInitRan:
     def test_the_kernels_message_is_kept(self) -> None:
         assert DRFInvalidArguments(_tree()).message == KernelInvalidArguments.default_message
 
-    def test_it_reads_as_drfs_validation_error_does(self) -> None:
+    def test_it_reads_as_drf_s_validation_error_does(self) -> None:
         # A ladder that turns the refusal into text, as an agent retry does,
         # reads what it read when the class raised was DRF's alone.
         assert str(DRFInvalidArguments(_tree())) == str(ValidationError(_tree()))

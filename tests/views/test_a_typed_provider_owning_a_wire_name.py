@@ -8,12 +8,10 @@ two names answer differently on a kernel spec:
   ``kwargs`` provider annotated to fill one, since its values reach the
   service's pool and never the Validator; ``input_data`` is the seat that
   fills a field. That refusal is the kernel's, raised when the spec's
-  parameters are assembled, so the drfs cases of a provider owning the wire
-  name have no kernel counterpart and the refusal is asserted instead.
+  parameters are assembled, so the refusal is what is asserted.
 - **The ``source`` is no parameter**, so a provider may own it, and what the
   service is handed for it is the question the rest of this module asks.
-  ``NotClientInput`` on the wire name has no reader on a kernel spec; a
-  provider owning the ``source`` is its spelling here.
+  A provider owning the ``source`` is how a key is kept from the client.
 
 A view's ``get_service_kwargs`` naming the wire name pins the field, as any
 value naming a Validator parameter does, and one naming the ``source`` goes

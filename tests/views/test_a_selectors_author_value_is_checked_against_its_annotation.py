@@ -5,15 +5,11 @@ an argument like any a caller sends, so it is checked against the type its read
 declares: a value that does not convert is refused with a 400 before the
 selector runs, and a string that converts reaches it as the declared type.
 
-Three answers differ from drfs'. Two by design: drfs checked the value
-against the selector's annotation, which a kernel spec never reads, since the
-signature reflection drops (S3) and its reads declare the type; and it checked
-a ``get_selector_kwargs()`` value, which never reaches a kernel spec (the
-carry-over list rewrites ``resolve_extra_kwargs`` onto the spec's providers),
-so a view overriding the hook beside one is refused when it is built.
-The third is the kernel route's answer today, which no plan decision names
-yet: drfs checked the spec's ``kwargs`` provider's value too, where the kernel
-hands a provider's value to the callable as given.
+Nothing is checked against the selector's own annotation, which a kernel spec
+never reads: its reads declare the type. A ``get_selector_kwargs()`` value never
+reaches a kernel spec, so a view overriding the hook beside one is refused when
+it is built, and the kernel hands a ``kwargs`` provider's value to the callable
+as given, unchecked.
 """
 
 from __future__ import annotations

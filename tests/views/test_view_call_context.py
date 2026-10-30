@@ -71,17 +71,6 @@ class _NameIn(serializers.Serializer):
     name = serializers.CharField()
 
 
-class _KernelCreateView(ServiceCreateView):
-    """``get_permissions`` answers the view's own classes, as for a spec setting none.
-
-    ``MutationFlowMixin.get_permissions`` reads ``spec.permission_classes``,
-    which a kernel spec has no attribute for.
-    """
-
-    def get_permissions(self) -> list[Any]:
-        return [permission() for permission in self.permission_classes]
-
-
 @pytest.mark.django_db
 def test_every_callable_of_a_kernel_service_is_handed_the_view_s_dict() -> None:
     """The ``kwargs`` and ``input_data`` providers, both seats' context callables
@@ -101,7 +90,7 @@ def test_every_callable_of_a_kernel_service_is_handed_the_view_s_dict() -> None:
         seen["service"] = call_context
         return Author.objects.create(name=data["name"])
 
-    class _View(_KernelCreateView):
+    class _View(ServiceCreateView):
         spec = ServiceSpec(
             service=service,
             permissions=_OPEN,
@@ -164,7 +153,7 @@ def test_a_view_hook_taking_kwargs_alone_is_never_handed_the_call_context(name: 
 
     view = type(
         "_Hooked",
-        (_KernelCreateView,),
+        (ServiceCreateView,),
         {
             "spec": ServiceSpec(
                 service=lambda *, data: None,
@@ -263,7 +252,7 @@ def test_a_status_or_finalizer_naming_the_call_context_is_refused_when_the_view_
         validator=SerializerValidator(_NameIn),
     )
     if view == "standalone":
-        built = type("_View", (_KernelCreateView,), {"spec": spec, **attrs})
+        built = type("_View", (ServiceCreateView,), {"spec": spec, **attrs})
         with pytest.raises(ImproperlyConfigured, match="call_context"):
             built.as_view()
     else:

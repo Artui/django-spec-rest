@@ -150,8 +150,7 @@ class TestCallableSuccessStatus:
 
 
 class TestASuccessStatusTheViewCannotResolve:
-    """Refused when the view is built, as a drfs spec's ``success_status`` is,
-    rather than raising ``TypeError`` once the service has committed."""
+    """Refused when the view is built, rather than raising ``TypeError`` once the service has committed."""
 
     def test_a_callable_requiring_a_key_the_pool_lacks_is_refused_at_as_view(self) -> None:
         def status(*, call_context: Any) -> int:

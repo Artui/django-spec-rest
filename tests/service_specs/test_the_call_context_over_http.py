@@ -40,15 +40,8 @@ factory = APIRequestFactory()
 _OPEN = (Unrestricted(),)
 
 
-class _CreateView(ServiceCreateView):
-    """A create view over a kernel spec, its own permission classes answering for it."""
-
-    def get_permissions(self) -> list[Any]:
-        return [permission() for permission in self.permission_classes]
-
-
 def _post(spec: ServiceSpec, body: Any, url: str = "/", **attrs: Any) -> Response:
-    view = type("_View", (_CreateView,), {"spec": spec, **attrs}).as_view()
+    view = type("_View", (ServiceCreateView,), {"spec": spec, **attrs}).as_view()
     return view(factory.post(url, body, format="json"))
 
 
@@ -179,7 +172,7 @@ def test_a_many_service_s_stages_share_the_dict() -> None:
 def test_each_request_is_a_dict_of_its_own() -> None:
     seen: list[dict[str, Any]] = []
     spec = ServiceSpec(service=lambda *, call_context: seen.append(call_context), permissions=_OPEN)
-    view = type("_View", (_CreateView,), {"spec": spec}).as_view()
+    view = type("_View", (ServiceCreateView,), {"spec": spec}).as_view()
 
     view(factory.post("/", {}, format="json"))
     view(factory.post("/", {}, format="json"))

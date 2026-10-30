@@ -201,8 +201,8 @@ class TestTheViewsHookChains:
         assert _post(view, {}).data == {"tenant": "spec"}
 
     def test_a_get_service_kwargs_value_named_like_a_field_pins_it(self) -> None:
-        """The serializer validates the server's value, never the client's, as
-        it did on drfs, and the service is handed the validated one."""
+        """The serializer validates the server's value, never the client's, and
+        the service is handed the validated one."""
 
         def fn(*, data: dict[str, Any], name: str) -> dict[str, Any]:
             return {"data": dict(data), "name": name}

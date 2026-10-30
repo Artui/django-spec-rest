@@ -78,21 +78,8 @@ def _touch_all(*, collection: QuerySet[Author]) -> QuerySet[Author]:
     return collection
 
 
-class _OwnPermissions:
-    """``get_permissions`` answers the view's own classes, as for a spec setting none.
-
-    ``MutationFlowMixin.get_permissions`` reads ``spec.permission_classes``,
-    which a kernel spec has no attribute for.
-    """
-
-    permission_classes: Any
-
-    def get_permissions(self) -> list[Any]:
-        return [permission() for permission in self.permission_classes]
-
-
 def _view(base: type, spec: ServiceSpec) -> Any:
-    return type("_View", (_OwnPermissions, base), {"spec": spec}).as_view()
+    return type("_View", (base,), {"spec": spec}).as_view()
 
 
 @pytest.fixture

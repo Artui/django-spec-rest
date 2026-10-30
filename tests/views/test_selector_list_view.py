@@ -174,9 +174,7 @@ class TestTheArguments:
         assert received == {"tenant_id": 12}
 
     def test_get_selector_kwargs_beside_a_kernel_spec_is_refused_at_as_view(self) -> None:
-        """Changed by design (the carry-over list rewrites ``resolve_extra_kwargs``
-        onto the spec's providers): drfs handed the selector the hook's keys. A
-        kernel spec is handed its own providers' values and never a selector
+        """A kernel spec is handed its own providers' values and never a selector
         view's hook, so a hook beside one would be silently unasked; it is
         refused when the view is built, pointing at the spec's ``kwargs``."""
 

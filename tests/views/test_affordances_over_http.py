@@ -74,17 +74,10 @@ def _view(permissions: Any = _OPEN, permission_classes: Any = None) -> Any:
         affordances=[UNPUBLISHED],
     )
 
-    class _Publish(ServiceUpdateView):
-        """``get_permissions`` stands in for ``MutationFlowMixin``'s, which
-        reads a drfs spec's ``permission_classes``, as the spine's views do."""
-
-        def get_permissions(self) -> list[Any]:
-            return [permission() for permission in self.permission_classes]
-
     attrs: dict[str, Any] = {"spec": spec}
     if permission_classes is not None:
         attrs["permission_classes"] = permission_classes
-    return type("_View", (_Publish,), attrs).as_view()
+    return type("_View", (ServiceUpdateView,), attrs).as_view()
 
 
 def _patch(view: Any, pk: int) -> Any:
@@ -133,7 +126,7 @@ def test_a_row_condition_on_a_create_view_is_refused_at_as_view() -> None:
 
 @pytest.mark.parametrize("published", [True, False], ids=["unavailable", "available"])
 def test_a_caller_the_view_denies_the_row_learns_nothing_about_its_state(published: bool) -> None:
-    """The drfs subject: the view's own DRF ``has_object_permission``.
+    """The subject: the view's own DRF ``has_object_permission``.
 
     Both rows are answered 403 and leave the row as it was: the unavailable one
     must not hear its affordance's 409, and the available one must not be

@@ -7,6 +7,7 @@ client both name a key. Every spec they declare is the kernel's own, with
 ``SerializerValidator`` as its seat, and every call goes through the view or
 the edge, never a helper the kernel route added.
 
+- ``open_spec`` declares the spec most of them dispatch.
 - ``post`` drives ``_CreateView`` (``test_kernel_views``) through
   ``as_view()``, as a client does.
 - ``CORES`` drives ``dispatch_kernel_spec`` and ``adispatch_kernel_spec`` over
@@ -36,12 +37,24 @@ from rest_framework.response import Response
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from django_spec_rest.dispatch.kernel_edge import adispatch_kernel_spec, dispatch_kernel_spec
+from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from django_spec_rest.views.utils import view_call_context
 from tests.views.test_kernel_views import _CreateView
 
 factory = APIRequestFactory()
 OPEN = (Unrestricted(),)
 FORMATS = pytest.mark.parametrize("fmt", ["json", "multipart"])
+
+
+def open_spec(service: Callable[..., Any], serializer: Any, **fields: Any) -> ServiceSpec:
+    """A non-atomic spec over ``serializer``, open to every caller."""
+    return ServiceSpec(
+        service=service,
+        permissions=OPEN,
+        validator=SerializerValidator(serializer),
+        atomic=False,
+        **fields,
+    )
 
 
 def post(
