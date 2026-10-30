@@ -475,13 +475,6 @@ class TestAnArrayReadWithNoItems:
     ``items``; until it does, ``as_view()`` passes it.
     """
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "kernel item 14: check_seeds refuses an array read with no items over a "
-            "keyword annotated as a parametrised sequence"
-        ),
-    )
     @pytest.mark.parametrize(
         "annotation",
         [list[int], Sequence[int], tuple[int, ...], list[int] | None],
