@@ -20,7 +20,8 @@ What a view hands it, and what it does with each:
   module, which never imports the HTTP views for it.
 - **The request's arguments**, read as the kernel reads a wire: a JSON body as
   it was sent, a form body and a query string through the kernel's
-  ``flat_arguments`` and then ``coerce_flat``, and the route captures the spec
+  ``flat_arguments`` and then ``coerce_flat``, a form's prefixed spellings of a
+  field read as DRF's field reads them, and the route captures the spec
   declares as parameters, coerced the same way and over what the body or the
   query string sent (``kernel_arguments``). A capture the spec does not
   declare is no argument and stays on ``view.kwargs`` for DRF's own machinery.
@@ -109,6 +110,7 @@ from django_spec_rest.service_specs.utils import (
     SERIALIZER_CONTEXT_SEED,
     EdgeCallState,
     edge_call_state,
+    read_form_spellings,
     serializer_context,
     write_form_value,
 )
@@ -198,7 +200,12 @@ def kernel_arguments(
     through ``coerce_flat``, so ``?published=true`` reaches the shape check as
     ``True``; a JSON body's do not, since the client typed them, so a JSON
     ``"true"`` is a string there, as on every typed transport
-    (test_a_json_body_is_not_read_as_flat_strings).
+    (test_a_json_body_is_not_read_as_flat_strings). A form body's fields are
+    its serializer's to parse: the spec dispatched for one carries a lenient
+    ``SerializerValidator`` (``recording_spec``), which declares each field
+    ``any``, so a checkbox's ``"on"`` reaches DRF's field as sent, and a
+    nested, dict or list field the form spells as prefixed keys (``v.tenant``,
+    ``tags[0]``) is read as its field reads them (``read_form_spellings``).
 
     The second value is ``(validator, body)`` for a single object over a
     ``SerializerValidator``: the request's body, with what the edge put over
@@ -242,9 +249,13 @@ def kernel_arguments(
         **route,
     }
     if isinstance(body, MultiValueDict):
-        sent = coerce_flat(
-            parameters, {**_unscoped(flat_arguments(parameters, body), reads), **scope}
-        )
+        flat = _unscoped(flat_arguments(parameters, body), reads)
+        # A serializer's fields alone have prefixed spellings to read: a spec
+        # with no such Validator has no serializer to describe
+        # (test_kernel_views' test_a_capture_outranks_a_form_body).
+        if isinstance(spec.validator, SerializerValidator):
+            flat = read_form_spellings(spec.validator, body, flat)
+        sent = coerce_flat(parameters, {**flat, **scope})
     elif isinstance(body, Mapping):
         sent = {**_unscoped(body, reads), **coerce_flat(parameters, scope)}
     else:
@@ -475,8 +486,11 @@ def _read_call(
     # Read by the recording twin's ``kwargs`` seat, which lays them beneath the
     # spec's provider over the Validator's values (``recording_spec``).
     edge_call_state().author_values = extra_kwargs
+    # Read before the arguments, which the twin's Validator declares: lenient
+    # for a form body, whose values its serializer alone parses.
+    dispatched = recording_spec(spec, lenient=isinstance(request.data, MultiValueDict))
     arguments, held = kernel_arguments(
-        spec, view=view, request=request, input_data=server, query=query
+        dispatched, view=view, request=request, input_data=server, query=query
     )
     if held is not None:
         # The server's value for each field it put one into, as it put it: what
@@ -498,7 +512,7 @@ def _read_call(
         # test_a_declined_owned_source_hands_its_parameter_none_of_the_clients_value).
         keys = provider_keys(spec.kwargs) if isinstance(spec, KernelServiceSpec) else None
         state.provider_owned = keys.filled if keys is not None else frozenset()
-    return recording_spec(spec), extra_kwargs, arguments, held
+    return dispatched, extra_kwargs, arguments, held
 
 
 def _edge_state(

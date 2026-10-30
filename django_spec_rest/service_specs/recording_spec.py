@@ -10,6 +10,7 @@ unvalidated.
 
 from __future__ import annotations
 
+import copy
 import functools
 import threading
 import weakref
@@ -33,7 +34,9 @@ KernelSpec = KernelServiceSpec | KernelSelectorSpec
 
 _RECORDING: dict[
     int,
-    tuple[weakref.ref[KernelServiceSpec], dict[tuple[frozenset[str], bool], KernelServiceSpec]],
+    tuple[
+        weakref.ref[KernelServiceSpec], dict[tuple[frozenset[str], bool, bool], KernelServiceSpec]
+    ],
 ] = {}
 """Each spec's recording twins, by the spec's identity and then by the names each records.
 
@@ -51,14 +54,16 @@ decide what a later one records
 _LOCK = threading.Lock()
 
 
-def recording_spec(spec: KernelSpec) -> KernelSpec:
+def recording_spec(spec: KernelSpec, *, lenient: bool = False) -> KernelSpec:
     """``spec``, or its twin whose providers the edge watches.
 
     Two seats, each wrapped only where it has something to watch:
     ``input_data``, which puts its answer for each field onto the body, and
     ``kwargs``, whose answer naming a parameter of a ``SerializerValidator``
     is refused (``_refuse_parameters``) and which hands back a view hook's
-    values beneath that answer (``_providing``).
+    values beneath that answer (``_providing``). Where ``lenient``, for a form
+    body, the twin's ``SerializerValidator`` is a lenient copy of the spec's,
+    so the serializer alone parses the form's strings.
 
     The serializer binds the request's body rather than the kernel's
     arguments, and the kernel merges the provider's answer into its arguments
@@ -89,7 +94,7 @@ def recording_spec(spec: KernelSpec) -> KernelSpec:
     ``SerializerValidator`` with a writable field, or a Validator and a call
     carrying a view hook's values, has one; the kernel refuses an ``async`` provider when
     the spec is built, so the wrapper is sync alone. The twin shares every
-    seat but those two, so presenting the result through the view's own
+    seat but those it wraps and its Validator, so presenting the result through the view's own
     spec is unchanged. A kernel ``Grant`` covers a call only for the spec it
     was minted for, by identity, so a caller passing one must mint it for, or
     compare it against, the twin.
@@ -126,6 +131,20 @@ def recording_spec(spec: KernelSpec) -> KernelSpec:
     authored = bool(edge_call_state().author_values) and spec.validator is not None
     if refusing or authored:
         changes["kwargs"] = _providing(spec.kwargs, spec.validator if refusing else None)
+    # A form body is validated by the serializer alone, as drfs validated every
+    # request a view dispatched: its values are strings DRF's fields parse (a
+    # checkbox's ``"on"``), which the kernel's typed check of the flat values
+    # would refuse (test_kernel_spec_variant's
+    # test_a_live_view_validates_a_form_body_by_its_serializer_alone). Only a
+    # serializer's Validator has a check of its own to fall to: a spec with
+    # none keeps the kernel's (test_kernel_views'
+    # test_a_capture_outranks_a_form_body, which fails without the
+    # ``isinstance``).
+    lenient = lenient and isinstance(spec.validator, SerializerValidator)
+    if lenient:
+        relaxed = copy.copy(cast(SerializerValidator, spec.validator))
+        relaxed.lenient = True
+        changes["validator"] = relaxed
     if not changes:
         return spec
     key = id(spec)
@@ -141,9 +160,9 @@ def recording_spec(spec: KernelSpec) -> KernelSpec:
                 weakref.ref(spec, lambda _dead: _RECORDING.pop(key, None)),
                 {},
             )
-        twin = held[1].get((names, authored))
+        twin = held[1].get((names, authored, lenient))
         if twin is None:
-            twin = held[1][names, authored] = spec.derive(**changes)
+            twin = held[1][names, authored, lenient] = spec.derive(**changes)
     return twin
 
 

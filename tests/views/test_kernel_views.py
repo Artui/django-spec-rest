@@ -506,7 +506,7 @@ class TestInputDataOverASeedNamedField:
 
 
 class TestTheArgumentsAreReadAsTheKernelReadsAWire:
-    def test_a_form_body_is_read_flat_and_coerced(self) -> None:
+    def test_a_form_body_is_read_as_its_serializer_reads_it(self) -> None:
         class _Input(serializers.Serializer):
             title = serializers.CharField()
             views = serializers.IntegerField(required=False)
@@ -524,13 +524,14 @@ class TestTheArgumentsAreReadAsTheKernelReadsAWire:
             format="multipart",
         )
         assert response.status_code == 204, response.data
-        # ``views`` coerced to the integer it declares, a blank boolean absent,
-        # and Django's CSRF field never an argument.
+        # ``views`` parsed to the integer its field declares and a blank
+        # boolean absent, as DRF reads a form, and Django's CSRF field never an
+        # argument.
         assert received == {"title": "t", "views": 3}
 
     def test_a_form_s_true_is_a_boolean(self) -> None:
-        """The kernel's typed check takes an integer's ``"3"`` as sent, so a
-        boolean is what holds the form body's coercion."""
+        """A form's ``"true"`` is the serializer's to parse: the kernel's typed
+        check, which would refuse the string, is lenient for a form body."""
 
         class _Input(serializers.Serializer):
             published = serializers.BooleanField()
@@ -547,7 +548,7 @@ class TestTheArgumentsAreReadAsTheKernelReadsAWire:
 
     def test_a_json_body_is_not_read_as_flat_strings(self) -> None:
         """A JSON ``"true"`` is a string, typed by the client, and reaches the
-        kernel's typed check as one, where a form's ``"true"`` is coerced.
+        kernel's typed check as one, where a form's ``"true"`` is the serializer's.
 
         The kernel's check answers before the serializer does, so DRF, which
         would read ``"true"`` as ``True``, is never asked. A lenient Validator,

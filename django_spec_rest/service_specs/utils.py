@@ -748,6 +748,35 @@ def write_form_value(body: QueryDict, name: str, value: Any) -> None:
         body[name] = value
 
 
+def read_form_spellings(validator: Any, body: Any, flat: Mapping[str, Any]) -> dict[str, Any]:
+    """``flat`` with each field DRF reads off a form's prefixed keys read as the field reads it.
+
+    A form body carries a nested serializer, a dict or a list field as DRF's
+    prefixed spellings of it (``v.tenant``, ``v[0]tenant``, ``tags[0]``), which
+    the kernel's flat reader takes as keys no parameter declares. So each
+    field the body spells that way is read by its own ``get_value``, DRF's
+    ``parse_html_dict`` and ``parse_html_list``, and its spellings give way to
+    that value, which the closed argument set then reads as the field's. The
+    kernel route reads a form body through this
+    (test_server_value_the_edge_put's
+    test_input_data_is_the_value_put_over_a_prefixed_form_key_under_reject).
+    Spellings the field reads nothing from are left as sent, keys no parameter
+    declares (test_a_spelling_its_field_does_not_read_is_an_unknown_argument).
+    """
+    read = dict(flat)
+    for name, field in describe_serializer(validator.serializer).fields.items():
+        prefixes = (f"{name}.", f"{name}[")
+        spellings = [key for key in flat if key.startswith(prefixes)]
+        if not spellings:
+            continue
+        value = field.get_value(body)
+        if value is not serializers.empty:
+            for key in spellings:
+                del read[key]
+            read[name] = value
+    return read
+
+
 def author_keys(validator: Any) -> Mapping[str, str]:
     """The key an author gave each of ``server_values`` under, read as ``server_values`` is."""
     state = edge_call_state()

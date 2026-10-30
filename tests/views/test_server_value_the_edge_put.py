@@ -21,13 +21,11 @@ Validator, so over HTTP its answer naming a field's wire name is refused on the
 request that gets it (``test_a_kwargs_value_named_like_a_field_is_refused`` in
 ``tests/service_specs/``); the wire-name case is asserted here too.
 
-Two answers part from drfs because of how the kernel route reads a body. A
-form body's prefixed keys (``v.tenant``) are no parameter to the kernel's flat
-reader, so under ``REJECT`` they are refused, a strict xfail, while under
-``IGNORE`` they are dropped and the server's value stands. And
-``input_data``'s value is validated as the author returned it, so a form
-body's reading of it (one value for a list, an empty string left out) is not
-this route's answer. A field named like a seed a project registers is not
+A form body's prefixed keys (``v.tenant``) are read as the field reads them,
+so under either policy they are the field's value and the server's value
+stands over it. One answer parts from drfs: ``input_data``'s value is validated
+as the author returned it, so a form body's reading of it (one value for a
+list, an empty string left out) is not this route's answer. A field named like a seed a project registers is not
 ported: the HTTP views register none, and the kernel's dispatch holds that
 case.
 """
@@ -219,20 +217,11 @@ def test_input_data_is_the_value_put_however_the_field_reads_a_json_body_on_eith
 
 # A form body carries a nested or a list field as DRF's prefixed keys -
 # ``v.tenant``, ``v[0]tenant``, ``v[0]`` - which are DRF's spelling of the
-# declared field ``v``. The kernel's flat reader does not read them, so to the
-# kernel they are keys no parameter declares: under ``IGNORE`` they are dropped
-# and the server's value is the field's, and under ``REJECT`` the call is
-# refused, so no nested or list field can be filled from a form body there.
+# declared field ``v``. The edge reads them as the field does, so to the kernel
+# they are the field's value, under either policy, and the server's value is
+# the field's.
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "the kernel route reads a form body through flat_arguments, which does "
-        "not read DRF's prefixed keys for a nested or list field, so under REJECT "
-        "they are unknown arguments"
-    ),
-)
 @_READ
 def test_input_data_is_the_value_put_over_a_prefixed_form_key_under_reject(
     monkeypatch: pytest.MonkeyPatch,
@@ -249,6 +238,21 @@ def test_input_data_is_the_value_put_over_a_prefixed_form_key_under_reject(
 
     assert response.status_code == 204, response.data
     assert seen == {"v": server, "data": server, "validated": server}
+
+
+def test_a_spelling_its_field_does_not_read_is_an_unknown_argument(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A nested serializer reads ``v.tenant`` and never ``v[0]``, so ``v[0]`` is
+    no spelling of it: a key no parameter declares, refused under ``REJECT``."""
+    monkeypatch.setattr(kernel_edge, "UNKNOWN_ARGUMENTS", UnknownArguments.REJECT)
+    seen: dict[str, Any] = {}
+
+    response = post(_spec(_reads(seen), _Nested), {"v[0]": "evil"}, fmt="multipart")
+
+    assert response.status_code == 400
+    assert response.data["v[0]"][0].code == "unknown"
+    assert seen == {}
 
 
 @_READ
