@@ -158,10 +158,12 @@ def view_call_context(view: Any, request: Request) -> dict[str, Any]:
     (test_a_catch_all_callable_on_a_live_view_is_never_handed_the_call_context).
     ``success_status`` and ``response_finalizer`` are not offered it, and one
     declaring it is refused when the view is built: a drfs spec's fields of
-    those names by ``validate_service_spec``, and a standalone mutation
-    view's attributes of those names over a kernel spec by
-    ``validate_mutation_view_spec``. A viewset's own attributes over a kernel
-    spec are not checked there.
+    those names by ``validate_service_spec``, and a view's attributes of those
+    names over a kernel spec by ``validate_mutation_view_spec``: a standalone
+    mutation view's over its ``spec``, and a viewset's over each kernel
+    ``action_specs`` entry, which its ``as_view()`` asks as the standalone view
+    asks of its spec
+    (test_a_status_or_finalizer_naming_the_call_context_is_refused_when_the_view_is_built).
     """
     context: dict[str, Any] | None = getattr(view, "_call_context", None)
     if context is None:
