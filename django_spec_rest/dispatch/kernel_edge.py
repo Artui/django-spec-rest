@@ -475,6 +475,11 @@ def _read_call(
     # Read before the arguments, which the twin's Validator declares: lenient
     # for a form body, whose values its serializer alone parses.
     dispatched = recording_spec(spec, lenient=isinstance(request.data, MultiValueDict))
+    # The twin's Validator, the one the view's input layers are for: a kernel
+    # call the service makes validates without them (``input_view_layers``).
+    # The twin, not the spec's: a form body's is lenient, so another object
+    # (test_the_directional_hook_layers_over_drf_s[multipart]).
+    edge_call_state().validator = getattr(dispatched, "validator", None)
     arguments, held = kernel_arguments(
         dispatched, view=view, request=request, input_data=server, query=query
     )
@@ -548,7 +553,11 @@ def _edge_state(
             call_context=call_context,
         )
 
-    return EdgeCallState(view_hooks=hooks, describe_context=describe_context)
+    return EdgeCallState(
+        view_hooks=hooks,
+        declaration=getattr(validator, "serializer", None),
+        describe_context=describe_context,
+    )
 
 
 def _overlay(

@@ -127,9 +127,11 @@ class _KernelCreateView(ServiceCreateView):
         return [permission() for permission in self.permission_classes]
 
 
-def _create(view: type[ServiceCreateView], body: dict[str, Any] | None = None) -> Any:
+def _create(
+    view: type[ServiceCreateView], body: dict[str, Any] | None = None, form: str = "json"
+) -> Any:
     sent = {"name": "Ada"} if body is None else body
-    return view.as_view()(factory.post("/", sent, format="json"))
+    return view.as_view()(factory.post("/", sent, format=form))
 
 
 class TestTheInputSerializer:
@@ -152,14 +154,18 @@ class TestTheInputSerializer:
         _create(_View)
         assert _CapturingIn.captured["tenant"] == "acme"
 
-    def test_the_directional_hook_layers_over_drf_s(self) -> None:
+    @pytest.mark.parametrize("form", ["json", "multipart"])
+    def test_the_directional_hook_layers_over_drf_s(self, form: str) -> None:
+        """A form body is validated by a lenient twin of the spec's Validator, and
+        the hook reaches it all the same: the edge's own call is the twin's."""
+
         class _View(_KernelCreateView):
             spec = _spec()
 
             def get_input_serializer_context(self) -> dict[str, Any]:
                 return {**super().get_input_serializer_context(), "origin": "input"}
 
-        _create(_View)
+        assert _create(_View, form=form).status_code == 201
         assert _CapturingIn.captured["origin"] == "input"
 
     def test_the_directional_hook_s_key_is_there_for_the_output(self) -> None:

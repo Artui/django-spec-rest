@@ -46,7 +46,7 @@ def _context(*_arguments: Any, whole_pool: bool = False) -> dict[str, Any]:
 
 @pytest.fixture
 def state() -> Iterator[EdgeCallState]:
-    state = EdgeCallState(describe_context=_context)
+    state = EdgeCallState(declaration=_In, describe_context=_context)
     describe_with(state, DescribeBinding(_In, _BODY, _ROW, partial=False))
     token = EDGE_CALL.set(state)
     try:

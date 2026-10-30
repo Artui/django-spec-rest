@@ -347,3 +347,63 @@ def test_a_kernel_call_for_another_principal_is_presented_under_its_own_offline_
 
     assert _create(_spec_of(service), {}, owner).status_code == 204
     assert [request.user for request in _PRESENTED_UNDER] == [owner, owner, other, other]
+
+
+_VALIDATED_UNDER: list[Any] = []
+_DESCRIBED_UNDER: list[Any] = []
+
+
+class _ReadsItsRequestWhileValidating(serializers.Serializer):
+    title = serializers.CharField()
+
+    def get_fields(self) -> dict[str, Any]:
+        if not hasattr(self, "initial_data"):
+            _DESCRIBED_UNDER.append((self.context["request"], self.context["view"]))
+        return super().get_fields()
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        _VALIDATED_UNDER.append((self.context["request"], self.context["view"]))
+        return attrs
+
+
+_TITLED = ServiceSpec(
+    service=lambda *, title: None,
+    permissions=_OPEN,
+    validator=SerializerValidator(_ReadsItsRequestWhileValidating),
+    atomic=False,
+)
+
+
+def test_a_kernel_call_for_another_principal_never_validates_under_the_view_s_request(
+    owner: User,
+) -> None:
+    """Only the edge's own call reads the view's request and view: a kernel call
+    the service makes for another principal validates under the offline pair
+    for that principal, as it would outside the view."""
+    _VALIDATED_UNDER.clear()
+    other = User.objects.create(username="other")
+
+    def service(*, data: Any) -> None:
+        dispatch(_TITLED, principal=other, arguments={"title": "t"})
+
+    assert _create(_spec_of(service), {}, owner).status_code == 204
+    ((request, view),) = _VALIDATED_UNDER
+    assert request.user == other
+    assert not isinstance(view, ServiceCreateView)
+
+
+def test_a_kernel_call_for_another_principal_is_never_described_under_the_view_s_request(
+    owner: User,
+) -> None:
+    """The parameters a kernel call the service makes are read off a description
+    of its serializer, and that description is not the edge's own call's either:
+    it is built as outside any call, with no request and no view."""
+    _DESCRIBED_UNDER.clear()
+    other = User.objects.create(username="other")
+
+    def service(*, data: Any) -> None:
+        dispatch(_TITLED, principal=other, arguments={"title": "t"})
+
+    assert _create(_spec_of(service), {}, owner).status_code == 204
+    assert _DESCRIBED_UNDER
+    assert all(pair == (None, None) for pair in _DESCRIBED_UNDER)

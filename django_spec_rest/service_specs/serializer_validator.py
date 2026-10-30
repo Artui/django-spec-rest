@@ -440,7 +440,7 @@ class SerializerValidator(Validator):
             context.principal,
             context.ambient,
             arguments,
-            view_layers=input_view_layers(),
+            view_layers=input_view_layers(self),
             provider=self.serializer_context,
             call_context=context.call_context,
         )

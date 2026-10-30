@@ -119,7 +119,11 @@ def describe_serializer(declaration: Any) -> serializers.Serializer:
     """
     state = EDGE_CALL.get()
     describe = state.describe_context if state is not None else None
-    if state is None or describe is None:
+    # Only the edge's own declaration reads the edge's request and view: one a
+    # kernel call inside the service describes, for whichever principal, is
+    # described as outside a call
+    # (test_a_kernel_call_for_another_principal_is_never_described_under_the_view_s_request).
+    if state is None or describe is None or state.declaration is not declaration:
         return bind_serializer(
             declaration, context=base_serializer_context(view=None, request=None)
         )
@@ -300,6 +304,8 @@ class EdgeCallState:
       (``recording_spec``).
     - ``view_hooks``: the view's serializer context layers, whose input half
       the Validator reads (``input_view_layers``).
+    - ``validator``: the Validator of the spec the edge dispatches, the
+      recording twin's, the one the view's input layers and request are for.
     - ``validator_input``: the Validator the edge dispatches, and the body it
       binds rather than the kernel's checked arguments (``validator_input``):
       the caller's own, a ``QueryDict`` kept one, with what the edge put over
@@ -323,6 +329,10 @@ class EdgeCallState:
       annotated to fill, which no client's value becomes, declined or not:
       the Validator hands the client's value for one on in ``data`` alone
       (``provider_owned``).
+    - ``declaration``: the input serializer the edge's own spec declares, the
+      one ``describe_context`` is for: another a kernel call inside the
+      service describes is described as outside any call
+      (``describe_serializer``).
     - ``describe_context``: builds the serializer context the call's input
       serializer is described with, its request, its view, the view's input
       layers and the spec's own context callable where the description can ask
@@ -354,10 +364,12 @@ class EdgeCallState:
 
     author_values: Mapping[str, Any] = dataclasses.field(default_factory=dict)
     view_hooks: ViewHooks = dataclasses.field(default_factory=ViewHooks)
+    validator: Any = None
     validator_input: tuple[Any, Any] | None = None
     server_values: Mapping[str, Any] = dataclasses.field(default_factory=dict)
     author_keys: Mapping[str, str] = dataclasses.field(default_factory=dict)
     provider_owned: frozenset[str] = frozenset()
+    declaration: Any = None
     describe_context: Callable[..., dict[str, Any] | None] | None = None
     base_context: tuple[Any, Any, dict[str, Any]] | None = None
     context_answers: dict[tuple[Any, ...], tuple[Any, Mapping[str, Any]]] = dataclasses.field(
@@ -519,9 +531,18 @@ def _names(state: EdgeCallState, validator: Any) -> bool:
     return held is not None and held[0] is validator
 
 
-def input_view_layers() -> Mapping[str, Any] | None:
-    """The input half of the view hooks the edge call carries, or ``None``."""
-    return edge_call_state().view_hooks.input_serializer_context
+def input_view_layers(validator: Any) -> Mapping[str, Any] | None:
+    """The input half of the view hooks the edge call carries, for its own Validator alone.
+
+    The layers answer the view's ``get_serializer_context``, so they carry the
+    view's request and view. Only the Validator of the spec the edge
+    dispatches reads them: a kernel call the service makes, for another
+    principal or none, validates under what it would outside the view, the
+    offline pair for its own principal
+    (test_a_kernel_call_for_another_principal_never_validates_under_the_view_s_request).
+    """
+    state = edge_call_state()
+    return state.view_hooks.input_serializer_context if state.validator is validator else None
 
 
 def output_view_layers(ambient: Mapping[str, Any], value: Any) -> Mapping[str, Any] | None:
