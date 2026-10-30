@@ -57,9 +57,7 @@ def _delete_author(*, instance: Author) -> None:
 
 
 def _lookup(**fields: Any) -> SelectorSpec:
-    return SelectorSpec(
-        kind=SelectorKind.RETRIEVE, selector=_author_by_pk, reads=_PK, permissions=_OPEN, **fields
-    )
+    return SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_author_by_pk, reads=_PK, **fields)
 
 
 def _update_spec(**lookup: Any) -> ServiceSpec:
@@ -123,9 +121,7 @@ class TestTheSpecCarriesTheLookup:
             ServiceSpec(
                 service=_update_author,
                 permissions=_OPEN,
-                instance_selector_spec=SelectorSpec(
-                    kind=SelectorKind.LIST, selector=_author_by_pk, permissions=_OPEN
-                ),
+                instance_selector_spec=SelectorSpec(kind=SelectorKind.LIST, selector=_author_by_pk),
             )
 
 

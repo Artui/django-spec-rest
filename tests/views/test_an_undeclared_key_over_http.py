@@ -79,7 +79,6 @@ def test_an_update_body_naming_another_row_s_id_changes_the_route_s_row_alone() 
             kind=SelectorKind.RETRIEVE,
             selector=_author_by_pk,
             reads=Parameters.of(Parameter("pk", "integer", required=True)),
-            permissions=_OPEN,
         ),
     )
     view = type("_View", (ServiceUpdateView,), {"spec": spec, "permission_classes": []})

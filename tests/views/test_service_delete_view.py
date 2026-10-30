@@ -33,7 +33,6 @@ _AUTHOR = SelectorSpec(
     kind=SelectorKind.RETRIEVE,
     selector=lambda *, pk: Author.objects.filter(pk=pk).first(),
     reads=Parameters.of(Parameter("pk", "integer", required=True)),
-    permissions=_OPEN,
 )
 
 
@@ -96,7 +95,6 @@ class TestServiceDeleteView:
             output_selector_spec=SelectorSpec(
                 kind=SelectorKind.RETRIEVE,
                 selector=lambda *, result: Author.objects.get(pk=result),
-                permissions=_OPEN,
                 presenter=_PRESENTER,
             ),
         )

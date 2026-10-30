@@ -959,6 +959,35 @@ def _check_kernel_seeds(spec: KernelServiceSpec | KernelSelectorSpec) -> None:
     check_seeds(spec)
 
 
+def refuse_a_nested_selectors_permissions(spec: KernelServiceSpec, *, label: str) -> None:
+    """Refuse ``permissions`` declared on a kernel spec's nested selector, on any of its three seats.
+
+    A nested selector is a step of the spec's call, not a call of its own: the
+    kernel authorizes the spec being dispatched and never asks the nested
+    selector's ``permissions``, so one declared guards nothing and reads as if
+    it did. drfs refused a nested spec's ``permission_classes`` for the same
+    reason. Any declaration is refused, ``Unrestricted()`` included: the
+    default is ``None``, which the kernel already refuses an empty sequence
+    beside, so a nested selector declaring nothing mounts.
+
+    One arc to coverage, so each conjunct is named: a seat the spec leaves
+    unset is skipped by every spec with no nested selector there
+    (test_service_create_view's test_creates_and_returns_201), and the
+    ``permissions`` test by every nested selector that declares none
+    (test_a_nested_selector_declaring_no_permissions_mounts). Each seat is held
+    by its own case of test_a_nested_selector_s_permissions_are_refused, since
+    coverage cannot see a role dropped from the tuple.
+    """
+    for role in ("instance", "collection", "output"):
+        nested: KernelSelectorSpec | None = getattr(spec, f"{role}_selector_spec")
+        if nested is not None and nested.permissions is not None:
+            raise ImproperlyConfigured(
+                f"{label}.{role}_selector_spec declares permissions, which a nested selector "
+                "never has asked: the spec being dispatched is what authorizes. Declare them "
+                "on the ServiceSpec, and drop them from the nested selector."
+            )
+
+
 def validate_mutation_view_spec(
     view_cls: type,
     *,
@@ -1003,6 +1032,7 @@ def validate_mutation_view_spec(
             getattr(view_cls, "response_finalizer", None), label=view_cls.__name__
         )
         _refuse_a_detail_spec_with_no_target(view_cls, spec, has_instance=has_instance)
+        refuse_a_nested_selectors_permissions(spec, label=f"{view_cls.__name__}.spec")
         # A view hook's keys reach the service through the edge's overlay,
         # which ``check_seeds`` cannot see and its own docstring says not to
         # be asked beside, so a hooked view is not asked it, as drfs read an

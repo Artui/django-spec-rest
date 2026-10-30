@@ -162,7 +162,6 @@ class TestTheResultOfAMutation:
                 output_selector_spec=SelectorSpec(
                     kind=SelectorKind.RETRIEVE,
                     selector=lambda *, result: Author.objects.get(pk=result.pk),
-                    permissions=_OPEN,
                 ),
                 presenter=SerializerPresenter(capturing, serializer_context=provider),
                 atomic=False,

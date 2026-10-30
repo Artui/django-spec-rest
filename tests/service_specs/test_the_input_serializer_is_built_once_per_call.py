@@ -165,7 +165,6 @@ _LOOKUP = SelectorSpec(
     kind=SelectorKind.RETRIEVE,
     selector=lambda pk: Post.objects.filter(pk=pk),
     reads=Parameters.of(Parameter("pk", "integer", required=True)),
-    permissions=_OPEN,
 )
 
 

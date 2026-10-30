@@ -67,7 +67,6 @@ _LOOKUP = SelectorSpec(
     selector=_post_for_team,
     reads=Parameters.of(Parameter("pk", "integer", required=True)),
     kwargs=_team_from_the_route,
-    permissions=_OPEN,
 )
 
 
@@ -166,7 +165,6 @@ class _ViewLookupView(_Open, ServiceUpdateView):
             kind=SelectorKind.RETRIEVE,
             selector=_post_seen_by_its_view,
             reads=Parameters.of(Parameter("pk", "integer", required=True)),
-            permissions=_OPEN,
         ),
         permissions=_OPEN,
         presenter=SerializerPresenter(PostSerializer),
@@ -288,7 +286,6 @@ class _CollectionView(_Open, ServiceUpdateView):
             kind=SelectorKind.LIST,
             selector=_posts_for_team,
             kwargs=_team_from_the_route,
-            permissions=_OPEN,
         ),
         permissions=_OPEN,
     )
