@@ -419,6 +419,43 @@ def test_a_kernel_call_for_another_principal_is_never_described_under_the_view_s
     assert all(pair == (None, None) for pair in _DESCRIBED_UNDER)
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "The kernel asks a Validator's parameters() with no call, so a service's kernel "
+        "call of the view's own spec for another principal is checked against the "
+        "description the edge built under the view's request, and describes nothing of "
+        "its own."
+    ),
+)
+def test_a_kernel_call_of_the_view_s_own_spec_for_another_principal_is_never_described_under_the_view_s_request(
+    owner: User,
+) -> None:
+    """The service dispatches the view's own spec for another principal: the
+    parameters that call is checked against are read off a description built as
+    outside any call, never the one the edge built under the view's request."""
+    _DESCRIBED_UNDER.clear()
+    other = User.objects.create(username="other")
+    by_the_inner_call: list[Any] = []
+
+    def service(*, title: str) -> None:
+        if title == "outer":
+            before = len(_DESCRIBED_UNDER)
+            dispatch(spec, principal=other, arguments={"title": "inner"})
+            by_the_inner_call.extend(_DESCRIBED_UNDER[before:])
+
+    spec = ServiceSpec(
+        service=service,
+        permissions=_OPEN,
+        validator=SerializerValidator(_ReadsItsRequestWhileValidating),
+        atomic=False,
+    )
+
+    assert _create(spec, {"title": "outer"}, owner).status_code == 204
+    assert by_the_inner_call
+    assert all(pair == (None, None) for pair in by_the_inner_call)
+
+
 _SAME_SEEN: list[tuple[Any, Any, Any]] = []
 
 
