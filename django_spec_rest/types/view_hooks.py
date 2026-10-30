@@ -33,9 +33,7 @@ class ViewHooks:
 
     Attributes:
         extra_kwargs: Merges into the dispatched callable's pool, beneath
-            ``spec.kwargs``. The same carrier serves the selector chain
-            (``get_selector_kwargs`` / ``get_<action>_selector_kwargs``) — only
-            the view-method names differ, not the layering.
+            ``spec.kwargs``.
         input_data: Merges onto the client payload *before* validation, beneath
             ``spec.input_data``; server-provided keys win over the client's.
         input_serializer_context: Layers onto the baseline serializer context

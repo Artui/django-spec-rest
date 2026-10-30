@@ -41,6 +41,12 @@ class SelectorRetrieveView(RetrieveModelMixin, GenericAPIView):
         return super().as_view(**initkwargs)
 
     def get_selector_kwargs(self) -> dict[str, Any]:
+        """The default an override is read against, and never called.
+
+        A view overriding it beside a kernel spec is refused at ``as_view()``
+        (test_get_selector_kwargs_beside_a_kernel_spec_is_refused_at_as_view):
+        the kernel route has no selector overlay to hand its value to.
+        """
         return {}
 
     def get_object(self) -> Any:

@@ -60,7 +60,7 @@ kernel's own unless stated:
   one it may decline and declines stays the client's, as the kernel answers
   both for a declared field.
 
-- **A view's ``get_service_kwargs`` outranks the Validator**, as on drfs:
+- **A view's ``get_service_kwargs`` outranks the Validator**:
   the kernel lays its ``extra_kwargs`` overlay beneath what the Validator
   computes, so the twin's ``kwargs`` seat hands the hook's values back beneath
   the spec's own provider, where they outrank a key a ``validate()`` derives
@@ -150,7 +150,7 @@ def kernel_arguments(
       argument of the spec (test_kernel_edge's
       test_a_query_handed_over_is_read_in_place_of_the_request_s).
     - **A service spec reads the body**: a ``many`` spec's under its
-      ``many_argument``, as a drfs ``many`` spec takes a list body; a form body
+      ``many_argument``, which takes a list body; a form body
       (a ``QueryDict``) through ``flat_arguments``; a JSON object as it was
       sent, which a typed caller's values already are. A body that is no
       object is refused as a whole.
@@ -557,7 +557,7 @@ def _overlay(
     """The view's ``extra_kwargs`` for ``dispatch``'s overlay, the keys pinned out of it, and the server's input.
 
     A ``get_service_kwargs`` value named like one of the spec's parameters or
-    seed-named fields pinned that field on drfs: the serializer validated the
+    seed-named fields pins that field: the serializer validates the
     server's value, never the client's. The kernel refuses an overlay key
     naming a parameter, so the edge moves such a key into the arguments over
     the client's value, where the shape check, the permission checks and the

@@ -9,10 +9,11 @@ request and view, so each answers as the view always did. The scope holds in
 the serializer that validates: a caller picks a row of its own and is refused
 another's.
 
-The call's context is DRF's serializer context, one dict per request handed to
-every serializer of the call as the very object: the drfs path's
-``test_each_serializer_of_the_call_has_its_own_context`` inverts, as
-``test_the_call_s_context_is_every_serializer_s_context`` here.
+The call's context is meant to be DRF's serializer context, one dict per
+request handed to every serializer of the call as the very object.
+``test_the_call_s_context_is_every_serializer_s_context`` holds that as a
+strict xfail: the serializers and the service share one dict, but not yet the
+one ``get_serializer_context()`` returned.
 """
 
 from __future__ import annotations
