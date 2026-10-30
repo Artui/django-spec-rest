@@ -25,21 +25,15 @@ from django_spec_rest.service_specs.renderable_serializer_class import (
     renderable_serializer_class,
 )
 from django_spec_rest.service_specs.utils import (
+    MAX_SERIALIZER_APPEARANCES,
     fragment_keywords,
     output_view_layers,
     registered_fragment,
     serializer_context,
+    shared_json_type,
 )
 from django_spec_rest.types.field_marking import MARKING
 from django_spec_rest.types.json_schema_registry import JsonSchemaRegistry
-
-# How many times one serializer class may appear on the walk's path before the
-# next appearance is truncated, so a self-bounded declaration (a countdown nesting three levels below its root) is
-# described as written, and an unbounded one stops rather than recursing until
-# the process dies. A serializer instantiates its fields lazily, so an unbounded
-# self-nesting declaration is legal to build and renders a finite value; only a
-# walk of its declaration would never end.
-_MAX_SERIALIZER_APPEARANCES: Final = 4
 
 # The kernel's JSON type and format per DRF field class, first ``isinstance``
 # hit wins, so a subclass precedes its base. A format the kernel does not name
@@ -410,7 +404,7 @@ def _shape(
     if isinstance(field, serializers.ManyRelatedField):
         return _Shape("array")
     if isinstance(field, serializers.Serializer):
-        if path.count(type(field)) >= _MAX_SERIALIZER_APPEARANCES:
+        if path.count(type(field)) >= MAX_SERIALIZER_APPEARANCES:
             return _Shape("object")
         return _Shape("object", fields=_output(field, path=path, registry=registry))
     if isinstance(field, serializers.MultipleChoiceField):
@@ -445,20 +439,7 @@ def _choices_type(choices: tuple[tuple[Any, str], ...]) -> str | None:
     ``bool`` before ``int``, which it subclasses: a boolean described as an
     integer is a false claim rather than a vague one.
     """
-    types = {_json_type(value) for value, _ in choices if value is not None}
-    return types.pop() if len(types) == 1 else None
-
-
-def _json_type(value: Any) -> str | None:
-    if isinstance(value, bool):
-        return "boolean"
-    if isinstance(value, int):
-        return "integer"
-    if isinstance(value, float):
-        return "number"
-    if isinstance(value, str):
-        return "string"
-    return None
+    return shared_json_type(value for value, _ in choices if value is not None)
 
 
 def _declared_label(name: str, field: serializers.Field) -> str | None:

@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import dataclasses
 import inspect
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from contextvars import ContextVar
 from typing import Any, Final
 
@@ -32,7 +32,6 @@ from django_service_specs.output.output import OutputField
 from django_service_specs.parameters.parameters import Parameter, Parameters
 from django_service_specs.pool.resolve_callable_kwargs import resolve_callable_kwargs
 from django_service_specs.types.unset import UNSET
-from django_service_specs.types.unset import UNSET as KERNEL_UNSET
 from rest_framework import ISO_8601, relations, serializers
 from rest_framework.settings import api_settings
 from rest_framework_dataclasses.serializers import DataclassSerializer
@@ -49,7 +48,10 @@ before the next appearance is truncated to an open object.
 A self-referential serializer is an ordinary shape and must not raise
 ``RecursionError`` while a transport describes it, and a serializer bounding
 its own depth with a countdown is usually written three levels below its root,
-so four appearances describe it as written."""
+so four appearances describe it as written. A serializer instantiates its
+fields lazily, so an unbounded self-nesting declaration is legal to build and
+renders a finite value; only a walk of its declaration would never end. The
+input walk and ``SerializerPresenter``'s output walk both stop here."""
 
 _SCALARS: tuple[tuple[type[serializers.Field], str, str | None], ...] = (
     (serializers.BooleanField, "boolean", None),
@@ -998,7 +1000,7 @@ def fragment_keywords(fragment: Mapping[str, Any], *, output: bool) -> dict[str,
     # A declared type stands over the values' (the ``enum-under-its-type`` case
     # of test_a_keyword_a_parameter_field_spells_sets_that_field).
     if kind is None and isinstance(enum, list):
-        kind = _enum_type(enum)
+        kind = shared_json_type(enum)
     declared["type"] = kind if _named(kind, _JSON_TYPES) else "any"
     stated: list[tuple[str, Any]] = []
     items = fragment.get("items")
@@ -1071,20 +1073,9 @@ def _named(value: Any, names: frozenset[str]) -> bool:
     return isinstance(value, str) and value in names
 
 
-def _enum_type(values: list[Any]) -> str | None:
-    """The one JSON type ``values`` share, or ``None``; ``bool`` before ``int``, which it subclasses."""
-    kinds = {
-        "boolean"
-        if isinstance(value, bool)
-        else "integer"
-        if isinstance(value, int)
-        else "number"
-        if isinstance(value, float)
-        else "string"
-        if isinstance(value, str)
-        else None
-        for value in values
-    }
+def shared_json_type(values: Iterable[Any]) -> str | None:
+    """The one JSON type ``values`` share, or ``None`` when they share none (``_json_type``)."""
+    kinds = {_json_type(value) for value in values}
     return kinds.pop() if len(kinds) == 1 else None
 
 
@@ -1213,7 +1204,7 @@ def literal_default(field: serializers.Field) -> Any:
     """
     default: Any = field.default
     if default is UNSET or callable(default):
-        return KERNEL_UNSET
+        return UNSET
     return default
 
 
