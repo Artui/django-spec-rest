@@ -1,386 +1,158 @@
-"""End-to-end tests for ``ServiceSpec.instance_selector_spec`` on viewsets."""
+"""A kernel write spec's target on a viewset is its own target selector's.
+
+The viewset's ``get_object()`` and its ``"retrieve"`` entry are never asked for
+a kernel write's row: the spec's ``instance_selector_spec`` (or
+``collection_selector_spec``) finds it inside the kernel's dispatch, and the
+view's object permission is asked of what it finds.
+"""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any
 
 import pytest
-from django.db.models import IntegerField, QuerySet, Value
-from rest_framework import serializers
-from rest_framework.permissions import BasePermission
-from rest_framework.test import APIRequestFactory
-from rest_framework.viewsets import GenericViewSet
-
-from django_spec_rest import (
+from django.db.models import QuerySet
+from django_service_specs import (
+    Parameter,
+    Parameters,
     SelectorKind,
     SelectorSpec,
     ServiceSpec,
-    ServiceViewSet,
-    service_action,
+    Unrestricted,
 )
+from rest_framework import serializers
+from rest_framework.permissions import BasePermission
+from rest_framework.response import Response
+from rest_framework.test import APIRequestFactory
+
+from django_spec_rest import ServiceViewSet
+from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
+from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from tests.testapp.models import Author
 from tests.testapp.serializers import AuthorSerializer
 
+pytestmark = pytest.mark.django_db
+
 factory = APIRequestFactory()
+_OPEN = (Unrestricted(),)
+_BY_PK = Parameters.of(Parameter("pk", "integer", required=True))
 
 
-@dataclass
-class _AuthorIn:
-    name: str
+class _NameIn(serializers.Serializer):
+    name = serializers.CharField()
 
 
-def _author_by_pk(*, pk: int) -> QuerySet[Author]:
-    return Author.objects.filter(pk=pk)
-
-
-def _update_author(*, instance: Author, data: _AuthorIn) -> Author:
-    instance.name = data.name
-    instance.save(update_fields=["name"])
-    return instance
-
-
-def _delete_author(*, instance: Author) -> None:
-    instance.delete()
-
-
-_INSTANCE_SPEC = SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_author_by_pk)
-_OUTPUT_SPEC = SelectorSpec(kind=SelectorKind.RETRIEVE, output_serializer=AuthorSerializer)
-
-
-class _SpecResolvedViewSet(ServiceViewSet):
-    # Deliberately no ``queryset``: every lookup must come from the spec.
-    action_specs = {
-        "update": ServiceSpec(
-            service=_update_author,
-            input_serializer=_AuthorIn,
-            instance_selector_spec=_INSTANCE_SPEC,
-            output_selector_spec=_OUTPUT_SPEC,
-        ),
-        "destroy": ServiceSpec(
-            service=_delete_author,
-            instance_selector_spec=_INSTANCE_SPEC,
-        ),
+def _by_pk(**fields: Any) -> SelectorSpec:
+    defaults: dict[str, Any] = {
+        "selector": lambda *, pk: Author.objects.filter(pk=pk).first(),
+        "reads": _BY_PK,
     }
+    return SelectorSpec(kind=SelectorKind.RETRIEVE, **{**defaults, **fields})
 
 
-@pytest.mark.django_db
-class TestInstanceSelectorResolution:
-    def test_update_resolves_instance_from_spec(self) -> None:
-        author = Author.objects.create(name="orig")
-        view = _SpecResolvedViewSet.as_view({"put": "update"})
-        response = view(factory.put("/", {"name": "new"}, format="json"), pk=author.pk)
-        assert response.status_code == 200
-        author.refresh_from_db()
-        assert author.name == "new"
-
-    def test_partial_update_resolves_instance_from_spec(self) -> None:
-        author = Author.objects.create(name="orig")
-        view = _SpecResolvedViewSet.as_view({"patch": "partial_update"})
-        response = view(factory.patch("/", {"name": "patched"}, format="json"), pk=author.pk)
-        assert response.status_code == 200
-        author.refresh_from_db()
-        assert author.name == "patched"
-
-    def test_destroy_resolves_instance_from_spec(self) -> None:
-        author = Author.objects.create(name="x")
-        view = _SpecResolvedViewSet.as_view({"delete": "destroy"})
-        response = view(factory.delete("/"), pk=author.pk)
-        assert response.status_code == 204
-        assert not Author.objects.filter(pk=author.pk).exists()
-
-    def test_missing_row_renders_404(self) -> None:
-        view = _SpecResolvedViewSet.as_view({"put": "update"})
-        response = view(factory.put("/", {"name": "new"}, format="json"), pk=99999)
-        assert response.status_code == 404
-
-    def test_allow_none_is_ignored_for_instance_resolution(self) -> None:
-        nullable_lookup = SelectorSpec(
-            kind=SelectorKind.RETRIEVE, selector=_author_by_pk, allow_none=True
-        )
-
-        class _View(ServiceViewSet):
-            action_specs = {
-                "update": ServiceSpec(
-                    service=_update_author,
-                    input_serializer=_AuthorIn,
-                    instance_selector_spec=nullable_lookup,
-                ),
-            }
-
-        view = _View.as_view({"put": "update"})
-        response = view(factory.put("/", {"name": "new"}, format="json"), pk=99999)
-        assert response.status_code == 404
-
-    def test_selectorless_instance_spec_falls_back_to_get_object(self) -> None:
-        class _View(ServiceViewSet):
-            queryset = Author.objects.all()
-            action_specs = {
-                "update": ServiceSpec(
-                    service=_update_author,
-                    input_serializer=_AuthorIn,
-                    instance_selector_spec=SelectorSpec(kind=SelectorKind.RETRIEVE),
-                ),
-            }
-
-        author = Author.objects.create(name="orig")
-        view = _View.as_view({"put": "update"})
-        response = view(factory.put("/", {"name": "new"}, format="json"), pk=author.pk)
-        assert response.status_code == 200
-        author.refresh_from_db()
-        assert author.name == "new"
-
-    def test_shaping_applied_to_instance_lookup(self) -> None:
-        seen: dict[str, Any] = {}
-
-        def _service(*, instance: Author) -> None:
-            seen["marker"] = instance.marker
-
-        shaped_spec = SelectorSpec(
-            kind=SelectorKind.RETRIEVE,
-            selector=_author_by_pk,
-            annotations={"marker": Value(42, output_field=IntegerField())},
-        )
-
-        class _View(ServiceViewSet):
-            action_specs = {
-                "update": ServiceSpec(service=_service, instance_selector_spec=shaped_spec),
-            }
-
-        author = Author.objects.create(name="x")
-        view = _View.as_view({"put": "update"})
-        response = view(factory.put("/", {}, format="json"), pk=author.pk)
-        assert response.status_code == 204
-        assert seen["marker"] == 42
-
-
-@pytest.mark.django_db
-class TestInstanceSelectorPrecedence:
-    def test_spec_selector_beats_retrieve_action_spec(self) -> None:
-        decoy = Author.objects.create(name="decoy")
-        target = Author.objects.create(name="target")
-
-        def _decoy_lookup(*, pk: int) -> Author:
-            return decoy
-
-        def _target_lookup(*, pk: int) -> QuerySet[Author]:
-            return Author.objects.filter(pk=pk)
-
-        class _View(ServiceViewSet):
-            action_specs = {
-                "retrieve": SelectorSpec(
-                    kind=SelectorKind.RETRIEVE,
-                    selector=_decoy_lookup,
-                    output_serializer=AuthorSerializer,
-                ),
-                "update": ServiceSpec(
-                    service=_update_author,
-                    input_serializer=_AuthorIn,
-                    instance_selector_spec=SelectorSpec(
-                        kind=SelectorKind.RETRIEVE, selector=_target_lookup
-                    ),
-                ),
-            }
-
-        view = _View.as_view({"put": "update"})
-        response = view(factory.put("/", {"name": "renamed"}, format="json"), pk=target.pk)
-        assert response.status_code == 200
-        target.refresh_from_db()
-        decoy.refresh_from_db()
-        assert target.name == "renamed"
-        assert decoy.name == "decoy"
-
-    def test_retrieve_action_spec_still_beats_drf_default_without_instance_spec(self) -> None:
-        decoy = Author.objects.create(name="decoy")
-        target = Author.objects.create(name="target")
-
-        def _decoy_lookup(*, pk: int) -> Author:
-            return decoy
-
-        class _View(ServiceViewSet):
-            queryset = Author.objects.all()
-            action_specs = {
-                "retrieve": SelectorSpec(
-                    kind=SelectorKind.RETRIEVE,
-                    selector=_decoy_lookup,
-                    output_serializer=AuthorSerializer,
-                ),
-                "update": ServiceSpec(service=_update_author, input_serializer=_AuthorIn),
-            }
-
-        view = _View.as_view({"put": "update"})
-        response = view(factory.put("/", {"name": "renamed"}, format="json"), pk=target.pk)
-        assert response.status_code == 200
-        decoy.refresh_from_db()
-        target.refresh_from_db()
-        assert decoy.name == "renamed"
-        assert target.name == "target"
-
-
-@pytest.mark.django_db
-class TestInstanceSelectorObjectPermissions:
-    def test_object_permission_denial_renders_403(self) -> None:
-        class _DenyObject(BasePermission):
-            def has_object_permission(self, request: Any, view: Any, obj: Any) -> bool:
-                return False
-
-        class _View(ServiceViewSet):
-            permission_classes = [_DenyObject]
-            action_specs = {
-                "update": ServiceSpec(
-                    service=_update_author,
-                    input_serializer=_AuthorIn,
-                    instance_selector_spec=_INSTANCE_SPEC,
-                ),
-            }
-
-        author = Author.objects.create(name="x")
-        view = _View.as_view({"put": "update"})
-        response = view(factory.put("/", {"name": "new"}, format="json"), pk=author.pk)
-        assert response.status_code == 403
-
-
-@pytest.mark.django_db
-class TestInstanceSelectorOnServiceAction:
-    def test_detail_action_resolves_instance_from_spec(self) -> None:
-        class _ViewSet(GenericViewSet):
-            # No ``queryset`` — the spec carries the lookup.
-            @service_action(
-                ServiceSpec(
-                    service=_update_author,
-                    input_serializer=_AuthorIn,
-                    instance_selector_spec=_INSTANCE_SPEC,
-                    output_selector_spec=_OUTPUT_SPEC,
-                ),
-                detail=True,
-                methods=["post"],
-            )
-            def rename(self, request: Any, pk: Any = None) -> Any: ...
-
-        author = Author.objects.create(name="orig")
-        view = _ViewSet.as_view({"post": "rename"})
-        response = view(factory.post("/", {"name": "new"}, format="json"), pk=author.pk)
-        assert response.status_code == 200
-        author.refresh_from_db()
-        assert author.name == "new"
-
-
-def _update_author_from_dict(*, instance: Author, data: dict[str, Any]) -> Author:
+def _rename(*, instance: Author, data: dict[str, Any]) -> Author:
     instance.name = data["name"]
     instance.save(update_fields=["name"])
     return instance
 
 
-@pytest.mark.django_db
-class TestInstanceAwareInputValidation:
-    def _recording_serializer(self, seen: dict[str, Any]) -> type[serializers.Serializer]:
-        class _Input(serializers.Serializer):
-            name = serializers.CharField()
+def _delete(*, instance: Author) -> None:
+    instance.delete()
 
-            def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
-                seen["instance"] = self.instance
-                return attrs
 
-        return _Input
+_UPDATE = ServiceSpec(
+    service=_rename,
+    permissions=_OPEN,
+    validator=SerializerValidator(_NameIn),
+    presenter=SerializerPresenter(AuthorSerializer),
+    instance_selector_spec=_by_pk(),
+)
+_DESTROY = ServiceSpec(service=_delete, permissions=_OPEN, instance_selector_spec=_by_pk())
 
-    def test_update_serializer_sees_resolved_instance(self) -> None:
-        seen: dict[str, Any] = {}
 
-        class _View(ServiceViewSet):
+class _ViewSet(ServiceViewSet):
+    queryset = Author.objects.none()
+    action_specs = {"update": _UPDATE, "destroy": _DESTROY}
+
+    def get_object(self) -> Any:
+        raise AssertionError("a kernel write's target is its own selector's")
+
+
+def _call(viewset: Any, method: str, action_name: str, body: Any = None, **kwargs: Any) -> Response:
+    request = getattr(factory, method)("/", body, format="json")
+    return viewset.as_view({method: action_name})(request, **kwargs)
+
+
+@pytest.fixture
+def author() -> Author:
+    return Author.objects.create(name="a")
+
+
+class TestTheTarget:
+    @pytest.mark.parametrize(
+        ("method", "action_name"), [("put", "update"), ("patch", "partial_update")]
+    )
+    def test_an_update_finds_its_row(self, author: Author, method: str, action_name: str) -> None:
+        response = _call(_ViewSet, method, action_name, {"name": "b"}, pk=author.pk)
+        assert response.data == {"id": author.pk, "name": "b"}
+
+    def test_a_destroy_finds_its_row(self, author: Author) -> None:
+        assert _call(_ViewSet, "delete", "destroy", pk=author.pk).status_code == 204
+        assert not Author.objects.exists()
+
+    def test_a_missing_row_is_404(self) -> None:
+        assert _call(_ViewSet, "put", "update", {"name": "b"}, pk=999).status_code == 404
+
+    def test_the_retrieve_entry_is_not_the_write_s_lookup(self, author: Author) -> None:
+        other = Author.objects.create(name="other")
+
+        class _WithRetrieve(_ViewSet):
             action_specs = {
-                "update": ServiceSpec(
-                    service=_update_author_from_dict,
-                    input_serializer=self._recording_serializer(seen),
-                    instance_selector_spec=_INSTANCE_SPEC,
+                "update": _UPDATE,
+                "retrieve": SelectorSpec(
+                    kind=SelectorKind.RETRIEVE,
+                    selector=lambda: other,
+                    permissions=_OPEN,
+                    presenter=SerializerPresenter(AuthorSerializer),
                 ),
             }
 
-        author = Author.objects.create(name="orig")
-        view = _View.as_view({"put": "update"})
-        response = view(factory.put("/", {"name": "new"}, format="json"), pk=author.pk)
-        assert response.status_code == 200
-        assert seen["instance"] == author
+        _call(_WithRetrieve, "put", "update", {"name": "b"}, pk=author.pk)
+        assert Author.objects.get(pk=author.pk).name == "b"
+        assert Author.objects.get(pk=other.pk).name == "other"
 
-    def test_partial_update_serializer_sees_legacy_get_object_instance(self) -> None:
-        # The instance-aware construction applies to the legacy
-        # ``get_object()`` chain too, not only spec-resolved lookups.
-        seen: dict[str, Any] = {}
+    def test_a_collection_target_takes_its_set(self) -> None:
+        Author.objects.create(name="a")
+        Author.objects.create(name="b")
 
-        class _View(ServiceViewSet):
-            queryset = Author.objects.all()
-            action_specs = {
-                "update": ServiceSpec(
-                    service=_update_author_from_dict,
-                    input_serializer=self._recording_serializer(seen),
-                ),
-            }
+        def rename_all(*, collection: QuerySet[Author], data: dict[str, Any]) -> None:
+            collection.update(name=data["name"])
 
-        author = Author.objects.create(name="orig")
-        view = _View.as_view({"patch": "partial_update"})
-        response = view(factory.patch("/", {"name": "new"}, format="json"), pk=author.pk)
-        assert response.status_code == 200
-        assert seen["instance"] == author
+        spec = ServiceSpec(
+            service=rename_all,
+            permissions=_OPEN,
+            validator=SerializerValidator(_NameIn),
+            collection_selector_spec=SelectorSpec(
+                kind=SelectorKind.LIST, selector=lambda: Author.objects.all()
+            ),
+        )
 
-    def test_create_serializer_still_validates_with_no_instance(self) -> None:
-        seen: dict[str, Any] = {}
+        class _Bulk(ServiceViewSet):
+            action_specs = {"update": spec}
 
-        def _create_author(*, data: dict[str, Any]) -> Author:
-            return Author.objects.create(name=data["name"])
-
-        class _View(ServiceViewSet):
-            action_specs = {
-                "create": ServiceSpec(
-                    service=_create_author,
-                    input_serializer=self._recording_serializer(seen),
-                ),
-            }
-
-        view = _View.as_view({"post": "create"})
-        response = view(factory.post("/", {"name": "new"}, format="json"))
-        assert response.status_code == 201
-        assert seen["instance"] is None
+        assert _call(_Bulk, "put", "update", {"name": "z"}).status_code == 204
+        assert set(Author.objects.values_list("name", flat=True)) == {"z"}
 
 
-@pytest.mark.django_db
-class TestInputDataProviderInstanceExtra:
-    def test_provider_declaring_instance_receives_it(self) -> None:
-        def _stamp_name(view: Any, request: Any, *, instance: Author) -> dict[str, Any]:
-            return {"name": f"{instance.name}-stamped"}
+class TestObjectPermissions:
+    def test_the_view_s_object_permission_refuses_the_row(self, author: Author) -> None:
+        class _NoRows(BasePermission):
+            def has_object_permission(self, request: Any, view: Any, obj: Any) -> bool:
+                return False
 
-        class _View(ServiceViewSet):
-            action_specs = {
-                "update": ServiceSpec(
-                    service=_update_author,
-                    input_serializer=_AuthorIn,
-                    instance_selector_spec=_INSTANCE_SPEC,
-                    input_data=_stamp_name,
-                ),
-            }
+        class _Guarded(_ViewSet):
+            permission_classes = [_NoRows]
 
-        author = Author.objects.create(name="orig")
-        view = _View.as_view({"put": "update"})
-        response = view(factory.put("/", {"name": "ignored"}, format="json"), pk=author.pk)
-        assert response.status_code == 200
-        author.refresh_from_db()
-        assert author.name == "orig-stamped"
-
-    def test_provider_without_instance_is_unaffected(self) -> None:
-        def _legacy(view: Any, request: Any) -> dict[str, Any]:
-            return {"name": "from-provider"}
-
-        class _View(ServiceViewSet):
-            action_specs = {
-                "update": ServiceSpec(
-                    service=_update_author,
-                    input_serializer=_AuthorIn,
-                    instance_selector_spec=_INSTANCE_SPEC,
-                    input_data=_legacy,
-                ),
-            }
-
-        author = Author.objects.create(name="orig")
-        view = _View.as_view({"put": "update"})
-        response = view(factory.put("/", {"name": "ignored"}, format="json"), pk=author.pk)
-        assert response.status_code == 200
-        author.refresh_from_db()
-        assert author.name == "from-provider"
+        assert _call(_Guarded, "put", "update", {"name": "b"}, pk=author.pk).status_code == 403
+        assert _call(_Guarded, "delete", "destroy", pk=author.pk).status_code == 403
+        assert Author.objects.get().name == "a"

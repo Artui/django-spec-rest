@@ -6,9 +6,12 @@ from collections.abc import Callable, Mapping
 from typing import Any, ClassVar, TypeVar
 
 from django.core.exceptions import ImproperlyConfigured
+from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelectorSpec
+from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
 from rest_framework.exceptions import MethodNotAllowed, NotFound
 from rest_framework.generics import GenericAPIView
 
+from django_spec_rest.dispatch.kernel_edge import runs_on_kernel
 from django_spec_rest.types.polymorphic_service_spec import PolymorphicServiceSpec
 from django_spec_rest.types.selector_kind import SelectorKind
 from django_spec_rest.types.selector_spec import SelectorSpec
@@ -18,8 +21,10 @@ from django_spec_rest.views.mutation.utils import _ServesRaisedSchema, mutation_
 from django_spec_rest.views.spec_validation import (
     is_overridden,
     validate_filter_set_no_backend_conflict,
+    validate_mutation_view_spec,
     validate_polymorphic_service_spec,
     validate_selector_spec,
+    validate_selector_view_spec,
     validate_service_spec,
 )
 from django_spec_rest.views.utils import layer_serializer_context
@@ -27,7 +32,9 @@ from django_spec_rest.viewsets.resolve_polymorphic_service_spec import (
     resolve_polymorphic_service_spec,
 )
 
-ActionSpec = SelectorSpec | ServiceSpec | PolymorphicServiceSpec
+ActionSpec = (
+    SelectorSpec | ServiceSpec | PolymorphicServiceSpec | KernelServiceSpec | KernelSelectorSpec
+)
 
 # ``has_instance`` drives signature validation and whether the mutation flow
 # expects a fetched instance from ``get_object()``.
@@ -141,15 +148,16 @@ def resolve_action_service_spec(
     method: str,
     *,
     view: Any,
-) -> ServiceSpec[Any, Any, Any]:
+) -> ServiceSpec[Any, Any, Any] | KernelServiceSpec:
     """Pick a [`ServiceSpec`][django_spec_rest.types.service_spec.ServiceSpec]
     from ``action_specs`` for a mutation action.
 
     A
     [`PolymorphicServiceSpec`][django_spec_rest.types.polymorphic_service_spec.PolymorphicServiceSpec]
     entry is resolved to its chosen variant via the discriminator (memoized on ``view``
-    for the request). Centralised so all three mutation viewset mixins share one error
-    path."""
+    for the request). A kernel ``ServiceSpec`` is returned as it is: the mutation
+    edge (``dispatch_mutation_for_spec``) parts it from the drfs path itself.
+    Centralised so all three mutation viewset mixins share one error path."""
     entry = resolve_action_spec_entry(action_specs, action)
     if entry is None:
         raise MethodNotAllowed(method)
@@ -157,7 +165,7 @@ def resolve_action_service_spec(
         return resolve_polymorphic_service_spec(entry, view=view, request=view.request)
     # ``as_view`` refuses this pairing at setup, so reaching it means the mapping
     # was built or swapped after the view was wired. Kept as the backstop.
-    if not isinstance(entry, ServiceSpec):
+    if not isinstance(entry, ServiceSpec | KernelServiceSpec):
         raise ImproperlyConfigured(
             f"action_specs[{action!r}] must be a ServiceSpec, got "
             f"{type(entry).__name__}. "
@@ -169,17 +177,21 @@ def resolve_action_service_spec(
 def resolve_action_selector_spec(
     action_specs: Mapping[str, ActionSpec],
     action: str,
-) -> SelectorSpec[Any, Any] | None:
+) -> SelectorSpec[Any, Any] | KernelSelectorSpec | None:
     """Pick a [`SelectorSpec`][django_spec_rest.types.selector_spec.SelectorSpec]
     from ``action_specs`` for a read action.
 
     ``None`` means the caller must fall back to vanilla DRF
     (``super().get_queryset()`` / ``super().get_object()``) — either the action is
     unconfigured or the spec opts out of selector dispatch (``selector=None``).
+    A kernel ``SelectorSpec`` always declares its selector, so it is never
+    ``None`` here.
     """
     entry = action_specs.get(action)
     if entry is None:
         return None
+    if isinstance(entry, KernelSelectorSpec):
+        return entry
     # As above: setup already refused this pairing, so this is the backstop for
     # a mapping that changed afterwards.
     if not isinstance(entry, SelectorSpec):
@@ -272,6 +284,80 @@ def _validate_custom_action_spec(view_cls: type, action: str, spec: object, *, l
         )
 
 
+class _SelectorHooks:
+    """The default ``get_selector_kwargs`` both selector mixins inherit.
+
+    One definition, so ``as_view()`` can tell a viewset's own override from
+    the default whichever selector mixin comes first in its MRO: with one
+    default per mixin, a ``retrieve`` entry asked against the retrieve mixin's
+    would read the list mixin's, listed first on ``ServiceViewSet``, as an
+    override, and every kernel retrieve spec would be refused
+    (test_service_viewset's test_retrieve_is_presented_by_the_spec).
+    """
+
+    def get_selector_kwargs(self) -> dict[str, Any]:
+        """Hook for additional kwargs available to the selector signature."""
+        return {}
+
+
+def _as_mounted(view_cls: type, action: str, spec: object, *, label: str) -> type:
+    """``view_cls`` as a standalone view would carry ``spec``: on ``spec``, serving ``action``.
+
+    The standalone views' kernel checks (``validate_mutation_view_spec`` and
+    ``validate_selector_view_spec``) read the spec, the view's hooks, its
+    ``success_status`` and ``response_finalizer`` and the ``action`` its
+    per-action hooks are named for, all off the class. A subclass of the
+    viewset carrying the entry as its ``spec`` and the key as its ``action``
+    answers each of those as the viewset does for that action, so the entry
+    is asked exactly what the standalone view asks of its spec, the checks
+    added to those entry points included, rather than a copy of them. Named
+    after the entry, so a refusal names the action it is about
+    (test_service_viewset's test_the_refusal_names_the_action).
+    """
+    return type(label, (view_cls,), {"spec": spec, "action": action})
+
+
+def _validate_kernel_action_spec(
+    view_cls: type, action: str, spec: KernelServiceSpec | KernelSelectorSpec, *, label: str
+) -> None:
+    """Ask a kernel entry the checks a standalone view asks of its kernel ``spec``.
+
+    A built-in write action is asked as the matching mutation view is
+    (``has_instance`` for an update or a delete, so a spec naming no target is
+    refused), and a read action as the matching selector view is, the
+    ``kind`` included. A kernel spec under the other kind of action is refused
+    by those same checks.
+
+    **A custom key is refused.** Such an entry feeds ``get_permissions`` and
+    the serializer resolver alone, while a kernel spec declares no
+    ``permission_classes`` and its own checks are asked by ``dispatch``, which
+    a custom key never reaches: the entry would guard nothing it seems to.
+    ``@service_action`` and ``@selector_action`` serve one
+    (test_service_viewset's test_a_kernel_spec_under_a_custom_key_is_refused).
+    """
+    mounted = _as_mounted(view_cls, action, spec, label=label)
+    if action in _MUTATION_ACTIONS:
+        validate_mutation_view_spec(mounted, has_instance=_MUTATION_ACTIONS[action]["has_instance"])
+    elif action in _SELECTOR_ACTION_KIND:
+        # A viewset composing neither selector mixin has no default to
+        # override, so any ``get_selector_kwargs`` it has is its own:
+        # ``is_overridden`` answers ``hasattr`` against a base declaring none.
+        # Each arm is held by test_selector_viewset: ``object`` by
+        # test_a_viewset_with_no_selector_mixin_and_no_hook_passes,
+        # ``_SelectorHooks`` by test_the_default_selector_hook_is_not_an_override.
+        validate_selector_view_spec(
+            mounted,
+            expected_kind=_SELECTOR_ACTION_KIND[action],
+            hooks_base=_SelectorHooks if issubclass(view_cls, _SelectorHooks) else object,
+        )
+    else:
+        raise ImproperlyConfigured(
+            f"{label} is a kernel {type(spec).__name__} under a key no action of the "
+            "viewset dispatches, so its permissions would guard nothing. Serve it with "
+            "@service_action(spec) or @selector_action(spec) on the action's method."
+        )
+
+
 def _validate_action_spec(view_cls: type, action: str, spec: object) -> None:
     """Run fail-fast validation for a single ``action_specs`` entry.
 
@@ -282,7 +368,9 @@ def _validate_action_spec(view_cls: type, action: str, spec: object) -> None:
     and surface as an ``ImproperlyConfigured`` on the first request instead.
     """
     label = f"{view_cls.__name__}.action_specs[{action!r}]"
-    if action in _MUTATION_ACTIONS:
+    if runs_on_kernel(spec):
+        _validate_kernel_action_spec(view_cls, action, spec, label=label)
+    elif action in _MUTATION_ACTIONS:
         _validate_mutation_action_spec(view_cls, action, spec, label=label)
     elif action in _SELECTOR_ACTION_KIND:
         _validate_selector_action_spec(view_cls, action, spec, label=label)
@@ -563,6 +651,12 @@ class _ActionSpecsMixin(_ServesRaisedSchema):
         # ``@selector_action`` stamped on the handler, so decorator-based
         # actions enforce permissions without the DRF router's ``initkwargs``.
         spec = resolve_action_spec(self, self.action)
+        # A kernel spec declares no ``permission_classes``: its checks are its
+        # ``permissions``, which the kernel's ``dispatch`` asks, after DRF has
+        # asked the view's own (test_service_viewset's
+        # test_the_view_s_own_classes_refuse_before_the_spec_runs).
+        if runs_on_kernel(spec):
+            return super().get_permissions()  # ty: ignore[unresolved-attribute]
         if isinstance(spec, PolymorphicServiceSpec):
             return self._polymorphic_permissions(spec)
         if spec is not None and spec.permission_classes is not None:

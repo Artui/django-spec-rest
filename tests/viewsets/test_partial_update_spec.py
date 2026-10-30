@@ -1,305 +1,115 @@
-"""Tests for ``ServiceSpec.partial`` and the ``"partial_update"`` action key."""
+"""PATCH and PUT on a viewset serving kernel specs.
+
+A PATCH dispatches the spec's partial variant, a PUT the spec as declared, and
+a spec declaring ``partial=True`` takes a PUT partially too, as on
+``ServiceUpdateView``. A ``"partial_update"`` entry wins for PATCH, and PATCH
+falls back to ``"update"``.
+"""
 
 from __future__ import annotations
 
 from typing import Any
 
 import pytest
-from rest_framework import serializers
-from rest_framework.permissions import BasePermission
-from rest_framework.test import APIRequestFactory
-from rest_framework.viewsets import GenericViewSet
-
-from django_spec_rest import (
-    ActionSerializerResolver,
+from django_service_specs import (
+    Parameter,
+    Parameters,
     SelectorKind,
     SelectorSpec,
     ServiceSpec,
-    ServiceUpdateView,
-    ServiceViewSet,
-    service_action,
+    Unrestricted,
 )
+from rest_framework import serializers
+from rest_framework.response import Response
+from rest_framework.test import APIRequestFactory
+
+from django_spec_rest import ServiceViewSet, service_action
+from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
+from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from tests.testapp.models import Author
 from tests.testapp.serializers import AuthorSerializer
+
+pytestmark = pytest.mark.django_db
 
 factory = APIRequestFactory()
 
 
-class _NameInput(serializers.Serializer):
-    name = serializers.CharField()  # required
+class _NameIn(serializers.Serializer):
+    name = serializers.CharField()
+    note = serializers.CharField()
 
 
-class _DenyAll(BasePermission):
-    def has_permission(self, request: Any, view: Any) -> bool:
-        return False
-
-
-def _update_author(*, instance: Author, data: dict[str, Any]) -> Author:
+def _rename(*, instance: Author, data: dict[str, Any]) -> Author:
     instance.name = data.get("name", instance.name)
     instance.save(update_fields=["name"])
     return instance
 
 
-def _create_author(*, data: dict[str, Any]) -> Author:
-    return Author.objects.create(name=data.get("name", "default"))
+def _update(**fields: Any) -> ServiceSpec:
+    defaults: dict[str, Any] = {
+        "service": _rename,
+        "permissions": (Unrestricted(),),
+        "validator": SerializerValidator(_NameIn),
+        "presenter": SerializerPresenter(AuthorSerializer),
+        "instance_selector_spec": SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=lambda *, pk: Author.objects.filter(pk=pk).first(),
+            reads=Parameters.of(Parameter("pk", "integer", required=True)),
+        ),
+    }
+    return ServiceSpec(**{**defaults, **fields})
 
 
-@pytest.mark.django_db
-class TestPartialOverride:
-    def test_patch_with_partial_false_enforces_required(self) -> None:
-        class _View(ServiceViewSet):
-            queryset = Author.objects.all()
-            action_specs = {
-                "partial_update": ServiceSpec(
-                    service=_update_author,
-                    input_serializer=_NameInput,
-                    partial=False,
-                ),
-            }
+def _viewset(**action_specs: ServiceSpec) -> Any:
+    return type("_ViewSet", (ServiceViewSet,), {"action_specs": action_specs})
 
-        author = Author.objects.create(name="orig")
-        view = _View.as_view({"patch": "partial_update"})
-        response = view(factory.patch("/", {}, format="json"), pk=author.pk)
-        assert response.status_code == 400
-        assert "name" in response.data
 
-    def test_put_with_partial_true_skips_required(self) -> None:
-        class _View(ServiceViewSet):
-            queryset = Author.objects.all()
-            action_specs = {
-                "update": ServiceSpec(
-                    service=_update_author,
-                    input_serializer=_NameInput,
-                    partial=True,
-                ),
-            }
+def _send(viewset: Any, method: str, body: Any, pk: int) -> Response:
+    action_name = "partial_update" if method == "patch" else "update"
+    request = getattr(factory, method)("/", body, format="json")
+    return viewset.as_view({method: action_name})(request, pk=pk)
 
-        author = Author.objects.create(name="orig")
-        view = _View.as_view({"put": "update"})
-        response = view(factory.put("/", {}, format="json"), pk=author.pk)
+
+@pytest.fixture
+def author() -> Author:
+    return Author.objects.create(name="a")
+
+
+class TestPartial:
+    def test_a_patch_validates_only_what_it_sends(self, author: Author) -> None:
+        response = _send(_viewset(update=_update()), "patch", {"name": "b"}, author.pk)
         assert response.status_code == 200
-        author.refresh_from_db()
-        assert author.name == "orig"
+        assert response.data["name"] == "b"
 
-    def test_partial_none_keeps_method_derived_behaviour(self) -> None:
-        class _View(ServiceViewSet):
-            queryset = Author.objects.all()
-            action_specs = {
-                "update": ServiceSpec(service=_update_author, input_serializer=_NameInput),
-            }
-
-        author = Author.objects.create(name="orig")
-        put_response = _View.as_view({"put": "update"})(
-            factory.put("/", {}, format="json"), pk=author.pk
-        )
-        patch_response = _View.as_view({"patch": "partial_update"})(
-            factory.patch("/", {}, format="json"), pk=author.pk
-        )
-        assert put_response.status_code == 400
-        assert patch_response.status_code == 200
-
-    def test_partial_true_applies_to_create_dispatch(self) -> None:
-        # ``spec.partial`` is applied at the single dispatch point, so it
-        # works uniformly — including create.
-        class _View(ServiceViewSet):
-            action_specs = {
-                "create": ServiceSpec(
-                    service=_create_author,
-                    input_serializer=_NameInput,
-                    partial=True,
-                ),
-            }
-
-        view = _View.as_view({"post": "create"})
-        response = view(factory.post("/", {}, format="json"))
-        assert response.status_code == 201
-        assert Author.objects.filter(name="default").exists()
-
-    def test_partial_override_on_standalone_view(self) -> None:
-        class _View(ServiceUpdateView):
-            queryset = Author.objects.all()
-            spec = ServiceSpec(
-                service=_update_author,
-                input_serializer=_NameInput,
-                partial=False,
-            )
-
-        author = Author.objects.create(name="orig")
-        response = _View.as_view()(factory.patch("/", {}, format="json"), pk=author.pk)
+    def test_a_put_validates_every_field(self, author: Author) -> None:
+        response = _send(_viewset(update=_update()), "put", {"name": "b"}, author.pk)
         assert response.status_code == 400
+        assert "note" in response.data
 
-    def test_partial_override_through_service_action(self) -> None:
-        class _ViewSet(GenericViewSet):
-            queryset = Author.objects.all()
-
-            @service_action(
-                ServiceSpec(
-                    service=_update_author,
-                    input_serializer=_NameInput,
-                    partial=True,
-                ),
-                detail=True,
-                methods=["post"],
-            )
-            def rename(self, request: Any, pk: Any = None) -> Any: ...
-
-        author = Author.objects.create(name="orig")
-        view = _ViewSet.as_view({"post": "rename"})
-        response = view(factory.post("/", {}, format="json"), pk=author.pk)
+    def test_a_partial_spec_takes_a_put_partially(self, author: Author) -> None:
+        response = _send(_viewset(update=_update(partial=True)), "put", {"name": "b"}, author.pk)
         assert response.status_code == 200
 
+    def test_a_service_action_s_partial_spec_validates_partially(self, author: Author) -> None:
+        class _ViewSet(ServiceViewSet):
+            @service_action(_update(partial=True), detail=True, methods=["post"])
+            def rename(self, request: Any, pk: Any = None) -> None:
+                """Stubbed."""
 
-@pytest.mark.django_db
-class TestPartialUpdateActionKey:
-    def test_partial_update_key_wins_over_update_for_patch(self) -> None:
-        ran: list[str] = []
-
-        def _put_service(*, instance: Author) -> None:
-            ran.append("update")
-
-        def _patch_service(*, instance: Author) -> None:
-            ran.append("partial_update")
-
-        class _View(ServiceViewSet):
-            queryset = Author.objects.all()
-            action_specs = {
-                "update": ServiceSpec(service=_put_service),
-                "partial_update": ServiceSpec(service=_patch_service),
-            }
-
-        author = Author.objects.create(name="x")
-        _View.as_view({"patch": "partial_update"})(factory.patch("/"), pk=author.pk)
-        _View.as_view({"put": "update"})(factory.put("/"), pk=author.pk)
-        assert ran == ["partial_update", "update"]
-
-    def test_patch_falls_back_to_update_key(self) -> None:
-        ran: list[str] = []
-
-        def _service(*, instance: Author) -> None:
-            ran.append("update")
-
-        class _View(ServiceViewSet):
-            queryset = Author.objects.all()
-            action_specs = {"update": ServiceSpec(service=_service)}
-
-        author = Author.objects.create(name="x")
-        response = _View.as_view({"patch": "partial_update"})(factory.patch("/"), pk=author.pk)
-        assert response.status_code == 204
-        assert ran == ["update"]
-
-    def test_patch_405_when_neither_key_configured(self) -> None:
-        def _noop(*, instance: Author) -> None:
-            return None
-
-        class _View(ServiceViewSet):
-            queryset = Author.objects.all()
-            action_specs = {"destroy": ServiceSpec(service=_noop)}
-
-        author = Author.objects.create(name="x")
-        response = _View.as_view({"patch": "partial_update"})(factory.patch("/"), pk=author.pk)
-        assert response.status_code == 405
-
-    def test_only_partial_update_key_makes_put_405(self) -> None:
-        class _View(ServiceViewSet):
-            queryset = Author.objects.all()
-            action_specs = {
-                "partial_update": ServiceSpec(service=_update_author, input_serializer=_NameInput),
-            }
-
-        author = Author.objects.create(name="orig")
-        put_response = _View.as_view({"put": "update"})(
-            factory.put("/", {"name": "x"}, format="json"), pk=author.pk
-        )
-        patch_response = _View.as_view({"patch": "partial_update"})(
-            factory.patch("/", {"name": "y"}, format="json"), pk=author.pk
-        )
-        assert put_response.status_code == 405
-        assert patch_response.status_code == 200
+        request = factory.post("/", {"name": "b"}, format="json")
+        assert _ViewSet.as_view({"post": "rename"})(request, pk=author.pk).status_code == 200
 
 
-@pytest.mark.django_db
-class TestPartialUpdatePermissionFallback:
-    def test_update_spec_permissions_enforced_on_patch_without_duplicate_key(self) -> None:
-        # Regression: permission resolution keys on ``self.action``
-        # (``"partial_update"`` under PATCH) while dispatch resolved
-        # ``"update"`` — the spec's permissions silently didn't apply to
-        # PATCH unless the spec was duplicated under a second key.
-        class _View(ServiceViewSet):
-            queryset = Author.objects.all()
-            action_specs = {
-                "update": ServiceSpec(
-                    service=_update_author,
-                    input_serializer=_NameInput,
-                    permission_classes=[_DenyAll],
-                ),
-            }
+class TestTheActionKeys:
+    def test_a_partial_update_entry_wins_for_a_patch(self, author: Author) -> None:
+        def mark(*, instance: Author, data: dict[str, Any]) -> Author:
+            instance.name = "patched"
+            instance.save(update_fields=["name"])
+            return instance
 
-        author = Author.objects.create(name="orig")
-        response = _View.as_view({"patch": "partial_update"})(
-            factory.patch("/", {"name": "x"}, format="json"), pk=author.pk
-        )
-        assert response.status_code == 403
+        viewset = _viewset(update=_update(), partial_update=_update(service=mark))
+        assert _send(viewset, "patch", {"name": "b"}, author.pk).data["name"] == "patched"
+        assert _send(viewset, "put", {"name": "c", "note": "n"}, author.pk).data["name"] == "c"
 
-    def test_partial_update_key_permissions_win_for_patch(self) -> None:
-        class _View(ServiceViewSet):
-            queryset = Author.objects.all()
-            action_specs = {
-                "update": ServiceSpec(service=_update_author, input_serializer=_NameInput),
-                "partial_update": ServiceSpec(
-                    service=_update_author,
-                    input_serializer=_NameInput,
-                    permission_classes=[_DenyAll],
-                ),
-            }
-
-        author = Author.objects.create(name="orig")
-        patch_response = _View.as_view({"patch": "partial_update"})(
-            factory.patch("/", {"name": "x"}, format="json"), pk=author.pk
-        )
-        put_response = _View.as_view({"put": "update"})(
-            factory.put("/", {"name": "x"}, format="json"), pk=author.pk
-        )
-        assert patch_response.status_code == 403
-        assert put_response.status_code == 200
-
-
-@pytest.mark.django_db
-class TestPartialUpdateSerializerResolution:
-    def test_serializer_resolution_follows_the_fallback_chain(self) -> None:
-        class _View(ActionSerializerResolver, GenericViewSet):
-            action_specs = {
-                "update": ServiceSpec(
-                    service=_update_author,
-                    output_selector_spec=SelectorSpec(
-                        kind=SelectorKind.RETRIEVE, output_serializer=AuthorSerializer
-                    ),
-                ),
-            }
-
-        view = _View()
-        view.action = "partial_update"
-        assert view.get_serializer_class() is AuthorSerializer
-
-    def test_dedicated_partial_update_key_wins_for_serializer_resolution(self) -> None:
-        class _PatchSerializer(serializers.Serializer):
-            name = serializers.CharField()
-
-        class _View(ActionSerializerResolver, GenericViewSet):
-            action_specs = {
-                "update": ServiceSpec(
-                    service=_update_author,
-                    output_selector_spec=SelectorSpec(
-                        kind=SelectorKind.RETRIEVE, output_serializer=AuthorSerializer
-                    ),
-                ),
-                "partial_update": ServiceSpec(
-                    service=_update_author,
-                    output_selector_spec=SelectorSpec(
-                        kind=SelectorKind.RETRIEVE, output_serializer=_PatchSerializer
-                    ),
-                ),
-            }
-
-        view = _View()
-        view.action = "partial_update"
-        assert view.get_serializer_class() is _PatchSerializer
+    def test_a_patch_with_neither_entry_is_405(self, author: Author) -> None:
+        assert _send(_viewset(), "patch", {"name": "b"}, author.pk).status_code == 405

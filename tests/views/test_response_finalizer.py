@@ -86,7 +86,6 @@ class TestResponseFinalizerSingle:
                 kind=SelectorKind.RETRIEVE,
                 selector=lambda *, pk: Author.objects.filter(pk=pk).first(),
                 reads=Parameters.of(Parameter("pk", "integer", required=True)),
-                permissions=_OPEN,
             ),
         )
         response = _view(ServiceDeleteView, spec, add_header)(factory.delete("/"), pk=author.pk)
@@ -126,7 +125,6 @@ class TestResponseFinalizerSingle:
             output_selector_spec=SelectorSpec(
                 kind=SelectorKind.RETRIEVE,
                 selector=lambda *, result: Author.objects.get(pk=result.author.pk),
-                permissions=_OPEN,
                 presenter=SerializerPresenter(AuthorSerializer),
             ),
         )
@@ -180,7 +178,7 @@ class TestResponseFinalizerBulk:
             service=delete_collection(Post),
             permissions=_OPEN,
             collection_selector_spec=SelectorSpec(
-                kind=SelectorKind.LIST, selector=lambda: Post.objects.all(), permissions=_OPEN
+                kind=SelectorKind.LIST, selector=lambda: Post.objects.all()
             ),
             atomic=False,
         )

@@ -12,8 +12,8 @@ there for every later serializer of the call, and the drfs path's "does not
 leak into output" answers invert by design; those tests assert the new answer.
 
 What the kernel route does not carry yet is a strict xfail naming the file
-that owes it: a viewset's ``action_specs`` and ``@selector_action`` refuse a
-kernel spec when the view is built.
+that owes it: a kernel selector is handed none of the view's output serializer
+context hooks.
 """
 
 from __future__ import annotations
@@ -52,10 +52,11 @@ pytestmark = pytest.mark.django_db
 factory = APIRequestFactory()
 _OPEN = (Unrestricted(),)
 
-_VIEWSETS_REFUSE_A_KERNEL_SPEC = (
-    "viewsets/utils.py _validate_action_spec and viewsets/decorators read drfs fields, "
-    "so a kernel spec in action_specs or @selector_action is refused at as_view(); "
-    "once accepted, the view's hook chains must reach the kernel call too."
+_A_SELECTOR_TAKES_NO_OUTPUT_HOOK = (
+    "views/utils.py resolve_view_hooks carries no output serializer context layer for the "
+    "selector chain, and selectors/utils.py dispatch_kernel_selector hands the edge no hooks, "
+    "so a view's get_<action>_output_serializer_context never reaches a kernel selector's "
+    "presenter."
 )
 
 
@@ -250,7 +251,6 @@ class TestPerActionHooks:
                     kind=SelectorKind.RETRIEVE,
                     selector=lambda *, pk: Author.objects.filter(pk=pk).first(),
                     reads=Parameters.of(Parameter("pk", "integer", required=True)),
-                    permissions=_OPEN,
                 ),
             )
 
@@ -269,7 +269,6 @@ class TestPerActionHooks:
         assert "per_action" not in _CapturingIn.captured
         assert getattr(_CapturingIn.captured["view"], "action", None) is None
 
-    @pytest.mark.xfail(strict=True, reason=_VIEWSETS_REFUSE_A_KERNEL_SPEC)
     def test_a_viewset_s_per_action_hook_layers_on_its_own_action(self) -> None:
         class _ViewSet(ServiceViewSet):
             queryset = Author.objects.all()
@@ -409,7 +408,7 @@ class TestASelectorView:
         _View.as_view()(factory.get("/"), pk=str(author.pk))
         assert _CapturingOut.captured["spec_key"] == "retrieve"
 
-    @pytest.mark.xfail(strict=True, reason=_VIEWSETS_REFUSE_A_KERNEL_SPEC)
+    @pytest.mark.xfail(strict=True, reason=_A_SELECTOR_TAKES_NO_OUTPUT_HOOK)
     def test_a_selector_action_presents_under_its_own_hook(self) -> None:
         Author.objects.create(name="x")
 

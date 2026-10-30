@@ -11,8 +11,9 @@ def enable_openapi() -> None:
     as the schema on every library view class.
 
     Call once from ``AppConfig.ready()`` (or anywhere after Django apps are
-    loaded) to make ``drf-spectacular`` see ``ServiceSpec`` request bodies,
-    response bodies, success statuses, and 422 contracts on:
+    loaded) to make ``drf-spectacular`` see a spec's request bodies, response
+    bodies, success statuses, and 422 contracts, a kernel ``ServiceSpec`` or
+    ``SelectorSpec`` read off its Validator and presenter, on:
 
     - ``ServiceCreateView``, ``ServiceUpdateView``, ``ServiceDeleteView``
     - ``SelectorListView``, ``SelectorRetrieveView``

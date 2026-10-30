@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from typing import Any, ClassVar
 
+from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
 from rest_framework.request import Request
 from rest_framework.response import Response
 
@@ -113,7 +114,7 @@ class MutationFlowMixin(_ServesRaisedSchema):
     def _run_mutation(
         self,
         request: Request,
-        spec: ServiceSpec[Any, Any, Any],
+        spec: ServiceSpec[Any, Any, Any] | KernelServiceSpec,
         *,
         instance: Any,
         default_status: int,

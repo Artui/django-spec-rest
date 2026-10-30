@@ -4,19 +4,21 @@ from __future__ import annotations
 
 from typing import Any
 
+from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelectorSpec
 from rest_framework.mixins import RetrieveModelMixin
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from django_spec_rest.selectors.utils import dispatch_selector_for_spec
+from django_spec_rest.selectors.utils import dispatch_selector_for_spec, present_kernel_row
 from django_spec_rest.views.utils import _JsonNullResponse, add_affordances
 from django_spec_rest.viewsets.utils import (
     _ActionSpecsMixin,
+    _SelectorHooks,
     resolve_action_selector_spec,
 )
 
 
-class SelectorRetrieveMixin(RetrieveModelMixin, _ActionSpecsMixin):
+class SelectorRetrieveMixin(RetrieveModelMixin, _SelectorHooks, _ActionSpecsMixin):
     """Compose with ``GenericViewSet``.
 
     When ``action_specs["retrieve"]`` is a
@@ -36,17 +38,25 @@ class SelectorRetrieveMixin(RetrieveModelMixin, _ActionSpecsMixin):
     The selector applies wherever ``get_object()`` is called, including from
     update/destroy actions composed alongside this mixin. If you need an
     action-specific override, do it explicitly in your own ``get_object()``.
+
+    A kernel ``SelectorSpec`` under ``"retrieve"`` runs through the kernel's
+    own ``dispatch``, as on ``SelectorRetrieveView``: the view's object
+    permission is asked of the row inside it, and the spec's ``presenter``
+    renders the row, or the view's serializer where the spec declares neither
+    presenter nor affordances. A miss is a 404, or JSON ``null`` under
+    ``allow_none``. A kernel write spec never asks ``get_object()``: its target
+    is its own selector's.
     """
 
     # Provided at runtime by ``GenericViewSet`` / ``GenericAPIView``.
     request: Any
     kwargs: dict[str, Any]
 
-    def get_selector_kwargs(self) -> dict[str, Any]:
-        return {}
-
     def retrieve(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         spec = resolve_action_selector_spec(self.action_specs, "retrieve")
+        if isinstance(spec, KernelSelectorSpec):
+            row, data = present_kernel_row(self, spec)
+            return _JsonNullResponse() if row is None else Response(data)
         if spec is None or (not spec.allow_none and spec.affordances is None):
             return super().retrieve(request, *args, **kwargs)
         # Nullable-resource contract: ``get_object()`` may resolve ``None``

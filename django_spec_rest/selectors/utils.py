@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import weakref
 from collections.abc import Callable, Mapping
 from typing import Any, cast
@@ -11,6 +12,7 @@ from django.http import QueryDict
 from django_service_specs.adapters.filters.filter_set_parameters import filter_set_parameters
 from django_service_specs.authorization.permission_check import PermissionCheck
 from django_service_specs.dispatch.dispatch_result import DispatchResult
+from django_service_specs.dispatch.present import present
 from django_service_specs.parameters.coerce_flat import coerce_flat
 from django_service_specs.parameters.parameters import Parameters
 
@@ -174,7 +176,7 @@ def check_view_object_permissions(
         context.view.check_object_permissions(context.request, instance)
 
 
-def dispatch_selector_for_spec(view: Any, spec: SelectorSpec[Any, Any]) -> Any:
+def dispatch_selector_for_spec(view: Any, spec: SelectorSpec[Any, Any] | KernelSelectorSpec) -> Any:
     """End-to-end dispatch for one ``SelectorSpec`` call from a DRF view.
 
     Resolves the view's ``get_selector_kwargs`` / ``get_<action>_selector_kwargs`` chain
@@ -274,6 +276,58 @@ def dispatch_kernel_selector(view: Any, spec: KernelSpec) -> DispatchResult:
     if found.kind == "not_found":
         raise NotFound()
     return found
+
+
+def present_kernel_selection(
+    view: Any, spec: KernelSelectorSpec, result: DispatchResult, rows: Any, *, many: bool
+) -> Any:
+    """``rows`` of a kernel selector ``result`` as the response body: the spec's, or the view's.
+
+    The spec's presenter is handed ``rows`` inside the result dispatch built,
+    so it renders what is served (a page's rows) with the call's context. A
+    spec declaring neither presenter nor affordances is rendered by the view's
+    ``get_serializer``, as DRF renders a queryset; one declaring affordances
+    with no presenter is refused by ``present`` rather than having them
+    dropped. Shared by the viewset mixins and ``@selector_action``.
+    """
+    # One arc to coverage, so each disjunct is named: a presenter by
+    # test_service_viewset's test_list_is_presented_by_the_spec, affordances
+    # with none by test_selector_viewset's
+    # test_affordances_with_no_presenter_are_refused_rather_than_dropped.
+    if spec.presenter is not None or spec.affordances is not None:
+        return present(spec, dataclasses.replace(result, value=rows))
+    return view.get_serializer(rows, many=many).data
+
+
+def present_kernel_list(view: Any, spec: KernelSelectorSpec, *, filtered: bool) -> tuple[Any, bool]:
+    """Dispatch a kernel LIST spec for ``view`` and present it: the body, and whether it is a page.
+
+    DRF's ``list`` steps in DRF's order on the set the dispatch read: the
+    view's filter backends where ``filtered`` (a viewset's ``list``; a custom
+    ``@selector_action`` applies none, as DRF's ``@action`` leaves that to its
+    handler), then its paginator where it has one (DRF's bare ``ViewSet`` has
+    none), then ``present_kernel_selection``. The caller wraps the body,
+    through ``get_paginated_response`` for a page.
+    """
+    result = dispatch_kernel_selector(view, spec)
+    rows = view.filter_queryset(result.value) if filtered else result.value
+    paginate = getattr(view, "paginate_queryset", None)
+    page = None if paginate is None else paginate(rows)
+    served = rows if page is None else page
+    return present_kernel_selection(view, spec, result, served, many=True), page is not None
+
+
+def present_kernel_row(view: Any, spec: KernelSelectorSpec) -> tuple[Any, Any]:
+    """Dispatch a kernel RETRIEVE spec for ``view``: the row found, and its body.
+
+    The row is ``None`` only under ``allow_none`` (any other miss raised
+    ``NotFound`` inside ``dispatch_kernel_selector``), and then nothing is
+    presented: the caller answers JSON ``null``.
+    """
+    result = dispatch_kernel_selector(view, spec)
+    if result.value is None:
+        return None, None
+    return result.value, present_kernel_selection(view, spec, result, result.value, many=False)
 
 
 class _ViewObjectPermission(PermissionCheck):

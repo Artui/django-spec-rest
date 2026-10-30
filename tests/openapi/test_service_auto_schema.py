@@ -1,331 +1,194 @@
-"""End-to-end schema generation with drf-spectacular + ``ServiceAutoSchema``."""
+"""``ServiceAutoSchema`` documenting kernel specs, end to end through drf-spectacular.
+
+Every view here carries the kernel's own ``ServiceSpec`` or ``SelectorSpec``,
+with no ``serializer_class``: the request body is read off the spec's
+Validator and the response off its presenter, so each test fails against a
+schema that reads only drfs specs, which falls back to the view's missing
+``serializer_class`` and documents no body at all.
+
+- **A ``SerializerValidator``** is documented by its serializer, under the
+  component name drf-spectacular gives that class; **any other Validator** by
+  the kernel's ``parameters_schema`` over the parameters the body carries,
+  under the edge's unknown-argument policy.
+- **A ``SerializerPresenter``** is documented by its serializer; **any other
+  presenter** by the kernel's ``output_schema``. A spec presenting rows is an
+  array of them.
+- **The status** is the view's ``success_status`` over the action's default,
+  as the kernel route answers.
+- **A FilterSet's query parameters** are the kernel's ``filter_set_parameters``.
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypedDict
 
 import django_filters
 import pytest
 from django.urls import path
-from django_filters.rest_framework import DjangoFilterBackend
+from django_service_specs import (
+    DataclassPresenter,
+    DataclassValidator,
+    Parameter,
+    Parameters,
+    SelectorKind,
+    SelectorSpec,
+    ServiceSpec,
+    Unrestricted,
+    Validator,
+)
 from drf_spectacular.generators import SchemaGenerator
+from drf_spectacular.utils import extend_schema
 from rest_framework import serializers
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.routers import DefaultRouter
 from rest_framework.test import APIRequestFactory
 from rest_framework.viewsets import GenericViewSet
 
 from django_spec_rest import (
-    PolymorphicServiceSpec,
-    SelectorKind,
     SelectorListView,
     SelectorRetrieveView,
-    SelectorSpec,
     ServiceCreateView,
     ServiceDeleteView,
-    ServiceSpec,
     ServiceUpdateView,
     ServiceViewSet,
+    selector_action,
     service_action,
 )
 from django_spec_rest.openapi import enable_openapi
-from django_spec_rest.openapi.service_auto_schema import (
-    ServiceAutoSchema,
-    _filter_set_parameters,
-    _SpecFilterBackend,
-)
+from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
+from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from tests.testapp.models import Author, Post
 from tests.testapp.serializers import AuthorSerializer, PostSerializer
 
+_OPEN = (Unrestricted(),)
+_BY_PK = Parameters.of(Parameter("pk", "integer", required=True))
+_PRESENTER = SerializerPresenter(AuthorSerializer)
+
+
+class NameInSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=20)
+
+
+class ReasonSerializer(serializers.Serializer):
+    reason = serializers.CharField()
+
 
 @dataclass
-class _AuthorIn:
+class _NameRow:
     name: str
 
 
 @dataclass
-class _AuthorOut:
+class _Named:
     id: int
     name: str
 
 
-def _create(*, data: _AuthorIn) -> _AuthorOut:
-    return _AuthorOut(id=1, name=data.name)
+class _NameValidator(Validator):
+    """A Validator that is no serializer and takes a partial call."""
+
+    def parameters(self) -> Parameters:
+        return Parameters.of(Parameter("name", "string", required=True))
+
+    def validate(self, arguments: Any, context: Any) -> dict[str, Any]:
+        return dict(arguments)
 
 
-def _update(*, instance: Any, data: _AuthorIn) -> _AuthorOut:
-    return _AuthorOut(id=1, name=data.name)
+class _Owned(TypedDict):
+    owner: str
 
 
-def _approve(*, instance: Any) -> dict[str, Any]:
-    return {"approved": True}
+def _owner() -> _Owned:
+    return {"owner": "me"}
 
 
 def _list_authors() -> Any:
-    return Author.objects.all().order_by("id")
+    return Author.objects.order_by("id")
 
 
-class _CreateView(ServiceCreateView):
-    spec = ServiceSpec(
-        service=_create,
-        input_serializer=_AuthorIn,
-        output_selector_spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE, output_serializer=AuthorSerializer
-        ),
-    )
+def _get_author(*, pk: int) -> Author | None:
+    return Author.objects.filter(pk=pk).first()
 
 
-class _UpdateView(ServiceUpdateView):
-    queryset = Author.objects.all()
-    spec = ServiceSpec(
-        service=_update,
-        input_serializer=_AuthorIn,
-        output_selector_spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE, output_serializer=AuthorSerializer
-        ),
-    )
+def _create_author(*, data: Any) -> Any: ...
 
 
-@dataclass
-class _DeleteReason:
-    reason: str
+def _create_owned(*, data: Any, tenant: str, owner: str) -> Any: ...
 
 
-def _delete_with_reason(*, instance: Any, data: _DeleteReason) -> None: ...
+def _rename(*, instance: Author, data: Any) -> Any: ...
 
 
-class _DeleteView(ServiceDeleteView):
-    queryset = Author.objects.all()
-    spec = ServiceSpec(service=_delete_with_reason, input_serializer=_DeleteReason)
+def _delete(*, instance: Author) -> None: ...
 
 
-def _delete_plain(*, instance: Any) -> None: ...
+def _target() -> SelectorSpec:
+    return SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_get_author, reads=_BY_PK)
 
 
-class _DeletePlainView(ServiceDeleteView):
-    queryset = Author.objects.all()
-    spec = ServiceSpec(service=_delete_plain)
-
-
-class _ForcedErrorDeleteView(ServiceDeleteView):
-    # No input_serializer, but ``document_service_error=True`` forces the 422
-    # back on (a no-input service that *does* raise ServiceError).
-    queryset = Author.objects.all()
-    spec = ServiceSpec(service=_delete_plain, document_service_error=True)
-
-
-def _archive(*, instance: Author) -> Author:
-    return instance
-
-
-_ARCHIVED = SelectorSpec(kind=SelectorKind.RETRIEVE, output_serializer=AuthorSerializer)
-
-
-class _ArchiveView(ServiceDeleteView):
-    # A soft delete: the destroy presents the row it kept.
-    queryset = Author.objects.all()
-    spec = ServiceSpec(service=_archive, output_selector_spec=_ARCHIVED, atomic=False)
-
-
-class _ArchiveAt204View(ServiceDeleteView):
-    # The same, with the 204 a destroy defaults to set explicitly.
-    queryset = Author.objects.all()
-    spec = ServiceSpec(
-        service=_archive, output_selector_spec=_ARCHIVED, success_status=204, atomic=False
-    )
-
-
-class _ArchiveAt202View(ServiceDeleteView):
-    # Any other status carries the body as it is.
-    queryset = Author.objects.all()
-    spec = ServiceSpec(
-        service=_archive, output_selector_spec=_ARCHIVED, success_status=202, atomic=False
-    )
-
-
-class _DeletedCount(serializers.Serializer):
-    deleted = serializers.IntegerField()
-
-
-def _all_authors() -> Any:
-    return Author.objects.all()
-
-
-def _delete_counted(*, collection: Any) -> dict[str, int]:
-    deleted, _ = collection.delete()
-    return {"deleted": deleted}
-
-
-def _delete_quietly(*, collection: Any) -> None:
-    collection.delete()
-
-
-_ALL_AUTHORS = SelectorSpec(kind=SelectorKind.LIST, selector=_all_authors)
-
-
-class _BulkDeleteCountedView(ServiceDeleteView):
-    # A bulk destroy presenting how many rows went.
-    spec = ServiceSpec(
-        service=_delete_counted,
-        collection_selector_spec=_ALL_AUTHORS,
-        output_selector_spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE, output_serializer=_DeletedCount
-        ),
-        atomic=False,
-    )
-
-
-class _BulkDeleteView(ServiceDeleteView):
-    spec = ServiceSpec(service=_delete_quietly, collection_selector_spec=_ALL_AUTHORS, atomic=False)
-
-
-class _BulkDeleteCountedUndeclaredView(ServiceDeleteView):
-    # The count again, with no serializer declaring it.
-    spec = ServiceSpec(service=_delete_counted, collection_selector_spec=_ALL_AUTHORS, atomic=False)
-
-
-class _NoErrorCreateView(ServiceCreateView):
-    # Input-bearing, but ``document_service_error=False`` drops the 422.
-    spec = ServiceSpec(
-        service=_create,
-        input_serializer=_AuthorIn,
-        document_service_error=False,
-        output_selector_spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE, output_serializer=AuthorSerializer
-        ),
-    )
-
-
-def _dynamic_status(*, result: _AuthorOut) -> int:
-    return 201 if result.id else 200
-
-
-class _CallableStatusCreateView(ServiceCreateView):
-    # A callable ``success_status`` can't be resolved statically, so the schema
-    # documents the create default (201).
-    spec = ServiceSpec(
-        service=_create,
-        input_serializer=_AuthorIn,
-        success_status=_dynamic_status,
-        output_selector_spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE, output_serializer=AuthorSerializer
-        ),
-    )
-
-
-class _AuthorViewSet(ServiceViewSet):
-    queryset = Author.objects.all()
-    action_specs = {
-        "create": ServiceSpec(
-            service=_create,
-            input_serializer=_AuthorIn,
-            output_selector_spec=SelectorSpec(
-                kind=SelectorKind.RETRIEVE, output_serializer=AuthorSerializer
-            ),
-        ),
-        "list": SelectorSpec(
-            kind=SelectorKind.LIST, selector=_list_authors, output_serializer=AuthorSerializer
-        ),
+def _create(**fields: Any) -> ServiceSpec:
+    defaults: dict[str, Any] = {
+        "service": _create_author,
+        "permissions": _OPEN,
+        "validator": SerializerValidator(NameInSerializer),
+        "presenter": _PRESENTER,
     }
+    return ServiceSpec(**{**defaults, **fields})
 
 
-class _ApproveViewSet(GenericViewSet):
-    queryset = Author.objects.all()
-
-    @service_action(
-        ServiceSpec(
-            service=_approve,
-            output_selector_spec=SelectorSpec(
-                kind=SelectorKind.RETRIEVE, output_serializer=AuthorSerializer
-            ),
-        ),
-        detail=True,
-        methods=["post"],
-    )
-    def approve(self, request, pk=None):  # type: ignore[no-untyped-def]
-        ...
+def _update(**fields: Any) -> ServiceSpec:
+    defaults: dict[str, Any] = {
+        "service": _rename,
+        "permissions": _OPEN,
+        "validator": SerializerValidator(NameInSerializer),
+        "presenter": _PRESENTER,
+        "instance_selector_spec": _target(),
+    }
+    return ServiceSpec(**{**defaults, **fields})
 
 
-class _ForcedFullUpdateView(ServiceUpdateView):
-    queryset = Author.objects.all()
-    spec = ServiceSpec(
-        service=_update,
-        input_serializer=_AuthorIn,
-        partial=False,
-        output_selector_spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE, output_serializer=AuthorSerializer
-        ),
-    )
+def _destroy(**fields: Any) -> ServiceSpec:
+    defaults: dict[str, Any] = {
+        "service": _delete,
+        "permissions": _OPEN,
+        "instance_selector_spec": _target(),
+    }
+    return ServiceSpec(**{**defaults, **fields})
 
 
-@dataclass
-class _EmailIn:
-    email: str
+def _list(**fields: Any) -> SelectorSpec:
+    defaults: dict[str, Any] = {
+        "selector": _list_authors,
+        "permissions": _OPEN,
+        "presenter": _PRESENTER,
+    }
+    return SelectorSpec(kind=SelectorKind.LIST, **{**defaults, **fields})
 
 
-@dataclass
-class _TokenIn:
-    token: str
+def _retrieve(**fields: Any) -> SelectorSpec:
+    defaults: dict[str, Any] = {
+        "selector": _get_author,
+        "reads": _BY_PK,
+        "permissions": _OPEN,
+        "presenter": _PRESENTER,
+    }
+    return SelectorSpec(kind=SelectorKind.RETRIEVE, **{**defaults, **fields})
 
 
-def _create_email(*, data: _EmailIn) -> _AuthorOut:
-    return _AuthorOut(id=1, name=data.email)
+def _view(base: type, spec: Any, **attrs: Any) -> Any:
+    return type("_View", (base,), {"queryset": Author.objects.all(), "spec": spec, **attrs})
 
 
-def _create_token(*, data: _TokenIn) -> _AuthorOut:
-    return _AuthorOut(id=1, name=data.token)
-
-
-_POLY_CREATE = PolymorphicServiceSpec(
-    discriminator=lambda *, data: "email" if "email" in data else "token",
-    specs={
-        "email": ServiceSpec(service=_create_email, input_serializer=_EmailIn),
-        "token": ServiceSpec(service=_create_token, input_serializer=_TokenIn),
-    },
-)
-
-
-class _PolyViewSet(ServiceViewSet):
-    queryset = Author.objects.all()
-    action_specs = {"create": _POLY_CREATE}
-
-
-def _side_effect() -> None: ...
-
-
-_POLY_NO_INPUT = PolymorphicServiceSpec(
-    discriminator=lambda: "a",
-    specs={"a": ServiceSpec(service=_side_effect), "b": ServiceSpec(service=_side_effect)},
-)
-
-
-class _PolyNoInputViewSet(ServiceViewSet):
-    queryset = Author.objects.all()
-    action_specs = {"create": _POLY_NO_INPUT}
-
-
-class _PolyActionViewSet(GenericViewSet):
-    queryset = Author.objects.all()
-
-    @service_action(_POLY_CREATE, detail=False, methods=["post"], url_path="switch")
-    def switch(self, request):  # type: ignore[no-untyped-def]
-        ...
-
-
-# --- filter_set → OpenAPI parameters (parity fixtures) -----------------------
+def _status_from_result(*, result: Any) -> int:
+    return 202
 
 
 class _PostFilter(django_filters.FilterSet):
-    """Exercises field, choice, multi-choice, and ordering filter shapes."""
-
     title = django_filters.CharFilter(lookup_expr="icontains")
     published = django_filters.BooleanFilter()
-    views = django_filters.NumberFilter()
     kind = django_filters.ChoiceFilter(field_name="body", choices=[("a", "A"), ("b", "B")])
-    labels = django_filters.MultipleChoiceFilter(
-        field_name="title", choices=[("x", "X"), ("y", "Y")]
-    )
-    order = django_filters.OrderingFilter(fields=(("title", "title"), ("views", "views")))
+    pks = django_filters.BaseInFilter(field_name="id")
 
     class Meta:
         model = Post
@@ -333,77 +196,188 @@ class _PostFilter(django_filters.FilterSet):
 
 
 def _list_posts() -> Any:
-    return Post.objects.all().order_by("id")
+    return Post.objects.order_by("id")
 
 
-class _ViewLevelFilterListView(SelectorListView):
-    """The *before* config: FilterSet on the view via ``DjangoFilterBackend``."""
-
-    queryset = Post.objects.all()
-    filter_backends = [DjangoFilterBackend]
-    filterset_class = _PostFilter
-    spec = SelectorSpec(
-        kind=SelectorKind.LIST, selector=_list_posts, output_serializer=PostSerializer
-    )
+def _get_post(*, pk: int) -> Post | None:
+    return Post.objects.filter(pk=pk).first()
 
 
-class _SpecFilterListView(SelectorListView):
-    """The *after* config: FilterSet on the spec, no backend."""
-
-    queryset = Post.objects.all()
-    spec = SelectorSpec(
-        kind=SelectorKind.LIST,
-        selector=_list_posts,
-        output_serializer=PostSerializer,
-        filter_set=_PostFilter,
-    )
+_POSTS = SerializerPresenter(PostSerializer)
 
 
-class _ViewLevelFilterRetrieveView(SelectorRetrieveView):
-    queryset = Post.objects.all()
-    filter_backends = [DjangoFilterBackend]
-    filterset_class = _PostFilter
-    spec = SelectorSpec(
-        kind=SelectorKind.RETRIEVE, selector=_list_posts, output_serializer=PostSerializer
-    )
+class _AnnotatedUpdateView(ServiceUpdateView):
+    queryset = Author.objects.all()
+    spec = _update()
+
+    @extend_schema(request=ReasonSerializer)
+    def patch(self, request: Any, *args: Any, **kwargs: Any) -> Any:
+        return super().patch(request, *args, **kwargs)
 
 
-class _SpecFilterRetrieveView(SelectorRetrieveView):
-    queryset = Post.objects.all()
-    spec = SelectorSpec(
-        kind=SelectorKind.RETRIEVE,
-        selector=_list_posts,
-        output_serializer=PostSerializer,
-        filter_set=_PostFilter,
-    )
+class _AuthorViewSet(ServiceViewSet):
+    queryset = Author.objects.all()
+    action_specs = {
+        "list": _list(),
+        "retrieve": _retrieve(),
+        "create": _create(),
+        "update": _update(),
+        "destroy": _destroy(),
+    }
+
+
+class _ActionViewSet(GenericViewSet):
+    queryset = Author.objects.all()
+
+    @service_action(_create(), detail=False, methods=["post"])
+    def approve(self, request: Any) -> Any: ...
+
+    @selector_action(_list(), detail=False)
+    def recent(self, request: Any) -> Any: ...
+
+    @selector_action(_list(presenter=DataclassPresenter(_Named)), detail=False)
+    def named(self, request: Any) -> Any: ...
 
 
 _router = DefaultRouter()
 _router.register("authors", _AuthorViewSet, basename="authors")
-_router.register("approvals", _ApproveViewSet, basename="approvals")
-_router.register("poly", _PolyViewSet, basename="poly")
-_router.register("poly-action", _PolyActionViewSet, basename="poly-action")
-_router.register("poly-noinput", _PolyNoInputViewSet, basename="poly-noinput")
+_router.register("actions", _ActionViewSet, basename="actions")
 
 urlpatterns = [
-    path("create/", _CreateView.as_view()),
-    path("update/<int:pk>/", _UpdateView.as_view()),
-    path("forced-full/<int:pk>/", _ForcedFullUpdateView.as_view()),
-    path("delete/<int:pk>/", _DeleteView.as_view()),
-    path("plain-delete/<int:pk>/", _DeletePlainView.as_view()),
-    path("force-error-delete/<int:pk>/", _ForcedErrorDeleteView.as_view()),
-    path("archive/<int:pk>/", _ArchiveView.as_view()),
-    path("archive-at-204/<int:pk>/", _ArchiveAt204View.as_view()),
-    path("archive-at-202/<int:pk>/", _ArchiveAt202View.as_view()),
-    path("bulk-delete-counted/", _BulkDeleteCountedView.as_view()),
-    path("bulk-delete/", _BulkDeleteView.as_view()),
-    path("bulk-delete-undeclared/", _BulkDeleteCountedUndeclaredView.as_view()),
-    path("no-error-create/", _NoErrorCreateView.as_view()),
-    path("callable-status-create/", _CallableStatusCreateView.as_view()),
-    path("posts-viewlevel/", _ViewLevelFilterListView.as_view()),
-    path("posts-spec/", _SpecFilterListView.as_view()),
-    path("post-viewlevel/<int:pk>/", _ViewLevelFilterRetrieveView.as_view()),
-    path("post-spec/<int:pk>/", _SpecFilterRetrieveView.as_view()),
+    path("create/", _view(ServiceCreateView, _create()).as_view()),
+    path("create-202/", _view(ServiceCreateView, _create(), success_status=202).as_view()),
+    path(
+        "create-callable/",
+        _view(ServiceCreateView, _create(), success_status=_status_from_result).as_view(),
+    ),
+    path("create-may-be-none/", _view(ServiceCreateView, _create(allow_none=True)).as_view()),
+    path(
+        "create-bare/",
+        _view(ServiceCreateView, _create(presenter=None, allow_none=True)).as_view(),
+    ),
+    path(
+        "create-dataclass-out/",
+        _view(ServiceCreateView, _create(presenter=DataclassPresenter(_Named))).as_view(),
+    ),
+    path("create-many/", _view(ServiceCreateView, _create(many=True)).as_view()),
+    path("create-returns-many/", _view(ServiceCreateView, _create(returns_many=True)).as_view()),
+    path(
+        "create-re-read-list/",
+        _view(
+            ServiceCreateView,
+            _create(
+                presenter=None,
+                output_selector_spec=SelectorSpec(
+                    kind=SelectorKind.LIST, selector=_list_authors, presenter=_PRESENTER
+                ),
+            ),
+        ).as_view(),
+    ),
+    path(
+        "create-many-dataclass/",
+        _view(
+            ServiceCreateView,
+            _create(
+                many=True,
+                validator=DataclassValidator(_NameRow),
+                presenter=DataclassPresenter(_Named),
+            ),
+        ).as_view(),
+    ),
+    path("create-no-input/", _view(ServiceCreateView, _create(validator=None)).as_view()),
+    path(
+        "t/<slug:tenant>/owned/",
+        _view(
+            ServiceCreateView,
+            _create(
+                service=_create_owned,
+                validator=DataclassValidator(_NameRow),
+                reads=Parameters.of(
+                    Parameter("tenant", "string", required=True),
+                    Parameter("owner", "string", required=True),
+                ),
+                kwargs=_owner,
+            ),
+        ).as_view(),
+    ),
+    path("update/<int:pk>/", _view(ServiceUpdateView, _update()).as_view()),
+    path(
+        "update-whole/<int:pk>/",
+        _view(ServiceUpdateView, _update(validator=SerializerValidator(_NameRow))).as_view(),
+    ),
+    path("update-annotated/<int:pk>/", _AnnotatedUpdateView.as_view()),
+    path("update-partial/<int:pk>/", _view(ServiceUpdateView, _update(partial=True)).as_view()),
+    path(
+        "update-own/<int:author>/",
+        _view(ServiceUpdateView, _update(validator=_NameValidator())).as_view(),
+    ),
+    path("delete/<int:pk>/", _view(ServiceDeleteView, _destroy()).as_view()),
+    path(
+        "delete-with-reason/<int:pk>/",
+        _view(
+            ServiceDeleteView, _destroy(validator=SerializerValidator(ReasonSerializer))
+        ).as_view(),
+    ),
+    path(
+        "delete-own-reason/<int:pk>/",
+        _view(ServiceDeleteView, _destroy(validator=_NameValidator())).as_view(),
+    ),
+    path("archive/<int:pk>/", _view(ServiceDeleteView, _destroy(presenter=_PRESENTER)).as_view()),
+    path("authors-list/", _view(SelectorListView, _list()).as_view()),
+    path(
+        "authors-list-dataclass/",
+        _view(SelectorListView, _list(presenter=DataclassPresenter(_Named))).as_view(),
+    ),
+    path(
+        "authors-list-bare/",
+        _view(SelectorListView, _list(presenter=None), serializer_class=AuthorSerializer).as_view(),
+    ),
+    path(
+        "authors-paged/",
+        _view(SelectorListView, _list(), pagination_class=PageNumberPagination).as_view(),
+    ),
+    path(
+        "authors-paged-dataclass/",
+        _view(
+            SelectorListView,
+            _list(presenter=DataclassPresenter(_Named)),
+            pagination_class=PageNumberPagination,
+        ).as_view(),
+    ),
+    path("author/<int:pk>/", _view(SelectorRetrieveView, _retrieve()).as_view()),
+    path(
+        "author-dataclass/<int:pk>/",
+        _view(SelectorRetrieveView, _retrieve(presenter=DataclassPresenter(_Named))).as_view(),
+    ),
+    path(
+        "posts/",
+        _view(
+            SelectorListView,
+            SelectorSpec(
+                kind=SelectorKind.LIST,
+                selector=_list_posts,
+                permissions=_OPEN,
+                presenter=_POSTS,
+                filter_set=_PostFilter,
+            ),
+            queryset=Post.objects.all(),
+        ).as_view(),
+    ),
+    path(
+        "post/<int:pk>/",
+        _view(
+            SelectorRetrieveView,
+            SelectorSpec(
+                kind=SelectorKind.RETRIEVE,
+                selector=_get_post,
+                reads=_BY_PK,
+                permissions=_OPEN,
+                presenter=_POSTS,
+                filter_set=_PostFilter,
+            ),
+            queryset=Post.objects.all(),
+        ).as_view(),
+    ),
     *_router.urls,
 ]
 
@@ -413,507 +387,289 @@ def _enable_openapi() -> None:
     enable_openapi()
 
 
-def _generate() -> dict[str, Any]:
+@pytest.fixture(scope="module")
+def schema() -> dict[str, Any]:
     return SchemaGenerator(patterns=urlpatterns).get_schema(request=None, public=True)
 
 
-@pytest.mark.django_db
-class TestStandaloneViewSchema:
-    def test_create_view_emits_201_response(self) -> None:
-        schema = _generate()
-        op = schema["paths"]["/create/"]["post"]
-        assert "201" in op["responses"]
-        assert "422" in op["responses"]
-
-    def test_create_view_request_body_uses_input_serializer(self) -> None:
-        schema = _generate()
-        op = schema["paths"]["/create/"]["post"]
-        body = op["requestBody"]["content"]["application/json"]["schema"]
-        # The schema is a $ref to a component derived from ``_AuthorIn``;
-        # follow it to verify the component has typed properties (not a bare
-        # ``object``).
-        ref = body["$ref"]
-        assert ref.startswith("#/components/schemas/")
-        component = schema["components"]["schemas"][ref.rsplit("/", 1)[1]]
-        assert set(component.get("properties", {}).keys()) == {"name"}
-
-    def test_partial_update_request_serializer_marked_partial(self) -> None:
-        schema = _generate()
-        op = schema["paths"]["/update/{id}/"]["patch"]
-        body = op["requestBody"]["content"]["application/json"]["schema"]
-        ref = body["$ref"]
-        component = schema["components"]["schemas"][ref.rsplit("/", 1)[1]]
-        # spectacular emits a ``Patched*`` component for partial requests.
-        assert "Patched" in ref or component.get("required") in (None, [])
-
-    def test_spec_partial_false_overrides_patch_partiality(self) -> None:
-        schema = _generate()
-        op = schema["paths"]["/forced-full/{id}/"]["patch"]
-        body = op["requestBody"]["content"]["application/json"]["schema"]
-        ref = body["$ref"]
-        component = schema["components"]["schemas"][ref.rsplit("/", 1)[1]]
-        # ``partial=False`` forces full-update semantics, so no ``Patched*``
-        # component and the required list survives under PATCH.
-        assert "Patched" not in ref
-        assert component.get("required") == ["name"]
-
-
-@pytest.mark.django_db
-class TestDeleteViewSchema:
-    def test_delete_view_emits_request_body_when_input_serializer_set(self) -> None:
-        schema = _generate()
-        op = schema["paths"]["/delete/{id}/"]["delete"]
-        assert "requestBody" in op
-        body = op["requestBody"]["content"]["application/json"]["schema"]
-        ref = body["$ref"]
-        component = schema["components"]["schemas"][ref.rsplit("/", 1)[1]]
-        assert set(component.get("properties", {}).keys()) == {"reason"}
-
-    def test_delete_view_omits_request_body_when_no_input_serializer(self) -> None:
-        schema = _generate()
-        op = schema["paths"]["/plain-delete/{id}/"]["delete"]
-        assert "requestBody" not in op
-
-
-# Each destroy route as (its path, its view, the status it is served under).
-_DESTROY_ROUTES: dict[str, tuple[str, Any, int]] = {
-    "single-row presenting a row": ("/archive/{id}/", _ArchiveView, 200),
-    "single-row presenting a row at an explicit 204": (
-        "/archive-at-204/{id}/",
-        _ArchiveAt204View,
-        200,
-    ),
-    "single-row presenting a row at an explicit 202": (
-        "/archive-at-202/{id}/",
-        _ArchiveAt202View,
-        202,
-    ),
-    "single-row presenting nothing": ("/plain-delete/{id}/", _DeletePlainView, 204),
-    "bulk presenting a count": ("/bulk-delete-counted/", _BulkDeleteCountedView, 200),
-    "bulk presenting nothing": ("/bulk-delete/", _BulkDeleteView, 204),
-}
-
-
-@pytest.mark.django_db
-@pytest.mark.parametrize("route", list(_DESTROY_ROUTES))
-def test_a_destroy_documents_the_response_it_serves(route: str) -> None:
-    """The schema and the runtime agree on a destroy's success response: its one
-    documented 2xx is the status the route answers, and it documents a body
-    exactly where the route sends one.
-
-    A destroy presenting a value answers ``200``, because a ``204`` carries no
-    body, and the schema used to document the serializer under the ``204``.
-    """
-    path, view, served = _DESTROY_ROUTES[route]
-    documented = _generate()["paths"][path]["delete"]["responses"]
-    pk = Author.objects.create(name="a").pk
-    kwargs = {"pk": pk} if "{id}" in path else {}
-    response = view.as_view()(APIRequestFactory().delete("/"), **kwargs)
-
-    assert response.status_code == served
-    assert [code for code in documented if code.startswith("2")] == [str(served)]
-    assert ("content" in documented[str(served)]) is (response.data is not None)
-
-
-@pytest.mark.django_db
-def test_an_undeclared_body_is_documented_as_no_content() -> None:
-    """The limit the OpenAPI page states, pinned so it stays true.
-
-    With no ``output_serializer``, only what the service returns decides whether
-    there is a body. The schema documents the empty ``204`` a destroy returning
-    ``None`` is answered with, while this one's count is served as a ``200``.
-    """
-    documented = _generate()["paths"]["/bulk-delete-undeclared/"]["delete"]["responses"]
-    Author.objects.create(name="a")
-    response = _BulkDeleteCountedUndeclaredView.as_view()(APIRequestFactory().delete("/"))
-
-    assert list(documented) == ["204"]
-    assert "content" not in documented["204"]
-    assert (response.status_code, response.data) == (200, {"deleted": 1})
-
-
-def _create_author() -> Author:
-    return Author.objects.create(name="x")
-
-
-def _no_author_visible(*, result: Author) -> Any:
-    # A re-read scoped to what the caller may see, which here is nothing.
-    return Author.objects.none()
-
-
-def _the_created_author(*, result: Author) -> Any:
-    return Author.objects.filter(pk=result.pk)
-
-
-def _create_view(output_selector_spec: SelectorSpec[Any, Any]) -> Any:
-    spec = ServiceSpec(
-        service=_create_author, output_selector_spec=output_selector_spec, atomic=False
-    )
-    return type("_CreateReReading", (ServiceCreateView,), {"spec": spec})
-
-
-def _documented_success(view: Any) -> dict[str, Any]:
-    generator = SchemaGenerator(patterns=[path("c/", view.as_view())])
-    responses = generator.get_schema(request=None, public=True)["paths"]["/c/"]["post"]
-    return {code: body for code, body in responses["responses"].items() if code.startswith("2")}
-
-
-@pytest.mark.django_db
-def test_a_create_that_may_present_nothing_documents_its_empty_204() -> None:
-    """A re-read that finds no row is answered with an empty ``204``, not the
-    ``201`` the serializer is documented under, so the schema documents both."""
-    view = _create_view(
-        SelectorSpec(
-            kind=SelectorKind.RETRIEVE,
-            selector=_no_author_visible,
-            output_serializer=AuthorSerializer,
-        )
-    )
-
-    documented = _documented_success(view)
-    response = view.as_view()(APIRequestFactory().post("/", {}, format="json"))
-
-    assert response.status_code == 204
-    assert sorted(documented) == ["201", "204"]
-    assert "content" in documented["201"]
-    assert "content" not in documented["204"]
-
-
-@pytest.mark.django_db
-def test_a_create_that_cannot_present_nothing_documents_no_204() -> None:
-    """Nothing to re-read and no ``allow_none``: the service's own row is presented."""
-    view = _create_view(
-        SelectorSpec(kind=SelectorKind.RETRIEVE, output_serializer=AuthorSerializer)
-    )
-
-    assert sorted(_documented_success(view)) == ["201"]
-
-
-@pytest.mark.django_db
-def test_an_undeclared_body_is_documented_at_its_status_alone() -> None:
-    """The limit the OpenAPI page states: with no ``output_serializer`` the schema
-    documents one empty response at the status, whether or not the re-read may
-    find nothing, because whether a body goes out is not declared anywhere it
-    reads."""
-    view = _create_view(SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_the_created_author))
-
-    documented = _documented_success(view)
-
-    assert sorted(documented) == ["201"]
-    assert "content" not in documented["201"]
-
-
-# --- where the documented ``204`` is not the empty answer served -----------------
-#
-# The schema documents the empty ``204`` wherever ``can_present_nothing`` says
-# dispatch may present ``None``. The renderers decide the empty answer from more
-# than the spec: an explicit ``success_status``, whether the view renders an
-# update's target in place, and whether the spec is answered by the bulk path. The
-# OpenAPI page states each case, and each test below puts the status served beside
-# the statuses documented, so a schema that grows exact fails here with the page.
-
-
-def _returns_nothing(**_: Any) -> None:
-    return None
-
-
-_PRESENTS_ITS_OWN = SelectorSpec(kind=SelectorKind.RETRIEVE, output_serializer=AuthorSerializer)
-
-
-def _documented_at(view: Any, route: str, path_key: str, method: str) -> list[str]:
-    generator = SchemaGenerator(patterns=[path(route, view.as_view())])
-    operation = generator.get_schema(request=None, public=True)["paths"][path_key][method]
-    return sorted(code for code in operation["responses"] if code.startswith("2"))
-
-
-@pytest.mark.django_db
-def test_an_empty_answer_at_an_explicit_status_is_documented_as_204_too() -> None:
-    """With nothing to re-read, an explicit ``success_status`` is the status the
-    empty answer goes out under, so the ``204`` documented is never served."""
-    spec = ServiceSpec(
-        service=_returns_nothing,
-        output_selector_spec=_PRESENTS_ITS_OWN,
-        allow_none=True,
-        success_status=201,
-        atomic=False,
-    )
-    view = type("_CreateAt201", (ServiceCreateView,), {"spec": spec})
-
-    response = view.as_view()(APIRequestFactory().post("/", {}, format="json"))
-
-    assert (response.status_code, response.data) == (201, None)
-    assert _documented_at(view, "c/", "/c/", "post") == ["201", "204"]
-
-
-@pytest.mark.django_db
-def test_a_re_read_finding_nothing_answers_204_whatever_the_status() -> None:
-    """The contrast the page draws: a re-read's ``None`` is authoritative, so it is
-    answered with the ``204`` documented, at an explicit ``201`` too."""
-    spec = ServiceSpec(
-        service=_create_author,
-        output_selector_spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE,
-            selector=_no_author_visible,
-            output_serializer=AuthorSerializer,
-        ),
-        success_status=201,
-        atomic=False,
-    )
-    view = type("_ReReadAt201", (ServiceCreateView,), {"spec": spec})
-
-    response = view.as_view()(APIRequestFactory().post("/", {}, format="json"))
-
-    assert (response.status_code, response.data) == (204, None)
-    assert _documented_at(view, "c/", "/c/", "post") == ["201", "204"]
-
-
-@pytest.mark.django_db
-def test_an_update_rendering_its_target_in_place_is_documented_with_a_204() -> None:
-    """An update whose service returns ``None`` renders the row it updated, so it
-    never answers empty, while ``allow_none`` has the schema document the ``204``."""
-    author = Author.objects.create(name="x")
-    spec = ServiceSpec(
-        service=_returns_nothing,
-        output_selector_spec=_PRESENTS_ITS_OWN,
-        allow_none=True,
-        atomic=False,
-    )
-    view = type(
-        "_UpdateInPlace", (ServiceUpdateView,), {"spec": spec, "queryset": Author.objects.all()}
-    )
-
-    response = view.as_view()(APIRequestFactory().put("/", {}, format="json"), pk=author.pk)
-
-    assert (response.status_code, response.data) == (200, {"id": author.pk, "name": "x"})
-    assert _documented_at(view, "u/<int:pk>/", "/u/{id}/", "put") == ["200", "204"]
-
-
-class _TouchViewSet(ServiceViewSet):
-    queryset = Author.objects.all()
-
-    @service_action(
-        ServiceSpec(
-            service=_returns_nothing,
-            output_selector_spec=_PRESENTS_ITS_OWN,
-            allow_none=True,
-            atomic=False,
-        ),
-        detail=True,
-        methods=["post"],
-    )
-    def touch(self, request: Any, pk: Any = None) -> Any: ...
-
-
-@pytest.mark.django_db
-def test_a_detail_action_rendering_its_target_in_place_is_documented_with_a_204() -> None:
-    """A detail ``@service_action`` renders its target as an update does."""
-    author = Author.objects.create(name="x")
-    router = DefaultRouter()
-    router.register("touch", _TouchViewSet, basename="touch")
-    view = _TouchViewSet.as_view({"post": "touch"})
-
-    response = view(APIRequestFactory().post("/", {}, format="json"), pk=author.pk)
-    schema = SchemaGenerator(patterns=router.urls).get_schema(request=None, public=True)
-    operation = schema["paths"]["/touch/{id}/touch/"]["post"]
-
-    assert (response.status_code, response.data) == (200, {"id": author.pk, "name": "x"})
-    assert sorted(code for code in operation["responses"] if code.startswith("2")) == [
-        "200",
-        "204",
-    ]
-
-
-def _none_visible(*, result: Any) -> Any:
-    return Author.objects.none()
-
-
-@pytest.mark.django_db
-def test_a_bulk_spec_answers_empty_at_its_status_beside_a_documented_204() -> None:
-    """A collection target is answered by the bulk path, which sends an empty answer
-    under the action's status, never ``204`` unless that is the status. A re-read
-    finding no row is answered ``200`` here, as an update, beside a documented
-    ``204``."""
-    Author.objects.create(name="x")
-    spec = ServiceSpec(
-        service=_returns_nothing,
-        collection_selector_spec=_ALL_AUTHORS,
-        output_selector_spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE, selector=_none_visible, output_serializer=AuthorSerializer
-        ),
-        atomic=False,
-    )
-    view = type(
-        "_BulkUpdate", (ServiceUpdateView,), {"spec": spec, "queryset": Author.objects.all()}
-    )
-
-    response = view.as_view()(APIRequestFactory().put("/", {}, format="json"), pk=0)
-
-    assert (response.status_code, response.data) == (200, None)
-    assert _documented_at(view, "u/<int:pk>/", "/u/{id}/", "put") == ["200", "204"]
-
-
-@pytest.mark.django_db
-class TestViewsetSchema:
-    def test_create_action_schema_uses_service_spec(self) -> None:
-        schema = _generate()
-        op = schema["paths"]["/authors/"]["post"]
-        assert "201" in op["responses"]
-        assert "422" in op["responses"]
-        body = op["requestBody"]["content"]["application/json"]["schema"]
-        assert body["$ref"].startswith("#/components/schemas/")
-
-    def test_callable_success_status_documents_default(self) -> None:
-        schema = _generate()
-        op = schema["paths"]["/callable-status-create/"]["post"]
-        # The callable can't be resolved statically → the create default stands.
-        assert "201" in op["responses"]
-
-    def _poly_request_component(self, schema: dict[str, Any], path: str) -> dict[str, Any]:
-        body = schema["paths"][path]["post"]["requestBody"]["content"]["application/json"]["schema"]
-        # The PolymorphicProxySerializer is registered as a named component; the
-        # request body $refs it and the oneOf lives inside.
-        ref = body["$ref"]
-        return schema["components"]["schemas"][ref.rsplit("/", 1)[1]]
-
-    def test_polymorphic_action_request_body_is_variant_union(self) -> None:
-        schema = _generate()
-        component = self._poly_request_component(schema, "/poly/")
-        # PolymorphicProxySerializer(resource_type_field_name=None) → a oneOf of
-        # the variant input serializers, no discriminator field.
-        assert "oneOf" in component
-        assert len(component["oneOf"]) == 2
-
-    def test_polymorphic_service_action_request_body_is_variant_union(self) -> None:
-        schema = _generate()
-        component = self._poly_request_component(schema, "/poly-action/switch/")
-        assert "oneOf" in component
-        assert len(component["oneOf"]) == 2
-
-    def test_polymorphic_without_variant_input_serializers_falls_back(self) -> None:
-        # No variant declares an input_serializer → no proxy is built and the
-        # base body applies (no request body for a no-input mutation).
-        schema = _generate()
-        op = schema["paths"]["/poly-noinput/"]["post"]
-        assert "requestBody" not in op
-
-    def test_list_action_schema_left_alone(self) -> None:
-        schema = _generate()
-        op = schema["paths"]["/authors/"]["get"]
-        # Selector list reads ``output_serializer`` via ``ActionSerializerResolver``;
-        # the AutoSchema does not attach a 422 to it.
-        assert "200" in op["responses"]
-        assert "422" not in op["responses"]
-
-
-@pytest.mark.django_db
-class TestServiceActionSchema:
-    def test_action_emits_response_and_gates_out_no_input_422(self) -> None:
-        schema = _generate()
-        # ``approve`` is a detail action; spectacular places it under
-        # /approvals/{id}/approve/.
-        op = schema["paths"]["/approvals/{id}/approve/"]["post"]
-        assert "200" in op["responses"]
-        # The approve spec has no ``input_serializer``, so the 422 ServiceError
-        # response is gated out — no spurious diff for a no-input action.
-        assert "422" not in op["responses"]
-
-
-@pytest.mark.django_db
-class TestServiceErrorResponseGating:
-    def test_no_input_delete_omits_422(self) -> None:
-        schema = _generate()
-        op = schema["paths"]["/plain-delete/{id}/"]["delete"]
-        # No input_serializer → no spurious ServiceError response.
-        assert "422" not in op["responses"]
-
-    def test_input_bearing_mutation_keeps_422(self) -> None:
-        schema = _generate()
-        op = schema["paths"]["/create/"]["post"]
-        assert "422" in op["responses"]
-
-    def test_flag_true_forces_422_on_no_input(self) -> None:
-        schema = _generate()
-        op = schema["paths"]["/force-error-delete/{id}/"]["delete"]
-        # document_service_error=True overrides the no-input heuristic.
-        assert "422" in op["responses"]
-
-    def test_flag_false_drops_422_on_input(self) -> None:
-        schema = _generate()
-        op = schema["paths"]["/no-error-create/"]["post"]
-        # document_service_error=False overrides the input-present heuristic.
-        assert "422" not in op["responses"]
-
-
-class TestServiceErrorSerializer:
-    def test_422_response_references_service_error(self) -> None:
-        schema = _generate()
-        op = schema["paths"]["/create/"]["post"]
-        ref = op["responses"]["422"]["content"]["application/json"]["schema"]["$ref"]
-        component_name = ref.rsplit("/", 1)[1]
-        component = schema["components"]["schemas"][component_name]
-        assert "detail" in component["properties"]
-
-
-def _params(schema: dict[str, Any], route: str, method: str) -> list[dict[str, Any]]:
-    return schema["paths"][route][method].get("parameters", [])
-
-
-@pytest.mark.django_db
-class TestFilterSetParameterParity:
-    """Moving a FilterSet view→spec must leave the OpenAPI parameters unchanged."""
-
-    def test_list_parameters_match_view_level_filterset(self) -> None:
-        schema = _generate()
-        view_level = _params(schema, "/posts-viewlevel/", "get")
-        spec_level = _params(schema, "/posts-spec/", "get")
-        # Byte-identical: same names, types, enums, ordering, style/explode.
-        assert spec_level == view_level
-        # And non-trivially present — the FilterSet actually contributed params.
-        names = {p["name"] for p in spec_level}
-        assert {"title", "published", "views", "kind", "labels", "order"} <= names
-
-    def test_ordering_filter_shape(self) -> None:
-        schema = _generate()
-        order = {p["name"]: p for p in _params(schema, "/posts-spec/", "get")}["order"]
-        assert order["in"] == "query"
-        assert order["schema"]["type"] == "array"
-        assert order["explode"] is False
-        assert order["style"] == "form"
-        # Ordering enum (asc + ``-`` desc variants) lives in the array items.
-        assert "enum" in order["schema"]["items"]
-        assert order.get("description")
-
-    def test_multiple_choice_filter_shape(self) -> None:
-        schema = _generate()
-        labels = {p["name"]: p for p in _params(schema, "/posts-spec/", "get")}["labels"]
-        assert labels["schema"]["type"] == "array"
-        assert labels["explode"] is True
-        assert labels["style"] == "form"
-
-    def test_retrieve_parameters_match_and_omit_filters(self) -> None:
-        # A detail operation documents no filter params in either config —
-        # drf-spectacular gates filter params on list views — so parity holds
-        # with both sides empty of filter params (only the path param remains).
-        schema = _generate()
-        view_level = _params(schema, "/post-viewlevel/{id}/", "get")
-        spec_level = _params(schema, "/post-spec/{id}/", "get")
-        assert spec_level == view_level
-        assert "title" not in {p["name"] for p in spec_level}
-
-
-class TestFilterSetParametersHelper:
-    def test_noop_for_duck_typed_non_filterset(self) -> None:
-        # A ``filter_set`` honouring only the ``(data, queryset) -> .qs``
-        # contract (no ``base_filters``) degrades to no parameters.
-        class _DuckFilter:
-            def __init__(self, *, data: Any, queryset: Any) -> None: ...
-
-            @property
-            def qs(self) -> Any: ...
-
-        assert _filter_set_parameters(ServiceAutoSchema(), _DuckFilter) == []
-
-    def test_spec_filter_backend_returns_filter_set(self) -> None:
-        sentinel = object()
-        backend = _SpecFilterBackend(sentinel)
-        assert backend.get_filterset_class(view=None, queryset=None) is sentinel
+def _op(schema: dict[str, Any], route: str, method: str) -> dict[str, Any]:
+    return schema["paths"][route][method]
+
+
+def _body(schema: dict[str, Any], route: str, method: str) -> dict[str, Any]:
+    return _op(schema, route, method)["requestBody"]["content"]["application/json"]["schema"]
+
+
+def _response(schema: dict[str, Any], route: str, method: str, status: str) -> dict[str, Any]:
+    return _op(schema, route, method)["responses"][status]["content"]["application/json"]["schema"]
+
+
+def _component(schema: dict[str, Any], ref: str) -> dict[str, Any]:
+    return schema["components"]["schemas"][ref.rsplit("/", 1)[1]]
+
+
+class TestTheRequestBody:
+    def test_a_serializer_validator_is_documented_by_its_serializer(
+        self, schema: dict[str, Any]
+    ) -> None:
+        # The component is drf-spectacular's name for the author's serializer,
+        # which a generated client keys on.
+        assert _body(schema, "/create/", "post") == {"$ref": "#/components/schemas/NameIn"}
+        assert schema["components"]["schemas"]["NameIn"]["required"] == ["name"]
+
+    def test_a_patch_is_documented_partial(self, schema: dict[str, Any]) -> None:
+        body = _body(schema, "/update/{id}/", "patch")
+        assert body == {"$ref": "#/components/schemas/PatchedNameIn"}
+        assert "required" not in _component(schema, body["$ref"])
+
+    def test_a_put_is_documented_whole(self, schema: dict[str, Any]) -> None:
+        assert _body(schema, "/update/{id}/", "put") == {"$ref": "#/components/schemas/NameIn"}
+
+    def test_a_patch_a_dataclass_validates_whole_is_documented_whole(
+        self, schema: dict[str, Any]
+    ) -> None:
+        # A dataclass builds its instance from every field, so the kernel route
+        # validates a PATCH whole, and the schema says so.
+        body = _body(schema, "/update-whole/{id}/", "patch")
+        assert "Patched" not in body["$ref"]
+        assert _component(schema, body["$ref"])["required"] == ["name"]
+
+    def test_an_extend_schema_request_is_documented_partial_on_a_patch(
+        self, schema: dict[str, Any]
+    ) -> None:
+        # The author's annotation wins, and drf-spectacular documents it under
+        # a PATCH as it does on any view.
+        assert _body(schema, "/update-annotated/{id}/", "patch") == {
+            "$ref": "#/components/schemas/PatchedReason"
+        }
+
+    def test_a_partial_spec_documents_its_put_partial(self, schema: dict[str, Any]) -> None:
+        assert _body(schema, "/update-partial/{id}/", "put") == {
+            "$ref": "#/components/schemas/PatchedNameIn"
+        }
+
+    def test_a_many_spec_takes_an_array_of_rows(self, schema: dict[str, Any]) -> None:
+        assert _body(schema, "/create-many/", "post") == {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/NameIn"},
+        }
+
+    def test_a_many_spec_over_another_validator_takes_an_array_of_its_rows(
+        self, schema: dict[str, Any]
+    ) -> None:
+        body = _body(schema, "/create-many-dataclass/", "post")
+        assert body["type"] == "array"
+        assert set(body["items"]["properties"]) == {"name"}
+
+    def test_another_validator_is_its_parameters_schema(self, schema: dict[str, Any]) -> None:
+        body = _body(schema, "/update-own/{author}/", "put")
+        assert body["type"] == "object"
+        assert body["properties"] == {"name": {"type": "string"}}
+        assert body["required"] == ["name"]
+        # The edge drops an undeclared key, so the body is not closed.
+        assert "additionalProperties" not in body
+
+    def test_another_validator_s_patch_requires_nothing(self, schema: dict[str, Any]) -> None:
+        body = _body(schema, "/update-own/{author}/", "patch")
+        assert body["properties"] == {"name": {"type": "string"}}
+        assert "required" not in body
+
+    def test_the_target_s_reads_are_no_body_key(self, schema: dict[str, Any]) -> None:
+        # ``pk`` is the target lookup's read and no route capture here: the
+        # body still does not choose the row.
+        assert set(_body(schema, "/update-own/{author}/", "put")["properties"]) == {"name"}
+
+    def test_a_route_capture_and_a_provider_s_key_are_no_body_key(
+        self, schema: dict[str, Any]
+    ) -> None:
+        # ``tenant`` is captured by the route and ``owner`` filled by the
+        # ``kwargs`` provider, so the client is asked for neither.
+        body = _body(schema, "/t/{tenant}/owned/", "post")
+        assert set(body["properties"]) == {"name"}
+
+    def test_a_delete_with_a_validator_documents_its_body(self, schema: dict[str, Any]) -> None:
+        assert _body(schema, "/delete-with-reason/{id}/", "delete") == {
+            "$ref": "#/components/schemas/Reason"
+        }
+        assert set(_body(schema, "/delete-own-reason/{id}/", "delete")["properties"]) == {"name"}
+
+    def test_a_spec_taking_nothing_documents_no_body(self, schema: dict[str, Any]) -> None:
+        assert "requestBody" not in _op(schema, "/delete/{id}/", "delete")
+        assert "requestBody" not in _op(schema, "/create-no-input/", "post")
+
+
+class TestTheResponse:
+    def test_a_create_answers_201_with_its_presenter_s_serializer(
+        self, schema: dict[str, Any]
+    ) -> None:
+        assert _response(schema, "/create/", "post", "201") == {
+            "$ref": "#/components/schemas/Author"
+        }
+        assert set(_op(schema, "/create/", "post")["responses"]) == {"201", "422"}
+
+    def test_the_view_s_status_is_documented(self, schema: dict[str, Any]) -> None:
+        assert set(_op(schema, "/create-202/", "post")["responses"]) == {"202", "422"}
+
+    def test_a_callable_status_documents_the_action_s_default(self, schema: dict[str, Any]) -> None:
+        assert set(_op(schema, "/create-callable/", "post")["responses"]) == {"201", "422"}
+
+    def test_a_spec_that_may_present_nothing_documents_its_204(
+        self, schema: dict[str, Any]
+    ) -> None:
+        responses = _op(schema, "/create-may-be-none/", "post")["responses"]
+        assert set(responses) == {"201", "204", "422"}
+        assert "content" not in responses["204"]
+
+    def test_no_presenter_documents_no_content_at_the_status(self, schema: dict[str, Any]) -> None:
+        # The spec may present nothing, and the no-content response is already
+        # the one documented, at its status: no 204 beside it.
+        responses = _op(schema, "/create-bare/", "post")["responses"]
+        assert set(responses) == {"201", "422"}
+        assert "content" not in responses["201"]
+
+    def test_another_presenter_is_its_output_schema(self, schema: dict[str, Any]) -> None:
+        body = _response(schema, "/create-dataclass-out/", "post", "201")
+        assert body["type"] == "object"
+        assert set(body["properties"]) == {"id", "name"}
+
+    def test_a_many_spec_presents_an_array(self, schema: dict[str, Any]) -> None:
+        assert _response(schema, "/create-many/", "post", "201") == {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/Author"},
+        }
+        body = _response(schema, "/create-many-dataclass/", "post", "201")
+        assert body["type"] == "array"
+        assert set(body["items"]["properties"]) == {"id", "name"}
+
+    def test_a_returns_many_spec_presents_an_array(self, schema: dict[str, Any]) -> None:
+        assert _response(schema, "/create-returns-many/", "post", "201") == {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/Author"},
+        }
+
+    def test_a_list_re_read_presents_an_array(self, schema: dict[str, Any]) -> None:
+        # The output selector's presenter renders its rows, and a LIST re-read
+        # never presents nothing, so no 204 is documented beside them.
+        responses = _op(schema, "/create-re-read-list/", "post")["responses"]
+        assert set(responses) == {"201", "422"}
+        assert _response(schema, "/create-re-read-list/", "post", "201") == {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/Author"},
+        }
+
+    def test_a_destroy_presenting_a_row_answers_200(self, schema: dict[str, Any]) -> None:
+        assert _response(schema, "/archive/{id}/", "delete", "200") == {
+            "$ref": "#/components/schemas/Author"
+        }
+
+    def test_a_destroy_presenting_nothing_answers_204(self, schema: dict[str, Any]) -> None:
+        assert set(_op(schema, "/delete/{id}/", "delete")["responses"]) == {"204"}
+
+    def test_a_service_error_is_documented_where_there_is_a_validator(
+        self, schema: dict[str, Any]
+    ) -> None:
+        # The ``ServiceError`` component carries under its name.
+        assert _response(schema, "/create/", "post", "422") == {
+            "$ref": "#/components/schemas/ServiceError"
+        }
+        assert "422" not in _op(schema, "/create-no-input/", "post")["responses"]
+
+
+class TestTheReadSide:
+    def test_a_list_is_an_array_of_its_presenter_s_serializer(self, schema: dict[str, Any]) -> None:
+        assert _response(schema, "/authors-list/", "get", "200") == {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/Author"},
+        }
+
+    def test_a_retrieve_is_its_presenter_s_serializer(self, schema: dict[str, Any]) -> None:
+        assert _response(schema, "/author/{id}/", "get", "200") == {
+            "$ref": "#/components/schemas/Author"
+        }
+
+    def test_another_presenter_is_its_output_schema(self, schema: dict[str, Any]) -> None:
+        listed = _response(schema, "/authors-list-dataclass/", "get", "200")
+        assert listed["type"] == "array"
+        assert set(listed["items"]["properties"]) == {"id", "name"}
+        one = _response(schema, "/author-dataclass/{id}/", "get", "200")
+        assert set(one["properties"]) == {"id", "name"}
+
+    def test_no_presenter_is_the_view_s_serializer_class(self, schema: dict[str, Any]) -> None:
+        assert _response(schema, "/authors-list-bare/", "get", "200") == {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/Author"},
+        }
+
+    def test_a_filter_set_s_parameters_are_the_kernel_s(self, schema: dict[str, Any]) -> None:
+        parameters = {p["name"]: p for p in _op(schema, "/posts/", "get")["parameters"]}
+        assert set(parameters) == {"title", "published", "kind", "pks"}
+        assert all(p["in"] == "query" and "required" not in p for p in parameters.values())
+        assert parameters["published"]["schema"] == {"type": "boolean"}
+        assert parameters["kind"]["schema"]["enum"] == ["a", "b"]
+        assert parameters["pks"]["schema"]["type"] == "array"
+
+    def test_a_paged_list_is_the_paginator_s_envelope(self, schema: dict[str, Any]) -> None:
+        # Once, whichever the presenter: a serializer's rows under the paged
+        # component drf-spectacular names, a raw row inside the envelope.
+        assert _response(schema, "/authors-paged/", "get", "200") == {
+            "$ref": "#/components/schemas/PaginatedAuthorList"
+        }
+        envelope = schema["components"]["schemas"]["PaginatedAuthorList"]
+        assert envelope["properties"]["results"] == {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/Author"},
+        }
+        raw = _response(schema, "/authors-paged-dataclass/", "get", "200")
+        assert raw["properties"]["results"]["type"] == "array"
+        assert set(raw["properties"]["results"]["items"]["properties"]) == {"id", "name"}
+
+    @pytest.mark.django_db
+    def test_an_array_filter_is_read_from_a_repeated_key(self) -> None:
+        # The documented style is OpenAPI's default for an array, one key per
+        # value, which the route reads as it reads a comma list.
+        author = Author.objects.create(name="a")
+        posts = [Post.objects.create(title=str(i), author=author) for i in range(3)]
+        view = urlpatterns[[str(u.pattern) for u in urlpatterns].index("posts/")].callback
+        request = APIRequestFactory().get(f"/posts/?pks={posts[0].pk}&pks={posts[2].pk}")
+        response = view(request)
+        assert response.status_code == 200
+        assert [row["id"] for row in response.data] == [posts[0].pk, posts[2].pk]
+
+    def test_a_retrieve_documents_no_filter_parameters(self, schema: dict[str, Any]) -> None:
+        names = {p["name"] for p in _op(schema, "/post/{id}/", "get")["parameters"]}
+        assert names == {"id"}
+
+
+class TestViewsets:
+    def test_action_specs_are_documented(self, schema: dict[str, Any]) -> None:
+        assert _body(schema, "/authors/", "post") == {"$ref": "#/components/schemas/NameIn"}
+        assert _response(schema, "/authors/", "post", "201") == {
+            "$ref": "#/components/schemas/Author"
+        }
+        assert _body(schema, "/authors/{id}/", "patch") == {
+            "$ref": "#/components/schemas/PatchedNameIn"
+        }
+        assert set(_op(schema, "/authors/{id}/", "delete")["responses"]) == {"204"}
+        assert _response(schema, "/authors/", "get", "200")["type"] == "array"
+        assert _response(schema, "/authors/{id}/", "get", "200") == {
+            "$ref": "#/components/schemas/Author"
+        }
+
+    def test_a_service_action_is_documented(self, schema: dict[str, Any]) -> None:
+        assert _body(schema, "/actions/approve/", "post") == {"$ref": "#/components/schemas/NameIn"}
+        assert _response(schema, "/actions/approve/", "post", "200") == {
+            "$ref": "#/components/schemas/Author"
+        }
+
+    def test_a_selector_action_listing_rows_is_an_array(self, schema: dict[str, Any]) -> None:
+        assert _response(schema, "/actions/recent/", "get", "200") == {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/Author"},
+        }
+
+    def test_a_selector_action_s_raw_rows_are_an_array(self, schema: dict[str, Any]) -> None:
+        # drf-spectacular does not read the action as a list operation, so the
+        # schema wraps the presenter's row itself, once.
+        body = _response(schema, "/actions/named/", "get", "200")
+        assert body["type"] == "array"
+        assert set(body["items"]["properties"]) == {"id", "name"}

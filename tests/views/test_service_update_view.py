@@ -72,7 +72,6 @@ _AUTHOR = SelectorSpec(
     kind=SelectorKind.RETRIEVE,
     selector=_author,
     reads=Parameters.of(Parameter("pk", "integer", required=True)),
-    permissions=_OPEN,
 )
 _PRESENTER = SerializerPresenter(AuthorSerializer)
 
@@ -358,7 +357,6 @@ class TestWhatAnUpdatePresents:
             output_selector_spec=SelectorSpec(
                 kind=SelectorKind.RETRIEVE,
                 selector=lambda *, result: None,
-                permissions=_OPEN,
                 allow_none=True,
                 presenter=_PRESENTER,
             ),
@@ -380,7 +378,6 @@ class TestWhatAnUpdatePresents:
             output_selector_spec=SelectorSpec(
                 kind=SelectorKind.RETRIEVE,
                 selector=lambda *, result: None,
-                permissions=_OPEN,
                 allow_none=True,
             ),
         )
@@ -398,7 +395,6 @@ class TestWhatAnUpdatePresents:
             output_selector_spec=SelectorSpec(
                 kind=SelectorKind.RETRIEVE,
                 selector=lambda *, result: Author.objects.get(pk=result.pk),
-                permissions=_OPEN,
                 presenter=_PRESENTER,
             ),
         )
@@ -430,7 +426,6 @@ class TestWhatAnUpdatePresents:
                 selector=lambda *, pk: Author.objects.filter(pk=pk),
                 reads=Parameters.of(Parameter("pk", "integer", required=True)),
                 prefetch_related=("posts",),
-                permissions=_OPEN,
             ),
             presenter=SerializerPresenter(_AuthorPosts),
             atomic=False,

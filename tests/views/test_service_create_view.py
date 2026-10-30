@@ -140,7 +140,6 @@ class TestServiceCreateView:
                 kind=SelectorKind.RETRIEVE,
                 selector=lambda *, result: None,
                 allow_none=True,
-                permissions=_OPEN,
                 presenter=_PRESENTER,
             )
         )
@@ -154,7 +153,6 @@ class TestServiceCreateView:
             output_selector_spec=SelectorSpec(
                 kind=SelectorKind.RETRIEVE,
                 selector=lambda *, result: other,
-                permissions=_OPEN,
                 presenter=_PRESENTER,
             )
         )
