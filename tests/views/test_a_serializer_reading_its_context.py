@@ -22,6 +22,8 @@ from typing import Any
 import pytest
 from django.contrib.auth.models import User
 from django_service_specs import ServiceSpec, Unrestricted
+from django_service_specs.dispatch.dispatch import dispatch
+from django_service_specs.dispatch.present import present
 from rest_framework import serializers
 from rest_framework.test import APIRequestFactory, force_authenticate
 
@@ -211,6 +213,24 @@ def test_a_live_view_describes_a_serializer_needing_a_whole_pool_callable(owner:
     assert seen == {"data": {"name": "n"}}
 
 
+class _FailsToBuild(serializers.Serializer):
+    """A ``get_fields`` that fails for a reason of its own, whatever context it has."""
+
+    def get_fields(self) -> dict[str, serializers.Field]:
+        raise KeyError("a key the serializer's own code lacks")
+
+
+def test_a_serializer_its_description_cannot_build_raises_as_it_is(owner: User) -> None:
+    """With no context callable to ask, the description is not rebuilt: what the
+    serializer raised is what the view raises, not a refusal of the call."""
+    seen: dict[str, Any] = {}
+
+    with pytest.raises(KeyError, match="a key the serializer's own code lacks"):
+        _create(_spec(_FailsToBuild, seen), {"name": "n"}, owner)
+
+    assert seen == {}
+
+
 class _WritesToItsContext(serializers.Serializer):
     title = serializers.CharField()
 
@@ -268,3 +288,43 @@ def test_the_call_s_context_is_every_serializer_s_context(owner: User) -> None:
     assert seen["service"] == "by-validate"
     assert response.data["written"] == "by-validate"
     assert seen["call_context"] is seen["returned"]
+
+
+class _RecordsItsRequest(serializers.Serializer):
+    title = serializers.CharField()
+
+    def to_representation(self, instance: Any) -> Any:
+        _PRESENTED_UNDER.append(self.context["request"])
+        return super().to_representation(instance)
+
+
+_PRESENTED_UNDER: list[Any] = []
+
+_ROWS = ServiceSpec(
+    service=lambda: [{"title": "a"}, {"title": "b"}],
+    permissions=_OPEN,
+    presenter=SerializerPresenter(_RecordsItsRequest),
+    returns_many=True,
+    atomic=False,
+)
+
+
+def test_a_kernel_call_inside_the_service_presents_every_row_under_one_offline_request(
+    owner: User,
+) -> None:
+    """A kernel call the service makes carries no request, so each row is
+    presented under an offline request for the principal it was handed, and the
+    rows of the call share the one the edge call built for it."""
+    _PRESENTED_UNDER.clear()
+
+    def service(*, data: Any) -> None:
+        present(_ROWS, dispatch(_ROWS, principal=owner, arguments={}))
+
+    assert _create(_spec_of(service), {}, owner).status_code == 204
+    first, second = _PRESENTED_UNDER
+    assert first is second
+    assert first.user is owner
+
+
+def _spec_of(service: Any) -> ServiceSpec:
+    return ServiceSpec(service=service, permissions=_OPEN, atomic=False)
