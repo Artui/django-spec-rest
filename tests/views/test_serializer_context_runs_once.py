@@ -6,8 +6,8 @@ query, and a run per row is N of them. Each path is driven over HTTP with a
 counting callable. A list is presented with the whole set under one context,
 never row by row, so a list of two rows still counts one.
 
-A kernel spec's presenter asks its context once per row, and the viewsets refuse
-a kernel spec in their actions yet; each is a strict xfail naming what owes it.
+A kernel spec's presenter asks its context once per row; each test that meets
+it is a strict xfail naming what owes it.
 """
 
 from __future__ import annotations
@@ -209,13 +209,6 @@ def test_a_selector_list_view_presents_under_one_context(two_authors: list[Autho
     assert len(calls) == 1
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "viewsets/utils.py _validate_action_spec reads drfs fields, so a kernel spec "
-        "in action_specs is refused at as_view()."
-    ),
-)
 def test_an_update_viewset_action_presents_under_one_context(two_authors: list[Author]) -> None:
     calls, context = _counter()
 

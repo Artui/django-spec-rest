@@ -395,7 +395,7 @@ def _dispatch_bulk_via_spec(
 def dispatch_mutation_for_spec(
     view: Any,
     request: Request,
-    spec: ServiceSpec[Any, Any, Any],
+    spec: ServiceSpec[Any, Any, Any] | KernelServiceSpec,
     *,
     instance: Any,
     default_status: int,
@@ -650,7 +650,7 @@ def _takes_a_partial_call(spec: ServiceSpec[Any, Any, Any]) -> bool:
 
 def resolve_mutation_instance(
     view: Any,
-    spec: ServiceSpec[Any, Any, Any],
+    spec: ServiceSpec[Any, Any, Any] | KernelServiceSpec,
 ) -> Any:
     """Resolve the mutation target, or defer to the core.
 
@@ -698,7 +698,7 @@ def resolve_mutation_instance(
 
 
 def mutation_target_source(
-    spec: ServiceSpec[Any, Any, Any],
+    spec: ServiceSpec[Any, Any, Any] | KernelServiceSpec,
 ) -> Literal["bulk", "instance_selector", "get_object"]:
     """Where a mutation's target comes from, as
     [`resolve_mutation_instance`][django_spec_rest.views.mutation.utils.resolve_mutation_instance]

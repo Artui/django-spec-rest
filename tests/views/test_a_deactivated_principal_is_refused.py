@@ -48,12 +48,6 @@ _UNAVAILABLE = {"detail": "The acting principal is unavailable."}
 _ACTIVE = pytest.mark.parametrize("active", [True, False], ids=["active", "deactivated"])
 _OPEN = (Unrestricted(),)
 
-# A gap in a file this module does not own, a strict xfail naming it.
-_VIEWSET_GAP = pytest.mark.xfail(
-    strict=True,
-    reason="ServiceViewSet.action_specs refuses a kernel ServiceSpec at as_view()",
-)
-
 ran: list[str] = []
 
 
@@ -207,7 +201,6 @@ def test_a_retrieve_view_with_no_permission_classes(active: bool) -> None:
     _answered(_Retrieve.as_view()(request, pk=author.pk), active, 200, "read")
 
 
-@_VIEWSET_GAP
 @_ACTIVE
 def test_a_viewset_action_with_no_permission_classes(active: bool) -> None:
     request = _as(_factory.post("/", {"name": "n"}, format="json"), active)

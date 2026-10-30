@@ -7,6 +7,7 @@ from collections.abc import Callable
 from typing import Any
 
 from django.core.exceptions import ImproperlyConfigured
+from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
 from rest_framework import status as drf_status
 from rest_framework.decorators import action
 from rest_framework.request import Request
@@ -23,6 +24,7 @@ from django_spec_rest.views.mutation.utils import (
     restore_raised_schema,
 )
 from django_spec_rest.views.spec_validation import (
+    validate_mutation_view_spec,
     validate_polymorphic_service_spec,
     validate_service_spec,
 )
@@ -88,8 +90,26 @@ def _restore_schema_when_handled(view: Any) -> None:
     view.get_exception_handler = restoring_exception_handler
 
 
+def _validate_kernel_spec(spec: KernelServiceSpec, *, label: str, detail: bool) -> None:
+    """Ask a kernel spec what a standalone mutation view asks of its own, with no view.
+
+    ``validate_mutation_view_spec`` reads the spec and the view's hooks off a
+    class, and the decorated class does not exist yet, so it is handed one
+    carrying the spec alone, named for the action so a refusal names it. A
+    class with no ``get_service_kwargs`` reads as one overriding it, so the
+    kernel's ``check_seeds`` is not asked, as a drfs spec here was validated
+    with permissive extras: a hook of the viewset's own may fill the keyword
+    it would refuse, and a mixin base would have it refused anyway
+    (test_service_action's test_a_keyword_the_viewset_s_hook_fills_is_not_refused).
+    A detail action with no target selector is refused, since the viewset's
+    ``get_object()`` is never asked for a kernel spec's row
+    (test_a_detail_action_with_no_target_is_refused).
+    """
+    validate_mutation_view_spec(type(label, (), {"spec": spec}), has_instance=detail)
+
+
 def service_action(
-    spec: ServiceSpec | PolymorphicServiceSpec,
+    spec: ServiceSpec | PolymorphicServiceSpec | KernelServiceSpec,
     *,
     detail: bool = False,
     methods: list[str] | None = None,
@@ -108,6 +128,13 @@ def service_action(
     for one action accepting several payload shapes) for the service wiring. ``detail``,
     ``methods``, ``url_path``, ``url_name``, and any extra ``**action_kwargs`` are
     forwarded to DRF's ``@action``.
+
+    A kernel ``ServiceSpec`` runs through the kernel's own ``dispatch``, as on the
+    standalone mutation views: its ``permissions`` are asked there, after the
+    view's own classes, a detail action's row is its own target selector's
+    (never ``get_object()``), and the answer is its presenter's, under the
+    viewset's ``success_status`` (``200`` by default) and through its
+    ``response_finalizer``.
 
     A plain ``ServiceSpec`` forwards its ``permission_classes`` into DRF's
     ``@action(permission_classes=...)``, so it is enforced on any viewset. A
@@ -151,7 +178,9 @@ def service_action(
         # The viewset class is unknown at decoration time, so any
         # ``get_<action>_service_kwargs`` / ``get_service_kwargs`` it may
         # carry has to be assumed permissive.
-        if isinstance(spec, PolymorphicServiceSpec):
+        if isinstance(spec, KernelServiceSpec):
+            _validate_kernel_spec(spec, label=f"@service_action {fn_label}", detail=detail)
+        elif isinstance(spec, PolymorphicServiceSpec):
             validate_polymorphic_service_spec(
                 spec,
                 label=f"@service_action {fn_label}",
@@ -181,7 +210,7 @@ def service_action(
                 # A polymorphic spec resolves to its chosen variant first (memoized
                 # for the request), then dispatches exactly as a plain spec. Inside
                 # the ``try`` because the discriminator's errors are mapped too.
-                concrete: ServiceSpec = (
+                concrete: ServiceSpec | KernelServiceSpec = (
                     resolve_polymorphic_service_spec(spec, view=self, request=request)
                     if isinstance(spec, PolymorphicServiceSpec)
                     else spec
