@@ -24,6 +24,7 @@ from rest_framework.filters import BaseFilterBackend
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import BasePermission
 from rest_framework.response import Response
+from rest_framework.routers import SimpleRouter
 from rest_framework.test import APIRequestFactory
 from rest_framework.viewsets import GenericViewSet, ViewSet
 
@@ -165,3 +166,23 @@ class TestAtDecoration:
 
     def test_a_well_declared_spec_is_accepted(self) -> None:
         assert callable(_viewset(_rows()).as_view({"get": "act"}))
+
+
+def test_methods_url_path_and_url_name_reach_the_route() -> None:
+    """What the decorator forwards to DRF's ``@action`` is what the router
+    routes: a ``POST`` read under its own path and name."""
+    Author.objects.create(name="Ada")
+
+    @selector_action(_rows(), methods=["post"], url_path="by-name", url_name="named")
+    def recent(self: Any, request: Any) -> None:
+        """Stubbed: the decorator serves the spec."""
+
+    viewset = type("_ViewSet", (GenericViewSet,), {"recent": recent})
+    router = SimpleRouter()
+    router.register("authors", viewset, basename="authors")
+
+    (route,) = [url for url in router.urls if url.name == "authors-named"]
+    assert route.pattern.regex.pattern == "^authors/by-name/$"
+    response = route.callback(factory.post("/"))
+    assert response.status_code == 200
+    assert [row["name"] for row in response.data] == ["Ada"]

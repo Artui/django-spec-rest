@@ -21,9 +21,9 @@ is its own lookup's and ``get_object()`` is never asked for one. The update and 
 cases declare ``instance_selector_spec`` instead, its ``pk`` read required, since the
 kernel's ``check_seeds`` refuses an optional read over a keyword with no default.
 
-Viewsets are not here: a viewset does not route a kernel spec yet, so the cases that
-reach the restore through ``@service_action``, a viewset's own ``handle_exception``
-or base order have no kernel counterpart.
+The cases that reach the restore through ``@service_action``, a viewset's own
+``handle_exception`` or ``get_exception_handler``, and the order of a viewset's bases
+are the decorator's, in ``tests/viewsets/decorators/test_service_action.py``.
 """
 
 from __future__ import annotations
