@@ -256,7 +256,10 @@ def _counted() -> None:
 # Over a live view the edge could bind the description to the call, and does
 # not: it sets no ``describe_binding`` for a kernel spec, so the Validator
 # describes its serializer for ``parameters()`` afresh, with no body, no row and
-# ``partial`` unset. Closing it takes the edge (``dispatch/kernel_edge.py``)
+# ``partial`` unset. A field only the row or a partial call adds still
+# validates, unmarked below: the kernel drops it from its arguments under the
+# edge's ``IGNORE``, but the serializer binds the request's body, which holds
+# it. Closing it takes the edge (``dispatch/kernel_edge.py``)
 # setting the binding and the serializer walk (``describe_serializer``,
 # ``describe_with``) reading it there.
 _UNBOUND = pytest.mark.xfail(
@@ -294,14 +297,15 @@ _BUILT_AGAIN = pytest.mark.xfail(
 )
 
 
-@_UNBOUND
 class TestOverALiveView:
+    @_UNBOUND
     def test_a_field_the_body_adds_validates(self, db: Any) -> None:
         response = _create(_spec(InitialDataKind), {"kind": "long", "extra": "x"})
 
         assert response.status_code == 201, response.data
         assert response.data == {"got": {"kind": "long", "extra": "x"}}
 
+    @_UNBOUND
     def test_a_serializer_reading_its_body_as_it_is_built_validates(self, db: Any) -> None:
         response = _create(_spec(InitialDataInInit), {"kind": "k"})
 
@@ -313,6 +317,7 @@ class TestOverALiveView:
         assert response.status_code == 200, response.data
         assert response.data["got"] == {"note": "n"}
 
+    @_UNBOUND
     def test_a_form_body_is_the_body_the_fields_are_built_for(self, db: Any) -> None:
         response = _create(
             _spec(InitialDataKind), {"kind": "long", "extra": "x"}, format="multipart"
@@ -322,6 +327,7 @@ class TestOverALiveView:
         assert response.data == {"got": {"kind": "long", "extra": "x"}}
         assert BUILT == {"InitialDataKind": 1}
 
+    @_UNBOUND
     def test_a_serializer_reading_the_row_its_lookup_finds_validates(self, post: Post) -> None:
         response = _lookup_update(_by_lookup(InstancePk), {"title": "n"}, post)
 

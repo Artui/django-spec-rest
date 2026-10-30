@@ -539,13 +539,6 @@ class EdgeCallState:
       binds rather than the kernel's checked arguments (``validator_input``):
       the caller's own, a ``QueryDict`` kept one, with what the edge put over
       it, as DRF's serializer has always been handed the request's data.
-    - ``input_beneath``: whether that body is bound together with the
-      kernel's checked arguments rather than in their place, so their values -
-      the caller's, the route's and ``input_data``'s - are the ones bound. The
-      kernel route's edge sets it and holds only fields named like a seed,
-      and so no parameter - the client's values it took off the arguments and
-      ``input_data``'s answer for them over those - so the two never share a
-      key; drfs' edge holds the whole body and does not (``validator_input``).
     - ``server_values``: the server's value for each field of that
       Validator's body the edge put one into - a view hook's or the spec's
       ``kwargs`` provider's value naming the field, and ``input_data``, a field
@@ -554,6 +547,12 @@ class EdgeCallState:
       reads back from the body, and a key a callable of the call marks
       ``NotClientInput`` is handed on by name only from one of them
       (``server_values``).
+    - ``server_values_as_form``: whether a server value on a form body is
+      read as the field reads a form holding only that value, as drfs' edge
+      wrote it there, or taken as the author returned it, as the kernel
+      route's edge takes it, since the kernel's shape check read the value as
+      returned (test_server_value_the_edge_put's
+      test_input_data_on_a_form_body_is_taken_as_the_author_returned_it).
     - ``author_keys``: for each of those a view hook or the spec's ``kwargs``
       provider gave, the key the author gave it under, the field's wire name or
       its ``source``: the parameter the author named, which the Validator also
@@ -620,8 +619,8 @@ class EdgeCallState:
     author_values: Mapping[str, Any] = dataclasses.field(default_factory=dict)
     view_hooks: ViewHooks = dataclasses.field(default_factory=ViewHooks)
     validator_input: tuple[Any, Any] | None = None
-    input_beneath: bool = False
     server_values: Mapping[str, Any] = dataclasses.field(default_factory=dict)
+    server_values_as_form: bool = True
     author_keys: Mapping[str, str] = dataclasses.field(default_factory=dict)
     provider_owned: frozenset[str] = frozenset()
     body_rows: bool = False
@@ -705,24 +704,16 @@ def _context_for(call_context: dict[str, Any] | None, *, view: Any, request: Any
 def validator_input(validator: Any, arguments: Any) -> Any:
     """What ``validator`` binds for the call: the edge's body for it, else ``arguments``.
 
-    Where the edge set ``input_beneath``, the body goes beneath ``arguments``
-    rather than in their place.
-
     Only the Validator the edge call names reads the edge's body, so a kernel
     call made inside the service, of another spec or of this one, binds its
     own arguments (test_a_kernel_call_inside_the_service_binds_its_own_arguments).
+    Never set for a ``many`` call, whose ``validated_many`` asks with no
+    arguments.
     """
-    state = edge_call_state()
-    held = state.validator_input
+    held = edge_call_state().validator_input
     if held is None or held[0] is not validator:
         return arguments
-    # With the arguments the kernel hands this Validator, where the edge holds
-    # only what it took off them
-    # (test_input_data_outranks_the_body_beside_a_seed_named_field). The keys
-    # are disjoint, so the order only keeps the checked values should they
-    # ever meet. Never set for a ``many`` call, whose ``validated_many`` asks
-    # with no arguments.
-    return {**held[1], **arguments} if state.input_beneath else held[1]
+    return held[1]
 
 
 def server_values(validator: Any) -> Mapping[str, Any]:

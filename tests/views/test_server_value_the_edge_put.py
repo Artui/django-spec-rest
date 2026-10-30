@@ -2,11 +2,13 @@
 
 On the kernel route the one seat filling a ``SerializerValidator`` field is the
 spec's ``input_data``: the kernel merges its answer over the caller's
-arguments before the Validator, and the serializer binds what the kernel
-hands it. So where a field reads more of a body than its own key - a nested
+arguments, and the edge puts it onto the request's body the serializer binds
+and records it as the server's value, which the Validator validates on its
+own. So where a field reads more of a body than its own key - a nested
 serializer, a dict, a nested ``many`` or a list a form body fills through
-``v.tenant`` or ``v[0]tenant`` - the server's value replaces the client's
-whole, and it is what the parameter, ``data`` and ``validated_data`` hold.
+``v.tenant`` or ``v[0]tenant``, or a field whose ``get_value`` reads another
+key - the server's value replaces the client's whole, and it is what the
+parameter, ``data`` and ``validated_data`` hold.
 
 A field named like a seed of the call is the serializer's alone, and
 ``input_data`` naming one is bound over the client's value
@@ -22,10 +24,12 @@ request that gets it (``test_a_kwargs_value_named_like_a_field_is_refused`` in
 Two answers part from drfs because of how the kernel route reads a body. A
 form body's prefixed keys (``v.tenant``) are no parameter to the kernel's flat
 reader, so under ``REJECT`` they are refused, a strict xfail, while under
-``IGNORE`` they are dropped and the server's value stands. And ``input_data``'s value is bound as the kernel merged it, so a
-form body's reading of it (one value for a list, an empty string left out) is
-a strict xfail. A field named like a seed a project registers is not ported:
-the HTTP views register none, and the kernel's dispatch holds that case.
+``IGNORE`` they are dropped and the server's value stands. And
+``input_data``'s value is validated as the author returned it, so a form
+body's reading of it (one value for a list, an empty string left out) is not
+this route's answer. A field named like a seed a project registers is not
+ported: the HTTP views register none, and the kernel's dispatch holds that
+case.
 """
 
 from __future__ import annotations
@@ -43,6 +47,7 @@ from rest_framework.fields import empty
 from django_spec_rest.dispatch import kernel_edge
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from tests.views.server_value_calls import CORES, FORMATS, OPEN, Core, post
+from tests.views.test_kernel_views import _CreateView
 
 pytestmark = pytest.mark.django_db
 
@@ -290,14 +295,6 @@ def test_a_key_only_a_fields_get_value_reads_is_an_unknown_argument_under_reject
     assert response.data["v_raw"][0].code == "unknown"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "the kernel route records no server_values for input_data's answer, so "
-        "the field validates what its get_value reads from the body, never the "
-        "value input_data put under its name"
-    ),
-)
 def test_a_field_reading_another_key_validates_the_value_put_under_ignore(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -381,6 +378,22 @@ def test_the_providers_value_by_wire_name_is_refused(fmt: str) -> None:
         post(spec, {"tenant": "evil"}, fmt=fmt)
 
     assert seen == {}
+
+
+@FORMATS
+def test_a_get_service_kwargs_value_by_wire_name_reaches_the_parameter_of_that_name(
+    fmt: str,
+) -> None:
+    """A view's ``get_service_kwargs`` naming a field by its wire name names the
+    parameter of that name too, as drfs handed it: the field validates the
+    value under its ``source`` and the parameter is handed it as well."""
+    seen: dict[str, Any] = {}
+    hooked = type("_Hooked", (_CreateView,), {"get_service_kwargs": lambda self: {"tenant": "srv"}})
+
+    response = post(_spec(_with_default(seen), _Sourced), {"tenant": "evil"}, fmt=fmt, view=hooked)
+
+    assert response.status_code == 204, response.data
+    assert seen == {"tenant": "srv", "data": "srv"}
 
 
 @FORMATS

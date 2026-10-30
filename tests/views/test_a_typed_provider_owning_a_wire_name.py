@@ -38,19 +38,6 @@ from tests.views.test_kernel_views import _view
 
 pytestmark = pytest.mark.django_db
 
-# The client's value for a key a provider owns reaches that key's service
-# parameter on the kernel route, because ``SerializerValidator`` hands the
-# service every validated value by its ``source`` and the kernel spreads it
-# into the pool before the provider answers.
-_OWNED_GAP = pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "the kernel route sets no provider_owned on the edge's state, so "
-        "SerializerValidator hands the client's value for a key the typed "
-        "provider owns to the service by its source"
-    ),
-)
-
 
 class _SourcedIn(serializers.Serializer):
     tenant = serializers.CharField(source="org", required=False)
@@ -106,7 +93,6 @@ _DECLINED = {"org": "D-org", "tenant": "D-tenant", "data": {"org": "evil"}}
 _FILLED = {"org": "srv", "tenant": "D-tenant", "data": {"org": "srv"}}
 
 
-@_OWNED_GAP
 @FORMATS
 def test_a_declined_owned_source_hands_its_parameter_none_of_the_clients_value(fmt: str) -> None:
     seen: dict[str, Any] = {}
@@ -117,7 +103,6 @@ def test_a_declined_owned_source_hands_its_parameter_none_of_the_clients_value(f
     assert seen == _DECLINED
 
 
-@_OWNED_GAP
 @CORES
 def test_a_declined_owned_source_hands_its_parameter_none_of_the_clients_value_on_either_core(
     core: Core,
@@ -195,7 +180,6 @@ def test_a_declinable_source_the_provider_declines_stays_the_clients(fmt: str) -
     assert seen == {"org": "evil", "tenant": "D-tenant", "data": {"org": "evil"}}
 
 
-@_OWNED_GAP
 @FORMATS
 def test_a_dotted_source_s_owned_key_is_the_one_it_nests_under(fmt: str) -> None:
     """``org.name`` is nested under ``org``: the provider owning ``org`` owns the value."""
@@ -218,7 +202,6 @@ def test_a_dotted_source_s_owned_key_is_the_one_it_nests_under(fmt: str) -> None
     assert seen == {"org": "D-org", "tenant": "D-tenant", "data": {"org": {"name": "evil"}}}
 
 
-@_OWNED_GAP
 @FORMATS
 def test_owning_the_key_a_dotted_source_nests_under_owns_no_deeper_one(fmt: str) -> None:
     """``loc.city`` is nested under ``loc``: a field of its own named ``city`` stays the client's."""

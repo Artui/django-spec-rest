@@ -336,8 +336,8 @@ class TestASeedNamedFieldValidatesFromTheBody:
 
     def test_input_data_outranks_the_body_beside_a_seed_named_field(self) -> None:
         """A body sending a field the kernel cannot take still has the server's
-        values over the client's: the serializer binds the kernel's checked
-        arguments, ``input_data``'s merged in, over that field's value alone."""
+        values over the client's: the serializer binds the request's body with
+        ``input_data``'s answer put over it."""
 
         class _Input(serializers.Serializer):
             title = serializers.CharField()
@@ -474,15 +474,35 @@ class TestInputDataOverASeedNamedField:
     def test_an_owned_parameter_it_declines_never_takes_the_client_s_value(
         self, extra: dict[str, Any]
     ) -> None:
-        """Beside a seed-named field too: the serializer binds the kernel's
-        checked arguments, which hold no ``title``, and nothing of the body but
-        that field."""
+        """Beside a seed-named field too: the edge takes the owned ``title``
+        off the body the serializer binds, as the kernel takes it off its
+        arguments."""
         principal = User.objects.create(username="ada")
         response, received = _post_as(
             principal, self._spec(_declines_title), {"title": "from the client", **extra}
         )
         assert response.status_code == 204, response.data
         assert received == extra
+
+    def test_a_hook_s_value_for_an_owned_parameter_it_declines_is_never_bound(self) -> None:
+        """The provider owns ``title``, so a view hook's value for it is no
+        more the serializer's than the client's, as the kernel answers it."""
+        received: dict[str, Any] = {}
+        spec = dataclasses.replace(
+            self._spec(_declines_title), service=lambda *, data: received.update(data)
+        )
+        view = type(
+            "_View",
+            (_CreateView,),
+            {"spec": spec, "get_input_data": lambda self, *_: {"title": "from the hook"}},
+        ).as_view()
+        request = factory.post("/", {"title": "from the client"}, format="json")
+        force_authenticate(request, user=User.objects.create(username="ada"))
+
+        response = view(request)
+
+        assert response.status_code == 204, response.data
+        assert received == {}
 
 
 class TestTheArgumentsAreReadAsTheKernelReadsAWire:

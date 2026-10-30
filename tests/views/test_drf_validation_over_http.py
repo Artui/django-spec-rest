@@ -155,26 +155,15 @@ def test_both_fields_refusals_are_answered_together() -> None:
     assert set(response.data) == {"title", "views"}
 
 
-# The kernel route reads a form body through ``flat_arguments`` and binds the
-# serializer to the plain dict that makes, so DRF's HTML-input reading, which
-# keys off a ``QueryDict`` (``html.is_html_input``), never runs: an empty
-# optional field is refused rather than absent or ``None``, and an unchecked
-# box is missing rather than ``False``.
-_HTML_INPUT = pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "the kernel route binds a SerializerValidator to the flat dict flat_arguments "
-        "reads off a form body rather than the request's QueryDict, so DRF's HTML-input "
-        "reading (an empty optional field, an unchecked checkbox) never runs"
-    ),
-)
-
+# The serializer binds the request's ``QueryDict`` itself, so DRF's HTML-input
+# reading, which keys off one (``html.is_html_input``), runs: an empty
+# optional field is absent or ``None``, and an unchecked box is ``False``.
 _FORMS = {
     "checkbox-on": ({"published": "on"}, "multipart"),
     "checkbox-yes": ({"published": "yes"}, "multipart"),
-    "empty-optional-int": pytest.param({"views": ""}, "multipart", marks=_HTML_INPUT),
-    "empty-optional-nullable": pytest.param({"nick": ""}, "multipart", marks=_HTML_INPUT),
-    "absent-checkbox": pytest.param({"views": "5"}, "multipart", marks=_HTML_INPUT),
+    "empty-optional-int": ({"views": ""}, "multipart"),
+    "empty-optional-nullable": ({"nick": ""}, "multipart"),
+    "absent-checkbox": ({"views": "5"}, "multipart"),
     "form-encoded-checkbox": ({"published": "on"}, None),
     "repeated-key": ({"tags": ["1", "2"]}, None),
 }
@@ -188,7 +177,6 @@ def test_a_form_body_is_read_as_html_input(body: dict[str, Any], fmt: str | None
     assert SEEN["data"] == _drf_answer(_Lenient, body, fmt)
 
 
-@_HTML_INPUT
 def test_an_unchecked_required_checkbox_is_false() -> None:
     """A form leaves an unchecked box out, and DRF reads that absence as ``False``."""
     response = _view(_Checkbox)(_request({"title": "t"}, "multipart"))
@@ -383,8 +371,9 @@ class _RepeatedIn(serializers.Serializer):
     "lenient",
     [
         # A lenient field is declared ``any``, which ``flat_arguments`` reads
-        # as the last value a repeated key carries.
-        pytest.param(True, marks=_HTML_INPUT, id="lenient"),
+        # as the last value a repeated key carries; the serializer reads the
+        # request's ``QueryDict`` itself, so it takes every value.
+        pytest.param(True, id="lenient"),
         pytest.param(False, id="typed"),
     ],
 )
@@ -408,10 +397,7 @@ def test_a_form_body_s_repeated_keys_reach_the_serializer_whole(lenient: bool) -
     "fmt",
     [
         "json",
-        # A form leaves the unsent multiple choice absent where DRF's HTML-input
-        # reading, which the flat dict the edge binds never reaches, reads it as
-        # none chosen.
-        pytest.param("multipart", marks=_HTML_INPUT),
+        "multipart",
     ],
 )
 def test_a_hooks_none_fills_a_required_nullable_field_the_client_omitted(fmt: str) -> None:

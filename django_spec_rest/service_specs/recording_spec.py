@@ -1,10 +1,11 @@
 """``recording_spec`` - the twin of a kernel spec the HTTP edge dispatches in its place.
 
 The kernel route (``dispatch/kernel_edge.py``) dispatches it in the spec's
-place. Its ``input_data`` records its answer for the seed-named fields, so the
-serializer binds the provider's value for a field the kernel never hands a
-Validator (``seed_named_fields``), and its ``kwargs`` refuses an answer naming a
-field's wire name, which would reach the service unvalidated.
+place. Its ``input_data`` puts its answer for each field onto the body the
+serializer binds, and records it as the server's value for the field, since the
+kernel merges that answer into its arguments alone; and its ``kwargs`` refuses
+an answer naming a field's wire name, which would reach the service
+unvalidated.
 """
 
 from __future__ import annotations
@@ -16,13 +17,15 @@ from collections.abc import Callable, Mapping
 from typing import Any, cast
 
 from django.core.exceptions import ImproperlyConfigured
+from django.http import QueryDict
+from django.utils.datastructures import MultiValueDict
 from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelectorSpec
 from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
 from django_service_specs.types.unset import UNSET
 
 from django_spec_rest.service_specs.seed_named_fields import seed_named_fields
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
-from django_spec_rest.service_specs.utils import edge_call_state
+from django_spec_rest.service_specs.utils import edge_call_state, write_form_value
 
 KernelSpec = KernelServiceSpec | KernelSelectorSpec
 
@@ -37,7 +40,7 @@ which need not hash. Each entry holds a weak reference to its spec, whose
 callback drops the entry when the spec dies, and a read serves a twin only
 while that reference still names the spec asked about, as the kernel's own
 ``kernel_spec`` cache holds its compiled specs. Beneath the spec, by the
-seed-named fields the call's serializer declares: a request-scoped
+writable fields the call's serializer declares: a request-scoped
 ``get_fields`` declares different ones per caller, so the first call must not
 decide what a later one records
 (test_kernel_edge's test_one_spec_s_twin_records_what_each_call_s_serializer_declares)."""
@@ -49,23 +52,26 @@ def recording_spec(spec: KernelSpec) -> KernelSpec:
     """``spec``, or its twin whose providers the edge watches.
 
     Two seats, each wrapped only where it has something to watch:
-    ``input_data``, which records its answer for the seed-named fields, and
+    ``input_data``, which puts its answer for each field onto the body, and
     ``kwargs``, whose answer naming a parameter of a ``SerializerValidator``
     is refused (``_refuse_parameters``).
 
-    The kernel hands a Validator only the ``input_data`` keys its
-    ``parameters()`` declare, and a seed-named field is none of them, so the
-    provider's value for one would never reach the serializer, and a client
-    sending the field would bind its own value in the server's place
-    (test_the_provider_s_value_outranks_the_client_s). The twin's provider is
+    The serializer binds the request's body rather than the kernel's
+    arguments, and the kernel merges the provider's answer into its arguments
+    alone, so without the twin the provider's value for a field would never
+    reach the serializer, and a client sending the field would bind its own
+    value in the server's place (test_the_provider_s_value_outranks_the_client_s),
+    one a second route of the serializer's put back included
+    (test_server_value_over_a_second_route's
+    test_input_data_outranks_a_second_route_over_http). The twin's provider is
     the spec's own, wrapped so its signature, and so the pool it is bound from,
     is the spec's, and called once per call as the spec's is
     (test_kernel_edge's test_the_provider_is_called_once_and_its_value_binds).
-    What it records goes into the body the edge holds for the Validator
-    (``_record``).
+    What it records goes into the body the edge holds for the Validator and
+    into the call's server values (``_record``).
 
     **Asked inside the edge's call**, with its state set, since the names are
-    the seed-named fields of the serializer described for the call: with the
+    the writable fields of the serializer described for the call: with the
     call's request, so a ``get_fields`` reading ``self.context["request"]``
     describes rather than raising, and declares the fields this caller sends
     (test_kernel_edge's
@@ -75,8 +81,8 @@ def recording_spec(spec: KernelSpec) -> KernelSpec:
 
     Built once per spec and set of names, since ``derive`` re-runs the spec's
     checks. Only a single-object service spec with a ``kwargs`` provider over
-    a ``SerializerValidator``, or an ``input_data`` provider and a seed-named
-    field, has one; the kernel refuses an ``async`` provider when
+    a ``SerializerValidator``, or an ``input_data`` provider over a
+    ``SerializerValidator`` with a writable field, has one; the kernel refuses an ``async`` provider when
     the spec is built, so the wrapper is sync alone. The twin shares every
     seat but those two, so presenting the result through the view's own
     spec is unchanged. A kernel ``Grant`` covers a call only for the spec it
@@ -86,13 +92,18 @@ def recording_spec(spec: KernelSpec) -> KernelSpec:
     # One arc to coverage, so each disjunct is named: a selector spec and a
     # ``many`` spec by test_kernel_edge's
     # test_a_spec_with_nothing_to_record_is_dispatched_as_it_is, which also
-    # holds a spec with no provider and one with no seed-named field.
+    # holds a spec with no provider and one with no writable field.
     if not isinstance(spec, KernelServiceSpec) or spec.many:
         return spec
     changes: dict[str, Any] = {}
     names = frozenset[str]()
-    if spec.input_data is not None:
-        names = seed_named_fields(spec.validator)
+    # One arc to coverage, so each conjunct is named, both by test_kernel_edge's
+    # test_a_spec_with_nothing_to_record_is_dispatched_as_it_is: a spec with no
+    # ``input_data`` provider, and a Validator that is no serializer's, whose
+    # input is the kernel's arguments; so is a serializer no caller's value
+    # reaches, with no name to record.
+    if spec.input_data is not None and isinstance(spec.validator, SerializerValidator):
+        names = spec.validator.parameters().names() | seed_named_fields(spec.validator)
         if names:
             changes["input_data"] = _recording(spec.input_data, names)
     # One arc to coverage, so each conjunct is named: a spec with no ``kwargs``
@@ -181,6 +192,16 @@ def _recording(provider: Callable[..., Any], names: frozenset[str]) -> Any:
 def _record(answer: Any, names: frozenset[str]) -> None:
     """Put ``answer``'s value for each of ``names`` into the body the edge holds for the call.
 
+    Over the body, a list on a form body through ``setlist``
+    (``write_form_value``), and into the call's ``server_values``, over a view
+    hook's value for the same field, since the kernel merges the provider's
+    answer over the arguments: the Validator validates that value for the
+    field on its own and lays it back over whatever a second route made of the
+    key (test_server_value_over_a_second_route's
+    test_input_data_outranks_a_second_route_over_http). The body is copied
+    before it is written to, since the edge hands the request's own on where
+    it put nothing there.
+
     A value the provider declines with ``UNSET`` is no answer: what the body
     holds for the name stands, which ``kernel_arguments`` has already emptied
     of a key the provider owns
@@ -193,7 +214,18 @@ def _record(answer: Any, names: frozenset[str]) -> None:
     """
     if not isinstance(answer, Mapping):
         return
-    body = cast(tuple[Any, dict[str, Any]], edge_call_state().validator_input)[1]
-    for name in names.intersection(answer):
-        if answer[name] is not UNSET:
-            body[name] = answer[name]
+    put = {name: answer[name] for name in names.intersection(answer) if answer[name] is not UNSET}
+    if not put:
+        return
+    state = edge_call_state()
+    validator, held = cast(tuple[Any, Any], state.validator_input)
+    body = held.copy() if isinstance(held, MultiValueDict) else dict(held)
+    server = dict(state.server_values)
+    for name, value in put.items():
+        if isinstance(body, QueryDict):
+            write_form_value(body, name, value)
+        else:
+            body[name] = value
+        server[name] = value
+    state.validator_input = (validator, body)
+    state.server_values = server

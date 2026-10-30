@@ -38,22 +38,27 @@ kernel's own unless stated:
   (``user``, ``result``, ``instance``, ...) or ``serializer`` is no parameter,
   because the kernel refuses a parameter a seed occupies, while a DRF
   serializer was always free to declare one. So the edge takes the field's
-  value off the kernel's arguments and hands it to the serializer beside what
-  the kernel hands it, the caller's checked values, the declared captures and
-  ``input_data``'s, so it validates into ``data`` while every value the kernel
-  checked keeps its own (``seed_named_fields``). For a single object only: a
-  ``many`` spec's rows are handed to the kernel as sent, so a row's
-  seed-named field is an unknown argument there: under ``IGNORE`` it is dropped,
-  so the row is refused for the field as required or loses its value where the
-  field is optional, and what the bulk path makes of it is the mutation views'.
-  ``input_data`` fills such a field as it fills any other, though the kernel
-  hands a Validator only the keys its ``parameters()`` declare: the edge
-  dispatches a twin of the spec whose provider records its answer for these
-  fields as it returns it, called once as the spec's own is, and the
-  serializer binds that answer over the client's value (``recording_spec``).
-  A key the provider owns and declines is absent rather than the client's,
-  and one it may decline and declines stays the client's, as the kernel
-  answers both for a declared field.
+  value off the kernel's arguments (``seed_named_fields``). For a single
+  object only: a ``many`` spec's rows are handed to the kernel as sent, so a
+  row's seed-named field is an unknown argument there: under ``IGNORE`` it is
+  dropped, so the row is refused for the field as required or loses its value
+  where the field is optional, and what the bulk path makes of it is the
+  mutation views'.
+- **The serializer binds the request's body**, for a single object, rather
+  than the kernel's checked arguments, as DRF's serializer was always handed
+  the request's data: a form body stays a ``QueryDict`` and is read as HTML
+  input, and a seed-named field validates into ``data`` from it. What the edge
+  put over the client's values for a field - a declared capture, a lookup read
+  the query string sends, a view hook's value, ``input_data``'s answer - is
+  written onto that body, and recorded as the server's value, which the
+  Validator validates on its own and lays back over whatever a second route
+  made of the key (``kernel_arguments``, ``SerializerValidator``). The kernel
+  merges ``input_data``'s answer into its arguments alone, so the edge
+  dispatches a twin of the spec whose provider puts its answer onto the body
+  as it returns it, called once as the spec's own is (``recording_spec``). A
+  key the provider owns and declines is absent rather than the client's, and
+  one it may decline and declines stays the client's, as the kernel answers
+  both for a declared field.
 
 Every refusal the kernel raises leaves as a DRF exception, by
 ``KERNEL_REFUSALS`` (``dispatch/kernel_refusals.py``). The seed-named fields
@@ -97,7 +102,9 @@ from django_spec_rest.service_specs.utils import (
     EDGE_CALL,
     SERIALIZER_CONTEXT_SEED,
     EdgeCallState,
+    edge_call_state,
     serializer_context,
+    write_form_value,
 )
 from django_spec_rest.types.view_hooks import ViewHooks
 
@@ -187,14 +194,13 @@ def kernel_arguments(
     ``"true"`` is a string there, as on every typed transport
     (test_a_json_body_is_not_read_as_flat_strings).
 
-    The second value is ``(validator, held)`` where the body sends a field
-    ``seed_named_fields`` names, or the spec's ``input_data`` may fill one:
-    each such field's value the body sends is taken off the arguments and
-    held, but for one the provider owns, which is the provider's alone, and
-    the serializer binds what is held beside what the kernel hands it (see the
-    module docstring). Otherwise ``None``, and the serializer binds what the
-    kernel hands it, its ``input_data`` provider's values merged in. A
-    ``many`` spec is never held for.
+    The second value is ``(validator, body)`` for a single object over a
+    ``SerializerValidator``: the request's body, with what the edge put over
+    the client's values for a field written onto it and each field the client
+    may not fill taken off it (``_validator_body``), which the serializer binds
+    in place of the kernel's arguments (see the module docstring). Otherwise
+    ``None``, and the Validator takes what the kernel hands it. The kernel's
+    arguments leave out each seed-named field, which is no parameter.
     """
     parameters: Parameters = spec.parameters()
     route = {
@@ -238,23 +244,57 @@ def kernel_arguments(
     else:
         raise DispatchError(f"The body must be an object; got {type(body).__name__}.")
     sent.update(server)
-    fields = seed_named_fields(spec.validator)
-    names = fields.intersection(sent)
-    # Skips a hold that would bind nothing: with no provider or no seed-named
-    # field the held body is empty, and ``{**{}, **arguments}`` is the
-    # arguments. A saving, not a check, so no test names its disjuncts.
-    if not names and (spec.input_data is None or not fields):
+    validator = spec.validator
+    if not isinstance(validator, SerializerValidator):
         return sent, None
+    seeded = seed_named_fields(validator)
+    fields = validator.parameters().names() | seeded
     keys = provider_keys(spec.input_data)
-    owned = frozenset() if keys is None else keys.filled
-    # Only the held fields' values, bound with the kernel's checked arguments
-    # rather than in their place (``EdgeCallState.input_beneath``), so a declared capture and
-    # ``input_data`` outrank the client's value here as on every other call
+    # A key the spec's typed ``input_data`` provider owns is the provider's
+    # alone: what the client sent for it is never bound, and what the provider
+    # answers is put over the body when it is called (``recording_spec``)
+    # (test_an_owned_field_it_declines_is_absent_not_the_client_s).
+    owned = fields.intersection(keys.filled) if keys is not None else frozenset[str]()
+    # What the edge put over the client's value for a field: a declared capture
     # (test_a_declared_capture_outranks_the_body_beside_a_seed_named_field,
-    # test_input_data_outranks_the_body_beside_a_seed_named_field).
-    held = {name: sent[name] for name in names.difference(owned)}
-    arguments = {name: value for name, value in sent.items() if name not in names}
-    return arguments, (spec.validator, held)
+    # which fails without ``name in scope``) or a view hook's value
+    # (test_a_hooks_none_fills_a_required_nullable_field_the_client_omitted,
+    # without ``name in server``). A target lookup's read is never named like a
+    # field, which the kernel refuses as two sources for one name. The owned
+    # keys are left out, so a hook's value for one is no more bound than the
+    # client's (test_a_hook_s_value_for_an_owned_parameter_it_declines_is_never_bound).
+    put = {
+        name: sent[name]
+        for name in fields.intersection(sent).difference(owned)
+        if name in scope or name in server
+    }
+    arguments = {name: value for name, value in sent.items() if name not in seeded}
+    return arguments, (validator, _validator_body(body, put, owned))
+
+
+def _validator_body(body: Any, put: Mapping[str, Any], dropped: frozenset[str]) -> Any:
+    """The body the spec's ``SerializerValidator`` binds: the caller's, with the edge's keys.
+
+    The whole body, as DRF's serializer was always handed the request's data,
+    so a ``QueryDict`` stays one and is read as HTML input. The serializer
+    binds it rather than the kernel's checked arguments, so what the edge put
+    over the caller's values for a field - a declared capture, a lookup read
+    the query string sends, a view hook's value - is written onto it, a list
+    on a form body through ``setlist`` (``write_form_value``), and each name
+    in ``dropped``, a key the ``input_data`` provider owns, is taken off it. Nothing to put or take hands the caller's
+    body on as it is, uncopied, since a form's copy is a deep one.
+    """
+    if not put and not dropped.intersection(body):
+        return body
+    held = body.copy() if isinstance(body, MultiValueDict) else dict(body)
+    for name in dropped:
+        held.pop(name, None)
+    for name, value in put.items():
+        if isinstance(held, QueryDict):
+            write_form_value(held, name, value)
+        else:
+            held[name] = value
+    return held
 
 
 def _target_reads(spec: KernelServiceSpec) -> Parameters:
@@ -425,10 +465,30 @@ def _read_call(
     test_the_twin_records_the_fields_the_call_s_own_serializer_declares,
     test_the_async_core_builds_the_twin_off_the_loop).
     """
-    extra_kwargs, server = _overlay(spec, hooks)
+    extra_kwargs, pinned, server = _overlay(spec, hooks)
     arguments, held = kernel_arguments(
         spec, view=view, request=request, input_data=server, query=query
     )
+    if held is not None:
+        # The server's value for each field it put one into, as it put it: what
+        # the Validator validates for the field on its own and lays back over
+        # whatever a second route made of the key, never what the field reads
+        # back from the body (``SerializerValidator``), each source held by its
+        # own test: test_a_view_hook_s_value_outranks_a_second_route_over_http
+        # (the hooks') and test_input_data_outranks_a_second_route_over_http
+        # (``input_data``'s, which ``recording_spec`` adds when it answers).
+        state = edge_call_state()
+        state.server_values = dict(server)
+        # A ``get_service_kwargs`` value named the parameter of its key, which
+        # the Validator hands the value to as well (test_server_value_the_edge_put's
+        # test_a_get_service_kwargs_value_by_wire_name_reaches_the_parameter_of_that_name).
+        state.author_keys = {name: name for name in pinned}
+        # A key the spec's typed ``kwargs`` provider fills is never the client's,
+        # whichever field its value came in through
+        # (test_a_typed_provider_owning_a_wire_name's
+        # test_a_declined_owned_source_hands_its_parameter_none_of_the_clients_value).
+        keys = provider_keys(spec.kwargs) if isinstance(spec, KernelServiceSpec) else None
+        state.provider_owned = keys.filled if keys is not None else frozenset()
     return recording_spec(spec), extra_kwargs, arguments, held
 
 
@@ -479,11 +539,15 @@ def _edge_state(
             call_context=call_context,
         )
 
-    return EdgeCallState(input_beneath=True, view_hooks=hooks, describe_context=describe_context)
+    return EdgeCallState(
+        view_hooks=hooks, describe_context=describe_context, server_values_as_form=False
+    )
 
 
-def _overlay(spec: KernelSpec, hooks: ViewHooks) -> tuple[dict[str, Any], dict[str, Any]]:
-    """The view's ``extra_kwargs`` for ``dispatch``'s overlay, and the server's input for the arguments.
+def _overlay(
+    spec: KernelSpec, hooks: ViewHooks
+) -> tuple[dict[str, Any], frozenset[str], dict[str, Any]]:
+    """The view's ``extra_kwargs`` for ``dispatch``'s overlay, the keys pinned out of it, and the server's input.
 
     A ``get_service_kwargs`` value named like one of the spec's parameters or
     seed-named fields pinned that field on drfs: the serializer validated the
@@ -508,7 +572,7 @@ def _overlay(spec: KernelSpec, hooks: ViewHooks) -> tuple[dict[str, Any], dict[s
     if isinstance(spec, KernelServiceSpec) and spec.validator is not None:
         names = names | spec.validator.parameters().names() | seed_named_fields(spec.validator)
     pinned = {key: overlay.pop(key) for key in names.intersection(overlay)}
-    return overlay, {**pinned, **(hooks.input_data or {})}
+    return overlay, frozenset(pinned), {**pinned, **(hooks.input_data or {})}
 
 
 def _resolved(

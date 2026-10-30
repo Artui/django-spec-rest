@@ -294,16 +294,28 @@ def test_a_stale_entry_under_a_live_spec_s_id_is_not_its_twin(
     assert twin is not live
 
 
+class _ReadsOnly(serializers.Serializer):
+    """No field a caller's value reaches, so ``input_data`` fills none."""
+
+    id = serializers.IntegerField(read_only=True)
+
+
+@dataclass
+class _TitleIn:
+    title: str
+
+
 def test_a_spec_with_nothing_to_record_is_dispatched_as_it_is() -> None:
     def spec(**kwargs: Any) -> ServiceSpec:
         return ServiceSpec(service=lambda *, data: None, permissions=_OPEN, **kwargs)
 
-    provided = {"validator": SerializerValidator(_UserPk), "input_data": lambda: {}}
+    provided = {"validator": SerializerValidator(_AuthorInput), "input_data": lambda: {}}
     for unrecorded in (
         _ONE,
         spec(many=True, **provided),
         spec(validator=SerializerValidator(_UserPk)),
-        spec(validator=SerializerValidator(_AuthorInput), input_data=lambda: {}),
+        spec(validator=SerializerValidator(_ReadsOnly), input_data=lambda: {}),
+        spec(validator=DataclassValidator(_TitleIn), input_data=lambda: {}),
     ):
         assert recording_spec(unrecorded) is unrecorded
     recorded = spec(**provided)
