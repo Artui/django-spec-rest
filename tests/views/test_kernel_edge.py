@@ -77,10 +77,11 @@ def test_a_drfs_spec_does_not_run_on_the_kernel() -> None:
     assert not runs_on_kernel(None)
 
 
-def test_another_validator_s_body_is_stripped_of_nothing() -> None:
+def test_another_validator_s_body_is_stripped_of_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
     """Only a ``SerializerValidator`` leaves a writable field out of its
     parameters; any other Validator's body is the kernel's arguments as sent,
-    so a ``user`` it does not declare is refused."""
+    so under ``REJECT`` a ``user`` it does not declare is refused."""
+    monkeypatch.setattr(kernel_edge, "UNKNOWN_ARGUMENTS", UnknownArguments.REJECT)
 
     @dataclass
     class _Input:

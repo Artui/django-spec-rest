@@ -30,9 +30,9 @@ Two of the edge's answers are decided for every spec, and both are the
 kernel's own unless stated:
 
 - **Nothing is stripped**: a body key ``request`` or ``serializer`` that no
-  field declares reaches the kernel's closed argument set and is refused there
-  as "Unknown argument." under ``UNKNOWN_ARGUMENTS``, as on every other
-  transport.
+  field declares reaches the kernel's closed argument set as any undeclared key
+  does, and ``UNKNOWN_ARGUMENTS`` answers it: dropped under ``IGNORE``, this
+  edge's policy, and "Unknown argument." under ``REJECT``.
 - **The one strip that stays**: a writable field of the spec's
   ``SerializerValidator`` named like one of the dispatcher's own seeds
   (``user``, ``result``, ``instance``, ...) or ``serializer`` is no parameter,
@@ -43,8 +43,8 @@ kernel's own unless stated:
   ``input_data``'s, so it validates into ``data`` while every value the kernel
   checked keeps its own (``seed_named_fields``). For a single object only: a
   ``many`` spec's rows are handed to the kernel as sent, so a row's
-  seed-named field is refused there as an unknown argument, and what the
-  bulk path makes of it is the mutation views'.
+  seed-named field is an unknown argument there, which ``UNKNOWN_ARGUMENTS``
+  answers, and what the bulk path makes of it is the mutation views'.
   ``input_data`` fills such a field as it fills any other, though the kernel
   hands a Validator only the keys its ``parameters()`` declare: the edge
   dispatches a twin of the spec whose provider records its answer for these
@@ -100,13 +100,15 @@ from django_spec_rest.service_specs.utils import (
 )
 from django_spec_rest.types.view_hooks import ViewHooks
 
-UNKNOWN_ARGUMENTS = UnknownArguments.REJECT
+UNKNOWN_ARGUMENTS = UnknownArguments.IGNORE
 """What the kernel route does with an argument the spec declares no parameter for.
 
-The kernel's own default, under which every undeclared body or query key is a
-``400`` "Unknown argument.". Which answer HTTP gives is an open owner question:
-drfs over HTTP dispatches under ``IGNORE``, dropping such a key unseen. Both
-cores pass this one value, so the decision is this line."""
+``IGNORE``: an undeclared body or query key is dropped unseen, as DRF drops a
+key no serializer field declares and as drfs over HTTP did, so a client sending
+a whole row back (its ``id`` beside the fields it may write) is not refused.
+The kernel's own default is ``REJECT``, a ``400`` "Unknown argument.", and it
+stays the answer where a caller asks for it. Both cores pass this one value
+(test_an_undeclared_body_key_is_dropped_by_default)."""
 
 
 def runs_on_kernel(spec: object) -> TypeIs[KernelSpec]:

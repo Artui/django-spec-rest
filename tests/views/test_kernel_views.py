@@ -31,6 +31,7 @@ from django_service_specs import (
     SelectorKind,
     SelectorSpec,
     ServiceSpec,
+    UnknownArguments,
     Unrestricted,
     UnsetType,
 )
@@ -41,6 +42,7 @@ from rest_framework.test import APIRequestFactory, force_authenticate
 from rest_framework.views import APIView
 
 from django_spec_rest import UNSET, SelectorListView, SelectorRetrieveView, ServiceCreateView
+from django_spec_rest.dispatch import kernel_edge
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from django_spec_rest.views.mutation.utils import dispatch_mutation_for_spec
@@ -178,14 +180,66 @@ class TestTheCallsContext:
         assert seen["call_context"]["view"] is view
 
 
+class TestAnUndeclaredKeyByDefault:
+    """The edge dispatches under ``IGNORE``: a key no parameter declares is dropped, as
+    DRF drops a key no serializer field declares, so a client sending a row back with
+    its ``id`` is not refused, and neither is a body of nothing but such keys."""
+
+    @pytest.mark.parametrize(
+        ("body", "data"),
+        [({"title": "t", "id": 1}, {"title": "t"}), ({"nope": 1}, {})],
+        ids=["beside-a-field", "alone"],
+    )
+    def test_an_undeclared_body_key_is_dropped_by_default(
+        self, body: dict[str, Any], data: dict[str, Any]
+    ) -> None:
+        received: list[dict[str, Any]] = []
+
+        class _Input(serializers.Serializer):
+            title = serializers.CharField(required=False)
+
+        spec = ServiceSpec(
+            service=lambda *, data: received.append(data),
+            permissions=_OPEN,
+            validator=SerializerValidator(_Input),
+        )
+        response = _post(_view(spec), body)
+        assert response.status_code == 204, response.data
+        assert received == [data]
+
+    def test_an_undeclared_query_key_is_dropped_by_default(self) -> None:
+        spec = SelectorSpec(
+            kind=SelectorKind.LIST,
+            selector=lambda: Post.objects.all(),
+            permissions=_OPEN,
+        )
+        cls = type("_View", (SelectorListView,), {"spec": spec, "serializer_class": PostSerializer})
+        response = cls.as_view()(factory.get("/?nope=1"))
+        assert response.status_code == 200, response.data
+        assert response.data == []
+
+
 class TestNothingIsStripped:
     @pytest.mark.parametrize("key", ["request", "serializer"])
-    def test_a_key_no_field_declares_is_an_unknown_argument(self, key: str) -> None:
+    def test_a_key_no_field_declares_is_an_unknown_argument_under_reject(
+        self, key: str, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(kernel_edge, "UNKNOWN_ARGUMENTS", UnknownArguments.REJECT)
         response = _post(_view(_CREATE), {"name": "Ada", key: "x"})
         assert response.status_code == 400
         assert key in response.data
         assert "Unknown argument." in str(response.data[key])
         assert not Author.objects.exists()
+
+    @pytest.mark.parametrize("key", ["request", "serializer"])
+    def test_a_key_no_field_declares_is_dropped_under_ignore(
+        self, key: str, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The kernel drops it, never the edge: the edge still strips nothing."""
+        monkeypatch.setattr(kernel_edge, "UNKNOWN_ARGUMENTS", UnknownArguments.IGNORE)
+        response = _post(_view(_CREATE), {"name": "Ada", key: "x"})
+        assert response.status_code == 201, response.data
+        assert response.data == {"id": Author.objects.get().pk, "name": "Ada"}
 
 
 class TestASeedNamedFieldValidatesFromTheBody:
@@ -723,7 +777,10 @@ class TestAListView:
         # one a plain string can take.
         assert received == {"ids": [kept.pk, other.pk], "named": ""}
 
-    def test_an_undeclared_query_key_is_an_unknown_argument(self) -> None:
+    def test_an_undeclared_query_key_is_an_unknown_argument_under_reject(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(kernel_edge, "UNKNOWN_ARGUMENTS", UnknownArguments.REJECT)
         spec = SelectorSpec(
             kind=SelectorKind.LIST,
             selector=lambda: Post.objects.all(),
