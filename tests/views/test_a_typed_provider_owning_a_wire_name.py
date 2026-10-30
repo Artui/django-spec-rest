@@ -92,7 +92,7 @@ def test_a_provider_owning_the_wire_name_is_refused_at_as_view() -> None:
 # A provider owning the ``source``: the client's value is the service's in
 # ``data`` alone, and the parameter is the provider's answer or its default.
 _DECLINED = {"org": "D-org", "tenant": "D-tenant", "data": {"org": "evil"}}
-_FILLED = {"org": "srv", "tenant": "D-tenant", "data": {"org": "srv"}}
+_FILLED = {"org": "srv", "tenant": "D-tenant", "data": {"org": "evil"}}
 
 
 @FORMATS
@@ -116,18 +116,15 @@ def test_a_declined_owned_source_hands_its_parameter_none_of_the_clients_value_o
     assert seen == _DECLINED
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "open owner decision: kwargs feeds the callable only, so the provider's "
-        "value never reaches data, which keeps the client's"
-    ),
-)
 @FORMATS
-def test_a_filled_owned_source_is_the_providers_value_in_data_too(fmt: str) -> None:
-    """A typed provider owning a ``source`` no field is named for: a key named
-    like a field is ``test_a_kwargs_value_named_like_a_field_is_refused``'s
-    (``tests/service_specs/``), and this case waits on the same decision."""
+def test_a_filled_owned_source_feeds_the_callable_and_leaves_data_the_clients(fmt: str) -> None:
+    """The decided answer: ``kwargs`` feeds the callable only.
+
+    A typed provider owning a ``source`` no field is named for puts its value in the
+    service's pool, so the provider's value never reaches ``data``, which keeps the
+    client's. A key named like a field is
+    ``test_a_kwargs_value_named_like_a_field_is_refused``'s (``tests/service_specs/``).
+    """
     seen: dict[str, Any] = {}
 
     response = post(_spec(seen, owns="org", value="srv"), {"tenant": "evil"}, fmt=fmt)

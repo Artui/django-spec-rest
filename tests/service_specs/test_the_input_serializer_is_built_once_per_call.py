@@ -5,8 +5,10 @@ row it updates and its context, so a ``get_fields`` or an ``__init__`` reading
 ``self.initial_data``, ``self.instance`` or ``self.partial`` reads the call's.
 A kernel spec whose Validator is a ``SerializerValidator`` keeps that: the
 fields the kernel checks the arguments against are the fields the serializer
-validates with, over a live view and through the kernel's own ``dispatch``, and
-over a live view the serializer is built, and queries as it is built, once.
+validates with over a live view, where the serializer is built, and queries as it
+is built, once. Through the kernel's own ``dispatch`` there is no call to
+describe the serializer for, so a serializer whose fields depend on the body, the
+row or ``partial`` is not covered off HTTP: that is the decided answer.
 """
 
 from __future__ import annotations
@@ -25,7 +27,6 @@ from django_service_specs import (
     SelectorKind,
     SelectorSpec,
     ServiceSpec,
-    UnknownArguments,
     Unrestricted,
 )
 from django_service_specs.dispatch.adispatch import adispatch
@@ -236,9 +237,6 @@ def _async(spec: Any, *, arguments: Any, **kwargs: Any) -> DispatchResult:
 
 
 _CORES = pytest.mark.parametrize("dispatch", [_sync, _async], ids=["sync", "async"])
-_POLICIES = pytest.mark.parametrize(
-    "policy", [UnknownArguments.IGNORE, UnknownArguments.REJECT], ids=["ignore", "reject"]
-)
 
 
 @pytest.fixture
@@ -269,21 +267,6 @@ _UNBOUND = pytest.mark.xfail(
         "row and partial unset: a field the body or the row adds is refused, or dropped "
         "under the edge's IGNORE so its value never reaches the service, a field an "
         "update never writes is required, and a serializer reading either raises"
-    ),
-)
-# Through the kernel's own ``dispatch`` there is no edge at all: the kernel asks
-# ``Validator.parameters()``, which takes nothing of the call, for its shape
-# check before ``validated()`` is handed the arguments and the target. So no
-# code in this package can describe the serializer for the call's body, row or
-# ``partial`` there; it would take a kernel seat handing the Validator the call
-# before the shape check, or these cases drop.
-_NO_CALL_TO_DESCRIBE_FOR = pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "the kernel's dispatch asks Validator.parameters() for its shape check with "
-        "nothing of the call, before validated() sees the arguments or the target, so "
-        "a serializer whose fields depend on the body, the row or partial cannot be "
-        "described for the call off HTTP"
     ),
 )
 _BUILT_AGAIN = pytest.mark.xfail(
@@ -354,85 +337,6 @@ class TestAnUpdateOverALiveViewIsDescribedForItsRow:
 
         assert response.status_code == 200, response.data
         assert response.data["got"] == {"body": "b"}
-
-
-@_NO_CALL_TO_DESCRIBE_FOR
-@_CORES
-class TestThroughTheKernelsDispatch:
-    def test_a_field_the_body_adds_validates(self, dispatch: Callable[..., DispatchResult]) -> None:
-        result = dispatch(_spec(InitialDataKind), arguments={"kind": "long", "extra": "x"})
-
-        assert result.value == {"got": {"kind": "long", "extra": "x"}}
-
-    def test_a_serializer_reading_its_body_as_it_is_built_validates(
-        self, dispatch: Callable[..., DispatchResult]
-    ) -> None:
-        assert dispatch(_spec(InitialDataInInit), arguments={"kind": "k"}).value == {
-            "got": {"kind": "k"}
-        }
-
-    def test_a_field_an_update_never_writes_is_not_required(
-        self, dispatch: Callable[..., DispatchResult], post: Post
-    ) -> None:
-        result = dispatch(_by_lookup(InstanceMakesReadOnly), arguments={"pk": post.pk, "body": "b"})
-
-        assert result.value["got"] == {"body": "b"}
-
-    def test_a_field_only_a_partial_call_takes_is_no_unknown_argument(
-        self, dispatch: Callable[..., DispatchResult], post: Post
-    ) -> None:
-        result = dispatch(
-            _by_lookup(PartialAddsField, partial=True), arguments={"pk": post.pk, "note": "n"}
-        )
-
-        assert result.value["got"] == {"note": "n"}
-
-    def test_a_field_the_server_s_value_adds_is_the_call_s(
-        self, dispatch: Callable[..., DispatchResult], db: Any
-    ) -> None:
-        spec = _spec(InitialDataKind, input_data=lambda: {"kind": "long"})
-
-        result = dispatch(spec, arguments={"kind": "short", "extra": "x"})
-
-        assert result.value == {"got": {"kind": "long", "extra": "x"}}
-
-    @_POLICIES
-    def test_a_serializer_reading_the_row_its_lookup_finds_validates(
-        self, dispatch: Callable[..., DispatchResult], post: Post, policy: UnknownArguments
-    ) -> None:
-        result = dispatch(
-            _by_lookup(InstancePk),
-            arguments={"pk": post.pk, "title": "n"},
-            unknown_arguments=policy,
-        )
-
-        assert result.value == {"got": {"title": "n"}, "pk": post.pk}
-
-    @_POLICIES
-    def test_a_field_added_for_the_row_its_lookup_finds_validates(
-        self, dispatch: Callable[..., DispatchResult], post: Post, policy: UnknownArguments
-    ) -> None:
-        result = dispatch(
-            _by_lookup(InstanceAddsField),
-            arguments={"pk": post.pk, "reason": "why"},
-            unknown_arguments=policy,
-        )
-
-        assert result.value["got"] == {"reason": "why"}
-
-    def test_a_row_its_lookup_finds_is_the_one_described(
-        self, dispatch: Callable[..., DispatchResult], post: Post
-    ) -> None:
-        result = dispatch(_by_lookup(InstanceMakesReadOnly), arguments={"pk": post.pk, "body": "b"})
-
-        assert result.value == {"got": {"body": "b"}, "pk": post.pk}
-
-    def test_a_missing_row_is_not_found(
-        self, dispatch: Callable[..., DispatchResult], post: Post
-    ) -> None:
-        result = dispatch(_by_lookup(InstancePk), arguments={"pk": post.pk + 1, "title": "n"})
-
-        assert result.kind == "not_found"
 
 
 @_BUILT_AGAIN

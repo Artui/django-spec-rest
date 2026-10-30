@@ -115,19 +115,7 @@ def test_without_a_route_capture_the_key_keeps_its_default(seen: list[Any]) -> N
 @pytest.mark.parametrize(
     "policy",
     [
-        pytest.param(
-            UnknownArguments.REJECT,
-            id="reject",
-            marks=pytest.mark.xfail(
-                strict=True,
-                reason=(
-                    "author code runs on a call the shape check refuses: the target lookup "
-                    "comes before the shape check, so the lookup selector (and its kwargs "
-                    "provider) is called for a body naming an undeclared key, which drfs "
-                    "answered without ever calling it. Owner question, not a fix here."
-                ),
-            ),
-        ),
+        pytest.param(UnknownArguments.REJECT, id="reject"),
         pytest.param(UnknownArguments.IGNORE, id="ignore"),
     ],
 )
@@ -136,9 +124,10 @@ def test_the_body_s_value_for_the_key_never_fills_it(
 ) -> None:
     """The spec declares no ``team`` argument, so the edge's policy answers the body's:
     a ``400`` "Unknown argument." under ``REJECT``, dropped unseen under ``IGNORE``.
-    Under neither does the lookup see it, and under ``REJECT`` the refused call
-    runs no author code at all, which is what drfs answered: the ``seen == []``
-    line is the one the held gap fails at."""
+    Under neither does the lookup see it. Under ``REJECT`` the target lookup runs
+    before the shape check refuses the body, with the route's value, so the lookup
+    selector (and its kwargs provider) is called for a call that is then refused:
+    this is the decided answer."""
     monkeypatch.setattr(kernel_edge, "UNKNOWN_ARGUMENTS", policy)
     post = Post.objects.create(title="p")
 
@@ -147,7 +136,7 @@ def test_the_body_s_value_for_the_key_never_fills_it(
     if policy is UnknownArguments.REJECT:
         assert response.status_code == 400
         assert [str(message) for message in response.data["team"]] == ["Unknown argument."]
-        assert seen == []
+        assert seen == ["route-team"]
     else:
         assert response.status_code == 200, response.data
         assert seen == ["route-team"]
