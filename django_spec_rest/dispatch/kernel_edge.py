@@ -72,7 +72,6 @@ from typing import Any
 from asgiref.sync import sync_to_async
 from django.http import QueryDict
 from django.utils.datastructures import MultiValueDict
-from django_service_specs.adapters.filters.filter_set_parameters import filter_set_parameters
 from django_service_specs.dispatch.adispatch import adispatch
 from django_service_specs.dispatch.dispatch import dispatch
 from django_service_specs.dispatch.dispatch_result import DispatchResult
@@ -154,16 +153,22 @@ def kernel_arguments(
       (a ``QueryDict``) through ``flat_arguments``; a JSON object as it was
       sent, which a typed caller's values already are. A body that is no
       object is refused as a whole.
-    - **A service spec's target lookup filters by the query string**: each
-      filter its ``filter_set`` declares is read from the query string alone,
-      as a selector spec's are, and a body key of a filter's name is dropped,
-      so the client's body never chooses the row a write reaches, past a
-      permission that read the query string
+    - **A service spec's target lookup reads the route and the query
+      string**: each parameter of its target selector, its ``reads`` and the
+      filters its ``filter_set`` declares, is read from the query string, as
+      a selector spec's are, with the route's capture over it, and a body key
+      of such a name is dropped, so the client's body never chooses the row a
+      write reaches, past a permission that read the query string
       (test_instance_selector_views' test_the_query_string_is_the_scope,
-      test_what_the_body_sends_for_the_filter; the drop itself by
-      test_a_body_s_filter_key_alone_scopes_nothing). Only the filters' keys
-      are read there: the rest of a write's query string, ``?format`` among
-      them, is DRF's and no argument
+      test_what_the_body_sends_for_the_filter,
+      test_a_target_lookups_declared_reads'
+      test_a_body_value_never_chooses_the_row; the drop itself by
+      test_a_body_s_filter_key_alone_scopes_nothing and
+      test_a_body_value_never_reaches_the_lookup_the_route_or_the_query_string).
+      A required read neither sends is refused as missing
+      (test_a_lookup_read_the_route_does_not_capture_is_never_the_body_s).
+      Only the lookup's keys are read there: the rest of a write's query
+      string, ``?format`` among them, is DRF's and no argument
       (test_the_rest_of_a_write_s_query_string_is_no_argument).
     - **The route captures the spec declares** go over either, since the
       route scopes the call and a client's value must not move it.
@@ -213,23 +218,23 @@ def kernel_arguments(
         if server and isinstance(body, list):
             body = [{**row, **server} if isinstance(row, Mapping) else row for row in body]
         return {spec.many_argument: body, **coerce_flat(parameters, route)}, None
-    filters = _target_filters(spec)
-    # The flat values that scope the call: the lookup's filters as the query
+    reads = _target_reads(spec)
+    # The flat values that scope the call: the lookup's reads as the query
     # string sends them, then the route's captures over them.
     scope = {
         **{
             name: value
-            for name, value in flat_arguments(filters, request.query_params).items()
-            if name in filters.names()
+            for name, value in flat_arguments(reads, request.query_params).items()
+            if name in reads.names()
         },
         **route,
     }
     if isinstance(body, MultiValueDict):
         sent = coerce_flat(
-            parameters, {**_unfiltered(flat_arguments(parameters, body), filters), **scope}
+            parameters, {**_unscoped(flat_arguments(parameters, body), reads), **scope}
         )
     elif isinstance(body, Mapping):
-        sent = {**_unfiltered(body, filters), **coerce_flat(parameters, scope)}
+        sent = {**_unscoped(body, reads), **coerce_flat(parameters, scope)}
     else:
         raise DispatchError(f"The body must be an object; got {type(body).__name__}.")
     sent.update(server)
@@ -252,17 +257,17 @@ def kernel_arguments(
     return arguments, (spec.validator, held)
 
 
-def _target_filters(spec: KernelServiceSpec) -> Parameters:
-    """The parameters the filter set of ``spec``'s target lookup declares, if it has one."""
+def _target_reads(spec: KernelServiceSpec) -> Parameters:
+    """The parameters of ``spec``'s target lookup, its reads and its filters, if it has one."""
     target = spec.target_selector_spec()
-    if target is None or target.filter_set is None:
+    if target is None:
         return Parameters()
-    return filter_set_parameters(target.filter_set)
+    return target.parameters()
 
 
-def _unfiltered(sent: Mapping[str, Any], filters: Parameters) -> dict[str, Any]:
-    """What the body sent, less a key named like one of the target lookup's ``filters``."""
-    return {name: value for name, value in sent.items() if name not in filters.names()}
+def _unscoped(sent: Mapping[str, Any], reads: Parameters) -> dict[str, Any]:
+    """What the body sent, less a key named like one of the target lookup's ``reads``."""
+    return {name: value for name, value in sent.items() if name not in reads.names()}
 
 
 def dispatch_kernel_spec(

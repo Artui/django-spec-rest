@@ -1,18 +1,16 @@
-"""A target lookup's declared reads are read as the spec's own are, over a live view.
+"""A target lookup's declared reads come from the route and the query string, never the body.
 
 A kernel spec declares a read as a ``Parameter``, with no ``UrlKwarg`` or
-``QueryParam`` to say where it comes from: on the kernel route a service spec's
-arguments are its body, and a route capture of a declared name goes over the
-body (``kernel_arguments``). A ``reads`` entry on the target lookup is a
-parameter of the spec like any other, so it is read the same way, and nothing
-the body sends is written onto ``view.kwargs`` or ``request.query_params``,
-which the view's permission classes have already read.
-
-The kernel route's answer today, which no plan decision names yet: drfs read a lookup's ``QueryParam`` from the query string
-alone and never from the body. A service spec's query string is no argument on
-the kernel route, so a value there is never read, and the body's is. Off HTTP a
-kernel spec is the kernel's own ``dispatch``, which has no view to read, so
-drfs' offline-view cases have no counterpart here.
+``QueryParam`` to say where it comes from. On the kernel route a target
+lookup's reads choose the row a write reaches, so the edge reads them from the
+route's captures and the query string alone, the route's over the query
+string's, and drops a body key of a read's name (``kernel_arguments``): a
+client's body never chooses the row, as drfs read a lookup's ``QueryParam``
+from the query string alone. Nothing the body sends is written onto
+``view.kwargs`` or ``request.query_params``, which the view's permission
+classes have already read. Off HTTP a kernel spec is the kernel's own
+``dispatch``, which has no view to read, so drfs' offline-view cases have no
+counterpart here.
 """
 
 from __future__ import annotations
@@ -95,35 +93,48 @@ def _put(seen: dict[str, Any], url: str, body: dict[str, Any], fmt: str, **route
 
 
 @pytest.mark.parametrize("fmt", ["json", "multipart"])
-def test_a_route_capture_of_a_lookup_read_goes_over_the_body(fmt: str) -> None:
+def test_a_route_capture_of_a_lookup_read_goes_over_the_query_string(fmt: str) -> None:
     seen: dict[str, Any] = {}
     post = Post.objects.create(title="a")
 
-    response = _put(seen, "/?q=from-query", _SENT, fmt, pk=post.pk, org="from-route")
+    response = _put(seen, "/?q=from-query&org=from-query", _SENT, fmt, pk=post.pk, org="from-route")
 
     assert response.status_code == 200, response.data
-    assert (seen["q"], seen["org"]) == ("from-body", "from-route")
+    assert (seen["q"], seen["org"]) == ("from-query", "from-route")
 
 
 @pytest.mark.parametrize("fmt", ["json", "multipart"])
-def test_the_query_string_is_no_argument_of_a_service_spec(fmt: str) -> None:
+def test_the_query_string_fills_a_lookup_read_the_route_does_not_capture(fmt: str) -> None:
     seen: dict[str, Any] = {}
     post = Post.objects.create(title="a")
 
     response = _put(seen, "/?q=from-query&org=from-query", {"body": "x"}, fmt, pk=post.pk)
 
     assert response.status_code == 200, response.data
-    assert (seen["q"], seen["org"]) == ("D-q", "D-org")
+    assert (seen["q"], seen["org"]) == ("from-query", "from-query")
 
 
 @pytest.mark.parametrize("fmt", ["json", "multipart"])
-def test_a_body_value_never_reaches_the_route_or_the_query_string(fmt: str) -> None:
+def test_a_body_value_never_reaches_the_lookup_the_route_or_the_query_string(fmt: str) -> None:
     seen: dict[str, Any] = {}
     post = Post.objects.create(title="a")
 
     response = _put(seen, "/", _SENT, fmt, pk=post.pk)
 
     assert response.status_code == 200, response.data
-    assert (seen["q"], seen["org"]) == ("from-body", "from-body")
+    assert (seen["q"], seen["org"]) == ("D-q", "D-org")
     assert seen["kwargs"] == {"pk": post.pk}
     assert seen["query"] == {}
+
+
+@pytest.mark.parametrize("fmt", ["json", "multipart"])
+def test_a_body_value_never_chooses_the_row(fmt: str) -> None:
+    """The body's ``pk`` names another row; the route's is the one found."""
+    seen: dict[str, Any] = {}
+    post = Post.objects.create(title="a")
+    other = Post.objects.create(title="b")
+
+    response = _put(seen, "/", {"body": "x", "pk": other.pk}, fmt, pk=post.pk)
+
+    assert response.status_code == 200, response.data
+    assert response.data["id"] == post.pk

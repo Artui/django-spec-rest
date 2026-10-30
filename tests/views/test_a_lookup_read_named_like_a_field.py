@@ -131,14 +131,10 @@ def test_a_body_value_never_moves_a_captured_lookup() -> None:
 
 
 @pytest.mark.django_db
-def test_a_lookup_read_the_route_does_not_capture_is_the_caller_s_argument() -> None:
-    """The kernel route's answer: a capture the spec declares goes over the
-    body, and a declared read the route does not capture is an argument like
-    any other, so the body sends it (``kernel_arguments``). drfs never let a
-    client's value scope a lookup; on the kernel route only the URL
-    configuration's capture does that. Pinned as today's answer, not a
-    decided one: whether a client's body may choose the row an update
-    touches is a question for the owner."""
+def test_a_lookup_read_the_route_does_not_capture_is_never_the_body_s() -> None:
+    """A target lookup's read comes from the route or the query string, so a
+    body naming it chooses nothing: with neither sending it, the required
+    read is missing, and the call is refused before the lookup runs."""
     seen: dict[str, Any] = {}
     post = Post.objects.create(title="old")
 
@@ -146,8 +142,11 @@ def test_a_lookup_read_the_route_does_not_capture_is_the_caller_s_argument() -> 
         _spec(seen, lookup_reads="current"), {"title": "new", "current": "old"}, pk=post.pk
     )
 
-    assert response.status_code == 200, response.data
-    assert seen["lookup"] == {"pk": post.pk, "current": "old"}
+    assert response.status_code == 400
+    assert "current" in response.data
+    assert seen == {}
+    post.refresh_from_db()
+    assert post.title == "old"
 
 
 @pytest.mark.django_db

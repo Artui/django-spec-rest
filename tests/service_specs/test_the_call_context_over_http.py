@@ -47,9 +47,9 @@ class _CreateView(ServiceCreateView):
         return [permission() for permission in self.permission_classes]
 
 
-def _post(spec: ServiceSpec, body: Any, **attrs: Any) -> Response:
+def _post(spec: ServiceSpec, body: Any, url: str = "/", **attrs: Any) -> Response:
     view = type("_View", (_CreateView,), {"spec": spec, **attrs}).as_view()
-    return view(factory.post("/", body, format="json"))
+    return view(factory.post(url, body, format="json"))
 
 
 def _seen_by(seen: dict[str, Any], stage: str, answer: Any = None) -> Any:
@@ -128,7 +128,8 @@ def test_a_target_lookup_and_the_service_share_the_dict() -> None:
         ),
     )
 
-    assert _post(spec, {"pk": author.pk}).status_code == 204
+    # A target lookup's read comes from the route or the query string, never the body.
+    assert _post(spec, {}, url=f"/?pk={author.pk}").status_code == 204
 
     assert seen["lookup"] is seen["service"]
     assert seen["service"]["view"]._call_context is seen["service"]
