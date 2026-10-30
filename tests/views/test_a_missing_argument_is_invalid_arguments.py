@@ -10,7 +10,6 @@ argument.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import Any
 
 import pytest
@@ -30,8 +29,9 @@ from django_service_specs import (
 from rest_framework.exceptions import ValidationError
 from rest_framework.test import APIRequestFactory
 
+from django_spec_rest.dispatch.kernel_edge import dispatch_kernel_spec
 from django_spec_rest.service_specs.drf_invalid_arguments import DRFInvalidArguments
-from tests.views.test_kernel_edge import CORES, _parts
+from tests.views.test_kernel_edge import _parts
 from tests.views.test_kernel_views import _CreateView
 
 pytestmark = pytest.mark.django_db
@@ -71,14 +71,11 @@ _SPECS = pytest.mark.parametrize(
 )
 
 
-@CORES
 @_SPECS
-def test_a_missing_argument_is_caught_as_drf_and_the_kernel_catch_it(
-    core: Callable[..., Any], spec: Any
-) -> None:
+def test_a_missing_argument_is_caught_as_drf_and_the_kernel_catch_it(spec: Any) -> None:
     for caught in (ValidationError, KernelInvalidArguments):
         with pytest.raises(caught) as raised:
-            core(spec, **_parts({}))
+            dispatch_kernel_spec(spec, **_parts({}))
 
         assert type(raised.value) is DRFInvalidArguments
         assert not isinstance(raised.value, ServiceValidationError | ServiceError)

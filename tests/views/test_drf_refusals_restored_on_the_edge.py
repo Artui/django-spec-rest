@@ -13,11 +13,9 @@ match without it.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import Any
 
 import pytest
-from asgiref.sync import async_to_sync
 from django_service_specs import (
     SelectorKind,
     SelectorSpec,
@@ -31,7 +29,7 @@ from rest_framework.permissions import BasePermission
 from rest_framework.test import APIRequestFactory
 
 from django_spec_rest import SelectorListView, SelectorRetrieveView, ServiceCreateView
-from django_spec_rest.dispatch.kernel_edge import adispatch_kernel_spec, dispatch_kernel_spec
+from django_spec_rest.dispatch.kernel_edge import dispatch_kernel_spec
 from django_spec_rest.service_specs.drf_not_permitted import DRFNotPermitted
 from django_spec_rest.service_specs.drf_permission_check import DRFPermissionCheck
 from django_spec_rest.service_specs.translating_drf_refusals import translating_drf_refusals
@@ -43,7 +41,7 @@ from tests.service_specs.test_drf_refusals_on_the_kernel_route import (
     _service_spec,
 )
 from tests.testapp.models import Post
-from tests.views.test_kernel_edge import CORES, _parts
+from tests.views.test_kernel_edge import _parts
 
 pytestmark = pytest.mark.django_db
 
@@ -62,7 +60,6 @@ def _spec(seat: str, error: Exception) -> Any:
     return build(seat, _raising(error), translating_drf_refusals)
 
 
-@CORES
 @_SEATS
 @pytest.mark.parametrize(
     "error",
@@ -73,11 +70,9 @@ def _spec(seat: str, error: Exception) -> Any:
     ],
     ids=["validation-error", "permission-denied", "not-authenticated"],
 )
-def test_a_refusal_is_the_exception_the_author_raised(
-    core: Callable[..., Any], seat: str, error: Exception
-) -> None:
+def test_a_refusal_is_the_exception_the_author_raised(seat: str, error: Exception) -> None:
     with pytest.raises(type(error)) as excinfo:
-        core(_spec(seat, error), **_parts({}))
+        dispatch_kernel_spec(_spec(seat, error), **_parts({}))
 
     assert excinfo.value is error
 
@@ -86,14 +81,11 @@ class _Locked(ValidationError):
     status_code = 423
 
 
-@CORES
-def test_a_project_subclass_with_its_own_status_is_the_exception_raised(
-    core: Callable[..., Any],
-) -> None:
+def test_a_project_subclass_with_its_own_status_is_the_exception_raised() -> None:
     error = _Locked("locked")
 
     with pytest.raises(_Locked) as excinfo:
-        core(
+        dispatch_kernel_spec(
             ServiceSpec(permissions=_OPEN, service=translating_drf_refusals(_raising(error))),
             **_parts({}),
         )
@@ -102,8 +94,7 @@ def test_a_project_subclass_with_its_own_status_is_the_exception_raised(
     assert excinfo.value.status_code == 423
 
 
-@CORES
-def test_the_exception_keeps_the_context_it_was_raised_in(core: Callable[..., Any]) -> None:
+def test_the_exception_keeps_the_context_it_was_raised_in() -> None:
     def service(**_: Any) -> None:
         try:
             {}["missing"]
@@ -111,7 +102,7 @@ def test_the_exception_keeps_the_context_it_was_raised_in(core: Callable[..., An
             raise ValidationError("whole") from None
 
     with pytest.raises(ValidationError) as excinfo:
-        core(
+        dispatch_kernel_spec(
             ServiceSpec(permissions=_OPEN, service=translating_drf_refusals(service)), **_parts({})
         )
 
@@ -119,10 +110,9 @@ def test_the_exception_keeps_the_context_it_was_raised_in(core: Callable[..., An
     assert excinfo.value.__suppress_context__ is True
 
 
-@CORES
-def test_a_raise_with_no_context_is_restored_with_none(core: Callable[..., Any]) -> None:
+def test_a_raise_with_no_context_is_restored_with_none() -> None:
     with pytest.raises(PermissionDenied) as excinfo:
-        core(
+        dispatch_kernel_spec(
             ServiceSpec(
                 permissions=_OPEN,
                 service=translating_drf_refusals(_raising(PermissionDenied("nope"))),
@@ -133,8 +123,7 @@ def test_a_raise_with_no_context_is_restored_with_none(core: Callable[..., Any])
     assert excinfo.value.__context__ is None
 
 
-@CORES
-def test_the_exception_keeps_the_cause_it_was_raised_from(core: Callable[..., Any]) -> None:
+def test_the_exception_keeps_the_cause_it_was_raised_from() -> None:
     """``from original`` sets the cause and suppresses the context, as Python's ``raise ... from`` does."""
     original = KeyError("original")
 
@@ -142,7 +131,7 @@ def test_the_exception_keeps_the_cause_it_was_raised_from(core: Callable[..., An
         raise ValidationError("whole") from original
 
     with pytest.raises(ValidationError) as excinfo:
-        core(
+        dispatch_kernel_spec(
             ServiceSpec(permissions=_OPEN, service=translating_drf_refusals(service)), **_parts({})
         )
 
@@ -150,10 +139,7 @@ def test_the_exception_keeps_the_cause_it_was_raised_from(core: Callable[..., An
     assert excinfo.value.__suppress_context__ is True
 
 
-@CORES
-def test_a_refusal_raised_from_another_is_restored_from_the_marker_not_the_cause(
-    core: Callable[..., Any],
-) -> None:
+def test_a_refusal_raised_from_another_is_restored_from_the_marker_not_the_cause() -> None:
     """The package's own ``DRFNotPermitted`` is left as raised, so it carries no marker to restore.
 
     Its cause is a DRF ``PermissionDenied``, which a restore that read the
@@ -165,20 +151,17 @@ def test_a_refusal_raised_from_another_is_restored_from_the_marker_not_the_cause
         raise error from PermissionDenied("y")
 
     with pytest.raises(DRFNotPermitted) as excinfo:
-        core(
+        dispatch_kernel_spec(
             ServiceSpec(permissions=_OPEN, service=translating_drf_refusals(service)), **_parts({})
         )
 
     assert excinfo.value is error
 
 
-@CORES
-def test_the_kernel_s_denial_still_leaves_as_the_package_s_not_permitted(
-    core: Callable[..., Any],
-) -> None:
+def test_the_kernel_s_denial_still_leaves_as_the_package_s_not_permitted() -> None:
     """Answered by the map, which the restore leaves alone."""
     with pytest.raises(DRFNotPermitted) as excinfo:
-        core(
+        dispatch_kernel_spec(
             ServiceSpec(permissions=_OPEN, service=_raising(KernelNotPermitted("kernel's"))),
             **_parts({}),
         )
@@ -187,30 +170,16 @@ def test_the_kernel_s_denial_still_leaves_as_the_package_s_not_permitted(
     assert str(excinfo.value.detail) == "kernel's"
 
 
-@CORES
-def test_an_async_service_s_refusal_is_restored_too(core: Callable[..., Any]) -> None:
+def test_an_async_service_s_refusal_is_restored_too() -> None:
     error = PermissionDenied("nope")
 
     with pytest.raises(PermissionDenied) as excinfo:
-        core(
+        dispatch_kernel_spec(
             ServiceSpec(permissions=_OPEN, service=translating_drf_refusals(_araising(error))),
             **_parts({}),
         )
 
     assert excinfo.value is error
-
-
-def test_the_async_edge_restores_as_the_sync_edge_does() -> None:
-    error = PermissionDenied("nope")
-    spec = ServiceSpec(permissions=_OPEN, service=translating_drf_refusals(_raising(error)))
-
-    with pytest.raises(PermissionDenied) as excinfo:
-        async_to_sync(adispatch_kernel_spec)(spec, **_parts({}))
-
-    assert excinfo.value is error
-    with pytest.raises(PermissionDenied) as sync_excinfo:
-        dispatch_kernel_spec(spec, **_parts({}))
-    assert sync_excinfo.value is error
 
 
 class _Unauthenticated(BasePermission):
@@ -223,19 +192,18 @@ class _Refusing(BasePermission):
         raise PermissionDenied("nope")
 
 
-@CORES
 @pytest.mark.parametrize(
     ("permission", "error"),
     [(_Unauthenticated, NotAuthenticated), (_Refusing, PermissionDenied)],
     ids=["not-authenticated", "permission-denied"],
 )
 def test_a_permission_class_s_raised_refusal_is_the_class_that_was_raised(
-    core: Callable[..., Any], permission: type[BasePermission], error: type[Exception]
+    permission: type[BasePermission], error: type[Exception]
 ) -> None:
     spec = ServiceSpec(permissions=(DRFPermissionCheck([permission]),), service=lambda: None)
 
     with pytest.raises(error) as excinfo:
-        core(spec, **_parts({}))
+        dispatch_kernel_spec(spec, **_parts({}))
 
     assert type(excinfo.value) is error
 

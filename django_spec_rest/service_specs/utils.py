@@ -164,7 +164,7 @@ a pool seed: the presenter runs when the transport renders, after the call, so
 the view's ``output_serializer_context`` hook - lazy, handed the value
 presented - travels with the result rather than through the call's pool, where
 a callable taking a bare ``**kwargs`` would be handed it
-(test_through_either_core_a_bare_kwargs_service_sees_no_edge_machinery)."""
+(test_a_bare_kwargs_service_sees_no_edge_machinery)."""
 
 
 @dataclasses.dataclass
@@ -175,7 +175,7 @@ class EdgeCallState:
     it does not travel through the pool the kernel hands a callable taking a
     bare ``**kwargs``, which holds ``progress``, ``request``,
     ``serializer``, ``user`` and the call's extras and nothing of the edge's
-    (test_through_either_core_a_bare_kwargs_service_sees_no_edge_machinery). The edge sets it in
+    (test_a_bare_kwargs_service_sees_no_edge_machinery). The edge sets it in
     ``EDGE_CALL`` around the whole call, and the compiled pieces that need it
     read it from there:
 
@@ -620,7 +620,7 @@ def serializer_context(
             **(arguments if isinstance(arguments, Mapping) else {}),
             # The edge's key for the output layers is no seed of the call, and
             # stays out of a callable's pool as every seed-free value does
-            # (test_through_either_core_a_bare_kwargs_service_sees_no_edge_machinery).
+            # (test_a_bare_kwargs_service_sees_no_edge_machinery).
             **{name: value for name, value in ambient.items() if name != SERIALIZER_CONTEXT_SEED},
             "request": request,
             "view": view,

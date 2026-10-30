@@ -22,7 +22,6 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from asgiref.sync import async_to_sync
 from django_service_specs import ServiceSpec, ServiceValidationError, Unrestricted
 from django_service_specs.mutations.create_from_input import create_from_input
 from django_service_specs.relations.child_spec import ChildSpec
@@ -30,10 +29,8 @@ from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 from rest_framework.test import APIRequestFactory
 
-from django_spec_rest.dispatch.kernel_edge import adispatch_kernel_spec
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from tests.testapp.models import Catalog, Section
-from tests.views.test_kernel_edge import _parts
 from tests.views.test_kernel_views import _CreateView
 
 pytestmark = pytest.mark.django_db
@@ -207,15 +204,6 @@ class TestEveryErrorClassAndBothCores:
 
         assert response.status_code == 400
         assert response.data == {"headline": ["Too long."]}
-
-    @_NOT_RENAMED
-    def test_it_applies_on_the_async_edge(self) -> None:
-        spec = _spec(_refuse({"author": {"name": ["Too short."]}}))
-
-        with pytest.raises(ValidationError) as excinfo:
-            async_to_sync(adispatch_kernel_spec)(spec, **_parts(_PAYLOAD))
-
-        assert excinfo.value.detail == {"writer": {"some_name": ["Too short."]}}
 
     @_NOT_RENAMED
     def test_a_precondition_is_renamed_too(self) -> None:

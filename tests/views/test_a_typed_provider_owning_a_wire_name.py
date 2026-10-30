@@ -33,7 +33,7 @@ from django_service_specs.types.unset import UNSET
 from rest_framework import serializers
 
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
-from tests.views.server_value_calls import CORES, FORMATS, OPEN, Core, post
+from tests.views.server_value_calls import FORMATS, OPEN, dispatch_live, post
 from tests.views.test_kernel_views import _view
 
 pytestmark = pytest.mark.django_db
@@ -103,13 +103,12 @@ def test_a_declined_owned_source_hands_its_parameter_none_of_the_clients_value(f
     assert seen == _DECLINED
 
 
-@CORES
-def test_a_declined_owned_source_hands_its_parameter_none_of_the_clients_value_on_either_core(
-    core: Core,
-) -> None:
+def test_a_declined_owned_source_hands_its_parameter_none_of_the_clients_value_on_either_core() -> (
+    None
+):
     seen: dict[str, Any] = {}
 
-    core(_spec(seen, owns="org", value=UNSET), {"tenant": "evil"})
+    dispatch_live(_spec(seen, owns="org", value=UNSET), {"tenant": "evil"})
 
     assert seen == _DECLINED
 

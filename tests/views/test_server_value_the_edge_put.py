@@ -43,7 +43,7 @@ from rest_framework import serializers
 from rest_framework.fields import empty
 
 from django_spec_rest.dispatch import kernel_edge
-from tests.views.server_value_calls import CORES, FORMATS, Core, open_spec, post
+from tests.views.server_value_calls import FORMATS, dispatch_live, open_spec, post
 from tests.views.test_kernel_views import _CreateView
 
 pytestmark = pytest.mark.django_db
@@ -99,13 +99,12 @@ def test_input_data_for_a_field_named_user_outranks_the_clients_over_http(fmt: s
     assert [alice] == _VALIDATED
 
 
-@CORES
-def test_input_data_for_a_field_named_user_outranks_the_clients_on_either_core(core: Core) -> None:
+def test_input_data_for_a_field_named_user_outranks_the_clients_on_either_core() -> None:
     alice = User.objects.create(username="alice")
     bob = User.objects.create(username="bob")
     seen: dict[str, Any] = {}
 
-    core(
+    dispatch_live(
         open_spec(_owned(seen), _OwnedIn, input_data=_owner),
         {"title": "t", "user": bob.pk},
         user=alice,
@@ -194,14 +193,13 @@ def test_input_data_is_the_value_put_however_the_field_reads_a_json_body(
     assert seen == {"v": server, "data": server, "validated": server}
 
 
-@CORES
 @_READ
 def test_input_data_is_the_value_put_however_the_field_reads_a_json_body_on_either_core(
-    core: Core, serializer: Any, server: Any, form: dict[str, Any], body: dict[str, Any]
+    serializer: Any, server: Any, form: dict[str, Any], body: dict[str, Any]
 ) -> None:
     seen: dict[str, Any] = {}
 
-    core(open_spec(_reads(seen), serializer, input_data=lambda: {"v": server}), body)
+    dispatch_live(open_spec(_reads(seen), serializer, input_data=lambda: {"v": server}), body)
 
     assert seen == {"v": server, "data": server, "validated": server}
 

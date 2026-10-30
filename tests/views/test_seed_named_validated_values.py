@@ -31,7 +31,7 @@ import pytest
 from django.contrib.auth.models import User
 from rest_framework import serializers
 
-from tests.views.server_value_calls import CORES, FORMATS, Core, open_spec, post
+from tests.views.server_value_calls import FORMATS, dispatch_live, open_spec, post
 
 pytestmark = pytest.mark.django_db
 
@@ -69,25 +69,23 @@ def test_a_current_user_hidden_field_named_user_validates_over_http(fmt: str) ->
     assert seen == {"data": {"title": "t", "user": alice}, "user": alice}
 
 
-@CORES
-def test_a_current_user_hidden_field_named_user_validates_on_either_core(core: Core) -> None:
+def test_a_current_user_hidden_field_named_user_validates_on_either_core() -> None:
     seen: dict[str, Any] = {}
     alice = User.objects.create(username="alice")
 
-    core(open_spec(_record(seen), _CurrentUserIn), {"title": "t"}, user=alice)
+    dispatch_live(open_spec(_record(seen), _CurrentUserIn), {"title": "t"}, user=alice)
 
     assert seen["data"] == {"title": "t", "user": alice}
     assert seen["user"] == alice
 
 
-@CORES
-def test_keys_a_validate_adds_named_like_seeds_stay_in_data(core: Core) -> None:
+def test_keys_a_validate_adds_named_like_seeds_stay_in_data() -> None:
     seen: dict[str, Any] = {}
 
     def service(*, data: Any, serializer: Any, progress: Any) -> None:
         seen.update(data=dict(data), serializer=serializer, progress=progress)
 
-    core(open_spec(service, _AddsSeedsIn), {"title": "t"})
+    dispatch_live(open_spec(service, _AddsSeedsIn), {"title": "t"})
 
     assert seen["data"] == {
         "title": "t",
@@ -100,8 +98,7 @@ def test_keys_a_validate_adds_named_like_seeds_stay_in_data(core: Core) -> None:
     assert isinstance(seen["serializer"], _AddsSeedsIn)
 
 
-@CORES
-def test_each_rows_seed_named_key_stays_in_its_row(core: Core) -> None:
+def test_each_rows_seed_named_key_stays_in_its_row() -> None:
     seen: dict[str, Any] = {}
     alice = User.objects.create(username="alice")
 
@@ -109,7 +106,7 @@ def test_each_rows_seed_named_key_stays_in_its_row(core: Core) -> None:
         seen["data"] = [dict(row) for row in data]
         seen["user"] = user
 
-    core(
+    dispatch_live(
         open_spec(bulk, _CurrentUserIn, many=True),
         [{"title": "a"}, {"title": "b"}],
         user=alice,

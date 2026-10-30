@@ -22,8 +22,6 @@ from django_service_specs import (
     ServiceSpec,
     Unrestricted,
 )
-from rest_framework.parsers import JSONParser
-from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from django_spec_rest import (
@@ -33,11 +31,8 @@ from django_spec_rest import (
     ServiceUpdateView,
     ServiceViewSet,
 )
-from django_spec_rest.dispatch.kernel_edge import adispatch_kernel_spec
-from django_spec_rest.service_specs.drf_principal_unavailable import DRFPrincipalUnavailable
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
-from django_spec_rest.views.utils import view_call_context
 from tests.testapp.models import Author
 from tests.testapp.serializers import AuthorSerializer
 
@@ -197,21 +192,3 @@ def test_a_retrieve_view_with_no_permission_classes(active: bool) -> None:
 def test_a_viewset_action_with_no_permission_classes(active: bool) -> None:
     request = _as(_factory.post("/", {"name": "n"}, format="json"), active)
     _answered(_ViewSet.as_view({"post": "create"})(request), active, 201, "create")
-
-
-@pytest.mark.django_db(transaction=True)
-async def test_the_async_core_refuses_it_on_a_live_view() -> None:
-    user = await get_user_model().objects.acreate(username="u", is_active=False)
-    view = ServiceCreateView()
-    view.request = Request(_factory.post("/", {"name": "n"}, format="json"), parsers=[JSONParser()])
-    view.request.user = user
-    view.args, view.kwargs, view.format_kwarg = (), {}, None
-
-    with pytest.raises(DRFPrincipalUnavailable):
-        await adispatch_kernel_spec(
-            _writes(_acreate),
-            view=view,
-            request=view.request,
-            call_context=view_call_context(view, view.request),
-        )
-    assert ran == []

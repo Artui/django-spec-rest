@@ -80,10 +80,8 @@ from collections.abc import Callable, Mapping
 from types import MappingProxyType
 from typing import Any
 
-from asgiref.sync import sync_to_async
 from django.http import QueryDict
 from django.utils.datastructures import MultiValueDict
-from django_service_specs.dispatch.adispatch import adispatch
 from django_service_specs.dispatch.dispatch import dispatch
 from django_service_specs.dispatch.dispatch_result import DispatchResult
 from django_service_specs.dispatch.grant import Grant
@@ -349,7 +347,6 @@ def dispatch_kernel_spec(
     lookup never would (``_resolved``).
 
     Every refusal leaves as its DRF answer (``KERNEL_REFUSALS``).
-    ``adispatch_kernel_spec`` is the async twin.
     """
     hooks = view_hooks if view_hooks is not None else ViewHooks()
     with answering_refusals():
@@ -387,69 +384,6 @@ def dispatch_kernel_spec(
             EDGE_CALL.reset(token)
 
 
-async def adispatch_kernel_spec(
-    spec: KernelSpec,
-    *,
-    view: Any,
-    request: Request,
-    call_context: dict[str, Any],
-    target: Any = UNSET,
-    view_hooks: ViewHooks | None = None,
-    on_target: Callable[[Any], None] | None = None,
-    query: QueryDict | None = None,
-) -> DispatchResult:
-    """``dispatch_kernel_spec`` from async code, awaiting the kernel's ``adispatch``.
-
-    The same arguments, the same state and the same answers; the kernel's
-    thread hops run in a copy of this context, which holds the same state.
-    Reading the arguments parses the request's body, which reads its stream,
-    describing the input serializer builds it with the call's request, whose
-    ``get_fields`` may query, and the spec's own lookup queries, so each runs
-    in Django's thread-sensitive executor rather than on the event loop
-    (test_kernel_edge's test_the_async_core_reads_the_body_off_the_loop,
-    test_the_async_core_describes_the_input_serializer_off_the_loop).
-    """
-    hooks = view_hooks if view_hooks is not None else ViewHooks()
-    with answering_refusals():
-        state = _edge_state(
-            spec, view=view, request=request, hooks=hooks, call_context=call_context
-        )
-        token = EDGE_CALL.set(state)
-        try:
-            (
-                dispatched,
-                extra_kwargs,
-                arguments,
-                state.validator_input,
-            ) = await sync_to_async(_read_call, thread_sensitive=True)(
-                spec, view=view, request=request, hooks=hooks, query=query
-            )
-            found = await sync_to_async(_resolved, thread_sensitive=True)(
-                dispatched,
-                principal=request.user,
-                arguments=arguments,
-                call_context=call_context,
-                target=target,
-                on_target=on_target,
-            )
-            if isinstance(found, DispatchResult):
-                return found
-            result = await adispatch(
-                dispatched,
-                principal=request.user,
-                arguments=arguments,
-                grant=found[1],
-                unknown_arguments=UNKNOWN_ARGUMENTS,
-                progress=hooks.progress,
-                target=found[0],
-                extra_kwargs=extra_kwargs,
-                call_context=call_context,
-            )
-            return _with_output_layers(result, hooks)
-        finally:
-            EDGE_CALL.reset(token)
-
-
 def _read_call(
     spec: KernelSpec,
     *,
@@ -460,13 +394,11 @@ def _read_call(
 ) -> tuple[KernelSpec, dict[str, Any], dict[str, Any], tuple[Any, Any] | None]:
     """The spec to dispatch, the overlay, the arguments and the held body of one call.
 
-    Every read that describes the input serializer, in one sync step, so the
-    async core hops to a thread once for all of it. The spec to dispatch is
-    ``recording_spec``'s, built here rather than before the call's state is
-    set, so the fields it records are those the serializer declares
+    Every read that describes the input serializer, in one step. The spec to
+    dispatch is ``recording_spec``'s, built here rather than before the call's
+    state is set, so the fields it records are those the serializer declares
     described with the call's request (test_kernel_edge's
-    test_the_twin_records_the_fields_the_call_s_own_serializer_declares,
-    test_the_async_core_builds_the_twin_off_the_loop).
+    test_the_twin_records_the_fields_the_call_s_own_serializer_declares).
     """
     extra_kwargs, pinned, server = _overlay(spec, hooks)
     # Read by the recording twin's ``kwargs`` seat, which lays them beneath the

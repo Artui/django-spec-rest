@@ -33,7 +33,7 @@ from rest_framework import serializers
 from typing_extensions import TypedDict
 
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
-from tests.views.server_value_calls import CORES, OPEN, Core, open_spec, post
+from tests.views.server_value_calls import OPEN, dispatch_live, open_spec, post
 from tests.views.test_kernel_views import _CreateView
 
 pytestmark = pytest.mark.django_db
@@ -114,15 +114,14 @@ def test_the_specs_provider_outranks_the_validators_over_http(
     assert seen == _OUTRANKED
 
 
-@CORES
 @_SHAPE
 @_PROVIDER
 def test_the_specs_provider_outranks_the_validators_on_either_core(
-    core: Core, serializer: Any, body: dict[str, Any], provider: Callable[..., Any]
+    serializer: Any, body: dict[str, Any], provider: Callable[..., Any]
 ) -> None:
     seen: dict[str, Any] = {}
 
-    core(_spec(seen, serializer, kwargs=provider), body)
+    dispatch_live(_spec(seen, serializer, kwargs=provider), body)
 
     assert seen == _OUTRANKED
 
@@ -203,10 +202,7 @@ def test_a_view_hook_s_unset_supplies_nothing() -> None:
     assert seen["tenant_id"] == "evil"
 
 
-@CORES
-def test_an_authors_serializer_value_reaches_a_service_no_validator_binds_one_for(
-    core: Core,
-) -> None:
+def test_an_authors_serializer_value_reaches_a_service_no_validator_binds_one_for() -> None:
     seen: dict[str, Any] = {}
 
     def service(*, serializer: Any = "default", tenant_id: str = "none") -> None:
@@ -220,13 +216,12 @@ def test_an_authors_serializer_value_reaches_a_service_no_validator_binds_one_fo
         atomic=False,
     )
 
-    core(spec, {})
+    dispatch_live(spec, {})
 
     assert seen == {"serializer": "provider", "tenant_id": "server"}
 
 
-@CORES
-def test_a_required_parameter_only_the_provider_fills_is_filled(core: Core) -> None:
+def test_a_required_parameter_only_the_provider_fills_is_filled() -> None:
     """An untyped provider's value fills a service keyword with no default,
     which no argument the caller sends could fill."""
     seen: dict[str, Any] = {}
@@ -238,7 +233,7 @@ def test_a_required_parameter_only_the_provider_fills_is_filled(core: Core) -> N
         service=close, permissions=OPEN, kwargs=lambda: {"reason": "server"}, atomic=False
     )
 
-    core(spec, {})
+    dispatch_live(spec, {})
 
     assert seen == {"reason": "server"}
 

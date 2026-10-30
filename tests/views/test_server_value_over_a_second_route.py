@@ -62,7 +62,7 @@ from rest_framework import serializers
 
 from django_spec_rest.dispatch import kernel_edge
 from tests.testapp.models import Author
-from tests.views.server_value_calls import CORES, Core, open_spec, post
+from tests.views.server_value_calls import dispatch_live, open_spec, post
 from tests.views.test_kernel_views import _CreateView
 
 pytestmark = pytest.mark.django_db
@@ -169,14 +169,13 @@ def test_input_data_outranks_a_second_route_in_a_form_body(
     assert seen == _SERVER
 
 
-@CORES
 @_SHAPE
 def test_input_data_outranks_a_second_route_on_either_core(
-    core: Core, serializer: Any, body: dict[str, Any]
+    serializer: Any, body: dict[str, Any]
 ) -> None:
     seen: dict[str, Any] = {}
 
-    core(open_spec(_plain(seen), serializer, input_data=_server), body)
+    dispatch_live(open_spec(_plain(seen), serializer, input_data=_server), body)
 
     assert seen == _SERVER
 
@@ -185,14 +184,13 @@ def _authored() -> dict[str, Any]:
     return {"tenant": "authored"}
 
 
-@CORES
-def test_a_provider_naming_the_field_input_data_fills_is_refused(core: Core) -> None:
+def test_a_provider_naming_the_field_input_data_fills_is_refused() -> None:
     """``input_data`` is the seat that fills a field. A ``kwargs`` answer naming
     the same wire name would reach the service unvalidated, so it is refused."""
     seen: dict[str, Any] = {}
 
     with pytest.raises(ImproperlyConfigured, match="ServiceSpec.input_data"):
-        core(open_spec(_plain(seen), _Alias, input_data=_server, kwargs=_authored), {})
+        dispatch_live(open_spec(_plain(seen), _Alias, input_data=_server, kwargs=_authored), {})
 
     assert seen == {}
 
@@ -307,15 +305,14 @@ class _Renames(serializers.Serializer):
         return attrs
 
 
-@CORES
-def test_a_key_validate_removed_is_not_put_back(core: Core) -> None:
+def test_a_key_validate_removed_is_not_put_back() -> None:
     """``data`` keeps the serializer's shape, the server's value under the key it was moved to."""
     seen: dict[str, Any] = {}
 
     def service(*, data: Any) -> None:
         seen["data"] = dict(data)
 
-    core(open_spec(service, _Renames, input_data=_server), {"tenant": "c1"})
+    dispatch_live(open_spec(service, _Renames, input_data=_server), {"tenant": "c1"})
 
     assert seen["data"] == {"tenant_id": "server"}
 
@@ -325,15 +322,14 @@ class _TenantInput:
     tenant: str = "unset"
 
 
-@CORES
-def test_a_dataclass_input_holds_the_servers_value_its_field_validated(core: Core) -> None:
+def test_a_dataclass_input_holds_the_servers_value_its_field_validated() -> None:
     """A dataclass instance is the call's ``data`` as built, and its fields the values."""
     seen: dict[str, Any] = {}
 
     def service(*, data: Any, tenant: str = "default") -> None:
         seen.update(tenant=tenant, data=data.tenant)
 
-    core(open_spec(service, _TenantInput, input_data=_server), {"tenant": "c1"})
+    dispatch_live(open_spec(service, _TenantInput, input_data=_server), {"tenant": "c1"})
 
     assert seen == {"tenant": "server", "data": "server"}
 
@@ -358,14 +354,13 @@ def test_a_key_validate_drops_still_reaches_the_parameter() -> None:
     assert seen == {"tenant": "server", "data": {}}
 
 
-@CORES
 @pytest.mark.parametrize(
     ("serializer", "row"),
     [(_Alias, {"alias": "evil"}), (_Copies, {"other": "evil"})],
     ids=["alias", "validate"],
 )
 def test_a_bulk_row_is_handed_on_as_its_serializer_built_it(
-    core: Core, serializer: Any, row: dict[str, Any]
+    serializer: Any, row: dict[str, Any]
 ) -> None:
     """A ``many`` spec's rows are handed on as its list serializer built them:
     the server's value for a row's field is not laid back over a second route."""
@@ -374,7 +369,7 @@ def test_a_bulk_row_is_handed_on_as_its_serializer_built_it(
     def service(*, data: Any) -> None:
         seen["data"] = [item["tenant"] for item in data]
 
-    core(open_spec(service, serializer, many=True, input_data=_server), [row])
+    dispatch_live(open_spec(service, serializer, many=True, input_data=_server), [row])
 
     assert seen == {"data": ["evil"]}
 
@@ -437,10 +432,9 @@ def test_an_overrides_undeclared_key_is_an_unknown_argument_under_reject(
     assert seen == {}
 
 
-@CORES
 @_OVERRIDES
 def test_an_overrides_undeclared_key_under_ignore_is_covered_by_the_server_value(
-    monkeypatch: pytest.MonkeyPatch, core: Core, serializer: Any
+    monkeypatch: pytest.MonkeyPatch, serializer: Any
 ) -> None:
     """The kernel drops ``other`` from its arguments, but the serializer binds
     the request's body, so the override reads the client's value into
@@ -448,7 +442,7 @@ def test_an_overrides_undeclared_key_under_ignore_is_covered_by_the_server_value
     monkeypatch.setattr(kernel_edge, "UNKNOWN_ARGUMENTS", UnknownArguments.IGNORE)
     seen: dict[str, Any] = {}
 
-    core(open_spec(_plain(seen), serializer, input_data=_server), {"other": "evil"})
+    dispatch_live(open_spec(_plain(seen), serializer, input_data=_server), {"other": "evil"})
 
     assert seen == _SERVER
 

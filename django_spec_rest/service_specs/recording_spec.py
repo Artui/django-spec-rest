@@ -84,9 +84,7 @@ def recording_spec(spec: KernelSpec, *, lenient: bool = False) -> KernelSpec:
     call's request, so a ``get_fields`` reading ``self.context["request"]``
     describes rather than raising, and declares the fields this caller sends
     (test_kernel_edge's
-    test_the_twin_records_the_fields_the_call_s_own_serializer_declares). The
-    async core asks it in the thread it reads the call in, since describing
-    may query (test_the_async_core_builds_the_twin_off_the_loop).
+    test_the_twin_records_the_fields_the_call_s_own_serializer_declares).
 
     Built once per spec and set of names, since ``derive`` re-runs the spec's
     checks. Only a service spec with a ``kwargs`` provider over a
@@ -284,8 +282,8 @@ def _record(answer: Any, names: frozenset[str]) -> None:
     of a key the provider owns
     (test_an_owned_field_it_declines_is_absent_not_the_client_s,
     test_a_declinable_field_it_declines_stays_the_client_s). The twin is
-    dispatched by the kernel route's two cores alone, inside the call whose state holds
-    that body, so the body is always there. An answer that is no mapping is
+    dispatched by the kernel route's ``dispatch_kernel_spec`` alone, inside the
+    call whose state holds that body, so the body is always there. An answer that is no mapping is
     left for the kernel to refuse in its own words
     (test_kernel_edge's test_a_provider_answering_no_mapping_is_the_kernel_s_to_refuse).
     """

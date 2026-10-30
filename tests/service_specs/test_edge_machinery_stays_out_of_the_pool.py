@@ -7,7 +7,7 @@ the kernel's pool alone: ``user``, ``progress``, the Validator's values and
 what the stage itself binds, with no name of the edge's, and, by the kernel's
 own rule, neither ``request``, ``view`` nor ``call_context``, which are handed
 by name only. Each case runs over a live view, and the service case through
-both cores.
+the edge's ``dispatch_kernel_spec`` directly.
 """
 
 from __future__ import annotations
@@ -16,7 +16,6 @@ from collections.abc import Callable
 from typing import Any
 
 import pytest
-from asgiref.sync import async_to_sync
 from django.db.models import QuerySet
 from django_service_specs import (
     Parameter,
@@ -30,7 +29,7 @@ from rest_framework import serializers
 from rest_framework.test import APIRequestFactory
 
 from django_spec_rest import SelectorListView, SelectorRetrieveView, ServiceCreateView
-from django_spec_rest.dispatch.kernel_edge import adispatch_kernel_spec, dispatch_kernel_spec
+from django_spec_rest.dispatch.kernel_edge import dispatch_kernel_spec
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from django_spec_rest.views.utils import view_call_context
@@ -117,15 +116,8 @@ def _parts() -> dict[str, Any]:
     return {"view": view, "request": request, "call_context": view_call_context(view, request)}
 
 
-@pytest.mark.parametrize(
-    "core",
-    [dispatch_kernel_spec, async_to_sync(adispatch_kernel_spec)],
-    ids=["sync", "async"],
-)
-def test_through_either_core_a_bare_kwargs_service_sees_no_edge_machinery(
-    core: Callable[..., Any],
-) -> None:
-    core(_SERVICE, **_parts())
+def test_a_bare_kwargs_service_sees_no_edge_machinery() -> None:
+    dispatch_kernel_spec(_SERVICE, **_parts())
 
     assert _edge_s(SEEN["service"]) == []
     assert _private(SEEN["input"]) == []

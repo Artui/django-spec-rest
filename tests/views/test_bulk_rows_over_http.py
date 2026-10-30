@@ -19,7 +19,7 @@ from rest_framework.test import APIRequestFactory
 
 from django_spec_rest import ServiceCreateView
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
-from tests.views.server_value_calls import CORES, open_spec, post
+from tests.views.server_value_calls import dispatch_live, open_spec, post
 
 pytestmark = pytest.mark.django_db
 
@@ -174,8 +174,5 @@ def test_a_kwargs_value_named_like_a_row_field_is_refused() -> None:
     _refused(post)
 
 
-@CORES
-def test_each_core_refuses_a_kwargs_value_named_like_a_row_field(
-    core: Callable[..., Any],
-) -> None:
-    _refused(core)
+def test_a_live_view_s_dispatch_refuses_a_kwargs_value_named_like_a_row_field() -> None:
+    _refused(dispatch_live)
