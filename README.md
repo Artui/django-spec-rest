@@ -10,41 +10,37 @@
 [![License](https://img.shields.io/pypi/l/django-spec-rest.svg)](LICENSE)
 
 A service / selector layer for Django REST Framework.
+Serve [django-service-specs](https://github.com/Artui/django-service-specs)
+kernel specs over Django REST Framework.
 
-DRF's default mode for mutating endpoints is "the serializer is the business
-logic". That's fine for thin CRUD, but it falls apart the moment you need
-to compose with an external system, fan out side effects, or write logic
-that doesn't belong on a model. `django-spec-rest` keeps DRF's
-routing, validation, and serialization for what they're good at, and gives
-you a precise, well-typed seam for the bits in the middle.
+A kernel spec declares an operation once: the callable that runs it, the
+arguments it reads, who may call it, how its input is validated and how its
+result is presented. `django-spec-rest` serves that spec on a DRF view or
+viewset, and lets DRF fill three of its seats: a serializer validates the
+input (`SerializerValidator`), a serializer renders the result
+(`SerializerPresenter`), and DRF permission classes decide who may call it
+(`DRFPermissionCheck`). The same spec runs off HTTP through the kernel's own
+`dispatch`, and on any other transport that serves kernel specs.
 
-Under the views it is a DRF adapter over
-[django-service-specs](https://github.com/Artui/django-service-specs): a spec
-declared here compiles to that kernel's spec, the kernel runs the call, and the
-serializer and DRF's permission classes are the validator, the presenter and the
-guard it calls back into. Over HTTP a view's request is still validated by its
-serializer alone, as DRF always validated it; off HTTP, as an agent transport
-calls a spec, the kernel also checks each argument's type. The kernel's names (`ServiceError`, `SpecRegistry`, the
-mutation helpers and the relation specs among them) are re-exported here as the
-same objects, so one import path serves both.
-
-- **Services** — plain callables. The library does not define a `Service`
-  base class or prescribe a signature.
-- **Selectors** — plain callables that override `get_queryset()` /
-  `get_object()`. Filter backends, pagination, and serialization stay
-  vanilla DRF.
-- **Mutation helpers** — `create_from_input`, `update_from_input`,
-  `apply_input`, plus async siblings `acreate_from_input` /
-  `aupdate_from_input`, with change tracking, no surprises.
-- **Sync and async** services and selectors, transparently dispatched.
-- **Atomic by default**, opt-out per spec.
-- **Framework-agnostic exceptions** — services don't import from DRF.
-- **Typed end-to-end** — generic `ServiceSpec[InputT, ResultT, ExtraT]` plus
-  lenient and strict Protocols that catch signature drift at type-check
-  time, with fail-fast validation at `as_view()`.
-- **100% test coverage**, type-checked, Python 3.10–3.14, Django 4.2–6.0.
+- **Views and viewsets that take a kernel spec**: `ServiceCreateView`,
+  `ServiceUpdateView`, `ServiceDeleteView`, `SelectorListView`,
+  `SelectorRetrieveView`, `ServiceViewSet`, `SelectorViewSet`, the per-action
+  mixins, and `@service_action` / `@selector_action` for custom routes.
+- **One reading of a request**: route captures, the query string and the body
+  become the spec's arguments by the kernel's rules, and a refusal comes back
+  as DRF's answer with DRF's status.
+- **DRF's seats**: serializers for input and output, permission classes for
+  authorization, with one serializer context per request.
+- **OPTIONS and OpenAPI read off the spec**: the opt-in `drf-spectacular`
+  integration describes each route's request and response.
 
 **Full documentation:** <https://artui.github.io/django-spec-rest/>
+
+Coming from `djangorestframework-services`? The
+[moving page](https://artui.github.io/django-spec-rest/moving-from-drfs/) has the
+import map and every change a client sees.
+
+## Install
 
 ```bash
 pip install django-spec-rest
@@ -52,773 +48,96 @@ pip install django-spec-rest
 uv add django-spec-rest
 ```
 
----
+The package is not a Django app and needs no `INSTALLED_APPS` entry. A spec's
+`filter_set` needs the kernel's `filter` extra
+(`pip install "django-service-specs[filter]"`), and the OpenAPI integration
+needs `pip install "django-spec-rest[spectacular]"`.
 
 ## Quick start
 
-A `POST /authors/` endpoint that creates an `Author`. Input is validated
-by a dataclass, the service is a plain function, and the response is
-shaped by another dataclass — both halves rendered through
-`DataclassSerializer` from
-[`djangorestframework-dataclasses`](https://pypi.org/project/djangorestframework-dataclasses/),
-which the library already depends on.
-
-```python
-from dataclasses import dataclass
-
-from rest_framework_dataclasses.serializers import DataclassSerializer
-from django_spec_rest import (
-    SelectorKind,
-    SelectorSpec,
-    ServiceCreateView,
-    ServiceSpec,
-    create_from_input,
-)
-
-from myapp.models import Author
-
-
-# 1. Input — validated at the view boundary; the service receives a
-#    typed instance.
-@dataclass
-class CreateAuthorInput:
-    name: str
-    bio: str = ""
-
-
-# 2. Output — a dataclass that shapes the JSON response. The service
-#    can return either the matching dataclass or a model instance with
-#    the same attribute names; DataclassSerializer reads via getattr.
-@dataclass
-class AuthorOutput:
-    id: int
-    name: str
-    bio: str
-
-
-class AuthorOutputSerializer(DataclassSerializer):
-    class Meta:
-        dataclass = AuthorOutput
-
-
-# 3. Service — a plain callable. No DRF imports; raises framework-
-#    agnostic exceptions if it needs to.
-def create_author(*, data: CreateAuthorInput) -> Author:
-    result = create_from_input(Author, data)
-    return result.instance
-
-
-# 4. View — wires it all together. The "output pipeline" (serializer,
-#    optional post-mutation re-fetch, queryset shaping) lives in a
-#    nested SelectorSpec under `output_selector_spec`.
-class CreateAuthorView(ServiceCreateView):
-    spec = ServiceSpec(
-        service=create_author,
-        input_serializer=CreateAuthorInput,
-        output_selector_spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE,
-            output_serializer=AuthorOutputSerializer,
-        ),
-    )
-```
-
-```python
-# urls.py
-from django.urls import path
-from myapp.views import CreateAuthorView
-
-urlpatterns = [path("authors/", CreateAuthorView.as_view())]
-```
-
-POST `{"name": "Ada"}` → `201` with `{"id": 1, "name": "Ada", "bio": ""}`.
-
-### Returning the output dataclass directly
-
-If you want the service's return type to *be* the response shape — useful
-when the API surface diverges from your model (computed fields, hidden
-columns, denormalised joins) — have the service build and return the
-output dataclass:
-
-```python
-def create_author(*, data: CreateAuthorInput) -> AuthorOutput:
-    author = Author.objects.create(name=data.name, bio=data.bio)
-    return AuthorOutput(id=author.id, name=author.name, bio=author.bio)
-```
-
-`AuthorOutputSerializer` renders it the same way; the view doesn't care.
-
-### Alternative: `ModelSerializer`
-
-When the response mirrors the model exactly, DRF's `ModelSerializer` is
-the shorter path and gets the full DRF feature set (relations, nested
-serializers, etc.):
+A service, a selector and two serializers, all plain:
 
 ```python
 from rest_framework import serializers
 
+from invoices.models import Invoice
 
-class AuthorSerializer(serializers.ModelSerializer):
+
+def create_invoice(*, data):
+    return Invoice.objects.create(**data)
+
+
+def list_invoices():
+    return Invoice.objects.all()
+
+
+class InvoiceInput(serializers.Serializer):
+    customer = serializers.CharField(max_length=200)
+    amount_cents = serializers.IntegerField(min_value=0)
+
+
+class InvoiceSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Author
-        fields = ("id", "name", "bio")
-
-
-class CreateAuthorView(ServiceCreateView):
-    spec = ServiceSpec(
-        service=create_author,
-        input_serializer=CreateAuthorInput,
-        output_selector_spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE,
-            output_serializer=AuthorSerializer,
-        ),
-    )
+        model = Invoice
+        fields = ("id", "customer", "amount_cents", "status")
 ```
 
-Both patterns are first-class — the library doesn't care which kind of
-DRF serializer you use for output. Pick `DataclassSerializer` when you
-want the API contract to live alongside the service signature; pick
-`ModelSerializer` when the response mirrors the model and you want
-DRF's relational machinery.
-
----
-
-## Mental model
-
-There are three building blocks:
-
-| Block | What it is | Where it lives |
-|---|---|---|
-| **Service** | A plain callable that performs a mutation | Your code |
-| **Selector** | A plain callable that returns data to read | Your code |
-| **View / Viewset** | DRF view that wires a service or selector to an HTTP method | Provided by this library |
-
-Views inspect the service / selector signature and pass only the arguments
-it declares, by name, from one pool: the seeds (`request`, `user`, `view`,
-`progress`, `data`, and `instance` for update / delete), the arguments the
-spec declares (an input serializer's validated fields, a selector's
-parameters, its `reads`), and the author's extras from `ServiceSpec.kwargs` /
-`SelectorSpec.kwargs` and `get_<action>_*_kwargs` / `get_service_kwargs()` /
-`get_selector_kwargs()`, which outrank the client's value of the same name.
-A callable declaring `**kwargs` receives all of those, never a key the spec
-does not declare. A service with no `input_serializer` receives `data={}`, and
-the request body never fills its own parameters; an off-HTTP caller opts in
-with `ArgumentBinding.SPREAD_AUTHOR_WINS`.
+Kernel specs with DRF in their seats, served on a viewset:
 
 ```python
-def create_author(*, data, user):  # the view passes only data + user
-    return Author.objects.create(name=data.name, created_by=user)
-
-
-def list_authors(*, request):  # request is in the pool
-    return Author.objects.filter(...)
-```
-
----
-
-## Mutation helpers
-
-The library doesn't run your services for you, but it does ship the helpers
-that DRF's `serializer.save()` quietly performs — minus the surprises and
-plus a typed change record.
-
-```python
-from django_spec_rest import update_from_input, UNSET
-
-
-def update_author(*, instance, data):
-    result = update_from_input(instance, data, exclude_fields=["created_by"])
-    if result.get_field_change("email"):
-        send_email_changed_notice(instance)
-    return result.instance
-```
-
-What you get:
-
-- **`apply_input(instance, data)`** — set attributes in memory, no save.
-- **`create_from_input(Model, data)`** — build, save, optional M2M.
-- **`update_from_input(instance, data)`** — diff in-memory state vs. input,
-  call `save(update_fields=[...])` with only the fields that actually
-  changed.
-- **`acreate_from_input` / `aupdate_from_input`** — async equivalents
-  using Django 4.2+ `asave()` / `aset()`.
-
-All of them accept:
-
-- `data` — a dataclass, plain dict, or any object with `__dict__`.
-- `field_map: dict[str, str]` — translate input keys to model attribute
-  names.
-- `exclude_fields: list[str]` — fields to drop from the input before
-  applying.
-
-`create_from_input` and `update_from_input` (and their async siblings)
-also accept `m2m: dict[str, Any]` — many-to-many assignments applied
-post-save. `update_from_input` additionally accepts
-`update_fields: bool | list[str]` (default `True`) — when truthy,
-`save()` is called with `update_fields=<changed columns>` and any
-`auto_now=True` fields are added automatically; pass `False` for a full
-save or an explicit list to control exactly which columns are written.
-`apply_input` doesn't save, so it has neither.
-
-All of them return a `ChangeResult`:
-
-```python
-@dataclass(frozen=True)
-class ChangeResult:
-    instance: Model
-    created: bool
-    changes: tuple[FieldChange, ...]
-
-    @property
-    def changed_fields(self) -> tuple[str, ...]: ...
-    def get_field_change(self, field_name: str) -> FieldChange | None: ...
-    def __bool__(self) -> bool: ...  # True iff any change
-```
-
-The `UNSET` sentinel distinguishes "field omitted from input" from "field
-explicitly set to `None`" — critical for correct `PATCH` semantics. Annotate
-sentinel-defaulted fields with its type, `UnsetType`, so they type-check
-cleanly: `bio: str | None | UnsetType = UNSET`.
-
----
-
-## Typed services and selectors
-
-Services and selectors are plain callables, but you can pin their shape
-to a Protocol so a type checker catches signature drift before request
-time.
-
-`CreateService`, `UpdateService`, `DeleteService`, `ListSelector`, and
-`RetrieveSelector` each take only the input, instance, and result type
-parameters. `**extras` is typed `Any` so the
-framework's kwargs pool flows through transparently, and your callable
-declares only the parameters it actually uses:
-
-```python
-from django_spec_rest import CreateService, ListSelector
-
-
-def create_author(*, data: CreateAuthorInput, **kwargs) -> Author: ...
-
-
-def list_authors(*, request, **kwargs) -> QuerySet[Author]: ...
-
-
-_: CreateService[CreateAuthorInput, Author] = create_author
-_: ListSelector[Author] = list_authors
-```
-
-For strict-typed extras — when you want the type checker to assist on
-`extras["tenant_id"]` accesses inside the function body — declare a
-`TypedDict` with `total=False` (or `NotRequired` per field) and unpack
-it into your function via [PEP 692](https://peps.python.org/pep-0692/)
-`Unpack[TypedDict]`. The Protocol itself does not carry a kwargs-shape
-parameter; the typing lives on your function, which keeps the design
-portable across `ty`, `mypy`, and `pyright`:
-
-```python
-from typing_extensions import TypedDict, Unpack
-
-from django_spec_rest import (
-    CreateService,
-    ListSelector,
-    ServiceSpec,
-    ServiceViewSet,
-    implements,
-)
-
-
-class AuthorExtras(TypedDict, total=False):
-    tenant_id: int
-
-
-def _author_kwargs(view, request) -> AuthorExtras:
-    return {"tenant_id": request.tenant.id}
-
-
-@implements(CreateService[CreateAuthorInput, Author])
-def create_author(
-    *,
-    data: CreateAuthorInput,
-    **extras: Unpack[AuthorExtras],
-) -> Author: ...
-
-
-@implements(ListSelector[Author])
-def list_authors(
-    **extras: Unpack[AuthorExtras],
-) -> QuerySet[Author]: ...
-
-
-class AuthorViewSet(ServiceViewSet):
-    action_specs = {
-        "create": ServiceSpec(
-            service=create_author,
-            input_serializer=CreateAuthorInput,
-            output_selector_spec=SelectorSpec(
-                kind=SelectorKind.RETRIEVE,
-                output_serializer=AuthorOutputSerializer,
-            ),
-            kwargs=_author_kwargs,
-        ),
-    }
-```
-
-`total=False` (or per-field `NotRequired`) keeps the function
-Protocol-conformant: under PEP 692, any required key would make the
-function reject callers that omit it, breaking assignment to the
-Protocol shape.
-
-`request` and `user` flow through `**extras` like every other pool key.
-Services that need them either read them off `**extras: Any` directly
-or use `HttpExtras[YourUserModel]` (a `total=False` `TypedDict`) as the
-`Unpack` target.
-
-On top of static typing, `as_view()` walks every spec at URL-wiring time
-and raises `ImproperlyConfigured` for misconfigurations the checker
-can't see — a service requiring `data` with no `input_serializer`, an
-`instance` parameter on a create flow, or a required parameter no
-extras provider supplies.
-
-### Default model service factories
-
-When the entire body of your service is a one-line wrapper over
-`create_from_input` / `update_from_input` / `instance.delete()`, the
-framework ships ready-made factories:
-
-```python
-from django_spec_rest import (
-    SelectorKind,
-    SelectorSpec,
-    ServiceSpec,
-    ServiceViewSet,
-    create_model,
-    delete_model,
-    update_model,
-)
-
-
-_author_out = SelectorSpec(
-    kind=SelectorKind.RETRIEVE,
-    output_serializer=AuthorOutSerializer,
-)
-
-
-class AuthorViewSet(ServiceViewSet):
-    queryset = Author.objects.all()
-    action_specs = {
-        "create": ServiceSpec(
-            service=create_model(Author),
-            input_serializer=AuthorInSerializer,
-            output_selector_spec=_author_out,
-        ),
-        "update": ServiceSpec(
-            service=update_model(Author),
-            input_serializer=AuthorInSerializer,
-            output_selector_spec=_author_out,
-        ),
-        "destroy": ServiceSpec(service=delete_model(Author)),
-    }
-```
-
-`create_model` / `update_model` (and their async siblings) take the same
-`field_map` / `exclude_fields` / `m2m` kwargs as the underlying mutation
-helper; `m2m` accepts a static mapping or a callable receiving the
-validated `data`. `update_model` also takes `update_fields`. `delete_model`
-takes an optional `soft_delete=` hook for the archive case. Async variants —
-`acreate_model` / `aupdate_model` / `adelete_model` — wrap
-`acreate_from_input` / `aupdate_from_input` / `await instance.adelete()`.
-Keep writing custom services the moment you need anything else
-(side-effects, `request.user` stamping, cross-table updates) — the
-factories cover the boilerplate case, not the framework itself.
-
-See [Typing services and selectors](https://artui.github.io/django-spec-rest/typing/)
-for the full Protocol catalogue and per-spec `kwargs=` resolution
-rules.
-
----
-
-## Views
-
-| Class | Method | Purpose |
-|---|---|---|
-| `ServiceCreateView` | `POST` | runs `service` to create |
-| `ServiceUpdateView` | `PUT` / `PATCH` | runs `service` to update; instance from `get_object()` |
-| `ServiceDeleteView` | `DELETE` | runs `service` to delete |
-| `SelectorListView` | `GET` | uses `spec.selector` (or `queryset`) for list |
-| `SelectorRetrieveView` | `GET` | uses `spec.selector` (or `queryset` + `lookup_field`) for retrieve |
-
-Mutation views are configured by setting a single `spec` class attribute
-to a `ServiceSpec`, which bundles `service`, `input_serializer`,
-`output_selector_spec` (the full output pipeline — see below), `atomic`,
-and `success_status`. Selector views are configured by setting `spec`
-to a `SelectorSpec`, which carries the required `kind` discriminator
-(`SelectorKind.LIST` for list endpoints, `SelectorKind.RETRIEVE` for
-retrieve endpoints) plus `selector` and `output_serializer`.
-
-`ServiceSpec.output_selector_spec` is a nested `SelectorSpec`
-(`kind=SelectorKind.RETRIEVE`) carrying the response serializer, optional
-post-mutation re-fetch `selector`, and queryset-shaping fields. Set
-`output_selector_spec=None` (the default) to render the service's return
-value directly; set it to a `SelectorSpec` to add serialization,
-re-fetching, or shaping.
-
-```python
-@dataclass
-class UpdateAuthorInput:
-    name: str | None = None
-    bio: str | None = None
-
-
-class UpdateAuthorView(ServiceUpdateView):
-    queryset = Author.objects.all()
-    spec = ServiceSpec(
-        service=update_author,
-        input_serializer=UpdateAuthorInput,
-        output_selector_spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE,
-            output_serializer=AuthorOutputSerializer,  # DataclassSerializer
-        ),
-    )
-```
-
-A `ModelSerializer` can be dropped in just as cleanly:
-
-```python
-class UpdateAuthorView(ServiceUpdateView):
-    queryset = Author.objects.all()
-    spec = ServiceSpec(
-        service=update_author,
-        input_serializer=UpdateAuthorInput,
-        output_selector_spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE,
-            output_serializer=AuthorSerializer,  # DRF ModelSerializer
-        ),
-    )
-```
-
-When an update service returns `None`, with an `output_serializer` and no
-output `selector` as in both views above, the in-memory instance is rendered,
-matching DRF's `UpdateAPIView` shape without you having to wire it up. A
-destroy returning `None` never renders the deleted instance; it answers with an
-empty body.
-
----
-
-## Viewsets
-
-`ServiceViewSet` is a router-compatible viewset composed of per-action
-mixins. Each action picks its own serializer; below the read side uses
-two `DataclassSerializer` shapes (terse list, full detail) and the
-mutations reuse the detail one:
-
-```python
-from dataclasses import dataclass
-
-from rest_framework_dataclasses.serializers import DataclassSerializer
-from django_spec_rest import SelectorSpec, ServiceSpec, ServiceViewSet
-
-
-@dataclass
-class AuthorListItem:
-    id: int
-    name: str
-
-
-@dataclass
-class AuthorDetail:
-    id: int
-    name: str
-    bio: str
-
-
-class AuthorListItemSerializer(DataclassSerializer):
-    class Meta:
-        dataclass = AuthorListItem
-
-
-class AuthorDetailSerializer(DataclassSerializer):
-    class Meta:
-        dataclass = AuthorDetail
-
-
-_author_detail = SelectorSpec(
-    kind=SelectorKind.RETRIEVE,
-    output_serializer=AuthorDetailSerializer,
-)
-
-
-class AuthorViewSet(ServiceViewSet):
-    queryset = Author.objects.all()
-    action_specs = {
-        "list": SelectorSpec(
-            kind=SelectorKind.LIST,
-            selector=list_authors,
-            output_serializer=AuthorListItemSerializer,
-        ),
-        "retrieve": SelectorSpec(
-            kind=SelectorKind.RETRIEVE,
-            selector=get_author,
-            output_serializer=AuthorDetailSerializer,
-        ),
-        "create": ServiceSpec(
-            service=create_author,
-            input_serializer=CreateAuthorInput,
-            output_selector_spec=_author_detail,
-        ),
-        "update": ServiceSpec(
-            service=update_author,
-            input_serializer=UpdateAuthorInput,
-            output_selector_spec=_author_detail,
-        ),
-        "destroy": ServiceSpec(service=delete_author),
-    }
-```
-
-`action_specs` is a single action-keyed mapping wiring every action.
-Read-side actions (`"list"`, `"retrieve"`) take a `SelectorSpec` whose
-`kind` must match (`LIST` for `"list"`, `RETRIEVE` for `"retrieve"`);
-write-side actions take a `ServiceSpec`. Per-action response serializers
-live on the spec — `output_serializer` for `SelectorSpec` and
-`output_selector_spec.output_serializer` for `ServiceSpec`.
-`ActionSerializerResolver` (already mixed into `ServiceViewSet` and
-`SelectorViewSet`) reads them when DRF calls `get_serializer_class()`.
-An absent entry on a write action returns `405 Method Not Allowed`; a
-wrong-type entry (e.g. `SelectorSpec` on `create`) raises
-`ImproperlyConfigured` at request time, and a kind / mount-point
-mismatch raises fail-fast at `as_view()`.
-
-Mix `ModelSerializer` and `DataclassSerializer` per action freely — the
-viewset doesn't distinguish between them.
-
-Register it with a router as usual:
-
-```python
-router = DefaultRouter()
-router.register("authors", AuthorViewSet, basename="author")
-```
-
-Per-action mixins (`ServiceCreateMixin`, `ServiceUpdateMixin`,
-`ServiceDestroyMixin`, `SelectorListMixin`, `SelectorRetrieveMixin`) and
-`ActionSerializerResolver` are exported so you can compose only the actions
-you need:
-
-```python
-from django_spec_rest import (
-    ActionSerializerResolver,
-    SelectorKind,
-    SelectorListMixin,
-    SelectorRetrieveMixin,
-    SelectorSpec,
-)
-
-
-class AuthorReadOnly(
-    SelectorListMixin,
-    SelectorRetrieveMixin,
-    ActionSerializerResolver,
-    GenericViewSet,
-):
-    queryset = Author.objects.all()
-    action_specs = {
-        "list": SelectorSpec(kind=SelectorKind.LIST, output_serializer=AuthorListItemSerializer),
-        "retrieve": SelectorSpec(
-            kind=SelectorKind.RETRIEVE, output_serializer=AuthorDetailSerializer
-        ),
-    }
-```
-
-`SelectorViewSet` is a pre-built read-only composition.
-
-### `ActionSerializerResolver`
-
-Per-action serializer dispatch driven by `action_specs`:
-
-```python
-action_specs = {
-    "list": SelectorSpec(kind=SelectorKind.LIST, output_serializer=ListSerializer),
-    "retrieve": SelectorSpec(kind=SelectorKind.RETRIEVE, output_serializer=DetailSerializer),
-    "my_custom_action": ServiceSpec(
-        service=my_action,
-        output_selector_spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE, output_serializer=CustomSerializer
-        ),
-    ),
-}
-```
-
-`get_serializer_class()` reads the response serializer from the active
-action's spec (`SelectorSpec.output_serializer` for reads,
-`ServiceSpec.output_selector_spec.output_serializer` for writes) and
-falls back to DRF's standard `serializer_class` when the action has no
-spec or the spec has no serializer set.
-
-### `@service_action`
-
-Custom viewset actions wrapped in the same plumbing as the standard
-mutation flow:
-
-```python
-from dataclasses import dataclass
-
-from rest_framework_dataclasses.serializers import DataclassSerializer
-from django_spec_rest import ServiceSpec, service_action
-
-
-@dataclass
-class ApproveInput:
-    note: str = ""
-
-
-@dataclass
-class InvoiceDetail:
-    id: int
-    customer: str
-    amount_cents: int
-    status: str
-
-
-class InvoiceDetailSerializer(DataclassSerializer):
-    class Meta:
-        dataclass = InvoiceDetail
+from django_service_specs import SelectorKind, SelectorSpec, ServiceSpec, Unrestricted
+from rest_framework.routers import DefaultRouter
+
+from django_spec_rest import ServiceViewSet
+from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
+from django_spec_rest.service_specs.serializer_validator import SerializerValidator
+
+OPEN = (Unrestricted(),)
+PRESENTER = SerializerPresenter(InvoiceSerializer)
 
 
 class InvoiceViewSet(ServiceViewSet):
-    @service_action(
-        ServiceSpec(
-            service=approve_invoice,
-            input_serializer=ApproveInput,
-            output_selector_spec=SelectorSpec(
-                kind=SelectorKind.RETRIEVE,
-                output_serializer=InvoiceDetailSerializer,
-            ),
+    action_specs = {
+        "list": SelectorSpec(
+            kind=SelectorKind.LIST,
+            selector=list_invoices,
+            permissions=OPEN,
+            presenter=PRESENTER,
         ),
-        detail=True,
-        methods=["post"],
-    )
-    def approve(self, request, pk=None):
-        """Approve an invoice."""
+        "create": ServiceSpec(
+            service=create_invoice,
+            validator=SerializerValidator(InvoiceInput),
+            permissions=OPEN,
+            presenter=PRESENTER,
+        ),
+    }
+
+
+router = DefaultRouter()
+router.register("invoices", InvoiceViewSet, basename="invoice")
+urlpatterns = router.urls
 ```
 
-The decorated method body is *not* executed — the decorator supplies the
-handler. The body is there so the action has a docstring, a name (used by
-the router), and a place for `@action`-compatible metadata.
+`GET /invoices/` answers the rows rendered by `InvoiceSerializer`;
+`POST /invoices/` answers 201 with the created row, or 400 keyed by field. The
+kernel refuses to dispatch a spec that declares no `permissions`, so
+`Unrestricted()` says the operation is open to every caller. The
+[quickstart](https://artui.github.io/django-spec-rest/quickstart/) carries this
+on to retrieve, update, OPTIONS and a call off HTTP.
 
----
+## Example project
 
-## Errors
-
-Services raise framework-agnostic exceptions. The view boundary translates
-them to DRF responses.
-
-```python
-from django_spec_rest import ServiceError, ServiceValidationError
-
-
-def withdraw(*, instance, data):
-    if data.amount > instance.balance:
-        raise ServiceValidationError({"amount": ["insufficient funds"]})
-    if instance.locked:
-        raise ServiceError("account is locked")
-    instance.balance -= data.amount
-    instance.save(update_fields=["balance"])
-    return instance
-```
-
-| Raised | Becomes | HTTP |
-|---|---|---|
-| `ServiceValidationError` | `rest_framework.exceptions.ValidationError` | 400 |
-| `ServiceError` | `rest_framework.exceptions.APIException` | 422 |
-
----
-
-## Atomic transactions
-
-Every service call is wrapped in `transaction.atomic()` by default. Opt out
-per spec — `atomic` lives on `ServiceSpec`:
-
-```python
-class ImportView(ServiceCreateView):
-    spec = ServiceSpec(
-        service=run_import,
-        input_serializer=ImportInput,
-        atomic=False,  # the import service handles its own savepoints
-    )
-```
-
----
-
-## Async services
-
-Services and selectors can be `async def`. The dispatcher detects this via
-`inspect.iscoroutinefunction` and runs them via `asgiref.sync.async_to_sync`
-under sync views, or directly under async views. Atomic wrapping works for
-both.
-
-```python
-async def fetch_remote(*, request):
-    async with httpx.AsyncClient() as client:
-        return await client.get("https://...").json()
-
-
-class FetchView(ServiceCreateView):
-    spec = ServiceSpec(service=fetch_remote)
-```
-
----
-
-## Beyond HTTP
-
-The same specs that drive HTTP views can be invoked with no view and no
-request — the surface an alternate transport (a CLI, a task runner, the
-[MCP server](https://github.com/Artui/djangorestframework-mcp-server))
-builds on:
-
-- **`dispatch_spec` / `adispatch_spec`** — call a `ServiceSpec` /
-  `SelectorSpec` with just the acting `user` and a flat `params` mapping;
-  get back a `DispatchResult` to format for your wire. See
-  [Dispatch reference](https://artui.github.io/django-spec-rest/reference/dispatch/).
-- **`filter_set` on selectors** — declare a django-filter `FilterSet` on a
-  `SelectorSpec` once and it applies transport-neutrally, off the HTTP
-  query-string path. On a selector view the query string feeds the filter; a
-  query value becomes an argument to the selector only where the spec declares
-  it with `reads=[QueryParam(...)]`.
-- **Bulk and nested writes** — `many=True` on a spec mutates a whole
-  collection, and the mutation helpers accept a `relations=` argument that
-  writes every relation kind Django has from one payload (forward FK and
-  one-to-one, reverse collections, reverse one-to-one, many-to-many and
-  generic relations), both independent of any request.
-- **`SpecRegistry`** — hold your spec set in one named, taggable place so each
-  transport reads the same source instead of enumerating the specs again. It
-  carries only what is invariant across transports (which spec, its canonical
-  name, its tags); per-transport knobs stay at the binding. `registry.specs()`
-  returns the `dict[str, spec]` adapters already accept, so adoption needs no
-  support from them. See
-  [Declare specs once, project them to many transports](https://artui.github.io/django-spec-rest/recipes/spec-registry/).
-- **JSON-schema helpers** — `serializer_to_json_schema`,
-  `output_to_json_schema`, `filterset_to_json_schema` and
-  `spec_to_json_schema` turn a spec (or bare serializer / dataclass) into a
-  JSON Schema dict with no `drf-spectacular` dependency, for building tool
-  definitions. See
-  [JSON Schema reference](https://artui.github.io/django-spec-rest/reference/jsonschema/).
-
----
-
-## Examples
-
-A minimal but runnable example project lives in
-[`examples/`](examples/). It demonstrates the create / list / retrieve /
-update / destroy flows on a single resource and two custom actions via
-`@service_action`, a query value the list selector declares in `reads`, a
-field `field_audiences` hides from an agent, and a `dispatch_spec(partial=True)`
-call off HTTP.
+[`examples/`](examples/) is a runnable Django project on one resource, with a
+test per behaviour: a spec on a viewset and on a standalone view, a filter read
+off the query string, OPTIONS on a detail route, a refusal of each status, a
+`DRFPermissionCheck` over HTTP and through the kernel's plain `dispatch`, and a
+key one serializer writes into the shared context that another renders.
 
 ```bash
 cd examples
 python manage.py migrate
 python manage.py runserver
 ```
-
----
 
 ## Compatibility
 
@@ -827,18 +146,12 @@ python manage.py runserver
 | Python | 3.10 – 3.14 |
 | Django | 4.2, 5.0, 5.1, 5.2, 6.0 |
 | DRF | ≥ 3.14 |
-| django-service-specs | ≥ 0.20.0 |
 
 CI runs the full Python × Django matrix with 100% coverage gating.
 
----
-
 ## Status
 
-Pre-1.0. Public API is stable but may shift. See
-[`CHANGELOG.md`](CHANGELOG.md) for the full release history.
-
----
+Pre-1.0. See [`CHANGELOG.md`](CHANGELOG.md) for the release history.
 
 ## License
 
