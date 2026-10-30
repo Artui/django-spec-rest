@@ -247,3 +247,30 @@ def test_a_required_parameter_only_the_provider_fills_is_filled(core: Core) -> N
     core(spec, {})
 
     assert seen == {"reason": "server"}
+
+
+def test_a_hook_s_key_a_typed_provider_does_not_list_still_reaches_the_service() -> None:
+    """The hook's values join the typed provider's answer in its seat, where a
+    key its ``TypedDict`` does not list is the hook's to add, as in the
+    kernel's overlay."""
+    seen: dict[str, Any] = {}
+
+    def service(*, data: Any, tenant_id: str = "none", note: str = "none") -> None:
+        seen.update(tenant_id=tenant_id, note=note)
+
+    class _Noted(_CreateView):
+        def get_service_kwargs(self) -> dict[str, Any]:
+            return {"note": "hook"}
+
+    spec = ServiceSpec(
+        service=service,
+        permissions=OPEN,
+        validator=SerializerValidator(_DerivingIn),
+        kwargs=_typed_provider,
+        atomic=False,
+    )
+
+    response = post(spec, {"title": "t"}, view=_Noted)
+
+    assert response.status_code == 204, response.data
+    assert seen == {"tenant_id": "server", "note": "hook"}

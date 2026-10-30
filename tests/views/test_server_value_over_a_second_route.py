@@ -450,7 +450,7 @@ def test_an_overrides_undeclared_key_is_an_unknown_argument_under_reject(
 
 @CORES
 @_OVERRIDES
-def test_an_overrides_undeclared_key_never_reaches_it_under_ignore(
+def test_an_overrides_undeclared_key_under_ignore_is_covered_by_the_server_value(
     monkeypatch: pytest.MonkeyPatch, core: Core, serializer: Any
 ) -> None:
     """The kernel drops ``other`` from its arguments, but the serializer binds
