@@ -11,10 +11,10 @@ These assert, over a kernel spec served by a view, that the rename reaches
 every depth and that it leaves alone what it cannot name.
 
 The kernel route does not rename yet: ``answering_refusals`` is not told which
-serializer the call validated with, and the helper that renames a refusal by a
-serializer's ``source=`` is one the kernel route does not use. Every test that needs the
-rename is a strict ``xfail`` naming that, so the day the edge hands its
-validator's serializer over, they fail as XPASS until the marks come off.
+serializer the call validated with, and the kernel route has no step renaming a
+refusal by a serializer's ``source=``. Every test that needs the rename is a
+strict ``xfail`` naming that, so the day the edge hands its validator's
+serializer over and renames by it, they fail as XPASS until the marks come off.
 """
 
 from __future__ import annotations
@@ -46,8 +46,8 @@ _NOT_RENAMED = pytest.mark.xfail(
     strict=True,
     reason=(
         "the kernel route answers a service's refusal under the model's names: the edge does "
-        "not hand answering_refusals the validator's serializer, and the helper that renames a "
-        "refusal by a serializer's source= is not used on the kernel route"
+        "not hand answering_refusals the validator's serializer, and no step on the kernel "
+        "route renames a refusal by a serializer's source="
     ),
 )
 

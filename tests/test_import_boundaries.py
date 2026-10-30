@@ -78,12 +78,6 @@ ALLOWED_DRF_IMPORTS: dict[str, frozenset[str]] = {
             "rest_framework.status",
         }
     ),
-    "dispatch/utils.py": frozenset(
-        {
-            "rest_framework.exceptions",
-            "rest_framework.settings",
-        }
-    ),
     "selectors/utils.py": frozenset(
         {
             "rest_framework.exceptions",
