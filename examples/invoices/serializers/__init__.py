@@ -1,76 +1,40 @@
-"""Serializers for the invoices app."""
+"""Serializers: one validates a write's body, one renders an invoice."""
 
 from __future__ import annotations
+
+from typing import Any
 
 from rest_framework import serializers
 
 from invoices.models import Invoice
 
 
-class InvoiceSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Invoice
-        fields = (
-            "id",
-            "customer",
-            "amount_cents",
-            "notes",
-            "status",
-            "created_at",
-            "updated_at",
-        )
+class InvoiceInput(serializers.Serializer):
+    """The body of a create, and of an update, which sends a subset of it.
 
-
-class AnnotateInvoiceInput(serializers.Serializer):
-    """Input for ``annotate``: a whole call sends both fields, a partial one either."""
+    ``validate`` writes a note into its ``context`` for the serializer that
+    renders the answer: the call hands both serializers the request's one
+    context dict, so what one writes the other reads.
+    """
 
     customer = serializers.CharField(max_length=200)
-    notes = serializers.CharField(allow_blank=True)
+    amount_cents = serializers.IntegerField(min_value=0)
+    notes = serializers.CharField(required=False, allow_blank=True)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        if attrs.get("amount_cents") == 0:
+            self.context.setdefault("warnings", []).append("The amount is zero.")
+        return attrs
 
 
-MIN_NET_DAYS = 1
-MAX_NET_DAYS = 90
+class InvoiceSerializer(serializers.ModelSerializer):
+    """An invoice as every route answers it, with the call's warnings beside it."""
 
+    warnings = serializers.SerializerMethodField()
 
-class NetDaysField(serializers.IntegerField):
-    """Days an invoice stays open for payment.
+    class Meta:
+        model = Invoice
+        fields = ("id", "customer", "amount_cents", "notes", "status", "warnings")
 
-    It declares no ``min_value`` or ``max_value``, so nothing in the class tells
-    a schema its range. ``PAYMENT_TERMS_SPEC`` states the range as a rule for
-    this class in its own registry, and that is what the schema, the compiled
-    spec and the checks that run off HTTP read.
-    """
-
-
-class PaymentTermsInput(serializers.Serializer):
-    """Input for ``terms``: how many days the customer has to pay."""
-
-    days = NetDaysField()
-
-    def validate_days(self, value: int) -> int:
-        # The route's own check: over HTTP the serializer is the validator and
-        # reads no registry. The rule states the same range for what a schema
-        # shows, and for the compiled spec, which checks it before the
-        # serializer runs.
-        if not MIN_NET_DAYS <= value <= MAX_NET_DAYS:
-            raise serializers.ValidationError(
-                f"Payment terms run {MIN_NET_DAYS} to {MAX_NET_DAYS} days."
-            )
-        return value
-
-
-class InvoiceFieldsSerializer(InvoiceSerializer):
-    """``InvoiceSerializer`` that keeps the fields a caller's ``?fields=`` names.
-
-    It reads the request the serializer context holds. Off HTTP the kernel's
-    presenter builds an offline one whose query string is the call's shaping
-    arguments, which is what ``FIELDS_SPEC`` is run with.
-    """
-
-    def to_representation(self, instance: Invoice) -> dict[str, object]:
-        data = super().to_representation(instance)
-        request = self.context.get("request")
-        wanted = request.query_params.get("fields") if request is not None else None
-        if not wanted:
-            return data
-        return {name: data[name] for name in wanted.split(",") if name in data}
+    def get_warnings(self, invoice: Invoice) -> list[str]:
+        return list(self.context.get("warnings", []))

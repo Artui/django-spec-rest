@@ -1,25 +1,32 @@
-"""Selector callables — plain functions returning data."""
+"""Selectors, and the FilterSet the list route reads off the query string."""
 
 from __future__ import annotations
 
-from typing import Any
+import django_filters
+from django.db.models import QuerySet
 
 from invoices.models import Invoice
 
 
-def list_invoices(*, status: str | None = None) -> Any:
-    """Return all invoices, newest first; supports a ``?status=`` filter.
+class InvoiceFilter(django_filters.FilterSet):
+    """``?status=`` and ``?customer=``, applied by the kernel to the selector's queryset."""
 
-    ``status`` is the ``QueryParam`` the list spec declares in its ``reads``,
-    handed over by name: from the query string on the live view, and as an
-    argument off HTTP. It keeps a default so a list with no ``?status=``
-    answers every invoice; a required one would answer it 400.
-    """
-    queryset = Invoice.objects.all()
-    if status:
-        queryset = queryset.filter(status=status)
-    return queryset
+    status = django_filters.ChoiceFilter(choices=Invoice.STATUS_CHOICES)
+    customer = django_filters.CharFilter(lookup_expr="icontains")
+
+    class Meta:
+        model = Invoice
+        fields: list[str] = []
+
+
+def list_invoices() -> QuerySet[Invoice]:
+    return Invoice.objects.all()
+
+
+def sent_invoices() -> QuerySet[Invoice]:
+    return Invoice.objects.filter(status=Invoice.STATUS_SENT)
 
 
 def get_invoice(*, pk: int) -> Invoice | None:
+    # ``None`` is a miss: the kernel answers it as not found, a 404 here.
     return Invoice.objects.filter(pk=pk).first()
