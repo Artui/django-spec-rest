@@ -214,6 +214,17 @@ class TestAFinalizerTheViewCannotCall:
         with pytest.raises(ImproperlyConfigured, match=r"\['call_context'\] the framework"):
             _view(ServiceCreateView, spec, finalizer)
 
+    def test_a_finalizer_taking_a_positional_only_parameter_is_refused_at_as_view(self) -> None:
+        """The framework hands its keys by keyword, so a positional-only
+        parameter with no default is never supplied, ``response`` included:
+        called, the finalizer would raise ``TypeError``."""
+
+        def finalizer(response: Response, /) -> None: ...
+
+        spec = ServiceSpec(service=_create_author, permissions=_OPEN)
+        with pytest.raises(ImproperlyConfigured, match=r"\['response'\] by position only"):
+            _view(ServiceCreateView, spec, finalizer)
+
     def test_a_finalizer_that_is_no_callable_is_refused_at_as_view(self) -> None:
         spec = ServiceSpec(service=_create_author, permissions=_OPEN)
         with pytest.raises(ImproperlyConfigured, match="`response_finalizer` must be a callable"):

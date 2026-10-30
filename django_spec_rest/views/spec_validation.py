@@ -39,6 +39,35 @@ def _required_kw_params(fn: Callable[..., Any]) -> dict[str, inspect.Parameter]:
     }
 
 
+def _positional_only(fn: Callable[..., Any]) -> list[str]:
+    """The parameters of ``fn`` taking a value by position alone and declaring no default, sorted.
+
+    The framework hands every value by keyword (``resolve_callable_kwargs``),
+    so such a parameter is never supplied, whatever its name: called, ``fn``
+    raises ``TypeError``. One with a default is left to it. One branch to
+    coverage, so each condition is named: a keyword parameter by
+    test_create_returns_201_then_200_on_upsert, which every parameter would
+    otherwise refuse, and a default by
+    test_a_positional_only_parameter_with_a_default_is_left_to_it.
+    """
+    return sorted(
+        name
+        for name, p in inspect.signature(fn).parameters.items()
+        if p.kind is inspect.Parameter.POSITIONAL_ONLY and p.default is inspect.Parameter.empty
+    )
+
+
+def _refuse_positional_only(fn: Callable[..., Any], *, label: str, seat: str) -> None:
+    """``ImproperlyConfigured`` where ``fn`` takes a parameter ``_positional_only`` names."""
+    positional = _positional_only(fn)
+    if positional:
+        raise ImproperlyConfigured(
+            f"{label}: `{seat}` takes parameter(s) {positional} by position only, which the "
+            "framework never supplies: it hands every value by keyword. Declare them as "
+            "keyword parameters, or give each a default."
+        )
+
+
 def is_overridden(view_cls: type, base_cls: type, method_name: str) -> bool:
     """Return ``True`` if ``view_cls`` overrides ``base_cls``'s ``method_name``.
 
@@ -112,6 +141,8 @@ def _validate_success_status(
     ``**kwargs`` beside it or not: ``**kwargs`` is handed the pool, never a
     name the pool lacks
     (test_a_callable_taking_kwargs_beside_a_key_the_pool_lacks_is_refused_at_as_view).
+    Nor can a required positional-only parameter, a key's name included
+    (test_a_callable_taking_a_positional_only_parameter_is_refused_at_as_view).
     """
     if success_status is None or isinstance(success_status, int):
         return
@@ -120,6 +151,7 @@ def _validate_success_status(
             f"{label}: `success_status` must be an int, a callable returning an int, "
             f"or None — got {type(success_status).__name__}."
         )
+    _refuse_positional_only(success_status, label=label, seat="success_status")
     unknown = set(_required_kw_params(success_status)) - _SUCCESS_STATUS_KEYS
     if unknown:
         raise ImproperlyConfigured(
@@ -134,7 +166,8 @@ def _validate_response_finalizer(finalizer: Any, *, label: str) -> None:
 
     Same rule as ``_validate_success_status``, against
     ``_RESPONSE_FINALIZER_KEYS``
-    (test_a_finalizer_taking_kwargs_beside_a_key_the_framework_lacks_is_refused_at_as_view).
+    (test_a_finalizer_taking_kwargs_beside_a_key_the_framework_lacks_is_refused_at_as_view,
+    test_a_finalizer_taking_a_positional_only_parameter_is_refused_at_as_view).
     """
     if finalizer is None:
         return
@@ -143,6 +176,7 @@ def _validate_response_finalizer(finalizer: Any, *, label: str) -> None:
             f"{label}: `response_finalizer` must be a callable returning a Response "
             f"or None — got {type(finalizer).__name__}."
         )
+    _refuse_positional_only(finalizer, label=label, seat="response_finalizer")
     unknown = set(_required_kw_params(finalizer)) - _RESPONSE_FINALIZER_KEYS
     if unknown:
         raise ImproperlyConfigured(

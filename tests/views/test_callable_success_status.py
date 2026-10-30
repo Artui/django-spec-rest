@@ -174,6 +174,27 @@ class TestASuccessStatusTheViewCannotResolve:
         with pytest.raises(ImproperlyConfigured, match=r"\['call_context'\] the framework can't"):
             view.as_view()
 
+    def test_a_callable_taking_a_positional_only_parameter_is_refused_at_as_view(self) -> None:
+        """The pool is handed by keyword, so a positional-only parameter with no
+        default is never supplied, a key of the pool's name included: called, it
+        would raise ``TypeError``."""
+
+        def status(result: Any, /) -> int:
+            return 202
+
+        view = type("_View", (_UpsertView,), {"success_status": staticmethod(status)})
+        with pytest.raises(ImproperlyConfigured, match=r"\['result'\] by position only"):
+            view.as_view()
+
+    def test_a_positional_only_parameter_with_a_default_is_left_to_it(self) -> None:
+        """Nothing is handed to it, so it takes its default."""
+
+        def status(code: int = 202, /) -> int:
+            return code
+
+        view = type("_View", (_UpsertView,), {"success_status": staticmethod(status)})
+        assert view.as_view()(factory.post("/", {"name": "Ada"}, format="json")).status_code == 202
+
     def test_a_value_that_is_no_int_nor_callable_is_refused_at_as_view(self) -> None:
         view = type("_View", (_UpsertView,), {"success_status": "201"})
         with pytest.raises(ImproperlyConfigured, match="`success_status` must be an int"):
