@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 import builtins
-import dataclasses
 from typing import Any, ClassVar
 
-from django_service_specs.dispatch.present import present
 from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelectorSpec
 from rest_framework.generics import GenericAPIView
 from rest_framework.mixins import ListModelMixin
@@ -15,7 +13,7 @@ from rest_framework.response import Response
 from rest_framework.serializers import BaseSerializer
 
 from django_spec_rest.dispatch.renderable_serializer_class import renderable_serializer_class
-from django_spec_rest.selectors.utils import dispatch_kernel_selector, dispatch_selector_for_spec
+from django_spec_rest.selectors.utils import dispatch_selector_for_spec, present_kernel_list
 from django_spec_rest.types.selector_kind import SelectorKind
 from django_spec_rest.types.selector_spec import SelectorSpec
 from django_spec_rest.views.spec_validation import validate_selector_view_spec
@@ -112,32 +110,13 @@ class SelectorListView(ListModelMixin, GenericAPIView):
         # the same seam ``SelectorListMixin`` uses.
         s: SelectorSpec | KernelSelectorSpec | None = get_class_attr(self, "spec")
         if isinstance(s, KernelSelectorSpec):
-            return self._list_kernel_spec(s)
+            # DRF's ``list`` steps over the set the dispatch read, presented
+            # by the spec, shared with the viewset's ``list``.
+            data, paginated = present_kernel_list(self, s, filtered=True)
+            return self.get_paginated_response(data) if paginated else Response(data)
         if s is None or s.affordances is None:
             return super().list(request, *args, **kwargs)
         return list_with_affordances(self, s)
-
-    def _list_kernel_spec(self, spec: KernelSelectorSpec) -> Response:
-        """DRF's ``list`` over a kernel spec's result, presented by the spec.
-
-        The same filter and paginate steps in the same order, on the set the
-        dispatch read, and the spec's presenter handed the page's rows inside
-        the result dispatch built, so it renders the rows served with the
-        call's context; the answers are added before a paginator wraps them,
-        as ``list_with_affordances`` adds them on the drfs path.
-        """
-        result = dispatch_kernel_selector(self, spec)
-        queryset = self.filter_queryset(result.value)
-        page = self.paginate_queryset(queryset)
-        rows = queryset if page is None else page
-        # One arc to coverage, so each disjunct is named: a presenter by
-        # test_the_spec_s_presenter_renders_the_rows, affordances with none by
-        # test_affordances_with_no_presenter_are_refused_rather_than_dropped.
-        if spec.presenter is not None or spec.affordances is not None:
-            data = present(spec, dataclasses.replace(result, value=rows))
-        else:
-            data = self.get_serializer(rows, many=True).data
-        return Response(data) if page is None else self.get_paginated_response(data)
 
     def get(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         return self.list(request, *args, **kwargs)

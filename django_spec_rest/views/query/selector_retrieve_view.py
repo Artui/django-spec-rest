@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any, ClassVar
 
-from django_service_specs.dispatch.present import present
 from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelectorSpec
 from rest_framework.generics import GenericAPIView
 from rest_framework.mixins import RetrieveModelMixin
@@ -13,7 +12,7 @@ from rest_framework.response import Response
 from rest_framework.serializers import BaseSerializer
 
 from django_spec_rest.dispatch.renderable_serializer_class import renderable_serializer_class
-from django_spec_rest.selectors.utils import dispatch_kernel_selector, dispatch_selector_for_spec
+from django_spec_rest.selectors.utils import dispatch_selector_for_spec, present_kernel_row
 from django_spec_rest.types.selector_kind import SelectorKind
 from django_spec_rest.types.selector_spec import SelectorSpec
 from django_spec_rest.views.spec_validation import validate_selector_view_spec
@@ -114,7 +113,12 @@ class SelectorRetrieveView(RetrieveModelMixin, GenericAPIView):
     def get(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         s: SelectorSpec | KernelSelectorSpec | None = get_class_attr(self, "spec")
         if isinstance(s, KernelSelectorSpec):
-            return self._retrieve_kernel_spec(s)
+            # The row and its body, presented by the spec, shared with the
+            # viewset's ``retrieve``. The view's object permission was asked
+            # inside the dispatch, so nothing here reads a row the caller may
+            # not see; ``None`` is a miss under ``allow_none``.
+            row, data = present_kernel_row(self, s)
+            return _JsonNullResponse() if row is None else Response(data)
         if (
             not isinstance(s, SelectorSpec)
             or s.selector is None
@@ -130,21 +134,3 @@ class SelectorRetrieveView(RetrieveModelMixin, GenericAPIView):
             return _JsonNullResponse()
         serializer = self.get_serializer(instance)
         return Response(add_affordances(s, serializer.data, instance, many=False))
-
-    def _retrieve_kernel_spec(self, spec: KernelSelectorSpec) -> Response:
-        """A kernel spec's row, presented by the spec, or ``null`` under ``allow_none``.
-
-        The view's object permission was asked inside the dispatch
-        (``dispatch_kernel_selector``), so nothing here reads a row the caller
-        may not see.
-        """
-        result = dispatch_kernel_selector(self, spec)
-        self._resolved_instance = result.value
-        if result.value is None:
-            return _JsonNullResponse()
-        # One arc to coverage, so each disjunct is named: a presenter by
-        # test_the_spec_s_presenter_renders_the_row, affordances with none by
-        # test_affordances_with_no_presenter_are_refused_rather_than_dropped.
-        if spec.presenter is not None or spec.affordances is not None:
-            return Response(present(spec, result))
-        return Response(self.get_serializer(result.value).data)
