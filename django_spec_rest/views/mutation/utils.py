@@ -263,7 +263,7 @@ def restore_raised_schema(exc: Exception, response: Response) -> Response:
         # A new dict rather than an assignment into the old one: under DRF's
         # default handler ``response.data`` *is* ``exc.detail``, and the
         # exception should keep describing itself the DRF way. Held by
-        # test_the_exception_keeps_drfs_shape_after_the_body_is_restored.
+        # test_the_exception_keeps_its_details_after_the_body_is_restored.
         response.data = {**data, "schema": exc.schema}
     return response
 

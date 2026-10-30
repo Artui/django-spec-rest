@@ -436,7 +436,8 @@ def _own_principal(state: EdgeCallState, principal: Any) -> bool:
     caller's anonymous call, or a row fetched afresh, for the edge's. A kernel
     call the service makes for the edge's own principal, handed the very
     object, reads what the edge's call reads: nothing at the Validator tells
-    the two apart.
+    the two apart. Held by
+    test_a_kernel_call_of_the_view_s_own_spec_for_an_equal_principal_is_not_the_edge_s.
     """
     return principal is state.principal
 

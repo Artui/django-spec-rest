@@ -26,7 +26,7 @@ class DRFPrincipalUnavailable(KernelPrincipalUnavailable, PermissionDenied):
 
     Both ``__init__``s run by name, as ``NotPermitted``'s do, so the order of
     the bases is a choice no test can tell from the other. The kernel's sets
-    ``message``: ``test_the_default_is_the_kernels_message_not_drfs`` fails
+    ``message``: ``test_the_default_is_the_kernels_message_not_a_permission_denial`` fails
     without it. DRF's sets ``detail`` with the ``code`` given, which the
     kernel's ``super()`` chain never passes: ``test_a_code_given_is_kept``
     fails without it.

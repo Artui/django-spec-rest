@@ -491,7 +491,7 @@ def _server_values(serializer: serializers.Serializer, put: Mapping[str, Any]) -
     ``ValidationError``
     (test_a_server_value_its_field_refuses_is_a_400_keyed_by_the_field)
     or Django's from ``validate_<field>``
-    (test_a_django_refusal_of_the_server_value_is_answered_as_drfs_loop_answers_it),
+    (test_a_django_refusal_of_the_server_value_is_a_400_keyed_by_the_field),
     is keyed by its field in DRF's shape, every refused field in one
     ``DRFInvalidArguments``, in the serializer's field order, and a
     field that skips - a partial call's ``HiddenField`` - holds nothing (the

@@ -89,7 +89,7 @@ KERNEL_REFUSALS: tuple[tuple[type[BaseException], Callable[[Any], APIException]]
     # function is the mapping, so its branches are held by
     # tests/views/test_map_service_error.py, one test per branch, and what the
     # view serves for each subclass by
-    # test_a_service_s_refusal_is_answered_as_on_the_drfs_path, one case per
+    # test_a_service_s_refusal_is_answered_by_map_service_error, one case per
     # subclass. The class ``AdditionalInputRequired`` answers with is the one
     # ``restore_raised_schema`` recognises, so the schema is restored on this
     # route too.
