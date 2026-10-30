@@ -7,9 +7,12 @@ became: a key a serializer's ``validate()`` derives from the body, or one a
 ``source="*"`` nested serializer flattens into ``validated_data``. The
 client's value stays where it was validated, in ``data``.
 
-Whether a view's ``get_service_kwargs`` hook, the other author, outranks the
-Validator is an open owner decision, and its drfs answer is a strict xfail
-below.
+A view's ``get_service_kwargs`` hook, the other author, outranks the Validator
+too, as on drfs: the edge lays the hook's values beneath the spec's provider in
+its seat rather than in the kernel's overlay, which sits beneath what the
+Validator computes. Beneath the provider it answers as the kernel's overlay
+does: the provider's value wins a key both give, a key a typed provider owns is
+never the hook's, and one it declines falls to the hook.
 
 Not ported: drfs kept the bound serializer over an author's value named
 ``serializer``. On the kernel route the ``kwargs`` provider's answer is merged
@@ -22,10 +25,10 @@ one named like a seed, and that is a kernel ask rather than a test here.
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 
 import pytest
-from django_service_specs import ServiceSpec
+from django_service_specs import UNSET, ServiceSpec, UnsetType
 from rest_framework import serializers
 from typing_extensions import TypedDict
 
@@ -130,28 +133,80 @@ def test_the_specs_provider_outranks_the_validators_on_either_core(
     assert seen == _OUTRANKED
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "open owner decision: get_service_kwargs reaches the kernel as its "
-        "extra_kwargs overlay, which sits beneath what the Validator computed by "
-        "the kernel's design, so the validated key outranks the hook's value"
-    ),
-)
+def _hooked(value: Any) -> type[_CreateView]:
+    class _Hooked(_CreateView):
+        def get_service_kwargs(self) -> dict[str, Any]:
+            return {"tenant_id": value}
+
+    return _Hooked
+
+
 @_SHAPE
 def test_a_view_hooks_value_outranks_the_validators_over_http(
     serializer: Any, body: dict[str, Any]
 ) -> None:
     seen: dict[str, Any] = {}
 
-    class _Hooked(_CreateView):
-        def get_service_kwargs(self) -> dict[str, Any]:
-            return {"tenant_id": "server"}
-
-    response = post(_spec(seen, serializer), body, view=_Hooked)
+    response = post(_spec(seen, serializer), body, view=_hooked("server"))
 
     assert response.status_code == 204, response.data
     assert seen == _OUTRANKED
+
+
+@_SHAPE
+def test_the_spec_s_provider_outranks_a_view_hook_for_one_key(
+    serializer: Any, body: dict[str, Any]
+) -> None:
+    seen: dict[str, Any] = {}
+
+    response = post(_spec(seen, serializer, kwargs=_untyped_provider), body, view=_hooked("hook"))
+
+    assert response.status_code == 204, response.data
+    assert seen == _OUTRANKED
+
+
+class _MayFill(TypedDict, total=False):
+    tenant_id: str | UnsetType
+
+
+def _owns_and_declines() -> _Tenant:
+    return cast(_Tenant, {"tenant_id": UNSET})
+
+
+def _may_decline() -> _MayFill:
+    return {"tenant_id": UNSET}
+
+
+def test_a_key_the_typed_provider_owns_is_never_a_view_hook_s() -> None:
+    """The provider owns ``tenant_id`` and declines it, so it is absent: neither
+    the hook's value nor the client's, which ``validate()`` derived."""
+    seen: dict[str, Any] = {}
+    spec = _spec(seen, _DerivingIn, kwargs=_owns_and_declines)
+
+    response = post(spec, _SHAPES["validate"][1], view=_hooked("hook"))
+
+    assert response.status_code == 204, response.data
+    assert seen["tenant_id"] == "none"
+
+
+def test_a_key_the_provider_declines_falls_to_a_view_hook() -> None:
+    seen: dict[str, Any] = {}
+    spec = _spec(seen, _DerivingIn, kwargs=_may_decline)
+
+    response = post(spec, _SHAPES["validate"][1], view=_hooked("server"))
+
+    assert response.status_code == 204, response.data
+    assert seen == _OUTRANKED
+
+
+def test_a_view_hook_s_unset_supplies_nothing() -> None:
+    """A hook's ``UNSET`` is no value, so the Validator's stands."""
+    seen: dict[str, Any] = {}
+
+    response = post(_spec(seen, _DerivingIn), _SHAPES["validate"][1], view=_hooked(UNSET))
+
+    assert response.status_code == 204, response.data
+    assert seen["tenant_id"] == "evil"
 
 
 @CORES

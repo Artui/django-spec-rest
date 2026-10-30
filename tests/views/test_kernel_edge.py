@@ -287,7 +287,7 @@ def test_a_stale_entry_under_a_live_spec_s_id_is_not_its_twin(
     monkeypatch.setitem(
         recording_spec_module._RECORDING,
         id(live),
-        (weakref.ref(other), {frozenset({"user"}): stale}),
+        (weakref.ref(other), {(frozenset({"title", "user"}), False): stale}),
     )
     twin = recording_spec(live)
     assert twin is not stale

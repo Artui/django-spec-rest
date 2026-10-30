@@ -532,7 +532,10 @@ class EdgeCallState:
       edge prepends (``guarded_selector``).
     - ``author_values``: a view hook's and the spec's ``kwargs`` provider's
       values naming no argument, which the compiled spec's ``kwargs`` seat
-      (``author_values``) hands back over the Validator's values.
+      (``author_values``) hands back over the Validator's values. On the
+      kernel route, the view's ``get_service_kwargs`` values alone, which the
+      recording twin's ``kwargs`` seat lays beneath the spec's provider
+      (``recording_spec``).
     - ``view_hooks``: the view's serializer context layers, whose input half
       the Validator reads (``input_view_layers``).
     - ``validator_input``: the Validator the edge dispatches, and the body it

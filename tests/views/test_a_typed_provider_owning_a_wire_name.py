@@ -15,8 +15,10 @@ two names answer differently on a kernel spec:
   ``NotClientInput`` on the wire name has no reader on a kernel spec; a
   provider owning the ``source`` is its spelling here.
 
-A view hook naming either name is not asked on the kernel route at all; that
-gap is held by ``test_author_values_outrank_the_validator``'s strict xfail.
+A view's ``get_service_kwargs`` naming the wire name pins the field, as any
+value naming a Validator parameter does, and one naming the ``source`` goes
+beneath the spec's provider, which it outranks the Validator from
+(``test_author_values_outrank_the_validator``).
 """
 
 from __future__ import annotations

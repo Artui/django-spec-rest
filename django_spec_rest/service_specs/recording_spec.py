@@ -19,6 +19,7 @@ from typing import Any, cast
 from django.core.exceptions import ImproperlyConfigured
 from django.http import QueryDict
 from django.utils.datastructures import MultiValueDict
+from django_service_specs.pool.provider_keys import provider_keys
 from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelectorSpec
 from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
 from django_service_specs.types.unset import UNSET
@@ -31,7 +32,8 @@ KernelSpec = KernelServiceSpec | KernelSelectorSpec
 
 
 _RECORDING: dict[
-    int, tuple[weakref.ref[KernelServiceSpec], dict[frozenset[str], KernelServiceSpec]]
+    int,
+    tuple[weakref.ref[KernelServiceSpec], dict[tuple[frozenset[str], bool], KernelServiceSpec]],
 ] = {}
 """Each spec's recording twins, by the spec's identity and then by the names each records.
 
@@ -40,7 +42,8 @@ which need not hash. Each entry holds a weak reference to its spec, whose
 callback drops the entry when the spec dies, and a read serves a twin only
 while that reference still names the spec asked about, as the kernel's own
 ``kernel_spec`` cache holds its compiled specs. Beneath the spec, by the
-writable fields the call's serializer declares: a request-scoped
+writable fields the call's serializer declares and whether the call carries a
+view hook's values for the ``kwargs`` seat: a request-scoped
 ``get_fields`` declares different ones per caller, so the first call must not
 decide what a later one records
 (test_kernel_edge's test_one_spec_s_twin_records_what_each_call_s_serializer_declares)."""
@@ -54,7 +57,8 @@ def recording_spec(spec: KernelSpec) -> KernelSpec:
     Two seats, each wrapped only where it has something to watch:
     ``input_data``, which puts its answer for each field onto the body, and
     ``kwargs``, whose answer naming a parameter of a ``SerializerValidator``
-    is refused (``_refuse_parameters``).
+    is refused (``_refuse_parameters``) and which hands back a view hook's
+    values beneath that answer (``_providing``).
 
     The serializer binds the request's body rather than the kernel's
     arguments, and the kernel merges the provider's answer into its arguments
@@ -81,8 +85,9 @@ def recording_spec(spec: KernelSpec) -> KernelSpec:
 
     Built once per spec and set of names, since ``derive`` re-runs the spec's
     checks. Only a single-object service spec with a ``kwargs`` provider over
-    a ``SerializerValidator``, or an ``input_data`` provider over a
-    ``SerializerValidator`` with a writable field, has one; the kernel refuses an ``async`` provider when
+    a ``SerializerValidator``, an ``input_data`` provider over a
+    ``SerializerValidator`` with a writable field, or a Validator and a call
+    carrying a view hook's values, has one; the kernel refuses an ``async`` provider when
     the spec is built, so the wrapper is sync alone. The twin shares every
     seat but those two, so presenting the result through the view's own
     spec is unchanged. A kernel ``Grant`` covers a call only for the spec it
@@ -110,8 +115,17 @@ def recording_spec(spec: KernelSpec) -> KernelSpec:
     # provider by test_a_spec_with_nothing_to_record_is_dispatched_as_it_is,
     # and a Validator that is no serializer's, which declares what it takes
     # itself, by test_another_validator_s_kwargs_provider_is_not_checked.
-    if spec.kwargs is not None and isinstance(spec.validator, SerializerValidator):
-        changes["kwargs"] = _refusing_parameters(spec.kwargs, spec.validator)
+    refusing = spec.kwargs is not None and isinstance(spec.validator, SerializerValidator)
+    # The view hooks' values go beneath the spec's own provider in its seat,
+    # where they outrank what the Validator computes, as on drfs; in the
+    # kernel's overlay they sit beneath it. Only where a Validator computes
+    # anything: a saving rather than a check, since without a Validator the
+    # overlay already reaches the service with the same values, held by
+    # test_kernel_edge's test_a_spec_with_nothing_to_record_is_dispatched_as_it_is
+    # with the call carrying no hook value.
+    authored = bool(edge_call_state().author_values) and spec.validator is not None
+    if refusing or authored:
+        changes["kwargs"] = _providing(spec.kwargs, spec.validator if refusing else None)
     if not changes:
         return spec
     key = id(spec)
@@ -127,20 +141,56 @@ def recording_spec(spec: KernelSpec) -> KernelSpec:
                 weakref.ref(spec, lambda _dead: _RECORDING.pop(key, None)),
                 {},
             )
-        twin = held[1].get(names)
+        twin = held[1].get((names, authored))
         if twin is None:
-            twin = held[1][names] = spec.derive(**changes)
+            twin = held[1][names, authored] = spec.derive(**changes)
     return twin
 
 
-def _refusing_parameters(provider: Callable[..., Any], validator: SerializerValidator) -> Any:
-    @functools.wraps(provider)
-    def refusing(*args: Any, **kwargs: Any) -> Any:
-        answer = provider(*args, **kwargs)
-        _refuse_parameters(provider, answer, validator)
-        return answer
+def _providing(provider: Callable[..., Any] | None, validator: SerializerValidator | None) -> Any:
+    """The twin's ``kwargs`` seat: ``provider``'s answer, checked, over the view hooks' values.
 
-    return refusing
+    Where ``validator`` is given, an answer naming one of its parameters is
+    refused (``_refuse_parameters``). The values a view's
+    ``get_service_kwargs`` named no parameter with (``EdgeCallState.author_values``)
+    go beneath the answer as the kernel lays its overlay beneath a provider
+    (``_beneath``), so they outrank what the Validator computes as the spec's
+    own provider does (test_author_values_outrank_the_validator's
+    test_a_view_hooks_value_outranks_the_validators_over_http).
+    """
+    owned = frozenset[str]()
+    if provider is not None and (keys := provider_keys(provider)) is not None:
+        owned = keys.filled
+
+    def providing(*args: Any, **kwargs: Any) -> Any:
+        answer = {} if provider is None else provider(*args, **kwargs)
+        if validator is not None:
+            _refuse_parameters(cast(Callable[..., Any], provider), answer, validator)
+        if not isinstance(answer, Mapping):
+            return answer
+        return {**answer, **_beneath(answer, owned)}
+
+    return providing if provider is None else functools.wraps(provider)(providing)
+
+
+def _beneath(answer: Mapping[str, Any], owned: frozenset[str]) -> dict[str, Any]:
+    """The view hooks' values ``answer`` leaves standing, as the kernel's ``overlaid`` leaves its overlay's.
+
+    A key the answer gives a value outranks the hook's
+    (test_the_spec_s_provider_outranks_a_view_hook_for_one_key). A key the
+    provider is annotated to fill and may not decline is the provider's alone,
+    so a hook's value for it is dropped
+    (test_a_key_the_typed_provider_owns_is_never_a_view_hook_s), while one it
+    may decline and declines falls to the hook
+    (test_a_key_the_provider_declines_falls_to_a_view_hook). A hook's
+    ``UNSET`` is passed on, which the kernel takes as the key declined
+    (test_a_view_hook_s_unset_supplies_nothing).
+    """
+    return {
+        name: value
+        for name, value in edge_call_state().author_values.items()
+        if name not in owned and answer.get(name, UNSET) is UNSET
+    }
 
 
 def _refuse_parameters(

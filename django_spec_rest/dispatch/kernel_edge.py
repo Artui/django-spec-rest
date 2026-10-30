@@ -60,6 +60,12 @@ kernel's own unless stated:
   one it may decline and declines stays the client's, as the kernel answers
   both for a declared field.
 
+- **A view's ``get_service_kwargs`` outranks the Validator**, as on drfs:
+  the kernel lays its ``extra_kwargs`` overlay beneath what the Validator
+  computes, so the twin's ``kwargs`` seat hands the hook's values back beneath
+  the spec's own provider, where they outrank a key a ``validate()`` derives
+  or a ``source="*"`` serializer flattens (``recording_spec``).
+
 Every refusal the kernel raises leaves as a DRF exception, by
 ``KERNEL_REFUSALS`` (``dispatch/kernel_refusals.py``). The seed-named fields
 and the recording twin live in the adapter, ``service_specs/seed_named_fields.py``
@@ -466,6 +472,9 @@ def _read_call(
     test_the_async_core_builds_the_twin_off_the_loop).
     """
     extra_kwargs, pinned, server = _overlay(spec, hooks)
+    # Read by the recording twin's ``kwargs`` seat, which lays them beneath the
+    # spec's provider over the Validator's values (``recording_spec``).
+    edge_call_state().author_values = extra_kwargs
     arguments, held = kernel_arguments(
         spec, view=view, request=request, input_data=server, query=query
     )
