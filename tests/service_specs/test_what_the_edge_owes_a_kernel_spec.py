@@ -1,8 +1,7 @@
-"""What a live view owes a kernel spec, three of them done and one still a strict xfail.
+"""What a live view owes a kernel spec.
 
 Each case is written against the public surface, a view over a kernel spec
-driven through ``as_view()``. The last, a nested selector's ``permissions``
-refused at ``as_view()``, is still a strict xfail naming the edge's gap.
+driven through ``as_view()``.
 
 - **A description of the input serializer is handed the call's request and
   view.** The kernel route describes the serializer the call validates with in
@@ -16,10 +15,13 @@ refused at ``as_view()``, is still a strict xfail naming the edge's gap.
   ``test_the_view_s_input_context_layer_reaches_the_input_serializer``).
 - **A nested selector's ``permissions`` are refused at ``as_view()``.** The
   kernel asks the spec being dispatched, never the selector resolving its
-  target, so checks declared there guard nothing. Today a kernel spec
-  declaring them is accepted, and they silently refuse nothing
-  (``test_enforce_permissions``'s
-  ``test_a_collection_selector_s_own_classes_are_not_what_answers``).
+  target, so checks declared there would guard nothing: a denying declaration
+  is refused on each of the three seats, naming the seat
+  (``test_a_nested_selector_s_permissions_are_refused``), and so is
+  ``Unrestricted()``, which guards nothing either
+  (``test_an_unrestricted_nested_selector_is_refused_too``). The refusal is of
+  a declaration, so a nested selector declaring none mounts
+  (``test_a_nested_selector_declaring_no_permissions_mounts``).
 """
 
 from __future__ import annotations
