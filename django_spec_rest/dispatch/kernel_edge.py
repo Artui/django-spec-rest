@@ -526,27 +526,20 @@ def _edge_state(
     test_a_request_scoped_serializer_declares_the_fields_the_call_validates;
     the layers by test_the_view_s_input_layer_reaches_the_description and
     test_the_validator_s_own_context_reaches_the_description), and is built
-    once for the call. A context callable taking ``**kwargs``
-    is left out of a description and never asked to rebuild one that cannot
-    be built without it: ``whole_pool`` is answered ``None``, so what the
-    serializer raises is raised as it is
-    (test_a_serializer_its_description_cannot_build_raises_as_it_is). A
-    saving, not a guard: asked again with the description's context, the
-    serializer raises the same.
+    once for the call. A context callable taking ``**kwargs`` is left out
+    of a description, and what a serializer that cannot be built without it
+    raises is raised as it is
+    (test_a_serializer_its_description_cannot_build_raises_as_it_is).
     """
     validator = spec.validator if isinstance(spec, KernelServiceSpec) else None
     provider = validator.serializer_context if isinstance(validator, SerializerValidator) else None
     ambient = {"request": request, "view": view}
 
-    def describe_context(
-        arguments: Any = None, *, whole_pool: bool = False
-    ) -> dict[str, Any] | None:
-        if whole_pool:
-            return None
+    def describe_context() -> dict[str, Any]:
         return serializer_context(
             request.user,
             ambient,
-            arguments,
+            None,
             view_layers=hooks.input_serializer_context,
             provider=provider,
             describing=True,

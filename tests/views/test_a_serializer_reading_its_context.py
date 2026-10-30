@@ -124,9 +124,8 @@ _DESCRIBED_WITH_NO_CALL = pytest.mark.xfail(
     strict=True,
     reason=(
         "The serializer is described with the call's request and view, but a seat's "
-        "serializer_context that declares the whole pool is not asked at description: "
-        "describe_context (dispatch/kernel_edge.py) answers None for it, so a serializer "
-        "that cannot be built without that callable's keys raises KeyError."
+        "serializer_context that declares the whole pool is left out of the description, "
+        "so a serializer that cannot be built without that callable's keys raises KeyError."
     ),
 )
 

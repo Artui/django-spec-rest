@@ -21,7 +21,6 @@ from django_spec_rest.service_specs.drf_invalid_arguments import DRFInvalidArgum
 from django_spec_rest.service_specs.utils import (
     author_keys,
     bind_serializer,
-    bound_description,
     bound_instance,
     describe_serializer,
     input_parameters,
@@ -425,12 +424,10 @@ class SerializerValidator(Validator):
         )
 
     def _serializer(self, context: ValidationContext, **kwargs: Any) -> serializers.Serializer:
-        """The serializer bound as ``kwargs`` binds it: the call's description, where it is that."""
-        built = self._context(context, kwargs["data"])
-        described = bound_description(self.serializer, built, **kwargs)
-        if described is not None:
-            return described
-        return bind_serializer(self.serializer, context=built, **kwargs)
+        """The serializer bound as ``kwargs`` binds it, under the call's context."""
+        return bind_serializer(
+            self.serializer, context=self._context(context, kwargs["data"]), **kwargs
+        )
 
     def _context(
         self, context: ValidationContext, arguments: Mapping[str, Any] | list[Any]
