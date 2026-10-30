@@ -16,9 +16,8 @@ as drfs read an overridden hook as a source of keys it could not see. It reads
 no output selector, so a keyword an ``output_selector_spec`` requires and
 nothing fills is no longer refused here, where drfs refused it.
 
-Where drfs answered differently the test says so, and whether a plan
-decision names the change: an undeclared route capture is no argument (D2),
-and the kernel hands every service ``data``, which no decision names.
+Where drfs answered differently the test says so: an undeclared route capture
+is no argument, and the kernel hands every service ``data``.
 """
 
 from __future__ import annotations
@@ -384,7 +383,7 @@ class TestASelectorView:
             _build(SelectorRetrieveView, spec)
 
     def test_a_route_capture_the_spec_does_not_declare_is_refused(self) -> None:
-        """Changed by design (D2: a route capture nothing declares is no
+        """Changed by design (a route capture nothing declares is no
         argument): drfs let a retrieve selector require any
         keyword, because a route capture might fill it. The kernel route reads
         only a capture the spec declares, so an undeclared one fills nothing

@@ -934,9 +934,13 @@ def _check_kernel_seeds(spec: KernelServiceSpec | KernelSelectorSpec) -> None:
     would raise from the URLconf's import, so such a spec's checks are its
     first request's, where the kernel answers them as it dispatches
     (test_spec_validation_e2e's TestASerializerThatCannotBeDescribedAtMount).
-    Only the description is tried and caught, never ``check_seeds`` itself,
-    so every refusal it makes of a serializer that describes still raises
-    here (test_a_refusal_check_seeds_makes_of_a_describable_spec_still_raises).
+    Only the description is tried and caught: every refusal ``check_seeds``
+    makes of a serializer that describes still raises here
+    (test_a_refusal_check_seeds_makes_of_a_describable_spec_still_raises).
+    A view overriding ``get_service_kwargs`` or a per-action
+    ``get_<action>_service_kwargs`` is not checked either, as
+    ``validate_mutation_view_spec`` does not call this for it, so its seeds
+    are its first request's as well.
     """
     # A selector spec has no validator to describe; reading one off it raises
     # at as_view() (test_a_var_keyword_selector_reads_no_route_capture and

@@ -31,13 +31,20 @@ from typing import Any
 import pytest
 from django.contrib.auth.models import User
 from django.core.exceptions import ImproperlyConfigured
-from django_service_specs import SelectorKind, SelectorSpec, ServiceSpec, Unrestricted
+from django_service_specs import (
+    Parameter,
+    Parameters,
+    SelectorKind,
+    SelectorSpec,
+    ServiceSpec,
+    Unrestricted,
+)
 from rest_framework import serializers
 from rest_framework.permissions import BasePermission
 from rest_framework.response import Response
 from rest_framework.test import APIRequestFactory, force_authenticate
 
-from django_spec_rest import ServiceCreateView
+from django_spec_rest import ServiceCreateView, ServiceUpdateView
 from django_spec_rest.service_specs.drf_permission_check import DRFPermissionCheck
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 
@@ -49,6 +56,15 @@ _OPEN = (Unrestricted(),)
 
 class _CreateView(ServiceCreateView):
     """A create view over a kernel spec, its own permission classes answering for it."""
+
+    permission_classes: Any = []
+
+    def get_permissions(self) -> list[Any]:
+        return [permission() for permission in self.permission_classes]
+
+
+class _UpdateView(ServiceUpdateView):
+    """An update view over a kernel spec, its own permission classes answering for it."""
 
     permission_classes: Any = []
 
@@ -128,25 +144,63 @@ class _Deny(BasePermission):
         return False
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "neither as_view() nor the kernel refuses permissions on a kernel spec's "
-        "collection_selector_spec, which the kernel never asks, where drfs refused a "
-        "nested spec's permission_classes at as_view()"
-    ),
-)
-def test_a_collection_selector_s_permissions_are_refused_at_as_view() -> None:
+_DENY = (DRFPermissionCheck((_Deny,)),)
+
+
+def _instance_seat() -> type:
     spec = ServiceSpec(
-        service=lambda *, collection: None,
-        collection_selector_spec=SelectorSpec(
-            kind=SelectorKind.LIST,
-            selector=lambda: [],
-            permissions=(DRFPermissionCheck((_Deny,)),),
+        service=lambda *, instance: None,
+        instance_selector_spec=SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=lambda pk: [],
+            reads=Parameters.of(Parameter("pk", "integer", required=True)),
+            permissions=_DENY,
         ),
         permissions=_OPEN,
     )
-    view = type("_View", (_CreateView,), {"spec": spec})
+    return type("_View", (_UpdateView,), {"spec": spec})
 
-    with pytest.raises(ImproperlyConfigured, match="collection_selector_spec"):
-        view.as_view()
+
+def _collection_seat() -> type:
+    spec = ServiceSpec(
+        service=lambda *, collection: None,
+        collection_selector_spec=SelectorSpec(
+            kind=SelectorKind.LIST, selector=lambda: [], permissions=_DENY
+        ),
+        permissions=_OPEN,
+    )
+    return type("_View", (_CreateView,), {"spec": spec})
+
+
+def _output_seat() -> type:
+    spec = ServiceSpec(
+        service=lambda: None,
+        output_selector_spec=SelectorSpec(
+            kind=SelectorKind.RETRIEVE, selector=lambda *, result: result, permissions=_DENY
+        ),
+        permissions=_OPEN,
+    )
+    return type("_View", (_CreateView,), {"spec": spec})
+
+
+# The spec is built inside ``pytest.raises`` so the refusal flips the xfail wherever it
+# lands: at ``ServiceSpec`` construction (the kernel) or at ``as_view()`` (this edge).
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "neither as_view() nor the kernel refuses permissions on a kernel spec's nested "
+        "selector, which the kernel never asks, so a declared Deny guards nothing, where "
+        "drfs refused a nested spec's permission_classes at as_view()"
+    ),
+)
+@pytest.mark.parametrize(
+    ("seat", "build"),
+    [
+        ("instance_selector_spec", _instance_seat),
+        ("collection_selector_spec", _collection_seat),
+        ("output_selector_spec", _output_seat),
+    ],
+)
+def test_a_nested_selector_s_permissions_are_refused(seat: str, build: Any) -> None:
+    with pytest.raises(ImproperlyConfigured, match=seat):
+        build().as_view()
