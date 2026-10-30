@@ -71,14 +71,10 @@ _LOOKUP = SelectorSpec(
 
 
 class _Open:
-    """No permission classes, answered as the spine's views answer them:
-    ``MutationFlowMixin.get_permissions`` reads a drfs-only spec field."""
+    """No permission or authentication classes of the view's own."""
 
     permission_classes: Any = []
     authentication_classes: Any = []
-
-    def get_permissions(self) -> list[Any]:
-        return []
 
 
 class _View(_Open, ServiceUpdateView):

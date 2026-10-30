@@ -116,17 +116,6 @@ def _spec(
     )
 
 
-class _KernelCreateView(ServiceCreateView):
-    """``get_permissions`` answers the view's own classes, as for a spec setting none.
-
-    ``MutationFlowMixin.get_permissions`` reads ``spec.permission_classes``,
-    which a kernel spec has no attribute for.
-    """
-
-    def get_permissions(self) -> list[Any]:
-        return [permission() for permission in self.permission_classes]
-
-
 def _create(
     view: type[ServiceCreateView], body: dict[str, Any] | None = None, form: str = "json"
 ) -> Any:
@@ -136,7 +125,7 @@ def _create(
 
 class TestTheInputSerializer:
     def test_is_built_under_drf_s_default_context(self) -> None:
-        class _View(_KernelCreateView):
+        class _View(ServiceCreateView):
             spec = _spec()
 
         assert _create(_View).status_code == 201
@@ -145,7 +134,7 @@ class TestTheInputSerializer:
         assert isinstance(captured["view"], _View)
 
     def test_the_view_s_get_serializer_context_flows_in(self) -> None:
-        class _View(_KernelCreateView):
+        class _View(ServiceCreateView):
             spec = _spec()
 
             def get_serializer_context(self) -> dict[str, Any]:
@@ -159,7 +148,7 @@ class TestTheInputSerializer:
         """A form body is validated by a lenient twin of the spec's Validator, and
         the hook reaches it all the same: the edge's own call is the twin's."""
 
-        class _View(_KernelCreateView):
+        class _View(ServiceCreateView):
             spec = _spec()
 
             def get_input_serializer_context(self) -> dict[str, Any]:
@@ -173,7 +162,7 @@ class TestTheInputSerializer:
         output serializer after it: the drfs path's "does not leak into output"
         inverts by design."""
 
-        class _View(_KernelCreateView):
+        class _View(ServiceCreateView):
             spec = _spec()
 
             def get_input_serializer_context(self) -> dict[str, Any]:
@@ -195,7 +184,7 @@ class TestTheInputSerializer:
         def service(*, data: _Payload, serializer: Any) -> None:
             seen.update(serializer.context)
 
-        class _View(_KernelCreateView):
+        class _View(ServiceCreateView):
             spec = ServiceSpec(
                 service=service,
                 permissions=_OPEN,
@@ -216,7 +205,7 @@ class TestTheInputSerializer:
 
 class TestTheOutputSerializer:
     def test_is_built_under_drf_s_default_context(self) -> None:
-        class _View(_KernelCreateView):
+        class _View(ServiceCreateView):
             spec = _spec()
 
         _create(_View)
@@ -227,7 +216,7 @@ class TestTheOutputSerializer:
         """The output hook runs after validation, so its key is in the one dict
         only once the input serializer has validated."""
 
-        class _View(_KernelCreateView):
+        class _View(ServiceCreateView):
             spec = _spec()
 
             def get_output_serializer_context(self) -> dict[str, Any]:
@@ -238,7 +227,7 @@ class TestTheOutputSerializer:
         assert "origin" not in _CapturingIn.captured
 
     def test_a_spec_with_no_presenter_renders_its_value(self) -> None:
-        class _View(_KernelCreateView):
+        class _View(ServiceCreateView):
             spec = ServiceSpec(service=lambda: {"raw": True}, permissions=_OPEN, atomic=False)
 
         response = _create(_View, {})
@@ -259,9 +248,6 @@ class TestPerActionHooks:
                     reads=Parameters.of(Parameter("pk", "integer", required=True)),
                 ),
             )
-
-            def get_permissions(self) -> list[Any]:
-                return [permission() for permission in self.permission_classes]
 
             def get_input_serializer_context(self) -> dict[str, Any]:
                 return {"directional": "input"}
@@ -292,7 +278,7 @@ class TestPerActionHooks:
 
 class TestTheSeatsOwnContext:
     def test_the_validator_s_context_is_applied(self) -> None:
-        class _View(_KernelCreateView):
+        class _View(ServiceCreateView):
             spec = _spec(
                 validator=SerializerValidator(
                     _CapturingIn, serializer_context=lambda: {"spec_key": "input"}
@@ -306,7 +292,7 @@ class TestTheSeatsOwnContext:
         """One dict per request: the input seat's key reaches the output
         serializer, where the drfs path held it to the input."""
 
-        class _View(_KernelCreateView):
+        class _View(ServiceCreateView):
             spec = _spec(
                 validator=SerializerValidator(
                     _CapturingIn, serializer_context=lambda: {"input_only": True}
@@ -318,7 +304,7 @@ class TestTheSeatsOwnContext:
         assert _CapturingOut.captured["input_only"] is True
 
     def test_the_validator_s_context_wins_over_the_view_s_hook(self) -> None:
-        class _View(_KernelCreateView):
+        class _View(ServiceCreateView):
             spec = _spec(
                 validator=SerializerValidator(
                     _CapturingIn, serializer_context=lambda: {"layer": "spec"}
@@ -339,7 +325,7 @@ class TestTheSeatsOwnContext:
             seen.update(view=view, request=request)
             return {}
 
-        class _View(_KernelCreateView):
+        class _View(ServiceCreateView):
             spec = _spec(validator=SerializerValidator(_CapturingIn, serializer_context=provider))
 
         _create(_View)
@@ -347,7 +333,7 @@ class TestTheSeatsOwnContext:
         assert seen["request"] is _CapturingIn.captured["request"]
 
     def test_the_presenter_s_context_is_applied(self) -> None:
-        class _View(_KernelCreateView):
+        class _View(ServiceCreateView):
             spec = _spec(
                 presenter=SerializerPresenter(
                     _CapturingOut, serializer_context=lambda: {"spec_key": "output"}
@@ -359,7 +345,7 @@ class TestTheSeatsOwnContext:
         assert "spec_key" not in _CapturingIn.captured
 
     def test_the_presenter_s_context_wins_over_the_view_s_hook(self) -> None:
-        class _View(_KernelCreateView):
+        class _View(ServiceCreateView):
             spec = _spec(
                 presenter=SerializerPresenter(
                     _CapturingOut, serializer_context=lambda: {"layer": "spec"}

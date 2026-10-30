@@ -70,8 +70,7 @@ def _view(
     view_attrs: dict[str, Any] | None = None,
     **spec: Any,
 ) -> Any:
-    """A create view over a kernel spec; ``get_permissions`` answers the view's own,
-    none, as the spine's views do: ``MutationFlowMixin``'s reads a drfs-only field.
+    """A create view over a kernel spec, with no permission classes of the view's own.
     ``view_attrs`` are the view's own overrides, a hook among them."""
     served = ServiceSpec(
         **{"service": _rows if spec.get("many") else _echo, **spec},
@@ -86,7 +85,6 @@ def _view(
             "spec": served,
             "permission_classes": [],
             "authentication_classes": [],
-            "get_permissions": lambda self: [],
             **(view_attrs or {}),
         },
     ).as_view()

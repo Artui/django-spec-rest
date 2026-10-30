@@ -103,16 +103,7 @@ def _spec(
 
 
 class _KernelCreateView(ServiceCreateView):
-    """``get_permissions`` answers the view's own classes, as for a spec setting none.
-
-    ``MutationFlowMixin.get_permissions`` reads ``spec.permission_classes``,
-    which a kernel spec has no attribute for.
-    """
-
     permission_classes: list[Any] = []
-
-    def get_permissions(self) -> list[Any]:
-        return [permission() for permission in self.permission_classes]
 
 
 def _create(

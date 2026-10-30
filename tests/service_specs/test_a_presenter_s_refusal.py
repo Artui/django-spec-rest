@@ -153,15 +153,9 @@ def test_any_other_exception_leaves_exactly_as_raised() -> None:
 
 
 class _CreateView(ServiceCreateView):
-    """A create view over a kernel spec, whose answer the spec's presenter renders.
-
-    ``get_permissions`` answers the view's own classes, as the spine's views do:
-    ``MutationFlowMixin``'s reads a drfs-only spec field."""
+    """A create view over a kernel spec, whose answer the spec's presenter renders."""
 
     permission_classes: Any = []
-
-    def get_permissions(self) -> list[Any]:
-        return [permission() for permission in self.permission_classes]
 
 
 @pytest.mark.parametrize(

@@ -93,28 +93,15 @@ _PURGE_ONE_SPEC = ServiceSpec(
 )
 
 
-class _KernelSpecView:
-    """Answers ``get_permissions`` as a view over a spec setting no DRF classes does.
-
-    ``MutationFlowMixin.get_permissions`` reads ``spec.permission_classes`` off the
-    spec, which a kernel spec does not have: it declares its checks as
-    ``permissions``. This answers what that method answers for a spec setting none,
-    the view's own classes.
-    """
-
-    def get_permissions(self) -> list[Any]:
-        return [permission() for permission in self.permission_classes]  # ty: ignore[unresolved-attribute]
-
-
-class _PurgeCreate(_KernelSpecView, ServiceCreateView):
+class _PurgeCreate(ServiceCreateView):
     spec = _PURGE_SPEC
 
 
-class _PurgeUpdate(_KernelSpecView, ServiceUpdateView):
+class _PurgeUpdate(ServiceUpdateView):
     spec = _PURGE_ONE_SPEC
 
 
-class _PurgeDelete(_KernelSpecView, ServiceDeleteView):
+class _PurgeDelete(ServiceDeleteView):
     spec = _PURGE_ONE_SPEC
 
 
@@ -129,12 +116,12 @@ _VIEWS: dict[str, tuple[type, str, bool]] = {
 
 # The shape a drfs update or delete view was written in: the view loads the row with
 # ``get_object()`` and the spec names no selector. It answered 422 with the schema.
-class _PurgeUpdateByGetObject(_KernelSpecView, ServiceUpdateView):
+class _PurgeUpdateByGetObject(ServiceUpdateView):
     queryset = Author.objects.all()
     spec = _PURGE_SPEC
 
 
-class _PurgeDeleteByGetObject(_KernelSpecView, ServiceDeleteView):
+class _PurgeDeleteByGetObject(ServiceDeleteView):
     queryset = Author.objects.all()
     spec = _PURGE_SPEC
 
@@ -387,7 +374,7 @@ def test_a_handler_answering_with_a_django_response_is_left_alone() -> None:
     assert set(json.loads(response.content)) == {"error"}
 
 
-class _RejectView(_KernelSpecView, ServiceCreateView):
+class _RejectView(ServiceCreateView):
     spec = ServiceSpec(service=_reject_schema_field, permissions=_OPEN, atomic=False)
 
 

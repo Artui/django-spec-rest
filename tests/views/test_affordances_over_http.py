@@ -74,17 +74,10 @@ def _view(permissions: Any = _OPEN, permission_classes: Any = None) -> Any:
         affordances=[UNPUBLISHED],
     )
 
-    class _Publish(ServiceUpdateView):
-        """``get_permissions`` stands in for ``MutationFlowMixin``'s, which
-        reads a drfs spec's ``permission_classes``, as the spine's views do."""
-
-        def get_permissions(self) -> list[Any]:
-            return [permission() for permission in self.permission_classes]
-
     attrs: dict[str, Any] = {"spec": spec}
     if permission_classes is not None:
         attrs["permission_classes"] = permission_classes
-    return type("_View", (_Publish,), attrs).as_view()
+    return type("_View", (ServiceUpdateView,), attrs).as_view()
 
 
 def _patch(view: Any, pk: int) -> Any:

@@ -60,17 +60,11 @@ class _CreateView(ServiceCreateView):
 
     permission_classes: Any = []
 
-    def get_permissions(self) -> list[Any]:
-        return [permission() for permission in self.permission_classes]
-
 
 class _UpdateView(ServiceUpdateView):
     """An update view over a kernel spec, its own permission classes answering for it."""
 
     permission_classes: Any = []
-
-    def get_permissions(self) -> list[Any]:
-        return [permission() for permission in self.permission_classes]
 
 
 def _post(spec: ServiceSpec, body: Any, *, user: Any = None, **attrs: Any) -> Response:

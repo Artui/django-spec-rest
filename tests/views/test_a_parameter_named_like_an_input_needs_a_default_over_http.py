@@ -50,13 +50,7 @@ class _In(serializers.Serializer):
 
 
 class _CreateView(ServiceCreateView):
-    """``get_permissions`` answers the view's own classes, as the spine's
-    ``_CreateView`` does: ``MutationFlowMixin``'s reads a drfs-only field."""
-
     permission_classes = []
-
-    def get_permissions(self) -> list[Any]:
-        return [permission() for permission in self.permission_classes]
 
 
 def _titled(*, data: Any, title: str) -> dict[str, Any]:

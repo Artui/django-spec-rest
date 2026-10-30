@@ -207,14 +207,10 @@ _factory = APIRequestFactory()
 
 
 class _Open:
-    """The view's own permission classes, none here, as the spine's views answer them:
-    ``MutationFlowMixin.get_permissions`` reads a drfs-only spec field."""
+    """No permission or authentication classes of the view's own."""
 
     permission_classes: Any = []
     authentication_classes: Any = []
-
-    def get_permissions(self) -> list[Any]:
-        return []
 
 
 def _create(spec: ServiceSpec, body: Any, **request: Any) -> Any:

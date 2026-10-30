@@ -73,17 +73,11 @@ def _spec(
 
 
 class _View(ServiceCreateView):
-    """A view whose ``get_serializer_context`` is the first layer.
-
-    ``get_permissions`` answers the view's own classes, none, as the spine's
-    views do: ``MutationFlowMixin``'s reads a drfs-only spec field."""
+    """A view whose ``get_serializer_context`` is the first layer."""
 
     permission_classes: Any = []
     authentication_classes: Any = []
     asked = 0
-
-    def get_permissions(self) -> list[Any]:
-        return []
 
     def get_serializer_context(self) -> dict[str, Any]:
         type(self).asked += 1

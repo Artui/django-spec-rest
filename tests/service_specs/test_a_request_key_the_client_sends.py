@@ -59,13 +59,6 @@ class _TitleIn(serializers.Serializer):
     title = serializers.CharField()
 
 
-class _CreateView(ServiceCreateView):
-    """A create view over a kernel spec, its own permission classes answering for it."""
-
-    def get_permissions(self) -> list[Any]:
-        return [permission() for permission in self.permission_classes]
-
-
 class _RetrieveView(SelectorRetrieveView):
     """Renders through DRF's ``serializer_class``, which a kernel spec does not reach."""
 
@@ -77,7 +70,7 @@ class _RetrieveView(SelectorRetrieveView):
 
 
 def _post(spec: ServiceSpec, body: Any) -> Response:
-    view = type("_View", (_CreateView,), {"spec": spec}).as_view()
+    view = type("_View", (ServiceCreateView,), {"spec": spec}).as_view()
     return view(factory.post("/", body, format="json"))
 
 
@@ -105,7 +98,7 @@ def test_a_body_key_no_field_declares(policy: UnknownArguments, key: str) -> Non
         assert response.status_code == 204, response.data
         assert received["data"] == {"title": "t"}
         assert isinstance(received["request"], Request)
-        assert isinstance(received["view"], _CreateView)
+        assert isinstance(received["view"], ServiceCreateView)
 
 
 @_POLICIES

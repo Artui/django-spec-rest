@@ -66,17 +66,6 @@ def _capturing_serializer_factory() -> type[serializers.ModelSerializer]:
     return _Capturing
 
 
-class _KernelCreateView(ServiceCreateView):
-    """``get_permissions`` answers the view's own classes, as for a spec setting none.
-
-    ``MutationFlowMixin.get_permissions`` reads ``spec.permission_classes``,
-    which a kernel spec has no attribute for.
-    """
-
-    def get_permissions(self) -> list[Any]:
-        return [permission() for permission in self.permission_classes]
-
-
 class _SmallPage(PageNumberPagination):
     page_size = 2
 
@@ -132,7 +121,7 @@ class TestTheResultOfAMutation:
             seen["result"] = result
             return {"result_pk": result.pk}
 
-        class _View(_KernelCreateView):
+        class _View(ServiceCreateView):
             spec = ServiceSpec(
                 service=lambda: author,
                 permissions=_OPEN,
@@ -155,7 +144,7 @@ class TestTheResultOfAMutation:
             seen.update(same_object_as_raw=result is raw, pk=result.pk)
             return {}
 
-        class _View(_KernelCreateView):
+        class _View(ServiceCreateView):
             spec = ServiceSpec(
                 service=lambda: raw,
                 permissions=_OPEN,
@@ -174,7 +163,7 @@ class TestTheResultOfAMutation:
         capturing = _capturing_serializer_factory()
         author = Author.objects.create(name="seed")
 
-        class _View(_KernelCreateView):
+        class _View(ServiceCreateView):
             spec = ServiceSpec(
                 service=lambda: author,
                 permissions=_OPEN,
@@ -190,7 +179,7 @@ class TestTheResultOfAMutation:
     def test_the_view_s_output_hook_is_handed_the_result(self) -> None:
         capturing = _capturing_serializer_factory()
 
-        class _View(_KernelCreateView):
+        class _View(ServiceCreateView):
             spec = ServiceSpec(
                 service=lambda: Author.objects.create(name="made"),
                 permissions=_OPEN,
@@ -213,7 +202,7 @@ class TestTheResultOfAMutation:
         def provider(*, result: Any) -> dict[str, Any]:
             return {"total": Author.objects.filter(pk=result.pk).count()}
 
-        class _View(_KernelCreateView):
+        class _View(ServiceCreateView):
             spec = ServiceSpec(
                 service=lambda *, data: Author.objects.create(name=data["name"]),
                 permissions=_OPEN,

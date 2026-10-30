@@ -47,11 +47,6 @@ class _BodyIn(serializers.Serializer):
 class _UpdateView(ServiceUpdateView):
     permission_classes = []
 
-    def get_permissions(self) -> list[Any]:
-        # ``MutationFlowMixin``'s reads a drfs-only field; the spine's views
-        # answer the view's own classes the same way.
-        return [permission() for permission in self.permission_classes]
-
 
 def _spec(seen: dict[str, Any]) -> ServiceSpec:
     def selector(*, pk: int, q: str = "D-q", org: str = "D-org") -> Any:

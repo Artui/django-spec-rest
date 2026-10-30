@@ -88,11 +88,6 @@ def _spec(*, lookup: SelectorSpec, **fields: Any) -> ServiceSpec:
 class _UpdateView(ServiceUpdateView):
     permission_classes = []
 
-    def get_permissions(self) -> list[Any]:
-        # ``MutationFlowMixin``'s reads a drfs-only field; the spine's views
-        # answer the view's own classes the same way.
-        return [permission() for permission in self.permission_classes]
-
 
 def test_a_typed_spec_level_provider_filling_the_lookup_s_read_is_refused_when_built() -> None:
     reads = Parameters((Parameter("pk", "integer", required=True),))

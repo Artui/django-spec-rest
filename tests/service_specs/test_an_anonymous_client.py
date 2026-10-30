@@ -34,9 +34,6 @@ class _CreateView(ServiceCreateView):
 
     permission_classes: Any = []
 
-    def get_permissions(self) -> list[Any]:
-        return [permission() for permission in self.permission_classes]
-
 
 def _served(**settings: Any) -> tuple[Response, list[Any]]:
     seen: list[Any] = []
