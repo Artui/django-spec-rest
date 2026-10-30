@@ -71,8 +71,8 @@ def resolve_input_extras(
     """Collect the extras to merge into the serializer input dict.
 
     ``resolve_extra_kwargs``'s layering — ``catch_all_hook`` view method,
-    then ``action_hook`` — applied to the ``input_serializer``-bound data rather than the
-    service-call pool.
+    then ``action_hook`` — applied to the data the input serializer binds rather
+    than the service-call pool.
 
     Args:
         extras: The resolved data available before validation — currently the

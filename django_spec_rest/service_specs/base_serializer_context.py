@@ -39,10 +39,9 @@ def base_serializer_context(*, view: Any, request: Any) -> dict[str, Any]:
     ambient ``http_request`` to ``build_offline_context`` when the transport has
     one, as the MCP server does.
 
-    The spec's provider is merged *over* this by
-    ``resolve_output_context`` /
-    ``resolve_input_context``, so a
-    provider keeps the final say on every key — including these three.
+    A seat's own ``serializer_context`` is merged *over* this by
+    ``serializer_context`` in ``service_specs/utils.py``, so a provider keeps
+    the final say on every key — including these three.
     """
     getter: Any = getattr(view, "get_serializer_context", None)
     if callable(getter):

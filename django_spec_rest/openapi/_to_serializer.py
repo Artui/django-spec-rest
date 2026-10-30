@@ -1,8 +1,8 @@
-"""Convert ``ServiceSpec`` serializer fields into ``Serializer`` classes.
+"""Convert a seat's serializer declaration into a ``Serializer`` class.
 
-The runtime accepts three shapes for ``input_serializer``:
+A ``SerializerValidator`` or ``SerializerPresenter`` reads one of three shapes:
 
-- ``None`` — no input.
+- ``None`` — no seat.
 - a ``Serializer`` subclass.
 - a bare ``@dataclass`` type, auto-wrapped in a ``DataclassSerializer``.
 
@@ -21,7 +21,7 @@ from django_spec_rest.service_specs.renderable_serializer_class import renderabl
 
 
 def to_serializer_class(value: type | None) -> type[Serializer] | None:
-    """Coerce a spec serializer field to a ``Serializer`` subclass.
+    """Coerce a seat's serializer declaration to a ``Serializer`` subclass.
 
     Returns ``None`` when ``value`` is ``None`` or an unrecognised shape.
     Bare dataclass types are wrapped in a ``DataclassSerializer`` subclass so

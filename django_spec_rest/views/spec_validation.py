@@ -71,8 +71,8 @@ def _refuse_positional_only(fn: Callable[..., Any], *, label: str, seat: str) ->
 def is_overridden(view_cls: type, base_cls: type, method_name: str) -> bool:
     """Return ``True`` if ``view_cls`` overrides ``base_cls``'s ``method_name``.
 
-    Drives ``permissive_extras``: an overridden ``get_*_kwargs`` is assumed to
-    contribute keys the validator cannot see.
+    Drives the seed check: an overridden ``get_*_kwargs`` is assumed to
+    contribute keys ``check_seeds`` cannot see, so such a view is not asked it.
     """
     base = getattr(base_cls, method_name, None)
     if base is None:
@@ -324,7 +324,7 @@ def validate_mutation_view_spec(
 
     hooked = is_overridden(view_cls, MutationFlowMixin, "get_service_kwargs")
     # A kernel spec declares neither HTTP answer, so the view's own
-    # attributes are what ``_dispatch_kernel_mutation`` calls, after the
+    # attributes are what ``dispatch_mutation_for_spec`` calls, after the
     # service has run: refused here rather than as a ``TypeError`` once the
     # write has committed
     # (test_callable_success_status' TestASuccessStatusTheViewCannotResolve,
