@@ -130,6 +130,37 @@ def test_input_data_for_the_field_of_a_declined_source_reaches_its_parameter(fmt
 
 
 @CORES
+def test_a_kernel_call_inside_the_service_takes_none_of_the_outer_calls_server_values(
+    core: Core,
+) -> None:
+    """The value the outer call's ``input_data`` put is that call's: a spec the
+    service dispatches through the kernel validates what its own caller sent."""
+    seen: dict[str, Any] = {}
+
+    def inner(*, data: Any, org: Any = "DEFAULT") -> None:
+        seen["inner"] = (org, dict(data))
+
+    inner_spec = ServiceSpec(
+        service=inner, permissions=OPEN, validator=SerializerValidator(_SourcedIn), atomic=False
+    )
+
+    def outer(*, data: Any) -> None:
+        kernel_dispatch(inner_spec, principal=AnonymousUser(), arguments={"tenant": "inner"})
+
+    spec = ServiceSpec(
+        service=outer,
+        permissions=OPEN,
+        validator=SerializerValidator(_SourcedIn),
+        input_data=lambda: {"tenant": "srv"},
+        atomic=False,
+    )
+
+    core(spec, {"tenant": "outer"})
+
+    assert seen == {"inner": ("inner", {"org": "inner"})}
+
+
+@CORES
 def test_a_kernel_call_inside_the_service_keeps_its_own_values(core: Core) -> None:
     """The keys the outer call's provider owns are that call's: a spec the
     service dispatches through the kernel hands its own parameter of that name
