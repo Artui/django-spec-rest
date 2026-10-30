@@ -161,6 +161,19 @@ class TestASuccessStatusTheViewCannotResolve:
         with pytest.raises(ImproperlyConfigured, match=r"\['call_context'\] the framework can't"):
             view.as_view()
 
+    def test_a_callable_taking_kwargs_beside_a_key_the_pool_lacks_is_refused_at_as_view(
+        self,
+    ) -> None:
+        """``**kwargs`` takes the pool, never a name the pool lacks: called, it
+        would still raise ``TypeError`` for ``call_context``."""
+
+        def status(*, call_context: Any, **kwargs: Any) -> int:
+            return 202
+
+        view = type("_View", (_UpsertView,), {"success_status": staticmethod(status)})
+        with pytest.raises(ImproperlyConfigured, match=r"\['call_context'\] the framework can't"):
+            view.as_view()
+
     def test_a_value_that_is_no_int_nor_callable_is_refused_at_as_view(self) -> None:
         view = type("_View", (_UpsertView,), {"success_status": "201"})
         with pytest.raises(ImproperlyConfigured, match="`success_status` must be an int"):

@@ -202,6 +202,18 @@ class TestAFinalizerTheViewCannotCall:
         with pytest.raises(ImproperlyConfigured, match=r"\['call_context'\] the framework"):
             _view(ServiceCreateView, spec, finalizer)
 
+    def test_a_finalizer_taking_kwargs_beside_a_key_the_framework_lacks_is_refused_at_as_view(
+        self,
+    ) -> None:
+        """``**kwargs`` takes the framework's keys, never a name it lacks: called,
+        the finalizer would still raise ``TypeError`` for ``call_context``."""
+
+        def finalizer(*, call_context: Any, **kwargs: Any) -> None: ...
+
+        spec = ServiceSpec(service=_create_author, permissions=_OPEN)
+        with pytest.raises(ImproperlyConfigured, match=r"\['call_context'\] the framework"):
+            _view(ServiceCreateView, spec, finalizer)
+
     def test_a_finalizer_that_is_no_callable_is_refused_at_as_view(self) -> None:
         spec = ServiceSpec(service=_create_author, permissions=_OPEN)
         with pytest.raises(ImproperlyConfigured, match="`response_finalizer` must be a callable"):

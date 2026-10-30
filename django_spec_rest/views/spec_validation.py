@@ -39,12 +39,6 @@ def _required_kw_params(fn: Callable[..., Any]) -> dict[str, inspect.Parameter]:
     }
 
 
-def _accepts_var_keyword(fn: Callable[..., Any]) -> bool:
-    return any(
-        p.kind == inspect.Parameter.VAR_KEYWORD for p in inspect.signature(fn).parameters.values()
-    )
-
-
 def is_overridden(view_cls: type, base_cls: type, method_name: str) -> bool:
     """Return ``True`` if ``view_cls`` overrides ``base_cls``'s ``method_name``.
 
@@ -114,7 +108,10 @@ def _validate_success_status(
     """Reject a ``success_status`` that is neither int/None nor a well-formed callable.
 
     A required parameter outside ``_SUCCESS_STATUS_KEYS`` can never be
-    supplied, so it fails here rather than as a ``TypeError`` deep in dispatch.
+    supplied, so it fails here rather than as a ``TypeError`` deep in dispatch,
+    ``**kwargs`` beside it or not: ``**kwargs`` is handed the pool, never a
+    name the pool lacks
+    (test_a_callable_taking_kwargs_beside_a_key_the_pool_lacks_is_refused_at_as_view).
     """
     if success_status is None or isinstance(success_status, int):
         return
@@ -123,14 +120,12 @@ def _validate_success_status(
             f"{label}: `success_status` must be an int, a callable returning an int, "
             f"or None — got {type(success_status).__name__}."
         )
-    if _accepts_var_keyword(success_status):
-        return
     unknown = set(_required_kw_params(success_status)) - _SUCCESS_STATUS_KEYS
     if unknown:
         raise ImproperlyConfigured(
             f"{label}: `success_status` callable requires parameter(s) "
             f"{sorted(unknown)} the framework can't supply — declare only a subset "
-            f"of {sorted(_SUCCESS_STATUS_KEYS)} (or `**kwargs`)."
+            f"of {sorted(_SUCCESS_STATUS_KEYS)}, and `**kwargs` for the rest."
         )
 
 
@@ -138,7 +133,8 @@ def _validate_response_finalizer(finalizer: Any, *, label: str) -> None:
     """Reject a ``response_finalizer`` that isn't a well-formed callable.
 
     Same rule as ``_validate_success_status``, against
-    ``_RESPONSE_FINALIZER_KEYS``.
+    ``_RESPONSE_FINALIZER_KEYS``
+    (test_a_finalizer_taking_kwargs_beside_a_key_the_framework_lacks_is_refused_at_as_view).
     """
     if finalizer is None:
         return
@@ -147,14 +143,12 @@ def _validate_response_finalizer(finalizer: Any, *, label: str) -> None:
             f"{label}: `response_finalizer` must be a callable returning a Response "
             f"or None — got {type(finalizer).__name__}."
         )
-    if _accepts_var_keyword(finalizer):
-        return
     unknown = set(_required_kw_params(finalizer)) - _RESPONSE_FINALIZER_KEYS
     if unknown:
         raise ImproperlyConfigured(
             f"{label}: `response_finalizer` requires parameter(s) {sorted(unknown)} the "
             f"framework can't supply — declare only a subset of "
-            f"{sorted(_RESPONSE_FINALIZER_KEYS)} (or `**kwargs`)."
+            f"{sorted(_RESPONSE_FINALIZER_KEYS)}, and `**kwargs` for the rest."
         )
 
 
