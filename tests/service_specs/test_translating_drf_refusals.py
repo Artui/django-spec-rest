@@ -1,12 +1,11 @@
-"""``translating_drf_refusals`` changes what an author callable raises, and nothing the compile reads.
+"""``translating_drf_refusals`` changes what an author callable raises, and nothing a reader of it takes.
 
-The compile hands the kernel each author callable that runs within a call
-through it. The kernel binds the call by the callable's signature, awaits it
-by its kind, and reads the keys a ``kwargs`` provider fills off its return
-``TypedDict``, resolved in the provider's own module. So every surface the
-compile derives is compared with the translator patched out: a wrapper that
-hid ``async``-ness, the signature, the annotations or ``__wrapped__`` would
-change one of them.
+An author applies it to a callable of a kernel spec. The kernel binds the call
+by the callable's signature, awaits it by its kind, and reads the keys a
+``kwargs`` provider fills off its return ``TypedDict``, resolved in the
+provider's own module. So every surface the kernel derives from a spec is
+compared with the decorator left off: a wrapper that hid ``async``-ness, the
+signature, the annotations or ``__wrapped__`` would change one of them.
 """
 
 from __future__ import annotations
@@ -14,29 +13,21 @@ from __future__ import annotations
 import functools
 import inspect
 from collections.abc import Callable
-from typing import Annotated, Any
+from typing import Any
 
 import pytest
 from django.db.models import QuerySet
+from django_service_specs import SelectorKind, SelectorSpec, ServiceSpec, Unrestricted
 from django_service_specs.pool.provider_keys import provider_keys
 from django_service_specs.types.is_async import is_async
-from rest_framework import serializers
 from typing_extensions import TypedDict, Unpack
 
-from django_spec_rest import (
-    NotClientInput,
-    QueryParam,
-    SelectorKind,
-    SelectorSpec,
-    ServiceSpec,
-)
-from django_spec_rest.dispatch.utils import server_owned_keys
-from django_spec_rest.service_specs import as_kernel_spec as compiler
-from django_spec_rest.service_specs.kernel_spec_variant import kernel_spec_variant
 from django_spec_rest.service_specs.translating_drf_refusals import (
     translating_drf_refusals,
 )
 from tests.testapp.models import Post
+
+_OPEN = (Unrestricted(),)
 
 
 class _Scope(TypedDict):
@@ -46,12 +37,6 @@ class _Scope(TypedDict):
 class _Keys(TypedDict):
     title: str
     status: str
-
-
-class _Title(serializers.Serializer):
-    title = serializers.CharField()
-    status = serializers.CharField()
-    note = serializers.CharField(required=False)
 
 
 def _scope(**_: Any) -> _Scope:
@@ -64,18 +49,13 @@ def _create(*, title: str, status: str, tenant: str) -> None: ...
 async def _acreate(*, title: str, status: str, tenant: str) -> None: ...
 
 
-def _gate(*, tenant: Annotated[str, NotClientInput] = "own", status: str) -> None: ...
-
-
-def _spread(
-    *, title: str, priority: int = 1, owner: Annotated[str, NotClientInput] = "x"
-) -> None: ...
+def _gate(*, status: str) -> None: ...
 
 
 def _unpacked(**keys: Unpack[_Keys]) -> None: ...
 
 
-def _rows(*, q: str = "", tenant: Annotated[str, NotClientInput] = "own") -> QuerySet[Post]:
+def _rows(*, q: str = "") -> QuerySet[Post]:
     return Post.objects.all()
 
 
@@ -83,82 +63,48 @@ async def _arows(*, q: str = "") -> QuerySet[Post]:
     return Post.objects.all()
 
 
-def _lookup(*, pk: int, tenant: Annotated[str, NotClientInput] = "own") -> Post:
-    return Post.objects.get(pk=pk)
-
-
-def _extend(queryset: Any, view: Any, request: Any) -> Any:
+def _extend(queryset: Any) -> Any:
     return queryset
 
 
-_SPECS: dict[str, Callable[[], Any]] = {
-    "sync-service": lambda: ServiceSpec(
-        service=_create,
-        input_serializer=_Title,
-        kwargs=_scope,
-        preconditions=[_gate],
-        input_data=lambda **_: {},
+_SPECS: dict[str, Callable[[Callable[[Any], Any]], Any]] = {
+    "sync-service": lambda wrap: ServiceSpec(
+        permissions=_OPEN,
+        service=wrap(_create),
+        kwargs=wrap(_scope),
+        preconditions=[wrap(_gate)],
     ),
-    "async-service": lambda: ServiceSpec(service=_acreate, input_serializer=_Title, kwargs=_scope),
-    "spread-service": lambda: ServiceSpec(service=_spread),
-    "unpacked-service": lambda: ServiceSpec(service=_unpacked),
-    "update-with-lookup": lambda: ServiceSpec(
-        service=_create,
-        input_serializer=_Title,
-        kwargs=_scope,
-        instance_selector_spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE, selector=_lookup, kwargs=_scope
-        ),
-        output_selector_spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE, selector=_lookup, extend_queryset=_extend
-        ),
+    "async-service": lambda wrap: ServiceSpec(
+        permissions=_OPEN, service=wrap(_acreate), kwargs=wrap(_scope)
     ),
-    "list-selector": lambda: SelectorSpec(
+    "unpacked-service": lambda wrap: ServiceSpec(permissions=_OPEN, service=wrap(_unpacked)),
+    "list-selector": lambda wrap: SelectorSpec(
+        permissions=_OPEN,
         kind=SelectorKind.LIST,
-        selector=_rows,
-        kwargs=_scope,
-        preconditions=[_gate],
-        extend_queryset=_extend,
-        reads=[QueryParam("status")],
+        selector=wrap(_rows),
+        kwargs=wrap(_scope),
+        extend_queryset=wrap(_extend),
     ),
-    "async-selector": lambda: SelectorSpec(kind=SelectorKind.LIST, selector=_arows),
+    "async-selector": lambda wrap: SelectorSpec(
+        permissions=_OPEN, kind=SelectorKind.LIST, selector=wrap(_arows)
+    ),
 }
-_VARIANTS: list[dict[str, Any]] = [
-    {},
-    {"lenient": True},
-    {"spread": True},
-    {"server_input": False},
-    {"unguarded": True},
-    {"target": True},
-]
 
 
 def _surfaces(spec: Any) -> list[Any]:
-    """Everything the compile derives that a translator could change."""
-    compiled = spec.as_kernel_spec()
-    callables = [
-        getattr(compiled, "service", None) or compiled.selector,
-        *(compiled.preconditions or ()),
-    ]
+    """Everything the kernel derives from a spec that a wrapper could change."""
+    callables = [getattr(spec, "service", None) or spec.selector, *(spec.preconditions or ())]
     return [
-        compiled.parameters(),
-        server_owned_keys(spec),
-        provider_keys(compiled.kwargs),
+        spec.parameters(),
+        provider_keys(spec.kwargs),
         [is_async(fn) for fn in callables],
         [inspect.signature(fn) for fn in callables],
-        *(kernel_spec_variant(spec, **variant).parameters() for variant in _VARIANTS),
     ]
 
 
 @pytest.mark.parametrize("build", list(_SPECS.values()), ids=list(_SPECS))
-def test_the_compile_reads_the_same_with_and_without_it(
-    build: Callable[[], Any], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    # A fresh spec for each compile: a spec caches what it compiles to.
-    translated = _surfaces(build())
-    monkeypatch.setattr(compiler, "translating_drf_refusals", lambda fn: fn)
-
-    assert translated == _surfaces(build())
+def test_a_spec_reads_the_same_with_and_without_it(build: Callable[..., Any]) -> None:
+    assert _surfaces(build(translating_drf_refusals)) == _surfaces(build(lambda fn: fn))
 
 
 def test_a_typed_provider_still_names_the_keys_it_fills() -> None:
@@ -233,48 +179,22 @@ class _Owner:
         return Post.objects.all()
 
 
-_DOCUMENTED: dict[str, tuple[Callable[[], Any], Callable[[Any], Any], str]] = {
-    "function-service": (
-        lambda: ServiceSpec(service=_documented_service),
-        lambda compiled: compiled.service,
-        "The service's own words.",
-    ),
-    "method-service": (
-        lambda: ServiceSpec(service=_Owner().create),
-        lambda compiled: compiled.service,
-        "The method's own words.",
-    ),
-    "async-service": (
-        lambda: ServiceSpec(service=_documented_aservice),
-        lambda compiled: compiled.service,
-        "The async service's own words.",
-    ),
-    "function-selector": (
-        lambda: SelectorSpec(kind=SelectorKind.LIST, selector=_documented_selector),
-        lambda compiled: compiled.selector,
-        "The selector's own words.",
-    ),
-    "method-selector": (
-        lambda: SelectorSpec(kind=SelectorKind.LIST, selector=_Owner().rows),
-        lambda compiled: compiled.selector,
-        "The bound selector's own words.",
-    ),
-    "kwargs-provider": (
-        lambda: ServiceSpec(service=_documented_service, kwargs=_documented_kwargs),
-        lambda compiled: compiled.kwargs,
-        "The provider's own words.",
-    ),
+_DOCUMENTED: dict[str, tuple[Callable[..., Any], str]] = {
+    "function-service": (_documented_service, "The service's own words."),
+    "method-service": (_Owner().create, "The method's own words."),
+    "async-service": (_documented_aservice, "The async service's own words."),
+    "function-selector": (_documented_selector, "The selector's own words."),
+    "method-selector": (_Owner().rows, "The bound selector's own words."),
+    "kwargs-provider": (_documented_kwargs, "The provider's own words."),
 }
 
 
-@pytest.mark.parametrize(
-    ("build", "seat", "words"), list(_DOCUMENTED.values()), ids=list(_DOCUMENTED)
-)
-def test_the_compiled_callable_keeps_the_author_s_docstring(
-    build: Callable[[], Any], seat: Callable[[Any], Any], words: str
+@pytest.mark.parametrize(("author", "words"), list(_DOCUMENTED.values()), ids=list(_DOCUMENTED))
+def test_the_wrapped_callable_keeps_the_author_s_docstring(
+    author: Callable[..., Any], words: str
 ) -> None:
-    """A tool description is read off the compiled callable, as on 0.61.0."""
-    assert inspect.getdoc(seat(build().as_kernel_spec())) == words
+    """A tool description is read off the callable the spec declares."""
+    assert inspect.getdoc(translating_drf_refusals(author)) == words
 
 
 def test_a_function_s_attributes_survive_the_wrap() -> None:

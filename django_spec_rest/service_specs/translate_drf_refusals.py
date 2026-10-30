@@ -87,9 +87,10 @@ def _kernel_twin(exc: APIException) -> APIException | None:
     if twin is None:
         return None
     # The detail as DRF built it, codes included, which is why the twin is built
-    # from the message alone, and a mapping a denial may carry
-    # (test_a_permission_denied_with_a_structured_detail_keeps_it), and the
-    # status a project's subclass declares (test_a_project_subclass_keeps_its_status).
+    # from the message alone, and a mapping a denial may carry, and the status a
+    # project's subclass declares: both are the two halves of
+    # test_a_project_subclass_keeps_its_status_and_detail, whose structured-detail
+    # case fails without the detail copy and whose status cases fail without the other.
     twin.detail = exc.detail
     twin.status_code = exc.status_code
     setattr(twin, TRANSLATED_FROM, exc)

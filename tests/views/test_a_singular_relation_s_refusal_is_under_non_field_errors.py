@@ -2,10 +2,10 @@
 
 The upgrade note states this shape, and each case here is one of its examples,
 asserted as the exact payload and run twice: through ``create_from_input``
-called directly, and through a live view whose service makes that call. The
-shape is the kernel's nested-write code's, which drfs re-exports, so 0.57.0's
-bare list or string under the relation's name (``{"author": ["A.", "B."]}``)
-is gone on both paths at once.
+called directly, and through a live view serving a kernel ``ServiceSpec``
+whose service makes that call. The shape is the kernel's nested-write code's,
+so 0.57.0's bare list or string under the relation's name
+(``{"author": ["A.", "B."]}``) is gone on both paths at once.
 
 A refusal that already named its own fields is left as it was, a Django
 ``ValidationError`` or a ``TypeError`` from a row service still propagates,
@@ -19,20 +19,22 @@ from typing import Any
 
 import pytest
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django_service_specs import (
+    ChildSpec,
+    ForwardRelationSpec,
+    ReverseOneToOneSpec,
+    ServiceSpec,
+    ServiceValidationError,
+    Unrestricted,
+    create_from_input,
+)
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 from rest_framework.test import APIRequestFactory
 
-from django_spec_rest import (
-    ChildSpec,
-    ForwardRelationSpec,
-    ReverseOneToOneSpec,
-    ServiceCreateView,
-    ServiceSpec,
-    ServiceValidationError,
-    create_from_input,
-)
+from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from tests.testapp.models import Author, Catalog, Cover, Post, Profile, Section
+from tests.views.test_kernel_views import _CreateView
 
 pytestmark = pytest.mark.django_db
 
@@ -164,7 +166,7 @@ _CASES: dict[str, tuple[Callable[[dict[str, Any]], None], Callable[[int], dict[s
         lambda _: _post_with_an_author(_refuses("Rude.")),
         lambda pk: {"author": {"non_field_errors": ["Rude."]}},
     ),
-    "forward-row-service-raising-drfs-validation-error": (
+    "forward-row-service-raising-drf-validation-error": (
         lambda _: _post_with_an_author(_raises(ValidationError(["D1."]))),
         lambda pk: {"author": {"non_field_errors": ["D1."]}},
     ),
@@ -225,8 +227,10 @@ def _view_running(call: Callable[[dict[str, Any]], None]) -> Any:
     def service(*, data: dict[str, Any]) -> None:
         call(data["payload"])
 
-    class _Create(ServiceCreateView):
-        spec = ServiceSpec(service=service, input_serializer=_Payload)
+    class _Create(_CreateView):
+        spec = ServiceSpec(
+            service=service, permissions=(Unrestricted(),), validator=SerializerValidator(_Payload)
+        )
 
     return _Create.as_view()
 
@@ -244,8 +248,8 @@ def test_called_directly_the_refusal_is_the_stated_payload(name: str) -> None:
         call(_body(theirs.pk))
 
     assert excinfo.value.detail == expected(theirs.pk)
-    # A service that reached for DRF's error keeps it, and the rest are drfs' own.
-    drf_own = name == "forward-row-service-raising-drfs-validation-error"
+    # A service that reached for DRF's error keeps it, and the rest are the kernel's own.
+    drf_own = name == "forward-row-service-raising-drf-validation-error"
     assert isinstance(excinfo.value, ServiceValidationError) is not drf_own
 
 

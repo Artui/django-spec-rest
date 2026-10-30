@@ -66,7 +66,11 @@ dependencies = [
     # signature is marked, and the kernel fills a marked read from a registered
     # seed on any dispatch, which is what lets the edge stop compiling a seed's
     # name out of the reads per call.
-    "django-service-specs>=0.15.0",
+    # 0.20.0 is the floor the move onto kernel specs is written against: the
+    # call seeds ``request`` and ``view`` by name (``CALL_SEEDS``), the
+    # registration check ``check_seeds``, and ``flat_arguments``, the reader a
+    # query string or form body goes through before ``dispatch``.
+    "django-service-specs>=0.20.0",
 ]
 
 [project.optional-dependencies]

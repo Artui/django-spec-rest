@@ -182,7 +182,7 @@ def test_the_serializer_context_carries_an_offline_request_for_the_principal() -
     request = seen["request"]
     assert isinstance(request, Request)
     assert request.user is principal
-    # The arguments are the request's data too, as dispatch_spec hands both.
+    # The arguments are the offline request's data too, as a call off HTTP has no other body.
     assert request.data == {"title": "hi"}
     assert seen["view"].request is request
     assert seen["format"] is None

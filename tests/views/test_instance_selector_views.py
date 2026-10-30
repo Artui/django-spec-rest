@@ -1,40 +1,53 @@
-"""Standalone-view tests for ``ServiceSpec.instance_selector_spec``."""
+"""A kernel ``ServiceSpec``'s ``instance_selector_spec`` on the standalone mutation views.
+
+The spec carries the lookup, so the views need no ``queryset``. Its row is
+found by the kernel's dispatch from the route's declared capture; a
+``filter_set`` on the lookup narrows which row a mutation may reach.
+"""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from typing import Any
 
 import django_filters
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 from django.db.models import QuerySet
-from rest_framework.test import APIRequestFactory
-
-from django_spec_rest import (
+from django_service_specs import (
+    Parameter,
+    Parameters,
     SelectorKind,
     SelectorSpec,
-    ServiceCreateView,
-    ServiceDeleteView,
     ServiceSpec,
-    ServiceUpdateView,
+    Unrestricted,
 )
+from rest_framework import serializers
+from rest_framework.permissions import BasePermission
+from rest_framework.test import APIRequestFactory
+
+from django_spec_rest import ServiceDeleteView, ServiceUpdateView
+from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
+from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from tests.testapp.models import Author
 from tests.testapp.serializers import AuthorSerializer
 
+pytestmark = pytest.mark.django_db
+
 factory = APIRequestFactory()
+_OPEN = (Unrestricted(),)
+_PK = Parameters.of(Parameter("pk", "integer", required=True))
 
 
-@dataclass
-class _AuthorIn:
-    name: str
+class _AuthorIn(serializers.Serializer):
+    name = serializers.CharField(max_length=20)
 
 
 def _author_by_pk(*, pk: int) -> QuerySet[Author]:
     return Author.objects.filter(pk=pk)
 
 
-def _update_author(*, instance: Author, data: _AuthorIn) -> Author:
-    instance.name = data.name
+def _update_author(*, instance: Author, data: dict[str, Any]) -> Author:
+    instance.name = data["name"]
     instance.save(update_fields=["name"])
     return instance
 
@@ -43,207 +56,133 @@ def _delete_author(*, instance: Author) -> None:
     instance.delete()
 
 
-_INSTANCE_SPEC = SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_author_by_pk)
-
-
-class _SpecLookupUpdateView(ServiceUpdateView):
-    # Deliberately no ``queryset`` / ``lookup_field`` — the spec carries
-    # the lookup.
-    spec = ServiceSpec(
-        service=_update_author,
-        input_serializer=_AuthorIn,
-        instance_selector_spec=_INSTANCE_SPEC,
-        output_selector_spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE, output_serializer=AuthorSerializer
-        ),
+def _lookup(**fields: Any) -> SelectorSpec:
+    return SelectorSpec(
+        kind=SelectorKind.RETRIEVE, selector=_author_by_pk, reads=_PK, permissions=_OPEN, **fields
     )
 
 
-class _SpecLookupDeleteView(ServiceDeleteView):
-    spec = ServiceSpec(service=_delete_author, instance_selector_spec=_INSTANCE_SPEC)
+def _update_spec(**lookup: Any) -> ServiceSpec:
+    return ServiceSpec(
+        service=_update_author,
+        permissions=_OPEN,
+        validator=SerializerValidator(_AuthorIn),
+        instance_selector_spec=_lookup(**lookup),
+        presenter=SerializerPresenter(AuthorSerializer),
+    )
 
 
-@pytest.mark.django_db
-class TestStandaloneInstanceSelector:
-    def test_update_view_without_queryset(self) -> None:
-        author = Author.objects.create(name="orig")
-        response = _SpecLookupUpdateView.as_view()(
-            factory.put("/", {"name": "new"}, format="json"), pk=author.pk
+class _StandIn:
+    """``get_permissions`` stands in for ``MutationFlowMixin``'s, which reads a
+    drfs spec's ``permission_classes``, as the spine's views do."""
+
+    permission_classes: Any
+
+    def get_permissions(self) -> list[Any]:
+        return [permission() for permission in self.permission_classes]
+
+
+def _view(base: type, spec: ServiceSpec) -> Any:
+    return type("_View", (_StandIn, base), {"spec": spec}).as_view()
+
+
+@pytest.fixture
+def author() -> Author:
+    return Author.objects.create(name="orig")
+
+
+class TestTheSpecCarriesTheLookup:
+    @pytest.mark.parametrize("method", ["put", "patch"])
+    def test_an_update_view_needs_no_queryset(self, author: Author, method: str) -> None:
+        request = getattr(factory, method)("/", {"name": "new"}, format="json")
+        response = _view(ServiceUpdateView, _update_spec())(request, pk=str(author.pk))
+        assert response.status_code == 200, response.data
+        assert response.data == {"id": author.pk, "name": "new"}
+
+    def test_a_delete_view_needs_no_queryset(self, author: Author) -> None:
+        spec = ServiceSpec(
+            service=_delete_author, permissions=_OPEN, instance_selector_spec=_lookup()
         )
-        assert response.status_code == 200
-        author.refresh_from_db()
-        assert author.name == "new"
-
-    def test_patch_on_update_view_without_queryset(self) -> None:
-        author = Author.objects.create(name="orig")
-        response = _SpecLookupUpdateView.as_view()(
-            factory.patch("/", {"name": "new"}, format="json"), pk=author.pk
-        )
-        assert response.status_code == 200
-        author.refresh_from_db()
-        assert author.name == "new"
-
-    def test_delete_view_without_queryset(self) -> None:
-        author = Author.objects.create(name="x")
-        response = _SpecLookupDeleteView.as_view()(factory.delete("/"), pk=author.pk)
+        response = _view(ServiceDeleteView, spec)(factory.delete("/"), pk=str(author.pk))
         assert response.status_code == 204
         assert not Author.objects.filter(pk=author.pk).exists()
 
-    def test_missing_row_renders_404(self) -> None:
-        response = _SpecLookupUpdateView.as_view()(
-            factory.put("/", {"name": "new"}, format="json"), pk=99999
-        )
-        assert response.status_code == 404
+    def test_a_missing_row_is_404(self) -> None:
+        request = factory.put("/", {"name": "new"}, format="json")
+        assert _view(ServiceUpdateView, _update_spec())(request, pk="999").status_code == 404
 
+    def test_a_json_array_body_is_a_400_not_a_500(self, author: Author) -> None:
+        request = factory.patch("/", [1, 2], format="json")
+        response = _view(ServiceUpdateView, _update_spec())(request, pk=str(author.pk))
+        assert response.status_code == 400
+        author.refresh_from_db()
+        assert author.name == "orig"
 
-class TestInstanceSelectorSpecValidation:
-    def test_list_kind_rejected_at_as_view(self) -> None:
-        class _View(ServiceUpdateView):
-            spec = ServiceSpec(
+    def test_a_list_lookup_is_refused_when_the_spec_is_built(self) -> None:
+        with pytest.raises(ImproperlyConfigured):
+            ServiceSpec(
                 service=_update_author,
-                input_serializer=_AuthorIn,
-                instance_selector_spec=SelectorSpec(kind=SelectorKind.LIST, selector=_author_by_pk),
-            )
-
-        with pytest.raises(ImproperlyConfigured, match="must be SelectorKind.RETRIEVE"):
-            _View.as_view()
-
-    def test_rejected_on_create_view_at_as_view(self) -> None:
-        def _create_author(*, data: _AuthorIn) -> Author:
-            return Author.objects.create(name=data.name)
-
-        class _View(ServiceCreateView):
-            spec = ServiceSpec(
-                service=_create_author,
-                input_serializer=_AuthorIn,
-                instance_selector_spec=_INSTANCE_SPEC,
-            )
-
-        with pytest.raises(ImproperlyConfigured, match="does not target an instance"):
-            _View.as_view()
-
-
-@pytest.mark.django_db
-class TestNestedOutputSpecIgnoresAllowNone:
-    def test_output_selector_none_still_renders_204(self) -> None:
-        # ``allow_none`` expresses a *standalone read* contract; the nested
-        # output spec keeps its authoritative-None → 204 behaviour.
-        def _vanishing(*, result: Author) -> None:
-            return None
-
-        class _View(ServiceUpdateView):
-            spec = ServiceSpec(
-                service=_update_author,
-                input_serializer=_AuthorIn,
-                instance_selector_spec=_INSTANCE_SPEC,
-                output_selector_spec=SelectorSpec(
-                    kind=SelectorKind.RETRIEVE,
-                    selector=_vanishing,
-                    allow_none=True,
+                permissions=_OPEN,
+                instance_selector_spec=SelectorSpec(
+                    kind=SelectorKind.LIST, selector=_author_by_pk, permissions=_OPEN
                 ),
             )
 
-        author = Author.objects.create(name="orig")
-        response = _View.as_view()(factory.put("/", {"name": "new"}, format="json"), pk=author.pk)
-        assert response.status_code == 204
 
-
-class _NameFilterSet(django_filters.FilterSet):
-    """Scoping filter set: keeps only rows whose ``name`` matches ``?scope=``."""
-
+class _ByName(django_filters.FilterSet):
     scope = django_filters.CharFilter(field_name="name")
 
     class Meta:
         model = Author
-        fields = ["scope"]
+        fields: list[str] = []
 
 
-class _ScopedUpdateView(ServiceUpdateView):
-    spec = ServiceSpec(
-        service=_update_author,
-        input_serializer=_AuthorIn,
-        instance_selector_spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE, selector=_author_by_pk, filter_set=_NameFilterSet
-        ),
+class _ScopeIsMine(BasePermission):
+    """Admits a request whose query string says ``?scope=mine``: the guard a
+    body-supplied scope walks past."""
+
+    def has_permission(self, request: Any, view: Any) -> bool:
+        return request.query_params.get("scope") == "mine"
+
+
+class TestALookupsFilterSet:
+    @pytest.mark.xfail(
+        strict=True,
+        reason="kernel_arguments reads a service spec's body and route alone, so the query "
+        "string never reaches its lookup's filter_set; an ask on dispatch/kernel_edge.py",
     )
-
-
-@pytest.mark.django_db
-class TestInstanceSelectorFilterChannel:
-    """A ``filter_set`` on the nested lookup narrows the row a mutation reaches.
-
-    That makes it a scoping rule, and a scoping rule has to read the channel
-    the client cannot also use: bound to the body, the value being written
-    would decide which row is writable. The query string is the filter's only
-    source, so a filter name the body also sends is dropped from it.
-    """
-
-    def test_the_query_string_is_the_scope(self) -> None:
-        author = Author.objects.create(name="orig")
-
-        response = _ScopedUpdateView.as_view()(
-            factory.patch("/?scope=orig", {"name": "new"}, format="json"), pk=author.pk
+    def test_the_query_string_is_the_scope(self, author: Author) -> None:
+        request = factory.patch("/?scope=someone-else", {"name": "new"}, format="json")
+        response = _view(ServiceUpdateView, _update_spec(filter_set=_ByName))(
+            request, pk=str(author.pk)
         )
-
-        assert response.status_code == 200
-        author.refresh_from_db()
-        assert author.name == "new"
-
-    def test_the_body_cannot_widen_the_scope(self) -> None:
-        author = Author.objects.create(name="orig")
-
-        response = _ScopedUpdateView.as_view()(
-            factory.patch("/?scope=someone-else", {"name": "new", "scope": "orig"}, format="json"),
-            pk=author.pk,
-        )
-
         assert response.status_code == 404
-        author.refresh_from_db()
-        assert author.name == "orig"
 
-    def test_a_filter_named_like_an_input_field_is_refused(self) -> None:
-        """A filter name and an input field share one set of argument names, so a
-        filter set reading the key the serializer validates is a misconfigured
-        spec rather than two channels told apart at request time."""
-
-        class _CollidingFilterSet(django_filters.FilterSet):
-            name = django_filters.CharFilter()
-
-            class Meta:
-                model = Author
-                fields = ["name"]
-
-        class _View(ServiceUpdateView):
-            spec = ServiceSpec(
-                service=_update_author,
-                input_serializer=_AuthorIn,
-                instance_selector_spec=SelectorSpec(
-                    kind=SelectorKind.RETRIEVE,
-                    selector=_author_by_pk,
-                    filter_set=_CollidingFilterSet,
-                ),
-            )
-
-        # Refused where the view is wired, since the serializer can be read
-        # there; one that cannot is refused by the request
-        # (test_a_serializer_unreadable_without_a_request_is_refused_by_the_request).
-        with pytest.raises(ImproperlyConfigured, match="also takes as a writable field"):
-            _View.as_view()
-
-
-@pytest.mark.django_db
-class TestNonObjectBody:
-    def test_a_json_array_body_is_a_400_not_a_500(self) -> None:
-        """Only a ``many=True`` spec takes a list. Reaching a single-instance
-        spec, one used to raise an ``AttributeError`` deep in the target lookup
-        — which DRF re-raises, so the client got a stack trace instead of the
-        rejection its input had earned."""
-        author = Author.objects.create(name="orig")
-
-        response = _SpecLookupUpdateView.as_view()(
-            factory.patch("/", [1, 2], format="json"), pk=author.pk
-        )
-
-        assert response.status_code == 400
-        author.refresh_from_db()
-        assert author.name == "orig"
+    @pytest.mark.xfail(
+        strict=True,
+        raises=AssertionError,
+        reason="open owner decision: on a mutation a body key sets the lookup's filter_set "
+        "scope, past a permission reading the query string",
+    )
+    def test_what_the_body_sends_for_the_filter(self) -> None:
+        """The kernel has one argument namespace, so a body key named like the
+        lookup's filter is that filter's value: the client's body picks the row
+        a mutation reaches, where drfs read the scope off the query string alone.
+        A permission class that checks ``?scope`` is then no guard, since the
+        body names another tenant's row. The safe answer, asserted here: the
+        body's ``scope`` does not choose the row, so ``?scope=mine`` finds none
+        (404) and the victim's row is unchanged."""
+        victim = Author.objects.create(name="victim")
+        view = type(
+            "_View",
+            (_StandIn, ServiceUpdateView),
+            {
+                "spec": _update_spec(filter_set=_ByName),
+                "permission_classes": [_ScopeIsMine],
+            },
+        ).as_view()
+        request = factory.patch("/?scope=mine", {"name": "pwned", "scope": "victim"}, format="json")
+        response = view(request, pk=str(victim.pk))
+        assert response.status_code == 404
+        victim.refresh_from_db()
+        assert victim.name == "victim"

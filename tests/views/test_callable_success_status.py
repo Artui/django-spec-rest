@@ -1,27 +1,43 @@
-"""Integration: ``ServiceSpec.success_status`` as a callable (upsert 200/201)."""
+"""A kernel spec's view's ``success_status`` as a callable (upsert 200/201).
+
+A kernel ``ServiceSpec`` has no ``success_status``, which is HTTP's alone, so
+its view declares it (``MutationFlowMixin.success_status``). Driven through the
+standalone views; the viewsets' ``action_specs`` and ``@service_action`` read it
+as their own lane decides.
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 import pytest
-from rest_framework.test import APIRequestFactory
-from rest_framework.viewsets import GenericViewSet
-
-from django_spec_rest import (
+from django.core.exceptions import ImproperlyConfigured
+from django_service_specs import (
+    Parameter,
+    Parameters,
     SelectorKind,
     SelectorSpec,
     ServiceSpec,
-    ServiceViewSet,
-    service_action,
+    Unrestricted,
 )
+from rest_framework import serializers
+from rest_framework.test import APIRequestFactory
+
+from django_spec_rest import ServiceCreateView, ServiceUpdateView
+from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
+from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from tests.testapp.models import Author
 from tests.testapp.serializers import AuthorSerializer
 
+pytestmark = pytest.mark.django_db
 
-@dataclass
-class _AuthorIn:
-    name: str
+factory = APIRequestFactory()
+_OPEN = (Unrestricted(),)
+
+
+class _AuthorIn(serializers.Serializer):
+    name = serializers.CharField()
 
 
 @dataclass
@@ -30,8 +46,8 @@ class _UpsertResult:
     created: bool
 
 
-def _upsert_author(*, data: _AuthorIn) -> _UpsertResult:
-    author, created = Author.objects.get_or_create(name=data.name)
+def _upsert_author(*, data: dict[str, Any]) -> _UpsertResult:
+    author, created = Author.objects.get_or_create(name=data["name"])
     return _UpsertResult(author=author, created=created)
 
 
@@ -40,74 +56,99 @@ def _refetch(*, result: _UpsertResult) -> Author:
 
 
 def _upsert_status(*, result: _UpsertResult) -> int:
-    # 201 for a freshly created row, 200 for an existing one — keyed on the
-    # *service's* return value, not the re-fetched output instance.
+    # 201 for a freshly created row, 200 for an existing one: keyed on the
+    # *service's* return value, not the re-read output row.
     return 201 if result.created else 200
 
 
-def _archive_status(*, instance: Author) -> int:
-    return 205
+class _UpsertView(ServiceCreateView):
+    success_status = _upsert_status
+    spec = ServiceSpec(
+        service=_upsert_author,
+        permissions=_OPEN,
+        validator=SerializerValidator(_AuthorIn),
+        output_selector_spec=SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=_refetch,
+            permissions=_OPEN,
+            presenter=SerializerPresenter(AuthorSerializer),
+        ),
+    )
 
 
 def _archive(*, instance: Author) -> None:
-    # In-place mutation that returns nothing → empty body; the callable status
-    # still applies uniformly (exercises the empty-body branch).
+    # In place, returning nothing: an empty body, under the callable's status.
     instance.name = f"[archived] {instance.name}"
     instance.save(update_fields=["name"])
 
 
-_UPSERT_SPEC: ServiceSpec = ServiceSpec(
-    service=_upsert_author,
-    input_serializer=_AuthorIn,
-    success_status=_upsert_status,
-    output_selector_spec=SelectorSpec(
-        kind=SelectorKind.RETRIEVE,
-        selector=_refetch,
-        output_serializer=AuthorSerializer,
-    ),
+def _archive_status(*, instance: Author, view: Any, request: Any) -> int:
+    assert view.request is request
+    return 205
+
+
+def _author(*, pk: int) -> Author | None:
+    return Author.objects.filter(pk=pk).first()
+
+
+_AUTHOR = SelectorSpec(
+    kind=SelectorKind.RETRIEVE,
+    selector=_author,
+    reads=Parameters.of(Parameter("pk", "integer", required=True)),
+    permissions=_OPEN,
 )
 
 
-class _UpsertViewSet(ServiceViewSet):
-    queryset = Author.objects.all()
-    action_specs = {"create": _UPSERT_SPEC}
+class _ArchiveView(ServiceUpdateView):
+    success_status = _archive_status
+    spec = ServiceSpec(service=_archive, permissions=_OPEN, instance_selector_spec=_AUTHOR)
 
 
-class _ArchiveViewSet(GenericViewSet):
-    queryset = Author.objects.all()
-
-    @service_action(
-        ServiceSpec(service=_archive, success_status=_archive_status),
-        detail=True,
-        methods=["post"],
-    )
-    def archive(self, request, pk=None):  # type: ignore[no-untyped-def]
-        """Stubbed — replaced by service_action."""
-
-
-factory = APIRequestFactory()
-
-
-@pytest.mark.django_db
 class TestCallableSuccessStatus:
     def test_create_returns_201_then_200_on_upsert(self) -> None:
-        view = _UpsertViewSet.as_view({"post": "create"})
+        view = _UpsertView.as_view()
 
         first = view(factory.post("/", {"name": "Ada"}, format="json"))
         assert first.status_code == 201
         assert first.data["name"] == "Ada"
 
-        # Same name again → get_or_create finds the row → 200, no duplicate.
+        # Same name again: get_or_create finds the row, so 200 and no duplicate.
         second = view(factory.post("/", {"name": "Ada"}, format="json"))
         assert second.status_code == 200
         assert Author.objects.filter(name="Ada").count() == 1
 
-    def test_service_action_resolves_status_per_request_not_at_decoration(self) -> None:
+    def test_a_callable_status_applies_to_an_empty_answer(self) -> None:
+        """Resolved per request from the pool, ``instance`` the row the view
+        found; with nothing to present, the set status still applies rather
+        than the ``204`` an unset one falls back to."""
         author = Author.objects.create(name="Grace")
-        view = _ArchiveViewSet.as_view({"post": "archive"})
-        # Empty-body response carrying the callable-resolved status (205).
-        response = view(factory.post("/", {}, format="json"), pk=author.pk)
+        response = _ArchiveView.as_view()(factory.put("/", {}, format="json"), pk=author.pk)
         assert response.status_code == 205
         assert not response.data
         author.refresh_from_db()
         assert author.name == "[archived] Grace"
+
+    def test_an_int_status_resolving_to_204_answers_200_with_a_body(self) -> None:
+        """A ``204`` carries no body, so a value to present goes out under ``200``."""
+        view = type("_View", (_UpsertView,), {"success_status": 204}).as_view()
+        response = view(factory.post("/", {"name": "Ada"}, format="json"))
+        assert response.status_code == 200
+        assert response.data["name"] == "Ada"
+
+
+class TestASuccessStatusTheViewCannotResolve:
+    """Refused when the view is built, as a drfs spec's ``success_status`` is,
+    rather than raising ``TypeError`` once the service has committed."""
+
+    def test_a_callable_requiring_a_key_the_pool_lacks_is_refused_at_as_view(self) -> None:
+        def status(*, call_context: Any) -> int:
+            return 202
+
+        view = type("_View", (_UpsertView,), {"success_status": staticmethod(status)})
+        with pytest.raises(ImproperlyConfigured, match=r"\['call_context'\] the framework can't"):
+            view.as_view()
+
+    def test_a_value_that_is_no_int_nor_callable_is_refused_at_as_view(self) -> None:
+        view = type("_View", (_UpsertView,), {"success_status": "201"})
+        with pytest.raises(ImproperlyConfigured, match="`success_status` must be an int"):
+            view.as_view()

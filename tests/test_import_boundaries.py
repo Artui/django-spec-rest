@@ -59,6 +59,10 @@ DRF_PREFIXES = ("rest_framework",)
 # keyword-pool resolver, the most transport-neutral code in the package, filed in
 # ``views/utils.py`` beside the view helpers that share its module.
 ALLOWED_VIEWS_IMPORTS: dict[str, frozenset[str]] = {
+    # The kernel route's refusal map answers every ``ServiceError`` with
+    # ``map_service_error``, as the drfs path does, so the ``AdditionalInputRequired``
+    # schema ``restore_raised_schema`` recognises by class is restored on both.
+    "dispatch/kernel_refusals.py": frozenset({"django_spec_rest.views.mutation.map_service_error"}),
     "selectors/acall_selector.py": frozenset({"django_spec_rest.views.utils"}),
     "selectors/call_selector.py": frozenset({"django_spec_rest.views.utils"}),
     "selectors/utils.py": frozenset({"django_spec_rest.views.utils"}),
@@ -80,6 +84,19 @@ ALLOWED_VIEWS_IMPORTS: dict[str, frozenset[str]] = {
 ALLOWED_DRF_IMPORTS: dict[str, frozenset[str]] = {
     "audience/build_audience_projection.py": frozenset({"rest_framework.serializers"}),
     "dispatch/enforce_permissions.py": frozenset({"rest_framework.exceptions"}),
+    # The DRF edge over the kernel's own ``dispatch``. ``request`` is for
+    # annotations alone: the ``Request`` whose body and query string it reads is
+    # handed in.
+    "dispatch/kernel_edge.py": frozenset({"rest_framework.request"}),
+    # The kernel route's refusal map answers each kernel refusal as a DRF
+    # exception (``exceptions``), the bare ``DispatchError``'s under a ``400`` it
+    # declares (``status``).
+    "dispatch/kernel_refusals.py": frozenset(
+        {
+            "rest_framework.exceptions",
+            "rest_framework.status",
+        }
+    ),
     "dispatch/utils.py": frozenset(
         {
             "rest_framework.exceptions",
@@ -100,6 +117,12 @@ ALLOWED_DRF_IMPORTS: dict[str, frozenset[str]] = {
         {
             "rest_framework.exceptions",
             "rest_framework.request",
+            # ``URL_FORMAT_OVERRIDE``: ``?format`` is one of DRF's own query
+            # keys, which ``kernel_query`` keeps off a kernel spec's arguments.
+            "rest_framework.settings",
+            # ``QueryParameterVersioning``: of DRF's versioning classes only
+            # this one reads ``?version``, so only it names a query key.
+            "rest_framework.versioning",
         }
     ),
     "services/acall_service.py": frozenset({"rest_framework.request"}),
@@ -303,6 +326,11 @@ ALLOWED_ADAPTER_IMPORTERS = frozenset(
         "dispatch/base_serializer_context.py",
         "dispatch/build_offline_context.py",
         "dispatch/dispatch_spec.py",
+        # The kernel route: the seed-named fields it hands the body, the recording
+        # twin it dispatches, and the edge's call state that carries that body.
+        "dispatch/kernel_edge.py",
+        # The kernel route's refusal map: the dual-base twins it answers with.
+        "dispatch/kernel_refusals.py",
         "dispatch/renderable_serializer_class.py",
         "dispatch/utils.py",
         "types/selector_spec.py",

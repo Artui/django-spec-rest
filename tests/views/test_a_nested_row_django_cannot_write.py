@@ -3,7 +3,7 @@
 A relation's row is written by the model's constructor, so a key the model
 has no field for raises Django's ``TypeError`` there. The row's write
 translates it into a refusal under the row's index, carrying Django's own
-message, where 0.57.0 let the ``TypeError`` escape as a 500. The same key at
+message, rather than letting the ``TypeError`` escape as a 500. The same key at
 the top level is still the 500 it was: the top-level write is the
 service's own, and its ``TypeError`` is never read as the client's mistake.
 """
@@ -11,10 +11,12 @@ service's own, and its ``TypeError`` is never read as the client's mistake.
 from __future__ import annotations
 
 import pytest
+from django_service_specs import ChildSpec, ServiceSpec, Unrestricted, create_model
 from rest_framework import serializers
 from rest_framework.test import APIRequestFactory
 
-from django_spec_rest import ChildSpec, ServiceCreateView, ServiceSpec, create_model
+from django_spec_rest import ServiceCreateView
+from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from tests.testapp.models import Catalog, Section
 
 pytestmark = pytest.mark.django_db
@@ -38,7 +40,8 @@ class _Create(ServiceCreateView):
         service=create_model(
             Catalog, relations={"sections": ChildSpec(model=Section, fk="catalog")}
         ),
-        input_serializer=_CatalogIn,
+        permissions=(Unrestricted(),),
+        validator=SerializerValidator(_CatalogIn),
     )
 
 

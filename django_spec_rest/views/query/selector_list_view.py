@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import builtins
+import dataclasses
 from typing import Any, ClassVar
 
+from django_service_specs.dispatch.present import present
+from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelectorSpec
 from rest_framework.generics import GenericAPIView
 from rest_framework.mixins import ListModelMixin
 from rest_framework.request import Request
@@ -12,7 +15,7 @@ from rest_framework.response import Response
 from rest_framework.serializers import BaseSerializer
 
 from django_spec_rest.dispatch.renderable_serializer_class import renderable_serializer_class
-from django_spec_rest.selectors.utils import dispatch_selector_for_spec
+from django_spec_rest.selectors.utils import dispatch_kernel_selector, dispatch_selector_for_spec
 from django_spec_rest.types.selector_kind import SelectorKind
 from django_spec_rest.types.selector_spec import SelectorSpec
 from django_spec_rest.views.spec_validation import validate_selector_view_spec
@@ -37,6 +40,12 @@ class SelectorListView(ListModelMixin, GenericAPIView):
 
     ``spec = None`` (the default) keeps both as vanilla DRF.
 
+    A kernel ``SelectorSpec`` on ``spec`` runs through the kernel's own
+    ``dispatch`` and is presented by its own ``presenter``, the page's rows
+    alone when the view paginates, with the affordance answers it declares;
+    a kernel spec declaring neither presenter nor affordances is rendered by
+    the view's ``serializer_class``, as DRF renders a queryset.
+
     The rest of the list flow — filter backends, pagination, response
     rendering — is the standard DRF ``ListModelMixin``.
     """
@@ -45,7 +54,9 @@ class SelectorListView(ListModelMixin, GenericAPIView):
 
     @classmethod
     def as_view(cls, **initkwargs: Any) -> Any:
-        validate_selector_view_spec(cls, expected_kind=SelectorKind.LIST)
+        validate_selector_view_spec(
+            cls, expected_kind=SelectorKind.LIST, hooks_base=SelectorListView
+        )
         return super().as_view(**initkwargs)
 
     def get_selector_kwargs(self) -> dict[str, Any]:
@@ -99,10 +110,34 @@ class SelectorListView(ListModelMixin, GenericAPIView):
         # The answers are added here rather than in ``get`` so a subclass that
         # extends ``list`` keeps running once its spec declares affordances --
         # the same seam ``SelectorListMixin`` uses.
-        s: SelectorSpec | None = get_class_attr(self, "spec")
+        s: SelectorSpec | KernelSelectorSpec | None = get_class_attr(self, "spec")
+        if isinstance(s, KernelSelectorSpec):
+            return self._list_kernel_spec(s)
         if s is None or s.affordances is None:
             return super().list(request, *args, **kwargs)
         return list_with_affordances(self, s)
+
+    def _list_kernel_spec(self, spec: KernelSelectorSpec) -> Response:
+        """DRF's ``list`` over a kernel spec's result, presented by the spec.
+
+        The same filter and paginate steps in the same order, on the set the
+        dispatch read, and the spec's presenter handed the page's rows inside
+        the result dispatch built, so it renders the rows served with the
+        call's context; the answers are added before a paginator wraps them,
+        as ``list_with_affordances`` adds them on the drfs path.
+        """
+        result = dispatch_kernel_selector(self, spec)
+        queryset = self.filter_queryset(result.value)
+        page = self.paginate_queryset(queryset)
+        rows = queryset if page is None else page
+        # One arc to coverage, so each disjunct is named: a presenter by
+        # test_the_spec_s_presenter_renders_the_rows, affordances with none by
+        # test_affordances_with_no_presenter_are_refused_rather_than_dropped.
+        if spec.presenter is not None or spec.affordances is not None:
+            data = present(spec, dataclasses.replace(result, value=rows))
+        else:
+            data = self.get_serializer(rows, many=True).data
+        return Response(data) if page is None else self.get_paginated_response(data)
 
     def get(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         return self.list(request, *args, **kwargs)

@@ -82,3 +82,25 @@ class TestDrfAnswersIt:
         # The DRF base is what earns the 400: without it, DRF's handler returns
         # nothing and the view's exception reaches Django unanswered.
         assert served_status(KernelInvalidArguments(_tree())) == 500
+
+
+class TestFromKernel:
+    def test_a_kernel_refusal_keeps_its_tree_and_every_code(self) -> None:
+        twin = InvalidArguments.from_kernel(
+            KernelInvalidArguments({"title": [CodedMessage("Required.", "required"), "Odd."]})
+        )
+        assert type(twin) is InvalidArguments
+        assert twin.get_codes() == {"title": ["required", "invalid"]}
+        assert [type(error) for error in twin.detail["title"]] == [ErrorDetail, ErrorDetail]
+
+    def test_a_kernel_refusal_keeps_a_subclass_s_message(self) -> None:
+        class _Worded(KernelInvalidArguments):
+            default_message = "Worded otherwise."
+
+        assert InvalidArguments.from_kernel(_Worded(_tree())).message == "Worded otherwise."
+
+    def test_it_is_built_as_the_class_it_is_called_on(self) -> None:
+        class _Project(InvalidArguments):
+            pass
+
+        assert type(_Project.from_kernel(KernelInvalidArguments(_tree()))) is _Project

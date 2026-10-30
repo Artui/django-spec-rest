@@ -1,14 +1,22 @@
-"""Over HTTP, a service parameter named like an input field or a read needs a default.
+"""A service parameter named like an input field or a read, and what fills it.
 
 Dispatch hands a service each validated value, and each declared read, by
-name. ``as_view()`` checks a callable's required parameters before any call,
-against the keys every call provides, and neither is one of them: a ``PATCH``
-may leave the field out, and a request may carry no query value. So a
-required parameter of either name is refused when the view is built, and one
-with a default is handed the value the call sends. A spec with a ``kwargs``
-provider is not checked there, its keys being unknown before a call. A
-selector takes its arguments from its signature, so its required parameter of
-a read's name is a required argument instead.
+name. A read the caller may leave out over a keyword with no default is
+refused at ``as_view()`` by the kernel's ``check_seeds``, since a call leaving
+it out would be refused as missing. Beside a Validator the kernel judges none
+of the service's keywords, since a Validator may hand it a value it does not
+declare, so such a spec is built and a call is answered by what it sends: a
+missing value is a 400 naming it, a sent one is handed over. A parameter with a
+default is handed the value the call sends. A selector takes its arguments
+from its reads, so a required read is a required argument.
+
+The kernel route's answer today, which no plan decision names yet: a service spec's reads are the body's on the kernel route
+(``kernel_arguments``), where drfs read a ``QueryParam`` off the query string,
+so each value here is sent in the body.
+
+drfs refused the field case at ``as_view()`` as well, and let a ``kwargs``
+provider of any shape waive both; a kernel spec is judged by its provider's
+annotated keys instead (``test_spec_validation_e2e``).
 """
 
 from __future__ import annotations
@@ -17,22 +25,38 @@ from typing import Any
 
 import pytest
 from django.core.exceptions import ImproperlyConfigured
+from django_service_specs import (
+    Parameter,
+    Parameters,
+    SelectorKind,
+    SelectorSpec,
+    ServiceSpec,
+    Unrestricted,
+)
 from rest_framework import serializers
 from rest_framework.test import APIRequestFactory
 
-from django_spec_rest import (
-    QueryParam,
-    SelectorKind,
-    SelectorListView,
-    SelectorSpec,
-    ServiceCreateView,
-    ServiceSpec,
-    dispatch_spec,
-)
+from django_spec_rest import SelectorListView, ServiceCreateView
+from django_spec_rest.service_specs.serializer_validator import SerializerValidator
+
+pytestmark = pytest.mark.django_db
+
+_OPEN = (Unrestricted(),)
+_factory = APIRequestFactory()
 
 
 class _In(serializers.Serializer):
     title = serializers.CharField()
+
+
+class _CreateView(ServiceCreateView):
+    """``get_permissions`` answers the view's own classes, as the spine's
+    ``_CreateView`` does: ``MutationFlowMixin``'s reads a drfs-only field."""
+
+    permission_classes = []
+
+    def get_permissions(self) -> list[Any]:
+        return [permission() for permission in self.permission_classes]
 
 
 def _titled(*, data: Any, title: str) -> dict[str, Any]:
@@ -51,85 +75,96 @@ def _scoped_or_none(*, data: Any, scope: str | None = None) -> dict[str, Any]:
     return {"scope": scope}
 
 
-_READ = (QueryParam("scope"),)
-_REQUIRED = {"field": (_titled, (), "title"), "read": (_scoped, _READ, "scope")}
-_DEFAULTED = {"field": (_titled_or_none, ()), "read": (_scoped_or_none, _READ)}
+_READ = Parameters((Parameter("scope", "string"),))
 
 
-def _spec(
-    service: Any, reads: tuple[QueryParam, ...], **declared: Any
-) -> ServiceSpec[Any, Any, Any]:
+def _spec(service: Any, *, validated: bool = True, reads: Parameters = _READ) -> ServiceSpec:
     return ServiceSpec(
         service=service,
-        input_serializer=_In,
+        permissions=_OPEN,
         reads=reads,
-        permission_classes=[],
+        validator=SerializerValidator(_In) if validated else None,
         atomic=False,
-        **declared,
     )
 
 
-def _view(spec: Any, base: type = ServiceCreateView) -> Any:
-    return type("_View", (base,), {"spec": spec, "permission_classes": []})
+def _post(spec: ServiceSpec, body: dict[str, Any]) -> Any:
+    view = type("_View", (_CreateView,), {"spec": spec}).as_view()
+    return view(_factory.post("/", body, format="json"))
 
 
-@pytest.mark.parametrize("named", list(_REQUIRED))
-def test_with_no_default_it_is_refused_when_the_view_is_built(named: str) -> None:
-    service, reads, name = _REQUIRED[named]
-
-    with pytest.raises(ImproperlyConfigured, match=rf"\['{name}'\] that the framework does not"):
-        _view(_spec(service, reads)).as_view()
-
-
-@pytest.mark.django_db
-@pytest.mark.parametrize("named", list(_REQUIRED))
-def test_with_no_default_it_is_handed_the_value_off_http(named: str) -> None:
-    service, reads, name = _REQUIRED[named]
-
-    result = dispatch_spec(_spec(service, reads), user=None, params={"title": "a", "scope": "s"})
-
-    assert result.value == {name: {"title": "a", "scope": "s"}[name]}
+def test_an_optional_read_over_a_keyword_with_no_default_is_refused_at_as_view() -> None:
+    with pytest.raises(
+        ImproperlyConfigured,
+        match=r"ServiceSpec\.service requires the keyword\(s\) \['scope'\], declared as "
+        r"optional reads that nothing else fills",
+    ):
+        type("_View", (_CreateView,), {"spec": _spec(_scoped, validated=False)}).as_view()
 
 
-@pytest.mark.django_db
 @pytest.mark.parametrize(
-    ("named", "expected"), [("field", {"title": "a"}), ("read", {"scope": "s"})]
+    ("service", "body", "expected"),
+    [
+        (_titled, {"title": "a", "scope": "s"}, {"title": "a"}),
+        (_scoped, {"title": "a", "scope": "s"}, {"scope": "s"}),
+    ],
+    ids=["field", "read"],
 )
-def test_with_a_default_it_is_handed_the_value_over_http(
-    named: str, expected: dict[str, Any]
+def test_beside_a_validator_a_sent_value_is_handed_over(
+    service: Any, body: dict[str, Any], expected: dict[str, Any]
 ) -> None:
-    service, reads = _DEFAULTED[named]
-    request = APIRequestFactory().post("/?scope=s", {"title": "a"}, format="json")
+    response = _post(_spec(service), body)
 
-    response = _view(_spec(service, reads)).as_view()(request)
-
-    assert response.status_code == 201
+    assert response.status_code == 201, response.data
     assert response.data == expected
 
 
-@pytest.mark.parametrize("named", list(_REQUIRED))
-def test_with_a_kwargs_provider_it_is_not_checked_when_the_view_is_built(named: str) -> None:
-    service, reads, _name = _REQUIRED[named]
+def test_beside_a_validator_a_read_left_out_is_refused_as_missing() -> None:
+    response = _post(_spec(_scoped), {"title": "a"})
 
-    _view(_spec(service, reads, kwargs=lambda: {})).as_view()
+    assert response.status_code == 400
+    assert "scope" in response.data
+
+
+@pytest.mark.parametrize(
+    ("service", "validated", "expected"),
+    [
+        (_titled_or_none, True, {"title": "a"}),
+        (_scoped_or_none, True, {"scope": "s"}),
+        (_scoped_or_none, False, {"scope": "s"}),
+    ],
+    ids=["field", "read", "read-with-no-validator"],
+)
+def test_with_a_default_it_is_handed_the_value_over_http(
+    service: Any, validated: bool, expected: dict[str, Any]
+) -> None:
+    body = {"title": "a", "scope": "s"} if validated else {"scope": "s"}
+
+    response = _post(_spec(service, validated=validated), body)
+
+    assert response.status_code == 201, response.data
+    assert response.data == expected
 
 
 def _listed(*, scope: str) -> list[Any]:
     return [{"title": scope}]
 
 
-@pytest.mark.django_db
 @pytest.mark.parametrize(("query", "status"), [("?scope=s", 200), ("", 400)])
 def test_a_selectors_required_read_is_a_required_argument(query: str, status: int) -> None:
     spec = SelectorSpec(
         kind=SelectorKind.LIST,
         selector=_listed,
-        output_serializer=_In,
-        reads=_READ,
-        permission_classes=[],
+        reads=Parameters((Parameter("scope", "string", required=True),)),
+        permissions=_OPEN,
+    )
+    view = type(
+        "_View",
+        (SelectorListView,),
+        {"spec": spec, "serializer_class": _In, "permission_classes": []},
     )
 
-    response = _view(spec, SelectorListView).as_view()(APIRequestFactory().get(f"/{query}"))
+    response = view.as_view()(_factory.get(f"/{query}"))
 
     assert response.status_code == status
     assert (response.data == [{"title": "s"}]) if status == 200 else ("scope" in response.data)

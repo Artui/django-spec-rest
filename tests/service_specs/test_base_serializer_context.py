@@ -1,19 +1,19 @@
-"""``base_serializer_context`` — DRF's baseline context, on and off the HTTP path."""
+"""``base_serializer_context``: DRF's baseline context, on and off the HTTP path, for a kernel spec."""
 
 from __future__ import annotations
 
 from typing import Any
 
 import pytest
+from django.contrib.auth.models import AnonymousUser
+from django_service_specs import SelectorKind, SelectorSpec, Unrestricted
+from django_service_specs.dispatch.dispatch import dispatch
+from django_service_specs.dispatch.present import present
 from rest_framework import serializers
 
-from django_spec_rest import (
-    SelectorKind,
-    SelectorSpec,
-    base_serializer_context,
-    build_offline_context,
-    render_spec_output,
-)
+from django_spec_rest.service_specs.base_serializer_context import base_serializer_context
+from django_spec_rest.service_specs.build_offline_context import build_offline_context
+from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from tests.testapp.models import Post
 
 
@@ -86,12 +86,13 @@ class _FileFieldShapedSerializer(serializers.Serializer):
 
 @pytest.mark.django_db
 class TestFileFieldsOffHttp:
-    """Regression: a request in the context must not be worse than none.
+    """A request in the context must not be worse than none.
 
-    0.29.0 started supplying ``request`` off HTTP, which is what makes
-    ``request.user`` work — but the synthesized request had an empty ``META``,
-    so ``build_absolute_uri`` raised ``KeyError: 'SERVER_NAME'``. Any serializer
-    with a ``FileField`` broke on a path that previously returned a relative URL.
+    A synthesized request with an empty ``META`` would raise
+    ``KeyError: 'SERVER_NAME'`` from ``build_absolute_uri``, so a serializer
+    with a ``FileField`` would break on a path that renders a relative URL with
+    no request at all. A transport carries the offline pair in the call's
+    context, as one with no DRF view of its own does.
     """
 
     def _render(self, host: str | None) -> Any:
@@ -99,16 +100,17 @@ class TestFileFieldsOffHttp:
         spec = SelectorSpec(
             kind=SelectorKind.LIST,
             selector=lambda: Post.objects.all(),
-            output_serializer=_FileFieldShapedSerializer,
+            permissions=(Unrestricted(),),
+            presenter=SerializerPresenter(_FileFieldShapedSerializer, value_keyword=None),
         )
         offline = build_offline_context(user=None, host=host)
-        return render_spec_output(
+        result = dispatch(
             spec,
-            list(Post.objects.all()),
-            many=True,
-            request=offline.request,
-            view=offline.view,
+            principal=AnonymousUser(),
+            arguments={},
+            call_context={"request": offline.request, "view": offline.view},
         )
+        return present(spec, result)
 
     def test_without_a_host_the_url_is_relative(self) -> None:
         assert [row["url"] for row in self._render(None)] == ["/media/doc.pdf"]

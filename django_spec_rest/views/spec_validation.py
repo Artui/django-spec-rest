@@ -7,6 +7,14 @@ surface the same misconfiguration at ``as_view()`` time with a precise message.
 
 Deliberately lenient on extras: a ``kwargs`` provider or an overridden
 ``get_*_kwargs`` may be feeding the callable keys the validator cannot see.
+
+A kernel spec is checked differently, and more strictly. It checks its own
+fields when it is built, so ``as_view()`` asks only what the view knows: that
+the spec is of the kind of operation the view serves, the ``SelectorKind`` its
+mount point is shaped for, and no ``filter_set`` beside DRF's own filter
+backend on a list; then the kernel's ``check_seeds``, against the seeds the
+edge dispatches with, refuses whatever no call could fill. No view hook reaches
+a kernel spec, so nothing is lenient on extras there.
 """
 
 from __future__ import annotations
@@ -18,9 +26,14 @@ from typing import Any
 
 from django.core.exceptions import ImproperlyConfigured
 from django_service_specs.adapters.filters.filter_set_parameters import filter_set_parameters
+from django_service_specs.dispatch.check_seeds import check_seeds
+from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelectorSpec
+from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
 from rest_framework.permissions import BasePermission
 from rest_framework.serializers import Serializer
 
+from django_spec_rest.dispatch.kernel_edge import runs_on_kernel
+from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from django_spec_rest.service_specs.utils import (
     UNREADABLE_WITHOUT_A_CALL,
     writable_input_names,
@@ -204,7 +217,7 @@ def _uses_django_filter_backend(view_cls: type) -> bool:
 
 def validate_filter_set_no_backend_conflict(
     view_cls: type,
-    spec: SelectorSpec[Any, Any],
+    spec: SelectorSpec[Any, Any] | KernelSelectorSpec,
     *,
     label: str,
 ) -> None:
@@ -214,7 +227,9 @@ def validate_filter_set_no_backend_conflict(
     dispatcher also applies ``spec.filter_set`` — equivalent operations, so the
     queryset would be filtered twice. Callers must gate this on the **list** path
     only: the selector retrieve path overrides ``get_object()`` and never calls
-    ``filter_queryset``, so there is no conflict there.
+    ``filter_queryset``, so there is no conflict there. A kernel spec's
+    ``filter_set`` is applied by the kernel's dispatch the same way, so it is
+    asked of either.
     """
     if spec.filter_set is None or not _uses_django_filter_backend(view_cls):
         return
@@ -829,12 +844,8 @@ def validate_selector_spec(
     would otherwise misbehave only at runtime."""
     _validate_permission_classes(spec.permission_classes, label=label)
     _validate_selector_shaping(spec, label=label)
-    if expected_kind is not None and spec.kind is not expected_kind:
-        raise ImproperlyConfigured(
-            f"{label}: spec.kind is {spec.kind!r} but this mount point "
-            f"expects {expected_kind!r}. Construct the spec with "
-            f"kind={expected_kind!r} or move it to the matching view."
-        )
+    if expected_kind is not None:
+        _validate_selector_kind(spec, label=label, expected_kind=expected_kind)
     # Must stay above the ``selector is None`` bail-out: a spec can carry
     # preconditions without its own selector (the view's ``get_queryset``
     # resolves the target), and those still run.
@@ -863,6 +874,91 @@ def validate_selector_spec(
     )
 
 
+def _validate_selector_kind(
+    spec: SelectorSpec[Any, Any] | KernelSelectorSpec,
+    *,
+    label: str,
+    expected_kind: SelectorKind,
+) -> None:
+    """Reject a spec whose ``kind`` is not the one its mount point is shaped for.
+
+    A drfs spec's and a kernel spec's alike: the kind is the view's question,
+    which no check made when the spec was built can answer.
+    """
+    if spec.kind is not expected_kind:
+        raise ImproperlyConfigured(
+            f"{label}: spec.kind is {spec.kind!r} but this mount point "
+            f"expects {expected_kind!r}. Construct the spec with "
+            f"kind={expected_kind!r} or move it to the matching view."
+        )
+
+
+def _serves_the_other_kind(view_cls: type, spec: Any, served: type) -> str:
+    """Why ``view_cls`` refuses ``spec``: a kernel spec of the kind the view does not serve."""
+    return (
+        f"{view_cls.__name__}.spec is a {type(spec).__name__}, but this view serves a "
+        f"{served.__name__}. Set the spec on a view of its own kind."
+    )
+
+
+def _check_kernel_seeds(spec: KernelServiceSpec | KernelSelectorSpec) -> None:
+    """Refuse at ``as_view()`` what the kernel's ``check_seeds`` refuses of ``spec``.
+
+    Most of what ``validate_service_spec`` and ``validate_selector_spec`` check
+    of a drfs spec's signatures is a question this one answers for a kernel
+    spec: a keyword nothing fills, a positional-only parameter, an optional
+    read over a keyword that requires it, a parameter a seed occupies. Not
+    all of it: ``check_seeds`` reads no output selector, so a keyword an
+    ``output_selector_spec``'s selector requires and nothing fills, which drfs
+    refused here, is met only when the call reaches the re-read, after the
+    service has run. It is asked with the kernel's default seeds because
+    those are the seeds the edge dispatches with (``dispatch_kernel_spec``
+    registers none), and only where nothing fills a keyword it cannot see:
+    a mutation view overriding a service-kwargs hook hands the edge's
+    overlay keys ``check_seeds`` never reads, so such a view is not asked it
+    (``validate_mutation_view_spec``), and a selector view overriding
+    ``get_selector_kwargs`` is refused beside a kernel spec
+    (``_refuse_selector_hooks``), so a selector view has no overlay to hide
+    a keyword.
+    The fields a kernel spec declares are checked when it is built, by its own
+    ``__post_init__``, so nothing of a drfs spec's field checks is owed here.
+    Held on a mutation view by test_a_keyword_nothing_fills_is_refused and on
+    a selector view by test_a_list_selector_requiring_data_is_refused.
+
+    **A serializer that cannot be described at mount is not asked.**
+    ``check_seeds`` reads ``spec.parameters()``, which describes a
+    ``SerializerValidator``'s serializer, and at ``as_view()`` there is no
+    call to describe it with: its context holds ``None`` for the request and
+    none of the view's layers. A ``get_fields`` reading
+    ``self.context["request"].user`` or a key the view's input layer adds
+    would raise from the URLconf's import, so such a spec's checks are its
+    first request's, where the kernel answers them as it dispatches
+    (test_spec_validation_e2e's TestASerializerThatCannotBeDescribedAtMount).
+    Only the description is tried and caught: every refusal ``check_seeds``
+    makes of a serializer that describes still raises here
+    (test_a_refusal_check_seeds_makes_of_a_describable_spec_still_raises).
+    A view overriding ``get_service_kwargs`` or a per-action
+    ``get_<action>_service_kwargs`` is not checked either, as
+    ``validate_mutation_view_spec`` does not call this for it, so its seeds
+    are its first request's as well.
+    """
+    # A selector spec has no validator to describe; reading one off it raises
+    # at as_view() (test_a_var_keyword_selector_reads_no_route_capture and
+    # test_url_kwarg_over_http mount selector views at import).
+    validator = spec.validator if isinstance(spec, KernelServiceSpec) else None
+    if isinstance(validator, SerializerValidator):
+        try:
+            validator.parameters()
+        # Each type is one a serializer raises when described with no call:
+        # ``AttributeError`` reading ``.user`` off the ``None`` request
+        # (test_one_reading_the_request_s_user_mounts_and_serves), ``KeyError``
+        # reading a key only the view's layer adds
+        # (test_one_reading_a_key_the_view_s_layer_adds_mounts_and_serves).
+        except (AttributeError, KeyError):
+            return
+    check_seeds(spec)
+
+
 def validate_mutation_view_spec(
     view_cls: type,
     *,
@@ -873,7 +969,17 @@ def validate_mutation_view_spec(
     No-op when ``spec`` is unset — the base classes inherit a ``None``
     placeholder so ``as_view()`` itself doesn't trip.
     """
-    spec: ServiceSpec[Any, Any, Any] | None = getattr(view_cls, "spec", None)
+    spec: ServiceSpec[Any, Any, Any] | KernelServiceSpec | KernelSelectorSpec | None = getattr(
+        view_cls, "spec", None
+    )
+    # A kernel selector spec is a kernel spec the kernel dispatches as gladly,
+    # so without this a mutation view would run a read for a write
+    # (test_kernel_views' test_a_kernel_selector_spec_on_a_mutation_view_is_refused_at_as_view).
+    # One arc to coverage, so each conjunct is named: without the first every
+    # drfs spec is refused (test_spec_validation_e2e_drfs), and without the second
+    # every kernel service spec (test_a_kernel_spec_passes_as_view).
+    if runs_on_kernel(spec) and not isinstance(spec, KernelServiceSpec):
+        raise ImproperlyConfigured(_serves_the_other_kind(view_cls, spec, KernelServiceSpec))
     if spec is None:
         return
     # Local import to avoid a module-level cycle:
@@ -883,18 +989,113 @@ def validate_mutation_view_spec(
         MutationFlowMixin,
     )
 
+    hooked = is_overridden(view_cls, MutationFlowMixin, "get_service_kwargs")
+    if runs_on_kernel(spec):
+        # A kernel spec declares neither HTTP answer, so the view's own
+        # attributes are what ``_dispatch_kernel_mutation`` calls, after the
+        # service has run: refused here as a drfs spec's fields of these names
+        # are, rather than as a ``TypeError`` once the write has committed
+        # (test_callable_success_status' TestASuccessStatusTheViewCannotResolve,
+        # test_response_finalizer's TestAFinalizerTheViewCannotCall). Read off
+        # the class, which a function stored there is returned from unbound.
+        _validate_success_status(getattr(view_cls, "success_status", None), label=view_cls.__name__)
+        _validate_response_finalizer(
+            getattr(view_cls, "response_finalizer", None), label=view_cls.__name__
+        )
+        _refuse_a_detail_spec_with_no_target(view_cls, spec, has_instance=has_instance)
+        # A view hook's keys reach the service through the edge's overlay,
+        # which ``check_seeds`` cannot see and its own docstring says not to
+        # be asked beside, so a hooked view is not asked it, as drfs read an
+        # overridden hook as ``permissive_extras``. One arc to coverage, so
+        # each disjunct is named: the catch-all hook by test_spec_validation_e2e's
+        # test_a_view_hook_fills_a_keyword_check_seeds_cannot_see, the
+        # per-action one by test_a_per_action_hook_fills_a_keyword_check_seeds_cannot_see.
+        if not (hooked or _overrides_the_action_hook(view_cls, "service")):
+            _check_kernel_seeds(spec)
+        return
     validate_service_spec(
         spec,
         label=f"{view_cls.__name__}.spec",
         has_instance=has_instance,
-        permissive_extras=is_overridden(view_cls, MutationFlowMixin, "get_service_kwargs"),
+        permissive_extras=hooked,
     )
+
+
+def _refuse_a_detail_spec_with_no_target(
+    view_cls: type, spec: KernelServiceSpec, *, has_instance: bool
+) -> None:
+    """Refuse an update or delete view's kernel spec that names nothing for it to act on.
+
+    A drfs spec naming no target lookup was scoped by the view's
+    ``get_object()``; a kernel spec never asks it, since the kernel refuses a
+    ``target=`` handed to a spec declaring no target selector, so such a spec
+    would run on no row at all (test_service_update_view's
+    test_a_detail_view_s_kernel_spec_with_no_target_selector_is_refused_at_as_view).
+    Asked before ``check_seeds``, whose refusal of a service taking
+    ``instance`` would name the symptom rather than the seat.
+
+    One arc to coverage, so each conjunct is named: ``has_instance`` by every
+    create view over a spec with no target selector (test_service_create_view's
+    test_creates_and_returns_201), ``many`` by a bulk update, whose list body
+    is its rows and which the kernel refuses a target selector to
+    (test_bulk_mutations' test_an_update_view_takes_a_many_spec_s_list_body_as_its_rows), and
+    the target selector by the refusal's own test.
+    """
+    if has_instance and not spec.many and spec.target_selector_spec() is None:
+        raise ImproperlyConfigured(
+            f"{view_cls.__name__}.spec declares no target selector, so it would act on no "
+            "row: a kernel spec's target is its own lookup's, and the view's get_object() is "
+            "never asked for one. Set instance_selector_spec to the row it acts on, "
+            "collection_selector_spec to a set, or many=True for a list body."
+        )
+
+
+def _refuse_selector_hooks(view_cls: type, hooks_base: type) -> None:
+    """Refuse a selector view's ``get_selector_kwargs`` hooks beside a kernel spec.
+
+    A kernel selector spec is handed its own ``kwargs`` provider's values and
+    no view hook's: the selector views hand the edge no hooks at all, so an
+    override would be silently unasked, and a keyword it was written to fill
+    a 500 or a default. Refused when the view is built, before
+    ``check_seeds`` would name the unfilled keyword rather than the hook. One
+    arc to coverage, so each disjunct is named: the catch-all hook by
+    test_selector_list_view's
+    test_get_selector_kwargs_beside_a_kernel_spec_is_refused_at_as_view, the
+    per-action one by
+    test_a_per_action_selector_hook_beside_a_kernel_spec_is_refused_at_as_view.
+    """
+    action = getattr(view_cls, "action", None)
+    for hook, overridden in (
+        ("get_selector_kwargs", is_overridden(view_cls, hooks_base, "get_selector_kwargs")),
+        (f"get_{action}_selector_kwargs", _overrides_the_action_hook(view_cls, "selector")),
+    ):
+        if overridden:
+            raise ImproperlyConfigured(
+                f"{view_cls.__name__} overrides {hook}, which never reaches a kernel spec: "
+                "its keywords are its own providers'. Return those keys from the spec's "
+                "kwargs provider (SelectorSpec(kwargs=...)), which may declare the request "
+                "and the view."
+            )
+
+
+def _overrides_the_action_hook(view_cls: type, chain: str) -> bool:
+    """Whether ``view_cls`` defines ``get_<action>_<chain>_kwargs`` for the ``action`` it sets.
+
+    A standalone view has no ``action`` unless its class sets one, and the
+    view's hook chain asks the per-action hook only for that action
+    (``resolve_view_hooks``), so a hook named for any other is never asked
+    and fills nothing (test_spec_validation_e2e's
+    test_a_per_action_hook_for_another_action_fills_nothing).
+    """
+    action = getattr(view_cls, "action", None)
+    return isinstance(action, str) and hasattr(view_cls, f"get_{action}_{chain}_kwargs")
 
 
 def validate_selector_view_spec(
     view_cls: type,
     *,
     expected_kind: SelectorKind,
+    hooks_base: type,
 ) -> None:
     """Validate ``view_cls.spec`` on a standalone selector view.
 
@@ -902,12 +1103,32 @@ def validate_selector_view_spec(
     the kind the view is shaped for (``LIST`` for
     [`SelectorListView`][django_spec_rest.views.query.selector_list_view.SelectorListView],
     ``RETRIEVE`` for
-    [`SelectorRetrieveView`][django_spec_rest.views.query.selector_retrieve_view.SelectorRetrieveView]).
+    [`SelectorRetrieveView`][django_spec_rest.views.query.selector_retrieve_view.SelectorRetrieveView]),
+    and ``hooks_base`` the view class declaring the default ``get_selector_kwargs``
+    that an override of is refused beside a kernel spec: each view passes its own,
+    since the two declare one each.
     """
-    spec: SelectorSpec[Any, Any] | None = getattr(view_cls, "spec", None)
+    spec: SelectorSpec[Any, Any] | KernelSelectorSpec | KernelServiceSpec | None = getattr(
+        view_cls, "spec", None
+    )
     if spec is None:
         return
     label = f"{view_cls.__name__}.spec"
-    validate_selector_spec(spec, label=label, expected_kind=expected_kind)
+    if runs_on_kernel(spec):
+        if not isinstance(spec, KernelSelectorSpec):
+            # As ``validate_mutation_view_spec`` refuses a kernel selector spec
+            # (test_kernel_views' test_a_kernel_service_spec_on_a_selector_view_is_refused_at_as_view).
+            raise ImproperlyConfigured(_serves_the_other_kind(view_cls, spec, KernelSelectorSpec))
+        # ``validate_selector_spec``'s checks of a drfs spec's own fields are
+        # the kernel's ``__post_init__``'s for a kernel spec, but two are the
+        # view's: the kind its mount point is shaped for
+        # (test_kernel_views' test_a_list_spec_on_a_retrieve_view_is_refused_at_as_view)
+        # and, below, a ``filter_set`` beside DRF's own filter backend
+        # (test_a_filter_set_beside_django_filter_s_backend_is_refused_at_as_view).
+        _validate_selector_kind(spec, label=label, expected_kind=expected_kind)
+        _refuse_selector_hooks(view_cls, hooks_base)
+        _check_kernel_seeds(spec)
+    else:
+        validate_selector_spec(spec, label=label, expected_kind=expected_kind)
     if expected_kind is SelectorKind.LIST:
         validate_filter_set_no_backend_conflict(view_cls, spec, label=label)
