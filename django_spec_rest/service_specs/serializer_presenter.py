@@ -133,8 +133,8 @@ class SerializerPresenter(Presenter):
         call carries is left as it is. A list result is presented row by row by the kernel's ``present``,
         each row with the same context, which is what a ``many=True`` render is.
         Over that, the output half of the view hooks a DRF edge adds to the
-        result's context (``output_view_layers``), resolved with the value, then ``serializer_context``, the
-        spec's own ``output_serializer_context``, each winning on a key it shares
+        result's context (``output_view_layers``), resolved with the value, then
+        this Presenter's own ``serializer_context``, each winning on a key it shares
         with what it layers over (see
         ``serializer_context`` in ``service_specs/utils.py``).
         The callable declares what it reads from the call's pool, ``request``,
@@ -192,8 +192,8 @@ class SerializerPresenter(Presenter):
         self.serializer_context = serializer_context
         self.value_keyword = value_keyword
         self.shaped = shaped
-        # The spec's, whose ``fields`` rules declare the fields they match
-        # (test_a_compiled_spec_s_output_fields_take_its_rules).
+        # Its ``fields`` rules declare the fields they match
+        # (test_a_spec_s_output_fields_take_the_presenter_s_rules).
         self.json_schema_registry = json_schema_registry
 
     def output(self) -> Output:
@@ -236,7 +236,7 @@ class SerializerPresenter(Presenter):
 
         A serializer refusing to render, DRF's ``ValidationError``, leaves as
         the dual-base
-        [`DRFInvalidArguments`][django_spec_rest.service_specs.drf_invalid_arguments.InvalidArguments],
+        [`DRFInvalidArguments`][django_spec_rest.service_specs.drf_invalid_arguments.DRFInvalidArguments],
         raised from it, so a route over the kernel's ``present`` reads the
         kernel's refusal of the arguments, a read-shaping ``fields`` naming no
         field among them. A mapping detail is kept as it is, and a list, which

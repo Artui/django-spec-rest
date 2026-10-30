@@ -9,10 +9,11 @@ request and view, so each answers as the view always did. The scope holds in
 the serializer that validates: a caller picks a row of its own and is refused
 another's.
 
-The call's context is DRF's serializer context, one dict per request handed to
-every serializer of the call as the very object: the drfs path's
-``test_each_serializer_of_the_call_has_its_own_context`` inverts, as
-``test_the_call_s_context_is_every_serializer_s_context`` here.
+The call's context is meant to be DRF's serializer context, one dict per
+request handed to every serializer of the call as the very object.
+``test_the_call_s_context_is_every_serializer_s_context`` holds that as a
+strict xfail: the serializers and the service share one dict, but not yet the
+one ``get_serializer_context()`` returned.
 """
 
 from __future__ import annotations
@@ -22,6 +23,8 @@ from typing import Any
 import pytest
 from django.contrib.auth.models import User
 from django_service_specs import ServiceSpec, Unrestricted
+from django_service_specs.dispatch.dispatch import dispatch
+from django_service_specs.dispatch.present import present
 from rest_framework import serializers
 from rest_framework.test import APIRequestFactory, force_authenticate
 
@@ -121,9 +124,8 @@ _DESCRIBED_WITH_NO_CALL = pytest.mark.xfail(
     strict=True,
     reason=(
         "The serializer is described with the call's request and view, but a seat's "
-        "serializer_context that declares the whole pool is not asked at description: "
-        "describe_context (dispatch/kernel_edge.py) answers None for it, so a serializer "
-        "that cannot be built without that callable's keys raises KeyError."
+        "serializer_context that declares the whole pool is left out of the description, "
+        "so a serializer that cannot be built without that callable's keys raises KeyError."
     ),
 )
 
@@ -211,6 +213,24 @@ def test_a_live_view_describes_a_serializer_needing_a_whole_pool_callable(owner:
     assert seen == {"data": {"name": "n"}}
 
 
+class _FailsToBuild(serializers.Serializer):
+    """A ``get_fields`` that fails for a reason of its own, whatever context it has."""
+
+    def get_fields(self) -> dict[str, serializers.Field]:
+        raise KeyError("a key the serializer's own code lacks")
+
+
+def test_a_serializer_its_description_cannot_build_raises_as_it_is(owner: User) -> None:
+    """With no context callable to ask, the description is not rebuilt: what the
+    serializer raised is what the view raises, not a refusal of the call."""
+    seen: dict[str, Any] = {}
+
+    with pytest.raises(KeyError, match="a key the serializer's own code lacks"):
+        _create(_spec(_FailsToBuild, seen), {"name": "n"}, owner)
+
+    assert seen == {}
+
+
 class _WritesToItsContext(serializers.Serializer):
     title = serializers.CharField()
 
@@ -268,3 +288,121 @@ def test_the_call_s_context_is_every_serializer_s_context(owner: User) -> None:
     assert seen["service"] == "by-validate"
     assert response.data["written"] == "by-validate"
     assert seen["call_context"] is seen["returned"]
+
+
+class _RecordsItsRequest(serializers.Serializer):
+    title = serializers.CharField()
+
+    def to_representation(self, instance: Any) -> Any:
+        _PRESENTED_UNDER.append(self.context["request"])
+        return super().to_representation(instance)
+
+
+_PRESENTED_UNDER: list[Any] = []
+
+_ROWS = ServiceSpec(
+    service=lambda: [{"title": "a"}, {"title": "b"}],
+    permissions=_OPEN,
+    presenter=SerializerPresenter(_RecordsItsRequest),
+    returns_many=True,
+    atomic=False,
+)
+
+
+def test_a_kernel_call_inside_the_service_presents_every_row_under_one_offline_request(
+    owner: User,
+) -> None:
+    """A kernel call the service makes carries no request, so each row is
+    presented under an offline request for the principal it was handed, and the
+    rows of the call share the one the edge call built for it."""
+    _PRESENTED_UNDER.clear()
+
+    def service(*, data: Any) -> None:
+        present(_ROWS, dispatch(_ROWS, principal=owner, arguments={}))
+
+    assert _create(_spec_of(service), {}, owner).status_code == 204
+    first, second = _PRESENTED_UNDER
+    assert first is second
+    assert first.user is owner
+
+
+def _spec_of(service: Any) -> ServiceSpec:
+    return ServiceSpec(service=service, permissions=_OPEN, atomic=False)
+
+
+def test_a_kernel_call_for_another_principal_is_presented_under_its_own_offline_request(
+    owner: User,
+) -> None:
+    """Two kernel calls the service makes with one arguments object, for two
+    principals: each is presented under an offline request for its own, so a
+    serializer reading ``request.user`` never reads the other's."""
+    _PRESENTED_UNDER.clear()
+    other = User.objects.create(username="other")
+    arguments: dict[str, Any] = {}
+
+    def service(*, data: Any) -> None:
+        for principal in (owner, other):
+            present(_ROWS, dispatch(_ROWS, principal=principal, arguments=arguments))
+
+    assert _create(_spec_of(service), {}, owner).status_code == 204
+    assert [request.user for request in _PRESENTED_UNDER] == [owner, owner, other, other]
+
+
+_VALIDATED_UNDER: list[Any] = []
+_DESCRIBED_UNDER: list[Any] = []
+
+
+class _ReadsItsRequestWhileValidating(serializers.Serializer):
+    title = serializers.CharField()
+
+    def get_fields(self) -> dict[str, Any]:
+        if not hasattr(self, "initial_data"):
+            _DESCRIBED_UNDER.append((self.context["request"], self.context["view"]))
+        return super().get_fields()
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        _VALIDATED_UNDER.append((self.context["request"], self.context["view"]))
+        return attrs
+
+
+_TITLED = ServiceSpec(
+    service=lambda *, title: None,
+    permissions=_OPEN,
+    validator=SerializerValidator(_ReadsItsRequestWhileValidating),
+    atomic=False,
+)
+
+
+def test_a_kernel_call_for_another_principal_never_validates_under_the_view_s_request(
+    owner: User,
+) -> None:
+    """Only the edge's own call reads the view's request and view: a kernel call
+    the service makes for another principal validates under the offline pair
+    for that principal, as it would outside the view."""
+    _VALIDATED_UNDER.clear()
+    other = User.objects.create(username="other")
+
+    def service(*, data: Any) -> None:
+        dispatch(_TITLED, principal=other, arguments={"title": "t"})
+
+    assert _create(_spec_of(service), {}, owner).status_code == 204
+    ((request, view),) = _VALIDATED_UNDER
+    assert request.user == other
+    assert not isinstance(view, ServiceCreateView)
+
+
+def test_a_kernel_call_for_another_principal_is_never_described_under_the_view_s_request(
+    owner: User,
+) -> None:
+    """The parameters a kernel call the service makes are read off a description
+    of its serializer, and that description is not the edge's own call's either:
+    it is built as outside any call, with no request and no view."""
+    _DESCRIBED_UNDER.clear()
+    other = User.objects.create(username="other")
+
+    def service(*, data: Any) -> None:
+        dispatch(_TITLED, principal=other, arguments={"title": "t"})
+
+    assert _create(_spec_of(service), {}, owner).status_code == 204
+    assert _DESCRIBED_UNDER
+    assert all(pair == (None, None) for pair in _DESCRIBED_UNDER)

@@ -316,3 +316,19 @@ class TestAffordances:
         spec = _listing(_posts, affordances={"publish": PUBLISH})
         with pytest.raises(ImproperlyConfigured, match="Declare a presenter"):
             _get(spec, attrs={"serializer_class": _PostOut})
+
+
+def test_a_view_with_no_spec_lists_as_drf_does() -> None:
+    """No ``spec``: the view's ``queryset`` and ``serializer_class`` answer, as
+    DRF's ``ListAPIView`` would."""
+    Author.objects.create(name="Ada")
+    view = type(
+        "_View",
+        (SelectorListView,),
+        {"queryset": Author.objects.all(), "serializer_class": AuthorSerializer},
+    )
+
+    response = view.as_view()(factory.get("/"))
+
+    assert response.status_code == 200
+    assert [row["name"] for row in response.data] == ["Ada"]

@@ -12,10 +12,11 @@ def base_serializer_context(*, view: Any, request: Any) -> dict[str, Any]:
     ``get_serializer_context`` —
     ``{"request", "format", "view"}`` — so serializers routinely read
     ``self.context["request"]`` unguarded (``build_absolute_uri``,
-    ``request.user``, a permission check in a ``SerializerMethodField``). A
-    spec's ``input_serializer_context`` / ``output_serializer_context`` provider
-    is *additive* config layered on top of that baseline, not a replacement for
-    it, so off HTTP — where there is no DRF view to ask — the baseline has to be
+    ``request.user``, a permission check in a ``SerializerMethodField``). What a
+    call layers on - the ``serializer_context`` a ``SerializerValidator`` or
+    ``SerializerPresenter`` declares, and a view's
+    ``get_input_serializer_context`` / ``get_output_serializer_context`` - is
+    *additive*, not a replacement for that baseline, so off HTTP — where there is no DRF view to ask — the baseline has to be
     synthesized rather than skipped. Without it the same serializer that renders
     over HTTP raises ``KeyError: 'request'`` when the spec is dispatched from an
     MCP tool call, a Pydantic-AI toolset, or a management command.

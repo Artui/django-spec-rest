@@ -33,14 +33,12 @@ class ViewHooks:
 
     Attributes:
         extra_kwargs: Merges into the dispatched callable's pool, beneath
-            ``spec.kwargs``. The same carrier serves the selector chain
-            (``get_selector_kwargs`` / ``get_<action>_selector_kwargs``) — only
-            the view-method names differ, not the layering.
+            ``spec.kwargs``.
         input_data: Merges onto the client payload *before* validation, beneath
             ``spec.input_data``; server-provided keys win over the client's.
         input_serializer_context: Layers onto the baseline serializer context
             ([`base_serializer_context`][django_spec_rest.service_specs.base_serializer_context.base_serializer_context]), beneath
-            ``spec.input_serializer_context``.
+            the Validator's own ``serializer_context``.
         output_serializer_context: **Lazy** — a callable taking the final
             post-selector ``result`` and returning the context — because the
             output context provider is documented to see the exact instance

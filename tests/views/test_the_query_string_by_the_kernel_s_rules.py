@@ -177,3 +177,30 @@ def test_a_refused_choice_is_keyed_at_its_index(
     (``{"ordering": ["Select a valid choice. ..."]}``)."""
     message = f"Select a valid choice. {value} is not one of the available choices."
     assert _served(query) == (400, {name: {"0": [message]}})
+
+
+def _scoped_to_ann() -> dict[str, Any]:
+    return {"name": "ann"}
+
+
+class _ScopedView(SelectorListView):
+    spec = SelectorSpec(
+        kind=SelectorKind.LIST,
+        selector=_users,
+        filter_set=_Users,
+        kwargs=_scoped_to_ann,
+        permissions=(Unrestricted(),),
+        presenter=SerializerPresenter(_Out),
+    )
+
+
+@pytest.mark.parametrize("query", ["name=bob", ""])
+def test_a_kwargs_providers_value_for_a_filter_outranks_the_query_strings(
+    pks: list[int], query: str
+) -> None:
+    """A value the spec's ``kwargs`` provider names like a filter is the filter's,
+    whatever the client puts in the query string."""
+    response = _ScopedView.as_view()(APIRequestFactory().get("/?" + query))
+
+    assert response.status_code == 200
+    assert [row["username"] for row in response.data] == ["ann"]

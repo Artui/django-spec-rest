@@ -32,19 +32,20 @@ parameter is ``test_author_values_outrank_the_validator``'s, and its value
 named like a field's wire name, refused over HTTP, is
 ``test_a_kwargs_value_named_like_a_field_is_refused``'s (``tests/service_specs/``).
 
+A ``HiddenField`` takes no input from the server either: ``input_data`` or a
+view hook naming one leaves the field its default, and a partial call skips it,
+as DRF's loop does, whatever the client sent.
+
 Also not ported, each for the reason beside it:
 
-- ``input_data`` for a read-only field, and for a ``HiddenField``: neither is
-  a parameter, so the case is what the kernel makes of an ``input_data`` key
-  no parameter declares, and drfs' answer turned on the ``NotClientInput``
-  parameter variant above;
+- ``input_data`` for a read-only field: it is no parameter, so the case is
+  what the kernel makes of an ``input_data`` key no parameter declares, and
+  drfs' answer turned on the ``NotClientInput`` parameter variant above;
 - every refusal of five server values answered together, and the client's
   refusal answered before the server's value is validated: both are orders of
-  the second validation, held by the drfs suite's module of this name in
-  ``tests/dispatch/``, and the second reads a key no field declares;
-- a server value for a field that skips, and a dotted or flattened field's
-  value reaching the parameter named like the field: both are the lay-back
-  this module asserts by its other routes, held by that drfs module;
+  the second validation, and the second reads a key no field declares;
+- a dotted or flattened field's value reaching the parameter named like the
+  field: it is the lay-back this module asserts by its other routes;
 - a hook's ``UNSET`` declining a name: a behaviour of the view's hook chain,
   not of a second route, so not this file's.
 """
@@ -57,6 +58,7 @@ from typing import Any
 
 import pytest
 from django.core.exceptions import ImproperlyConfigured
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django_service_specs import ServiceSpec, UnknownArguments
 from rest_framework import serializers
 
@@ -494,3 +496,64 @@ def test_a_server_value_a_field_never_ran_on_is_still_refused_by_it() -> None:
     assert response.status_code == 400
     assert response.data == _TOO_LONG
     assert seen == {}
+
+
+class _BuildsAndChecks(_BuildsTheKey):
+    """``validate_tenant`` refuses with Django's ``ValidationError``, as a model validator would."""
+
+    def validate_tenant(self, value: str) -> str:
+        raise DjangoValidationError("Not a tenant of yours.", code="foreign")
+
+
+def test_a_django_refusal_of_the_server_value_is_answered_as_drfs_loop_answers_it() -> None:
+    """``_BuildsAndChecks`` never runs its field, so only the server's value,
+    validated on its own, meets ``validate_tenant``: its Django refusal is a
+    400 keyed by the field, its code kept, as DRF's own field loop answers one."""
+    seen: dict[str, Any] = {}
+    spec = _spec(_plain(seen), _BuildsAndChecks, input_data=_server)
+
+    response = post(spec, {"other": "evil"})
+
+    assert response.status_code == 400
+    assert response.data == {"tenant": ["Not a tenant of yours."]}
+    assert response.data["tenant"][0].code == "foreign"
+    assert seen == {}
+
+
+class _HiddenTenant(serializers.Serializer):
+    tenant = serializers.HiddenField(default="field-default")
+    title = serializers.CharField(required=False)
+
+
+def _hidden(seen: dict[str, Any]) -> Callable[..., None]:
+    def service(*, data: Any, serializer: Any) -> None:
+        seen.update(data=dict(data), validated=dict(serializer.validated_data))
+
+    return service
+
+
+@pytest.mark.parametrize("partial", [False, True], ids=["full", "partial"])
+@pytest.mark.parametrize("seat", ["input_data", "get_input_data", "get_service_kwargs"])
+def test_a_hidden_field_takes_its_default_whatever_the_server_or_the_client_puts(
+    seat: str, partial: bool
+) -> None:
+    """A ``HiddenField`` is the server's own value and takes no input, so neither
+    the client's ``"evil"`` nor the server's ``"server"`` reaches it: the field
+    takes its default, and a partial call skips it, as DRF's loop does."""
+    seen: dict[str, Any] = {}
+    fields: dict[str, Any] = {"input_data": _server} if seat == "input_data" else {}
+    view = (
+        _CreateView
+        if seat == "input_data"
+        else type("_Hooked", (_CreateView,), {seat: lambda self, *_: _server()})
+    )
+
+    response = post(
+        _spec(_hidden(seen), _HiddenTenant, partial=partial, **fields),
+        {"tenant": "evil", "title": "t"},
+        view=view,
+    )
+
+    assert response.status_code == 204, response.data
+    held = {"title": "t"} if partial else {"tenant": "field-default", "title": "t"}
+    assert seen == {"data": held, "validated": held}

@@ -456,3 +456,27 @@ def test_a_principal_reaches_the_lookup_s_permission_check() -> None:
     request = factory.put("/", {}, format="json")
     force_authenticate(request, user=user)
     assert _view(spec)(request, pk=author.pk).status_code == 403
+
+
+class TestWithNoSpec:
+    """A view with no ``spec`` describes its route as DRF does, and serves nothing."""
+
+    def test_options_is_drf_s_own_answer(self) -> None:
+        author = Author.objects.create(name="a")
+        view = type(
+            "_View",
+            (ServiceUpdateView,),
+            {"serializer_class": AuthorSerializer, "queryset": Author.objects.all()},
+        )
+
+        response = view.as_view()(factory.options("/"), pk=author.pk)
+
+        assert response.status_code == 200
+        assert "name" in response.data["actions"]["PUT"]
+
+    @pytest.mark.parametrize("method", ["put", "patch"])
+    def test_a_write_names_the_missing_spec(self, method: str) -> None:
+        view = type("_Unconfigured", (ServiceUpdateView,), {})
+
+        with pytest.raises(NotImplementedError, match="_Unconfigured requires a `spec`"):
+            view.as_view()(getattr(factory, method)("/", {}, format="json"), pk=1)

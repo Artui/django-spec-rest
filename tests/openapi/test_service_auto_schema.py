@@ -40,6 +40,7 @@ from django_service_specs import (
 from drf_spectacular.generators import SchemaGenerator
 from drf_spectacular.utils import extend_schema
 from rest_framework import serializers
+from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.routers import DefaultRouter
 from rest_framework.test import APIRequestFactory
@@ -673,3 +674,20 @@ class TestViewsets:
         body = _response(schema, "/actions/named/", "get", "200")
         assert body["type"] == "array"
         assert set(body["items"]["properties"]) == {"id", "name"}
+
+
+class _PlainViewSet(GenericViewSet):
+    """A DRF action beside no spec at all: the schema class documents it as DRF's."""
+
+    serializer_class = NameInSerializer
+
+    @action(detail=False, methods=["post"])
+    def plain(self, request: Any) -> Any: ...
+
+
+def test_an_operation_with_no_service_spec_documents_drfs_own_request_body() -> None:
+    router = DefaultRouter()
+    router.register("plain", _PlainViewSet, basename="plain")
+    generated = SchemaGenerator(patterns=router.urls).get_schema(request=None, public=True)
+
+    assert _body(generated, "/plain/plain/", "post") == {"$ref": "#/components/schemas/NameIn"}

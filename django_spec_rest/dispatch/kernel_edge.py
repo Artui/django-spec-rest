@@ -60,7 +60,7 @@ kernel's own unless stated:
   one it may decline and declines stays the client's, as the kernel answers
   both for a declared field.
 
-- **A view's ``get_service_kwargs`` outranks the Validator**, as on drfs:
+- **A view's ``get_service_kwargs`` outranks the Validator**:
   the kernel lays its ``extra_kwargs`` overlay beneath what the Validator
   computes, so the twin's ``kwargs`` seat hands the hook's values back beneath
   the spec's own provider, where they outrank a key a ``validate()`` derives
@@ -150,7 +150,7 @@ def kernel_arguments(
       argument of the spec (test_kernel_edge's
       test_a_query_handed_over_is_read_in_place_of_the_request_s).
     - **A service spec reads the body**: a ``many`` spec's under its
-      ``many_argument``, as a drfs ``many`` spec takes a list body; a form body
+      ``many_argument``, which takes a list body; a form body
       (a ``QueryDict``) through ``flat_arguments``; a JSON object as it was
       sent, which a typed caller's values already are. A body that is no
       object is refused as a whole.
@@ -475,6 +475,11 @@ def _read_call(
     # Read before the arguments, which the twin's Validator declares: lenient
     # for a form body, whose values its serializer alone parses.
     dispatched = recording_spec(spec, lenient=isinstance(request.data, MultiValueDict))
+    # The twin's Validator, the one the view's input layers are for: a kernel
+    # call the service makes validates without them (``input_view_layers``).
+    # The twin, not the spec's: a form body's is lenient, so another object
+    # (test_the_directional_hook_layers_over_drf_s[multipart]).
+    edge_call_state().validator = getattr(dispatched, "validator", None)
     arguments, held = kernel_arguments(
         dispatched, view=view, request=request, input_data=server, query=query
     )
@@ -515,33 +520,26 @@ def _edge_state(
     ``spec.parameters()``, which describes the input serializer: with the
     state's ``describe_context`` it is built with the call's request and
     view, the view's input layers and the Validator's own context callable,
-    as the Validator binds it, so a ``get_fields`` reading
+    and with no body and no row, so a ``get_fields`` reading
     ``self.context["request"]`` declares the fields the call validates
     (test_service_create_view's
     test_a_request_scoped_serializer_declares_the_fields_the_call_validates;
     the layers by test_the_view_s_input_layer_reaches_the_description and
     test_the_validator_s_own_context_reaches_the_description), and is built
-    once for the call. A context callable taking ``**kwargs``
-    is left out of a description and never asked to rebuild one that cannot
-    be built without it: ``whole_pool`` is answered ``None``, so what the
-    serializer raises is raised as it is
-    (test_a_serializer_its_description_cannot_build_raises_as_it_is). A
-    saving, not a guard: asked again with the description's context, the
-    serializer raises the same.
+    once for the call. A context callable taking ``**kwargs`` is left out
+    of a description, and what a serializer that cannot be built without it
+    raises is raised as it is
+    (test_a_serializer_its_description_cannot_build_raises_as_it_is).
     """
     validator = spec.validator if isinstance(spec, KernelServiceSpec) else None
     provider = validator.serializer_context if isinstance(validator, SerializerValidator) else None
     ambient = {"request": request, "view": view}
 
-    def describe_context(
-        arguments: Any = None, *, whole_pool: bool = False
-    ) -> dict[str, Any] | None:
-        if whole_pool:
-            return None
+    def describe_context() -> dict[str, Any]:
         return serializer_context(
             request.user,
             ambient,
-            arguments,
+            None,
             view_layers=hooks.input_serializer_context,
             provider=provider,
             describing=True,
@@ -549,7 +547,9 @@ def _edge_state(
         )
 
     return EdgeCallState(
-        view_hooks=hooks, describe_context=describe_context, server_values_as_form=False
+        view_hooks=hooks,
+        declaration=getattr(validator, "serializer", None),
+        describe_context=describe_context,
     )
 
 
@@ -559,7 +559,7 @@ def _overlay(
     """The view's ``extra_kwargs`` for ``dispatch``'s overlay, the keys pinned out of it, and the server's input.
 
     A ``get_service_kwargs`` value named like one of the spec's parameters or
-    seed-named fields pinned that field on drfs: the serializer validated the
+    seed-named fields pins that field: the serializer validates the
     server's value, never the client's. The kernel refuses an overlay key
     naming a parameter, so the edge moves such a key into the arguments over
     the client's value, where the shape check, the permission checks and the

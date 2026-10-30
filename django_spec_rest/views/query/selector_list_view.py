@@ -34,14 +34,8 @@ class SelectorListView(ListModelMixin, GenericAPIView):
 
     @classmethod
     def as_view(cls, **initkwargs: Any) -> Any:
-        validate_selector_view_spec(
-            cls, expected_kind=SelectorKind.LIST, hooks_base=SelectorListView
-        )
+        validate_selector_view_spec(cls, expected_kind=SelectorKind.LIST)
         return super().as_view(**initkwargs)
-
-    def get_selector_kwargs(self) -> dict[str, Any]:
-        """Hook for additional kwargs available to the selector signature."""
-        return {}
 
     def get_queryset(self) -> Any:
         s: SelectorSpec | None = get_class_attr(self, "spec")

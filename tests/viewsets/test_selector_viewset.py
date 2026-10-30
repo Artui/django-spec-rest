@@ -144,13 +144,13 @@ class TestAffordances:
 
 class TestAsView:
     @pytest.mark.parametrize("action_name", ["list", "retrieve"])
-    def test_the_default_selector_hook_is_not_an_override(self, action_name: str) -> None:
+    def test_a_selector_viewset_with_no_selector_hook_passes(self, action_name: str) -> None:
         entry = _list() if action_name == "list" else _retrieve()
         assert callable(_viewset(action_specs={action_name: entry}).as_view({"get": action_name}))
 
     def test_a_selector_hook_on_a_viewset_with_no_selector_mixin_is_refused(self) -> None:
-        """No selector mixin, no default: a ``get_selector_kwargs`` there is the
-        viewset's own, and never reaches a kernel spec."""
+        """A ``get_selector_kwargs`` there is the viewset's own, as on any
+        viewset, and never reaches a kernel spec."""
         viewset = _viewset(
             base=type("_Base", (ServiceCreateMixin, GenericViewSet), {}),
             action_specs={"list": _list()},

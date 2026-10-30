@@ -250,20 +250,18 @@ def _counted() -> None:
     BUILT.clear()
 
 
-# Over a live view the edge could bind the description to the call, and does
-# not: it sets no ``describe_binding`` for a kernel spec, so the Validator
-# describes its serializer for ``parameters()`` afresh, with no body, no row and
-# ``partial`` unset. A field only the row or a partial call adds still
-# validates, unmarked below: the kernel drops it from its arguments under the
-# edge's ``IGNORE``, but the serializer binds the request's body, which holds
-# it. Closing it takes the edge (``dispatch/kernel_edge.py``)
-# setting the binding and the serializer walk (``describe_serializer``,
-# ``describe_with``) reading it there.
+# Over a live view the edge describes a kernel spec's serializer for
+# ``parameters()`` with no body, no row and ``partial`` unset, so a field only
+# the body, the row or a partial call adds is not among the parameters. A field
+# only the row or a partial call adds still validates, unmarked below: the
+# kernel drops it from its arguments under the edge's ``IGNORE``, but the
+# serializer binds the request's body, which holds it. Closing it takes the
+# edge describing the serializer bound to the call's body, row and flags.
 _UNBOUND = pytest.mark.xfail(
     strict=True,
     reason=(
-        "the kernel route's edge sets no describe_binding for a kernel spec, so its "
-        "SerializerValidator describes the serializer for parameters() with no body, no "
+        "the kernel route describes a kernel spec's serializer for parameters() with no "
+        "body, no "
         "row and partial unset: a field the body or the row adds is refused, or dropped "
         "under the edge's IGNORE so its value never reaches the service, a field an "
         "update never writes is required, and a serializer reading either raises"
@@ -272,9 +270,9 @@ _UNBOUND = pytest.mark.xfail(
 _BUILT_AGAIN = pytest.mark.xfail(
     strict=True,
     reason=(
-        "a kernel spec's SerializerValidator builds its serializer afresh for every "
-        "parameters() read on the kernel route, so the call builds it, and queries as it "
-        "is built, more than once"
+        "the kernel route describes a kernel spec's serializer for parameters() and its "
+        "SerializerValidator builds another to validate with, so the call builds it, and "
+        "queries as it is built, more than once"
     ),
 )
 

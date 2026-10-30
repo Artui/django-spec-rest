@@ -77,10 +77,9 @@ dependencies = [
 # OpenAPI / Swagger via drf-spectacular. Pulled in only when the user
 # installs the extra and calls ``django_spec_rest.openapi.enable_openapi``.
 spectacular = ["drf-spectacular>=0.27,<1.0"]
-# django-filter introspection for ``filterset_to_json_schema``. The core never
-# imports django-filter (``SelectorSpec.filter_set`` is applied by duck typing);
-# only the JSON Schema introspection of a ``FilterSet`` needs the real classes,
-# so it lives behind this extra and imports lazily.
+# django-filter, for a ``SelectorSpec.filter_set``: the kernel reads its filters
+# as parameters and binds it, and imports django-filter lazily to do so. This
+# package imports none of it. The floor is the kernel's own ``filter`` extra's.
 filter = ["django-filter>=23.1"]
 
 [project.urls]
@@ -98,11 +97,6 @@ dev = [
     "pytest-cov>=7.1.0",
     "pytest-asyncio>=1.3.0",
     "flake8-tidy-imports>=4.12.0",
-    # Used by the audience tests to validate a *rendered payload* against the
-    # schema generated from the same declaration. A round trip through our own
-    # helpers proves they agree with each other; only a real validator proves
-    # they agree with JSON Schema.
-    "jsonschema>=4.20",
     "django-stubs>=6.0.4",
     "djangorestframework-stubs>=3.17.0",
     # Keep these two at the same floor as the ``spectacular`` / ``filter``

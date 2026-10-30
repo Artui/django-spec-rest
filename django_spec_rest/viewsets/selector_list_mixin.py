@@ -11,12 +11,11 @@ from rest_framework.response import Response
 from django_spec_rest.selectors.utils import dispatch_selector_for_spec, present_kernel_list
 from django_spec_rest.viewsets.utils import (
     _ActionSpecsMixin,
-    _SelectorHooks,
     resolve_action_selector_spec,
 )
 
 
-class SelectorListMixin(ListModelMixin, _SelectorHooks, _ActionSpecsMixin):
+class SelectorListMixin(ListModelMixin, _ActionSpecsMixin):
     """Compose with ``GenericViewSet``.
 
     An absent ``"list"`` key falls through to DRF's default ``get_queryset()``.

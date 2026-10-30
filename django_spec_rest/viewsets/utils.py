@@ -99,7 +99,7 @@ def resolve_action_spec(view: Any, action: str | None) -> ActionSpec | None:
     ``handle_exception`` would re-raise it and every OPTIONS request (CORS
     preflights included) would 500 before permissions are evaluated. So is the
     ``action is None`` check, for a method the action map does not route: held
-    by test_a_method_the_viewset_does_not_route_is_refused_rather_than_crashing.
+    by the ``None`` case of test_a_kernel_entry_resolves_to_the_view_s_serializer_class.
     """
     spec = resolve_action_spec_entry(view.action_specs, action)
     if spec is not None or action is None:
@@ -155,22 +155,6 @@ def resolve_action_selector_spec(
     return entry
 
 
-class _SelectorHooks:
-    """The default ``get_selector_kwargs`` both selector mixins inherit.
-
-    One definition, so ``as_view()`` can tell a viewset's own override from
-    the default whichever selector mixin comes first in its MRO: with one
-    default per mixin, a ``retrieve`` entry asked against the retrieve mixin's
-    would read the list mixin's, listed first on ``ServiceViewSet``, as an
-    override, and every kernel retrieve spec would be refused
-    (test_service_viewset's test_retrieve_is_presented_by_the_spec).
-    """
-
-    def get_selector_kwargs(self) -> dict[str, Any]:
-        """Hook for additional kwargs available to the selector signature."""
-        return {}
-
-
 def _as_mounted(view_cls: type, action: str, spec: object, *, label: str) -> type:
     """``view_cls`` as a standalone view would carry ``spec``: on ``spec``, serving ``action``.
 
@@ -210,16 +194,9 @@ def _validate_kernel_action_spec(
     if action in _MUTATION_ACTIONS:
         validate_mutation_view_spec(mounted, has_instance=_MUTATION_ACTIONS[action]["has_instance"])
     elif action in _SELECTOR_ACTION_KIND:
-        # A viewset composing neither selector mixin has no default to
-        # override, so any ``get_selector_kwargs`` it has is its own:
-        # ``is_overridden`` answers ``hasattr`` against a base declaring none.
-        # Each arm is held by test_selector_viewset: ``object`` by
-        # test_a_viewset_with_no_selector_mixin_and_no_hook_passes,
-        # ``_SelectorHooks`` by test_the_default_selector_hook_is_not_an_override.
         validate_selector_view_spec(
             mounted,
             expected_kind=_SELECTOR_ACTION_KIND[action],
-            hooks_base=_SelectorHooks if issubclass(view_cls, _SelectorHooks) else object,
         )
     else:
         raise ImproperlyConfigured(

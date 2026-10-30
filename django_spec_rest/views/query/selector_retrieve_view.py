@@ -35,13 +35,8 @@ class SelectorRetrieveView(RetrieveModelMixin, GenericAPIView):
 
     @classmethod
     def as_view(cls, **initkwargs: Any) -> Any:
-        validate_selector_view_spec(
-            cls, expected_kind=SelectorKind.RETRIEVE, hooks_base=SelectorRetrieveView
-        )
+        validate_selector_view_spec(cls, expected_kind=SelectorKind.RETRIEVE)
         return super().as_view(**initkwargs)
-
-    def get_selector_kwargs(self) -> dict[str, Any]:
-        return {}
 
     def get_object(self) -> Any:
         """Resolve the target row through the spec's selector, if one is set.

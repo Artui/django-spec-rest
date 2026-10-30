@@ -105,3 +105,8 @@ class TestResolveSelectorSpec:
     def test_a_service_entry_is_none(self) -> None:
         assert resolve_selector_spec(_bound(_ViewSet, "create")) is None
         assert resolve_selector_spec(_StandaloneView()) is None
+
+    def test_a_viewset_with_no_action_specs_and_no_stamp_is_none(self) -> None:
+        """``_ActionViewSet`` declares no ``action_specs``, and its ``go`` carries a
+        service stamp, which is no selector's."""
+        assert resolve_selector_spec(_bound(_ActionViewSet, "go")) is None

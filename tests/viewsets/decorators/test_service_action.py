@@ -8,11 +8,15 @@ against a tree whose decorator reads drfs fields off the spec.
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import pytest
+from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
+from django.test import override_settings
 from django_service_specs import (
+    AdditionalInputRequired,
     Parameter,
     Parameters,
     PermissionCheck,
@@ -22,12 +26,15 @@ from django_service_specs import (
     Unrestricted,
 )
 from rest_framework import serializers
+from rest_framework.exceptions import ErrorDetail
 from rest_framework.permissions import BasePermission
 from rest_framework.response import Response
+from rest_framework.routers import SimpleRouter
 from rest_framework.test import APIRequestFactory
+from rest_framework.views import exception_handler
 from rest_framework.viewsets import GenericViewSet, ViewSet
 
-from django_spec_rest import ServiceViewSet, service_action
+from django_spec_rest import ActionSerializerResolver, ServiceViewSet, service_action
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from django_spec_rest.viewsets.utils import resolve_action_spec
@@ -244,3 +251,182 @@ class TestAtDecoration:
         def announce(*, data: dict[str, Any], tag: str) -> None: ...
 
         assert _viewset(_collection(service=announce), detail=False).act.detail is False
+
+
+class TestRouting:
+    """What the decorator forwards to DRF's ``@action`` is what the router routes."""
+
+    def test_methods_url_path_and_url_name_reach_the_route(self) -> None:
+        @service_action(
+            _collection(), detail=False, methods=["put"], url_path="say-it", url_name="say"
+        )
+        def announce(self: Any, request: Any) -> None:
+            """Stubbed: the decorator serves the spec."""
+
+        viewset = type("_ViewSet", (GenericViewSet,), {"announce": announce})
+        router = SimpleRouter()
+        router.register("authors", viewset, basename="authors")
+
+        (route,) = [url for url in router.urls if url.name == "authors-say"]
+        assert route.pattern.regex.pattern == "^authors/say-it/$"
+        response = route.callback(factory.put("/", {"note": "hi"}, format="json"))
+        assert response.status_code == 200, response.data
+        assert response.data["name"] == "hi"
+
+    def test_with_none_given_drf_s_defaults_route_it(self) -> None:
+        """No ``methods``, ``url_path`` or ``url_name``: DRF's ``@action`` routes
+        ``GET`` under the method's own name."""
+
+        @service_action(_collection(validator=None, service=lambda: None), detail=False)
+        def ping(self: Any, request: Any) -> None:
+            """Stubbed: the decorator serves the spec."""
+
+        viewset = type("_ViewSet", (GenericViewSet,), {"ping": ping})
+        router = SimpleRouter()
+        router.register("authors", viewset, basename="authors")
+
+        (route,) = [url for url in router.urls if url.name == "authors-ping"]
+        assert route.pattern.regex.pattern == "^authors/ping/$"
+        assert route.callback(factory.get("/")).status_code == 204
+
+
+# ``AdditionalInputRequired`` carries a JSON Schema DRF would stringify leaf by
+# leaf: ``False`` as ``"False"``, ``3`` as ``"3"``.
+_PURGE_SCHEMA: dict[str, Any] = {
+    "confirmed": {"type": "boolean", "default": False},
+    "batches": {"type": "integer", "minimum": 1, "maximum": 3},
+    "mode": {"enum": ["soft", None]},
+}
+
+
+def _purge() -> None:
+    raise AdditionalInputRequired("Confirm the purge.", schema=_PURGE_SCHEMA)
+
+
+def _purging(*bases: type) -> type:
+    @service_action(
+        ServiceSpec(service=_purge, permissions=_OPEN, atomic=False),
+        detail=False,
+        methods=["post"],
+    )
+    def purge(self: Any, request: Any) -> None:
+        """Stubbed: the decorator serves the spec."""
+
+    return type("_Purging", bases, {"queryset": Author.objects.all(), "purge": purge})
+
+
+# Every way a ``@service_action`` can sit on a viewset, keyed by its bases: DRF's
+# own two, and this package's bases on either side of ``GenericViewSet``, where
+# ``APIView.handle_exception`` shadows the package's restore.
+_BASES: dict[str, tuple[type, ...]] = {
+    "GenericViewSet": (GenericViewSet,),
+    "ViewSet": (ViewSet,),
+    "ServiceViewSet": (ServiceViewSet,),
+    "ActionSerializerResolver, GenericViewSet": (ActionSerializerResolver, GenericViewSet),
+    "GenericViewSet, ActionSerializerResolver": (GenericViewSet, ActionSerializerResolver),
+}
+
+_seen: list[Exception] = []
+
+
+def _recording(exc: Exception, context: dict[str, Any]) -> Response | None:
+    """DRF's own handler, keeping hold of the exception it was given."""
+    _seen.append(exc)
+    return exception_handler(exc, context)
+
+
+def _declining(exc: Exception, context: dict[str, Any]) -> Response | None:
+    _seen.append(exc)
+    return None
+
+
+def _handled_by(name: str) -> Any:
+    return override_settings(
+        REST_FRAMEWORK={**settings.REST_FRAMEWORK, "EXCEPTION_HANDLER": f"{__name__}.{name}"}
+    )
+
+
+def _purge_through(viewset: type) -> Any:
+    response = viewset.as_view({"post": "purge"})(factory.post("/", {}, format="json"))
+    response.render()
+    return response
+
+
+@pytest.mark.parametrize("bases", list(_BASES))
+def test_service_action_serves_the_schema_as_raised_on_any_viewset(bases: str) -> None:
+    """Read off the rendered bytes: the boolean default arrives as ``false`` and
+    the bound as ``3``. The configured handler runs once and sees DRF's
+    ``ErrorDetail`` leaves. ``GenericViewSet``, ``ViewSet`` and
+    ``GenericViewSet, ActionSerializerResolver`` reach no restore of the
+    package's bases, so they serve the strings without the decorator's own."""
+    _seen.clear()
+    with _handled_by("_recording"):
+        response = _purge_through(_purging(*_BASES[bases]))
+
+    assert response.status_code == 422
+    assert json.loads(response.content) == {"detail": "Confirm the purge.", "schema": _PURGE_SCHEMA}
+    assert len(_seen) == 1
+    leaf = _seen[0].detail["schema"]["confirmed"]["default"]  # ty: ignore[unresolved-attribute]
+    assert isinstance(leaf, ErrorDetail)
+    assert leaf == "False"
+
+
+@pytest.mark.parametrize("bases", list(_BASES))
+def test_a_handler_declining_the_error_runs_once_on_any_viewset(bases: str) -> None:
+    """A handler answering ``None`` declines the error, so DRF raises it, once."""
+    _seen.clear()
+    with _handled_by("_declining"), pytest.raises(Exception, match="Confirm the purge."):
+        _purge_through(_purging(*_BASES[bases]))
+
+    assert len(_seen) == 1
+
+
+class _Redacting:
+    """A viewset's own ``handle_exception``, rewriting the body it is handed."""
+
+    def handle_exception(self, exc: Exception) -> Response:
+        response = super().handle_exception(exc)  # ty: ignore[unresolved-attribute]
+        response.data["schema"] = {"redacted": True}
+        return response
+
+
+@pytest.mark.parametrize("bases", list(_BASES))
+def test_an_overriding_handle_exception_has_the_last_word_on_every_route(bases: str) -> None:
+    """The restore runs inside the handler, beneath any ``handle_exception``
+    override, so what the override writes is what the client gets."""
+    response = _purge_through(_purging(_Redacting, *_BASES[bases]))
+
+    assert response.status_code == 422
+    assert json.loads(response.content) == {
+        "detail": "Confirm the purge.",
+        "schema": {"redacted": True},
+    }
+
+
+def _signing(exc: Exception, context: dict[str, Any]) -> Response | None:
+    """DRF's handler, with a key of its own added to the body."""
+    response = exception_handler(exc, context)
+    assert response is not None
+    response.data["handled_by"] = "the viewset"
+    return response
+
+
+class _OwnHandler:
+    """A viewset choosing its own exception handler over ``EXCEPTION_HANDLER``."""
+
+    def get_exception_handler(self) -> Any:
+        return _signing
+
+
+@pytest.mark.parametrize("bases", list(_BASES))
+def test_a_viewsets_own_exception_handler_still_answers_on_any_viewset(bases: str) -> None:
+    """The handler is asked through the view's own ``get_exception_handler``, as
+    DRF asks it, and the schema is restored on what that handler built."""
+    response = _purge_through(_purging(_OwnHandler, *_BASES[bases]))
+
+    assert response.status_code == 422
+    assert json.loads(response.content) == {
+        "detail": "Confirm the purge.",
+        "schema": _PURGE_SCHEMA,
+        "handled_by": "the viewset",
+    }

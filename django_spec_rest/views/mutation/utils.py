@@ -210,10 +210,10 @@ def resolve_mutation_instance(view: Any, spec: KernelServiceSpec) -> Any:
 def mutation_target_source(spec: KernelServiceSpec) -> Literal["bulk", "instance_selector"] | None:
     """Where a mutation's target comes from, as ``resolve_mutation_instance`` decides it.
 
-    ``None`` is a spec naming no target. Each condition is held by a test that
-    fails without it: ``spec.many`` by the ``put-bulk-no-queryset`` row of
-    test_options_describes_every_spec_only_shape, and ``collection_selector_spec``
-    by TestBulkDeleteCollection.test_delete_over_query_filter_204.
+    ``None`` is a spec naming no target. The kernel refuses a target selector
+    beside ``many=True`` or a collection selector, so ``"bulk"`` never shadows
+    ``"instance_selector"``, and the one caller, which asks only for the
+    latter, cannot tell ``"bulk"`` from ``None``.
     """
     if spec.many or spec.collection_selector_spec is not None:
         return "bulk"
@@ -245,7 +245,8 @@ def restore_raised_schema(exc: Exception, response: Response) -> Response:
     # ``EXCEPTION_HANDLER`` may answer with any Django response, which DRF
     # serves as it is; only DRF's ``Response`` has a ``.data``.
     data: Any = getattr(response, "data", None)
-    # Each condition is held by its own test in tests/test_additional_input_required.py:
+    # Each condition is held by its own test in
+    # tests/views/test_additional_input_required_over_http.py:
     # the exception type by test_another_error_naming_a_schema_field_is_left_alone,
     # the dict by test_a_handler_answering_with_a_string_body_is_left_alone (a
     # ``str`` body saying "schema", which ``in`` matches as a substring, so a
@@ -282,8 +283,8 @@ class _ServesRaisedSchema:
     ships is composed that way. A user who lists a drfs mixin after
     ``GenericViewSet`` gets DRF's method, and that mixin's own actions serve the
     schema stringified; ``@service_action`` restores it itself on any viewset.
-    Held by test_a_mixin_listed_after_generic_viewset_serves_its_own_actions_stringified
-    and test_service_action_serves_the_schema_as_raised_on_any_viewset.
+    The restoring half is held by
+    test_service_action_serves_the_schema_as_raised_on_any_viewset.
     """
 
     def handle_exception(self, exc: Exception) -> Response:

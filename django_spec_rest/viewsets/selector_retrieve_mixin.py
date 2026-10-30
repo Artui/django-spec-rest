@@ -12,12 +12,11 @@ from django_spec_rest.selectors.utils import dispatch_selector_for_spec, present
 from django_spec_rest.views.utils import _JsonNullResponse
 from django_spec_rest.viewsets.utils import (
     _ActionSpecsMixin,
-    _SelectorHooks,
     resolve_action_selector_spec,
 )
 
 
-class SelectorRetrieveMixin(RetrieveModelMixin, _SelectorHooks, _ActionSpecsMixin):
+class SelectorRetrieveMixin(RetrieveModelMixin, _ActionSpecsMixin):
     """Compose with ``GenericViewSet``.
 
     An absent ``"retrieve"`` key falls through to DRF's default ``get_object()``.

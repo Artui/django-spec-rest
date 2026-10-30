@@ -411,3 +411,56 @@ def test_input_data_by_wire_name_leaves_the_parameter_of_that_name_its_default(f
 
     assert response.status_code == 204, response.data
     assert seen == {"tenant": "D", "data": "srv"}
+
+
+class _ReadOnlyWithADefault(serializers.Serializer):
+    """A read-only field with a default, whose key a ``validate()`` drops.
+
+    The drop is what makes the field's default visible: left in place, DRF's
+    own ``validated_data`` holds the default and the parameter takes it either
+    way."""
+
+    ro = serializers.CharField(read_only=True, default="field-default")
+    title = serializers.CharField()
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        attrs.pop("ro", None)
+        return attrs
+
+
+def test_input_data_for_a_read_only_field_with_a_default_holds_no_server_value() -> None:
+    """A read-only field takes no value in DRF's loop, so a view's ``get_input_data``
+    naming it holds nothing: the field never validates to its default as the
+    server's."""
+    seen: dict[str, Any] = {}
+
+    def service(*, data: Any, ro: str = "parameter-default") -> None:
+        seen.update(data=dict(data), ro=ro)
+
+    hooked = type("_Hooked", (_CreateView,), {"get_input_data": lambda self, *_: {"ro": "srv"}})
+
+    response = post(_spec(service, _ReadOnlyWithADefault), {"title": "t"}, view=hooked)
+
+    assert response.status_code == 204, response.data
+    assert seen == {"data": {"title": "t"}, "ro": "parameter-default"}
+
+
+class _DottedTenant(serializers.Serializer):
+    tenant = serializers.CharField(source="org.name", required=False)
+
+
+def test_a_dotted_fields_server_value_reaches_the_parameter_named_like_the_field() -> None:
+    """A dotted ``source`` has no key of its own in ``data``, where its value nests
+    under ``org``: the server's value is handed under the field's name, and
+    ``org`` stays the mapping it nests in."""
+    seen: dict[str, Any] = {}
+
+    def service(*, data: Any, tenant: str = "D-tenant", org: Any = "D-org") -> None:
+        seen.update(data=dict(data), tenant=tenant, org=org)
+
+    hooked = type("_Hooked", (_CreateView,), {"get_input_data": lambda self, *_: {"tenant": "srv"}})
+
+    response = post(_spec(service, _DottedTenant), {"tenant": "evil"}, view=hooked)
+
+    assert response.status_code == 204, response.data
+    assert seen == {"data": {"org": {"name": "srv"}}, "tenant": "srv", "org": {"name": "srv"}}

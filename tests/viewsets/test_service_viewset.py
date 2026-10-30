@@ -388,6 +388,37 @@ class TestUnconfigured:
         assert response.status_code == 200
 
 
+class TestWithNoEntry:
+    """A read action no ``action_specs`` entry configures is DRF's own, over the
+    viewset's ``queryset`` and ``serializer_class``."""
+
+    def test_list_lists_as_drf_does(self) -> None:
+        Author.objects.create(name="a")
+        viewset = _viewset(action_specs={}, serializer_class=AuthorSerializer)
+
+        response = _call(viewset, "get", "list")
+
+        assert response.status_code == 200
+        assert [row["name"] for row in response.data] == ["a"]
+
+    def test_retrieve_retrieves_as_drf_does(self) -> None:
+        author = Author.objects.create(name="a")
+        viewset = _viewset(action_specs={}, serializer_class=AuthorSerializer)
+
+        response = _call(viewset, "get", "retrieve", pk=author.pk)
+
+        assert response.status_code == 200
+        assert response.data["name"] == "a"
+
+    def test_options_of_a_route_serving_no_spec_is_drf_s_own_answer(self) -> None:
+        viewset = _viewset(action_specs={}, serializer_class=AuthorSerializer)
+
+        response = viewset.as_view({"get": "list", "post": "create"})(factory.options("/"))
+
+        assert response.status_code == 200
+        assert "name" in response.data["actions"]["POST"]
+
+
 class TestAsView:
     @pytest.mark.parametrize("action", ["create", "update", "partial_update", "destroy"])
     def test_a_selector_spec_under_a_write_action_is_refused(self, action: str) -> None:
@@ -480,3 +511,8 @@ class TestAsView:
         viewset = _viewset(action_specs={"publish": _create()})
         with pytest.raises(ImproperlyConfigured, match="service_action"):
             viewset.as_view({"post": "create"})
+
+    def test_an_entry_that_is_no_spec_is_refused(self) -> None:
+        viewset = _viewset(action_specs={"list": _list_authors})
+        with pytest.raises(ImproperlyConfigured, match="must be a ServiceSpec or SelectorSpec"):
+            viewset.as_view({"get": "list"})

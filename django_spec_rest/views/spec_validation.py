@@ -39,12 +39,6 @@ def _required_kw_params(fn: Callable[..., Any]) -> dict[str, inspect.Parameter]:
     }
 
 
-def _accepts_var_keyword(fn: Callable[..., Any]) -> bool:
-    return any(
-        p.kind == inspect.Parameter.VAR_KEYWORD for p in inspect.signature(fn).parameters.values()
-    )
-
-
 def is_overridden(view_cls: type, base_cls: type, method_name: str) -> bool:
     """Return ``True`` if ``view_cls`` overrides ``base_cls``'s ``method_name``.
 
@@ -114,7 +108,10 @@ def _validate_success_status(
     """Reject a ``success_status`` that is neither int/None nor a well-formed callable.
 
     A required parameter outside ``_SUCCESS_STATUS_KEYS`` can never be
-    supplied, so it fails here rather than as a ``TypeError`` deep in dispatch.
+    supplied, so it fails here rather than as a ``TypeError`` deep in dispatch,
+    ``**kwargs`` beside it or not: ``**kwargs`` is handed the pool, never a
+    name the pool lacks
+    (test_a_callable_taking_kwargs_beside_a_key_the_pool_lacks_is_refused_at_as_view).
     """
     if success_status is None or isinstance(success_status, int):
         return
@@ -123,14 +120,12 @@ def _validate_success_status(
             f"{label}: `success_status` must be an int, a callable returning an int, "
             f"or None — got {type(success_status).__name__}."
         )
-    if _accepts_var_keyword(success_status):
-        return
     unknown = set(_required_kw_params(success_status)) - _SUCCESS_STATUS_KEYS
     if unknown:
         raise ImproperlyConfigured(
             f"{label}: `success_status` callable requires parameter(s) "
             f"{sorted(unknown)} the framework can't supply — declare only a subset "
-            f"of {sorted(_SUCCESS_STATUS_KEYS)} (or `**kwargs`)."
+            f"of {sorted(_SUCCESS_STATUS_KEYS)}, and `**kwargs` for the rest."
         )
 
 
@@ -138,7 +133,8 @@ def _validate_response_finalizer(finalizer: Any, *, label: str) -> None:
     """Reject a ``response_finalizer`` that isn't a well-formed callable.
 
     Same rule as ``_validate_success_status``, against
-    ``_RESPONSE_FINALIZER_KEYS``.
+    ``_RESPONSE_FINALIZER_KEYS``
+    (test_a_finalizer_taking_kwargs_beside_a_key_the_framework_lacks_is_refused_at_as_view).
     """
     if finalizer is None:
         return
@@ -147,14 +143,12 @@ def _validate_response_finalizer(finalizer: Any, *, label: str) -> None:
             f"{label}: `response_finalizer` must be a callable returning a Response "
             f"or None — got {type(finalizer).__name__}."
         )
-    if _accepts_var_keyword(finalizer):
-        return
     unknown = set(_required_kw_params(finalizer)) - _RESPONSE_FINALIZER_KEYS
     if unknown:
         raise ImproperlyConfigured(
             f"{label}: `response_finalizer` requires parameter(s) {sorted(unknown)} the "
             f"framework can't supply — declare only a subset of "
-            f"{sorted(_RESPONSE_FINALIZER_KEYS)} (or `**kwargs`)."
+            f"{sorted(_RESPONSE_FINALIZER_KEYS)}, and `**kwargs` for the rest."
         )
 
 
@@ -350,7 +344,7 @@ def _refuse_a_detail_spec_with_no_target(
         )
 
 
-def _refuse_selector_hooks(view_cls: type, hooks_base: type) -> None:
+def _refuse_selector_hooks(view_cls: type) -> None:
     """Refuse a selector view's ``get_selector_kwargs`` hooks beside a kernel spec.
 
     A kernel selector spec is handed its own ``kwargs`` provider's values and
@@ -366,7 +360,7 @@ def _refuse_selector_hooks(view_cls: type, hooks_base: type) -> None:
     """
     action = getattr(view_cls, "action", None)
     for hook, overridden in (
-        ("get_selector_kwargs", is_overridden(view_cls, hooks_base, "get_selector_kwargs")),
+        ("get_selector_kwargs", hasattr(view_cls, "get_selector_kwargs")),
         (f"get_{action}_selector_kwargs", _overrides_the_action_hook(view_cls, "selector")),
     ):
         if overridden:
@@ -395,7 +389,6 @@ def validate_selector_view_spec(
     view_cls: type,
     *,
     expected_kind: SelectorKind,
-    hooks_base: type,
 ) -> None:
     """Validate ``view_cls.spec`` on a standalone selector view.
 
@@ -404,9 +397,8 @@ def validate_selector_view_spec(
     [`SelectorListView`][django_spec_rest.views.query.selector_list_view.SelectorListView],
     ``RETRIEVE`` for
     [`SelectorRetrieveView`][django_spec_rest.views.query.selector_retrieve_view.SelectorRetrieveView]),
-    and ``hooks_base`` the view class declaring the default ``get_selector_kwargs``
-    that an override of is refused beside a kernel spec: each view passes its own,
-    since the two declare one each.
+    A ``get_selector_kwargs`` the view has is the author's, since no
+    selector view or mixin declares one, and is refused beside a kernel spec.
     """
     spec: KernelSelectorSpec | KernelServiceSpec | None = getattr(view_cls, "spec", None)
     if spec is None:
@@ -422,7 +414,7 @@ def validate_selector_view_spec(
     # and, below, a ``filter_set`` beside DRF's own filter backend
     # (test_a_filter_set_beside_django_filter_s_backend_is_refused_at_as_view).
     _validate_selector_kind(spec, label=label, expected_kind=expected_kind)
-    _refuse_selector_hooks(view_cls, hooks_base)
+    _refuse_selector_hooks(view_cls)
     _check_kernel_seeds(spec)
     if expected_kind is SelectorKind.LIST:
         validate_filter_set_no_backend_conflict(view_cls, spec, label=label)

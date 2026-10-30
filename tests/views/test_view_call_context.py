@@ -149,6 +149,93 @@ def test_a_kernel_selector_is_handed_the_view_s_dict() -> None:
     assert seen["selector"]["action"] is None
 
 
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "name", ["get_service_kwargs", "get_input_serializer_context", "get_progress_reporter"]
+)
+def test_a_view_hook_taking_kwargs_alone_is_never_handed_the_call_context(name: str) -> None:
+    """The dict is offered by name only: a hook taking a bare ``**kwargs`` is
+    handed the view and the request, as it always was."""
+    seen: dict[str, Any] = {}
+
+    def hook(self: Any, **kwargs: Any) -> dict[str, Any] | None:
+        seen.update(kwargs)
+        return None if name == "get_progress_reporter" else {}
+
+    view = type(
+        "_Hooked",
+        (_KernelCreateView,),
+        {
+            "spec": ServiceSpec(
+                service=lambda *, data: None,
+                permissions=_OPEN,
+                validator=SerializerValidator(_NameIn),
+            ),
+            name: hook,
+        },
+    )
+
+    response = view.as_view()(factory.post("/", {"name": "Ada"}, format="json"))
+
+    assert response.status_code == 204, response.data
+    assert set(seen) == {"view", "request"}
+
+
+_HOOKS = (
+    "get_service_kwargs",
+    "get_create_service_kwargs",
+    "get_input_data",
+    "get_create_input_data",
+    "get_input_serializer_context",
+    "get_create_input_serializer_context",
+    "get_output_serializer_context",
+    "get_create_output_serializer_context",
+    "get_progress_reporter",
+)
+
+
+@pytest.mark.django_db
+def test_every_viewset_hook_naming_the_call_context_is_handed_the_view_s_dict() -> None:
+    """Each of a viewset's hooks, the catch-all and the per-action form alike,
+    declaring ``call_context`` is handed the request's one dict."""
+    seen: dict[str, Any] = {}
+
+    def hook(name: str) -> Any:
+        def answer(self: Any, *, call_context: dict[str, Any]) -> Any:
+            seen[name] = call_context
+            return None if name == "get_progress_reporter" else {}
+
+        return answer
+
+    def service(*, data: Any, call_context: dict[str, Any]) -> Author:
+        seen["service"] = call_context
+        return Author.objects.create(name=data["name"])
+
+    spec = ServiceSpec(
+        service=service,
+        permissions=_OPEN,
+        validator=SerializerValidator(_NameIn),
+        presenter=SerializerPresenter(AuthorSerializer),
+    )
+    viewset = type(
+        "_Hooked",
+        (ServiceViewSet,),
+        {
+            "queryset": Author.objects.all(),
+            "action_specs": {"create": spec},
+            **{name: hook(name) for name in _HOOKS},
+        },
+    )
+
+    response = viewset.as_view({"post": "create"})(
+        factory.post("/", {"name": "Ada"}, format="json")
+    )
+
+    assert response.status_code == 201, response.data
+    assert set(seen) == {*_HOOKS, "service"}
+    assert all(context is seen["service"] for context in seen.values())
+
+
 def _needs_the_call_context(*, call_context: dict[str, Any]) -> int:
     return 201
 
