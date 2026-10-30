@@ -234,9 +234,9 @@ class SerializerPresenter(Presenter):
         field among them. A mapping detail is kept as it is, and a list, which
         is all DRF makes of a message, goes under the kernel's
         ``NON_FIELD_ERRORS``; every message keeps its code. One that is
-        already the kernel's ``InvalidArguments`` leaves as raised. No route of
-        this package's own presents through here, so a live view and
-        ``render_spec_output`` still answer DRF's class
+        already the kernel's ``InvalidArguments`` leaves as raised. A view
+        presents through the kernel's ``present``, so the refusal reaches HTTP
+        as a ``400`` whose body is the mapping
         (``tests/service_specs/test_a_presenter_s_refusal.py``).
         """
         if value is None:

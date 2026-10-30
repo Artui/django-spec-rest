@@ -198,8 +198,8 @@ class EdgeCallState:
       ``kwargs`` provider's value naming the field, and ``input_data``, a field
       named like a seed of the call included - by the name the body carries,
       as the edge put it. The Validator validates these, never what a field
-      reads back from the body, and a key a callable of the call marks
-      ``NotClientInput`` is handed on by name only from one of them
+      reads back from the body, and a key the Validator's ``server_owned``
+      names is handed on by name only from one of them
       (``server_values``). On a form body as on any other, each is validated
       as the author returned it, since the kernel's shape check read the value
       as returned (test_server_value_the_edge_put's
@@ -508,8 +508,7 @@ def serializer_context(
        One alone is kept as it is, beside a ``None`` for the other: pairing a
        carried request with a view built around another one would describe a
        call that never happened. A carried DRF ``Request`` is never given the
-       shapes: over HTTP it carries its own query string, and off HTTP the edge
-       writes a declared ``QueryParam`` onto it. **A carried Django request
+       shapes: it carries its own query string. **A carried Django request
        DRF has not wrapped**, the request a run arrived on as the kernel's
        call context holds it, is wrapped: the pair is built around a copy of
        it whose query string is the shapes, replacing its own

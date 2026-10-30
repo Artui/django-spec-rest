@@ -114,8 +114,8 @@ def view_call_context(view: Any, request: Request) -> dict[str, Any]:
     dispatches in one request, the retrieve spec finding an update's row and
     then the update spec, are one call and share it.
 
-    A view hands this object to the kernel's ``dispatch`` as its ``call_context=`` and
-    to ``render_spec_output``, so the spec's own callables are offered it as
+    A view hands this object to the kernel's ``dispatch`` as its
+    ``call_context=``, so the spec's own callables are offered it as
     the edge offers them, and it offers it itself to each callable it invokes:
 
     - the hooks ``get_service_kwargs``, ``get_input_data``,

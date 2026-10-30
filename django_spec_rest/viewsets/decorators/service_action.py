@@ -147,10 +147,9 @@ def service_action(
         def handler(self: Any, request: Request, *args: Any, **kwargs: Any) -> Response:
             try:
                 instance: Any = resolve_mutation_instance(self, spec) if detail else None
-                # ``success_status`` is resolved per-request inside the dispatch
-                # (``spec.success_status`` may be a callable keyed on the result),
-                # so the decorator passes only the action default (200) — it is
-                # *not* frozen here at decoration time.
+                # The viewset's ``success_status`` is resolved per request inside
+                # the dispatch, since it may be a callable keyed on the result,
+                # so the decorator passes only the action default (200).
                 return dispatch_mutation_for_spec(
                     self,
                     request,
@@ -166,8 +165,8 @@ def service_action(
                 _restore_schema_when_handled(self)
                 raise
 
-        # Stash the spec on the handler so schema generators (and any future
-        # introspection) can recover it; the closure is otherwise opaque.
+        # Stash the spec on the handler so schema generators can recover it;
+        # the closure is otherwise opaque.
         handler._service_spec = spec  # ty: ignore[unresolved-attribute]
         return action(**drf_kwargs)(handler)
 
