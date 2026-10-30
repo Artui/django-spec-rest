@@ -336,8 +336,8 @@ class TestASeedNamedFieldValidatesFromTheBody:
 
     def test_input_data_outranks_the_body_beside_a_seed_named_field(self) -> None:
         """A body sending a field the kernel cannot take still has the server's
-        values over the client's: the serializer binds the kernel's checked
-        arguments, ``input_data``'s merged in, over that field's value alone."""
+        values over the client's: the serializer binds the request's body with
+        ``input_data``'s answer put over it."""
 
         class _Input(serializers.Serializer):
             title = serializers.CharField()
@@ -474,9 +474,9 @@ class TestInputDataOverASeedNamedField:
     def test_an_owned_parameter_it_declines_never_takes_the_client_s_value(
         self, extra: dict[str, Any]
     ) -> None:
-        """Beside a seed-named field too: the serializer binds the kernel's
-        checked arguments, which hold no ``title``, and nothing of the body but
-        that field."""
+        """Beside a seed-named field too: the edge takes the owned ``title``
+        off the body the serializer binds, as the kernel takes it off its
+        arguments."""
         principal = User.objects.create(username="ada")
         response, received = _post_as(
             principal, self._spec(_declines_title), {"title": "from the client", **extra}
@@ -484,9 +484,29 @@ class TestInputDataOverASeedNamedField:
         assert response.status_code == 204, response.data
         assert received == extra
 
+    def test_a_hook_s_value_for_an_owned_parameter_it_declines_is_never_bound(self) -> None:
+        """The provider owns ``title``, so a view hook's value for it is no
+        more the serializer's than the client's, as the kernel answers it."""
+        received: dict[str, Any] = {}
+        spec = dataclasses.replace(
+            self._spec(_declines_title), service=lambda *, data: received.update(data)
+        )
+        view = type(
+            "_View",
+            (_CreateView,),
+            {"spec": spec, "get_input_data": lambda self, *_: {"title": "from the hook"}},
+        ).as_view()
+        request = factory.post("/", {"title": "from the client"}, format="json")
+        force_authenticate(request, user=User.objects.create(username="ada"))
+
+        response = view(request)
+
+        assert response.status_code == 204, response.data
+        assert received == {}
+
 
 class TestTheArgumentsAreReadAsTheKernelReadsAWire:
-    def test_a_form_body_is_read_flat_and_coerced(self) -> None:
+    def test_a_form_body_is_read_as_its_serializer_reads_it(self) -> None:
         class _Input(serializers.Serializer):
             title = serializers.CharField()
             views = serializers.IntegerField(required=False)
@@ -504,13 +524,14 @@ class TestTheArgumentsAreReadAsTheKernelReadsAWire:
             format="multipart",
         )
         assert response.status_code == 204, response.data
-        # ``views`` coerced to the integer it declares, a blank boolean absent,
-        # and Django's CSRF field never an argument.
+        # ``views`` parsed to the integer its field declares and a blank
+        # boolean absent, as DRF reads a form, and Django's CSRF field never an
+        # argument.
         assert received == {"title": "t", "views": 3}
 
     def test_a_form_s_true_is_a_boolean(self) -> None:
-        """The kernel's typed check takes an integer's ``"3"`` as sent, so a
-        boolean is what holds the form body's coercion."""
+        """A form's ``"true"`` is the serializer's to parse: the kernel's typed
+        check, which would refuse the string, is lenient for a form body."""
 
         class _Input(serializers.Serializer):
             published = serializers.BooleanField()
@@ -527,7 +548,7 @@ class TestTheArgumentsAreReadAsTheKernelReadsAWire:
 
     def test_a_json_body_is_not_read_as_flat_strings(self) -> None:
         """A JSON ``"true"`` is a string, typed by the client, and reaches the
-        kernel's typed check as one, where a form's ``"true"`` is coerced.
+        kernel's typed check as one, where a form's ``"true"`` is the serializer's.
 
         The kernel's check answers before the serializer does, so DRF, which
         would read ``"true"`` as ``True``, is never asked. A lenient Validator,

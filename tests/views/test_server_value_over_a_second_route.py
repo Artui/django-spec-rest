@@ -2,37 +2,35 @@
 
 On the kernel route ``input_data`` is the seat that fills a
 ``SerializerValidator`` field: the kernel merges its answer over the caller's
-arguments and the serializer binds the result. DRF then builds
-``validated_data`` field by field, so a later field with the same ``source``,
-a ``source="*"`` nested serializer carrying a key of that name, or a
-``validate()`` copying another field into it puts the client's value back
-under the key. drfs validated the value the server put on its own and laid it
-back over the key, so the service's parameter, its ``data`` and the bound
-serializer's ``validated_data`` all held the server's value; the kernel route
-records no server value for the Validator to do that with yet, and those
-cases are strict xfails naming the gap (``_SECOND_ROUTE_GAP``).
+arguments, and the edge puts it onto the body the serializer binds. DRF then
+builds ``validated_data`` field by field, so a later field with the same
+``source``, a ``source="*"`` nested serializer carrying a key of that name, or
+a ``validate()`` copying another field into it puts the client's value back
+under the key. The edge records the value the server put, which the Validator
+validates on its own and lays back over the key, so the service's parameter,
+its ``data`` and the bound serializer's ``validated_data`` all hold the
+server's value, as on drfs.
 
-What the kernel route already answers as drfs did is asserted: a dotted
-``source`` a ``validate()`` replaced is left as built, a key ``validate()``
-renamed is not put back, a dataclass's ``data`` is its instance, a ``many``
-spec's rows are handed on as built, and a server value a field refuses is
-DRF's 400. A ``to_internal_value`` override reading a key no field declares
-meets the kernel's closed argument set first, so what it can do turns on the
-unknown-argument policy, and each policy's answer is asserted.
+Also as drfs answered: a dotted ``source`` a ``validate()`` replaced is left
+as built, a key ``validate()`` renamed is not put back, a dataclass's ``data``
+is its instance, a ``many`` spec's rows are handed on as built, and a server
+value a field refuses is DRF's 400. A ``to_internal_value`` override reading a
+key no field declares meets the kernel's closed argument set first, so under
+``REJECT`` it is refused, and under ``IGNORE`` the override reads the client's
+value and the server's is laid back over it.
 
-The view's ``get_service_kwargs`` and ``get_input_data`` reach the arguments
-as ``input_data``'s answer does, and meet the same gap through each of the
-three second routes, held as strict xfails of their own
-(``_HOOK_SECOND_ROUTE_GAP``).
+The view's ``get_service_kwargs`` and ``get_input_data`` are the server's
+values as ``input_data``'s answer is, and hold through each of the three
+second routes.
 
 Not ported: the drfs ``NotClientInput`` parameter variant, whose marker has
 no reader on a kernel spec (a typed provider owning a key is its spelling,
-``test_a_typed_provider_owning_a_wire_name``); and the query counts of validating a related field's server value twice, which
-measure drfs' second validation and have no counterpart while the gap stands.
+``test_a_typed_provider_owning_a_wire_name``); and the query counts of validating a related field's server value twice, a
+cost rather than an answer.
 The ``kwargs`` provider's value outranking the Validator's for the service's
-parameter is ``test_author_values_outrank_the_validator``'s, and its value never
-reaching ``data`` is ``test_a_kwargs_value_named_like_a_field_is_the_service_s_alone``'s
-(``tests/service_specs/``).
+parameter is ``test_author_values_outrank_the_validator``'s, and its value
+named like a field's wire name, refused over HTTP, is
+``test_a_kwargs_value_named_like_a_field_is_refused``'s (``tests/service_specs/``).
 
 Also not ported, each for the reason beside it:
 
@@ -42,11 +40,11 @@ Also not ported, each for the reason beside it:
   parameter variant above;
 - every refusal of five server values answered together, and the client's
   refusal answered before the server's value is validated: both are orders of
-  drfs' second validation, which the kernel route does not run while the
-  ``_SECOND_ROUTE_GAP`` stands, and the second reads a key no field declares;
+  the second validation, held by the drfs suite's module of this name in
+  ``tests/dispatch/``, and the second reads a key no field declares;
 - a server value for a field that skips, and a dotted or flattened field's
-  value reaching the parameter named like the field: both are the value drfs
-  laid back, the same gap;
+  value reaching the parameter named like the field: both are the lay-back
+  this module asserts by its other routes, held by that drfs module;
 - a hook's ``UNSET`` declining a name: a behaviour of the view's hook chain,
   not of a second route, so not this file's.
 """
@@ -58,6 +56,7 @@ from collections.abc import Callable
 from typing import Any
 
 import pytest
+from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import ServiceSpec, UnknownArguments
 from rest_framework import serializers
 
@@ -68,15 +67,6 @@ from tests.views.server_value_calls import CORES, OPEN, Core, post
 from tests.views.test_kernel_views import _CreateView
 
 pytestmark = pytest.mark.django_db
-
-_SECOND_ROUTE_GAP = pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "the kernel route records no server_values for input_data's answer, so "
-        "SerializerValidator hands on validated_data as DRF built it, a second "
-        "route's client value included"
-    ),
-)
 
 
 class _Alias(serializers.Serializer):
@@ -148,7 +138,6 @@ def _spec(service: Callable[..., Any], serializer: Any, **fields: Any) -> Servic
     )
 
 
-@_SECOND_ROUTE_GAP
 @_SHAPE
 def test_input_data_outranks_a_second_route_over_http(
     serializer: Any, body: dict[str, Any]
@@ -161,18 +150,6 @@ def test_input_data_outranks_a_second_route_over_http(
     assert seen == _SERVER
 
 
-_HOOK_SECOND_ROUTE_GAP = pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "the kernel route records no server_values for the view hooks' answer either "
-        "(get_service_kwargs, get_input_data), so SerializerValidator hands on "
-        "validated_data as DRF built it, a second route's client value included"
-    ),
-)
-
-
-@_HOOK_SECOND_ROUTE_GAP
 @pytest.mark.parametrize("hook", ["get_service_kwargs", "get_input_data"])
 @_SHAPE
 def test_a_view_hook_s_value_outranks_a_second_route_over_http(
@@ -191,7 +168,6 @@ def test_a_view_hook_s_value_outranks_a_second_route_over_http(
     assert seen == _SERVER
 
 
-@_SECOND_ROUTE_GAP
 @_FLAT_SHAPE
 def test_input_data_outranks_a_second_route_in_a_form_body(
     serializer: Any, body: dict[str, Any]
@@ -204,7 +180,6 @@ def test_input_data_outranks_a_second_route_in_a_form_body(
     assert seen == _SERVER
 
 
-@_SECOND_ROUTE_GAP
 @CORES
 @_SHAPE
 def test_input_data_outranks_a_second_route_on_either_core(
@@ -222,17 +197,15 @@ def _authored() -> dict[str, Any]:
 
 
 @CORES
-def test_input_data_and_the_provider_naming_one_field_split_its_value(core: Core) -> None:
-    """Two author values for one field. drfs made ``input_data``'s the field's
-    everywhere; the kernel hands each seat its own: ``input_data``'s value is
-    what the field validated, in ``data`` and ``validated_data``, and the
-    ``kwargs`` provider's, merged into the service's pool after the Validator,
-    is the parameter's."""
+def test_a_provider_naming_the_field_input_data_fills_is_refused(core: Core) -> None:
+    """``input_data`` is the seat that fills a field. A ``kwargs`` answer naming
+    the same wire name would reach the service unvalidated, so it is refused."""
     seen: dict[str, Any] = {}
 
-    core(_spec(_plain(seen), _Alias, input_data=_server, kwargs=_authored), {})
+    with pytest.raises(ImproperlyConfigured, match="ServiceSpec.input_data"):
+        core(_spec(_plain(seen), _Alias, input_data=_server, kwargs=_authored), {})
 
-    assert seen == {"tenant": "authored", "data": "server", "validated": "server"}
+    assert seen == {}
 
 
 class _Shouting(_Alias):
@@ -240,7 +213,6 @@ class _Shouting(_Alias):
         return value.upper()
 
 
-@_SECOND_ROUTE_GAP
 def test_the_value_laid_back_is_the_fields_validate_method_s() -> None:
     """The field's value as ``validated_data`` would have held it: after ``validate_<field>``."""
     seen: dict[str, Any] = {}
@@ -260,7 +232,6 @@ class _Lowers(serializers.Serializer):
         return attrs
 
 
-@_SECOND_ROUTE_GAP
 def test_a_validate_rewrite_of_the_servers_own_value_is_laid_over() -> None:
     """``validate()`` cannot tell the server's value from a client's, and neither
     can the lay-back, so the service sees the value as its field validated it."""
@@ -280,7 +251,6 @@ class _AuthorIn(serializers.Serializer):
     )
 
 
-@_SECOND_ROUTE_GAP
 def test_the_value_laid_back_is_the_fields_validated_value() -> None:
     """A primary key the server gives arrives as the row its field resolves it to."""
     mine = Author.objects.create(name="mine")
@@ -318,7 +288,6 @@ def _data(seen: dict[str, Any]) -> Callable[..., None]:
     return service
 
 
-@_SECOND_ROUTE_GAP
 def test_a_dotted_source_is_laid_back_where_it_nests() -> None:
     seen: dict[str, Any] = {}
 
@@ -388,7 +357,6 @@ class _Drops(serializers.Serializer):
         return attrs
 
 
-@_SECOND_ROUTE_GAP
 def test_a_key_validate_drops_still_reaches_the_parameter() -> None:
     seen: dict[str, Any] = {}
 
@@ -482,11 +450,12 @@ def test_an_overrides_undeclared_key_is_an_unknown_argument_under_reject(
 
 @CORES
 @_OVERRIDES
-def test_an_overrides_undeclared_key_never_reaches_it_under_ignore(
+def test_an_overrides_undeclared_key_under_ignore_is_covered_by_the_server_value(
     monkeypatch: pytest.MonkeyPatch, core: Core, serializer: Any
 ) -> None:
-    """The kernel drops ``other`` before the Validator, and the serializer binds
-    the kernel's checked arguments, so the override never reads the client's value."""
+    """The kernel drops ``other`` from its arguments, but the serializer binds
+    the request's body, so the override reads the client's value into
+    ``tenant``; the server's value, validated on its own, is laid back over it."""
     monkeypatch.setattr(kernel_edge, "UNKNOWN_ARGUMENTS", UnknownArguments.IGNORE)
     seen: dict[str, Any] = {}
 
@@ -514,7 +483,6 @@ def test_a_server_value_its_field_refuses_is_a_400_keyed_by_the_field() -> None:
     assert seen == {}
 
 
-@_SECOND_ROUTE_GAP
 def test_a_server_value_a_field_never_ran_on_is_still_refused_by_it() -> None:
     """``_BuildsTheKey`` never runs its field, so only validating the server's
     value on its own refuses what the field alone refuses."""

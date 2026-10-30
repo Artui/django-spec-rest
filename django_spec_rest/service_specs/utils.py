@@ -532,20 +532,16 @@ class EdgeCallState:
       edge prepends (``guarded_selector``).
     - ``author_values``: a view hook's and the spec's ``kwargs`` provider's
       values naming no argument, which the compiled spec's ``kwargs`` seat
-      (``author_values``) hands back over the Validator's values.
+      (``author_values``) hands back over the Validator's values. On the
+      kernel route, the view's ``get_service_kwargs`` values alone, which the
+      recording twin's ``kwargs`` seat lays beneath the spec's provider
+      (``recording_spec``).
     - ``view_hooks``: the view's serializer context layers, whose input half
       the Validator reads (``input_view_layers``).
     - ``validator_input``: the Validator the edge dispatches, and the body it
       binds rather than the kernel's checked arguments (``validator_input``):
       the caller's own, a ``QueryDict`` kept one, with what the edge put over
       it, as DRF's serializer has always been handed the request's data.
-    - ``input_beneath``: whether that body is bound together with the
-      kernel's checked arguments rather than in their place, so their values -
-      the caller's, the route's and ``input_data``'s - are the ones bound. The
-      kernel route's edge sets it and holds only fields named like a seed,
-      and so no parameter - the client's values it took off the arguments and
-      ``input_data``'s answer for them over those - so the two never share a
-      key; drfs' edge holds the whole body and does not (``validator_input``).
     - ``server_values``: the server's value for each field of that
       Validator's body the edge put one into - a view hook's or the spec's
       ``kwargs`` provider's value naming the field, and ``input_data``, a field
@@ -554,6 +550,12 @@ class EdgeCallState:
       reads back from the body, and a key a callable of the call marks
       ``NotClientInput`` is handed on by name only from one of them
       (``server_values``).
+    - ``server_values_as_form``: whether a server value on a form body is
+      read as the field reads a form holding only that value, as drfs' edge
+      wrote it there, or taken as the author returned it, as the kernel
+      route's edge takes it, since the kernel's shape check read the value as
+      returned (test_server_value_the_edge_put's
+      test_input_data_on_a_form_body_is_taken_as_the_author_returned_it).
     - ``author_keys``: for each of those a view hook or the spec's ``kwargs``
       provider gave, the key the author gave it under, the field's wire name or
       its ``source``: the parameter the author named, which the Validator also
@@ -620,8 +622,8 @@ class EdgeCallState:
     author_values: Mapping[str, Any] = dataclasses.field(default_factory=dict)
     view_hooks: ViewHooks = dataclasses.field(default_factory=ViewHooks)
     validator_input: tuple[Any, Any] | None = None
-    input_beneath: bool = False
     server_values: Mapping[str, Any] = dataclasses.field(default_factory=dict)
+    server_values_as_form: bool = True
     author_keys: Mapping[str, str] = dataclasses.field(default_factory=dict)
     provider_owned: frozenset[str] = frozenset()
     body_rows: bool = False
@@ -691,10 +693,8 @@ def _context_for(call_context: dict[str, Any] | None, *, view: Any, request: Any
     call's context already holds, so a key the view adds is there while the
     call's own entries, and whatever a stage of the call wrote, keep one value
     for every stage (test_a_key_the_view_s_get_serializer_context_adds_is_in_the_one_dict).
-    A view's input hook, whose default answers ``get_serializer_context()`` whole,
-    is laid over this dict afterwards, so for ``format`` the view's answer wins
-    today; the route's suffix winning is a strict xfail,
-    test_the_route_s_suffix_outranks_an_overriding_get_serializer_context_for_format.
+    The view's hook layers are laid over this dict afterwards, all but ``format``
+    (``serializer_context``).
     """
     base = call_base_context(view=view, request=request)
     if call_context is None:
@@ -707,24 +707,16 @@ def _context_for(call_context: dict[str, Any] | None, *, view: Any, request: Any
 def validator_input(validator: Any, arguments: Any) -> Any:
     """What ``validator`` binds for the call: the edge's body for it, else ``arguments``.
 
-    Where the edge set ``input_beneath``, the body goes beneath ``arguments``
-    rather than in their place.
-
     Only the Validator the edge call names reads the edge's body, so a kernel
     call made inside the service, of another spec or of this one, binds its
     own arguments (test_a_kernel_call_inside_the_service_binds_its_own_arguments).
+    Never set for a ``many`` call, whose ``validated_many`` asks with no
+    arguments.
     """
-    state = edge_call_state()
-    held = state.validator_input
+    held = edge_call_state().validator_input
     if held is None or held[0] is not validator:
         return arguments
-    # With the arguments the kernel hands this Validator, where the edge holds
-    # only what it took off them
-    # (test_input_data_outranks_the_body_beside_a_seed_named_field). The keys
-    # are disjoint, so the order only keeps the checked values should they
-    # ever meet. Never set for a ``many`` call, whose ``validated_many`` asks
-    # with no arguments.
-    return {**held[1], **arguments} if state.input_beneath else held[1]
+    return held[1]
 
 
 def server_values(validator: Any) -> Mapping[str, Any]:
@@ -754,6 +746,35 @@ def write_form_value(body: QueryDict, name: str, value: Any) -> None:
         body.setlist(name, list(value))
     else:
         body[name] = value
+
+
+def read_form_spellings(validator: Any, body: Any, flat: Mapping[str, Any]) -> dict[str, Any]:
+    """``flat`` with each field DRF reads off a form's prefixed keys read as the field reads it.
+
+    A form body carries a nested serializer, a dict or a list field as DRF's
+    prefixed spellings of it (``v.tenant``, ``v[0]tenant``, ``tags[0]``), which
+    the kernel's flat reader takes as keys no parameter declares. So each
+    field the body spells that way is read by its own ``get_value``, DRF's
+    ``parse_html_dict`` and ``parse_html_list``, and its spellings give way to
+    that value, which the closed argument set then reads as the field's. The
+    kernel route reads a form body through this
+    (test_server_value_the_edge_put's
+    test_input_data_is_the_value_put_over_a_prefixed_form_key_under_reject).
+    Spellings the field reads nothing from are left as sent, keys no parameter
+    declares (test_a_spelling_its_field_does_not_read_is_an_unknown_argument).
+    """
+    read = dict(flat)
+    for name, field in describe_serializer(validator.serializer).fields.items():
+        prefixes = (f"{name}.", f"{name}[")
+        spellings = [key for key in flat if key.startswith(prefixes)]
+        if not spellings:
+            continue
+        value = field.get_value(body)
+        if value is not serializers.empty:
+            for key in spellings:
+                del read[key]
+            read[name] = value
+    return read
 
 
 def author_keys(validator: Any) -> Mapping[str, str]:
@@ -871,7 +892,9 @@ def serializer_context(
        per-action hooks the view resolved, one direction's half of what the
        edge carries: the input half from the call's ``EdgeCallState``, the
        output half from the result's presentation context, under
-       ``SERIALIZER_CONTEXT_SEED``.
+       ``SERIALIZER_CONTEXT_SEED``. Written into the call's one dict, they
+       leave its ``format`` alone: that is the route's suffix, which an
+       override of the view's ``get_serializer_context()`` does not displace.
     4. **The spec's own callable**, ``provider``, which has the final say. It
        is called through the kernel's declared-kwargs resolver, as every other
        spec callable is, from a pool of the call's ``arguments`` (a mapping's
@@ -947,7 +970,14 @@ def serializer_context(
         request = offline.request
         view = offline.view if view is None else view
     context = _context_for(call_context if shared else None, view=view, request=request)
-    context.update(view_layers or {})
+    # ``format`` is the layer beneath's: in the call's one dict the route's
+    # suffix, which the view answered when the call began. A view's hook layer
+    # defaults to its ``get_serializer_context()`` answered whole, so an
+    # override of that answering another ``format`` would replace the suffix
+    # for every stage of the call
+    # (test_the_route_s_suffix_outranks_an_overriding_get_serializer_context_for_format).
+    # A dict of a serializer's own already took ``format`` from that very answer.
+    context.update({key: value for key, value in (view_layers or {}).items() if key != "format"})
     if provider is not None:
         pool: dict[str, Any] = {
             **(arguments if isinstance(arguments, Mapping) else {}),

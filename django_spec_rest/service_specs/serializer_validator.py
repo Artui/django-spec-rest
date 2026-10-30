@@ -610,6 +610,9 @@ def _server_values(serializer: serializers.Serializer, put: Mapping[str, Any]) -
     fields = serializer.fields
     held: dict[str, Any] = {}
     errors: dict[str, Any] = {}
+    # The body a value was put into, where a form's value is read as a form
+    # reads it, else none (``EdgeCallState.server_values_as_form``).
+    body = serializer.initial_data if edge_call_state().server_values_as_form else None
     # In the serializer's field order, as DRF's loop answers its refusals
     # (test_every_server_value_its_field_refuses_is_answered_together asserts
     # the order the keys come back in).
@@ -618,9 +621,7 @@ def _server_values(serializer: serializers.Serializer, put: Mapping[str, Any]) -
             continue
         method = getattr(serializer, f"validate_{name}", None)
         try:
-            value = field.run_validation(
-                _server_primitive(field, name, put[name], serializer.initial_data)
-            )
+            value = field.run_validation(_server_primitive(field, name, put[name], body))
             if method is not None:
                 value = method(value)
         except serializers.ValidationError as exc:
@@ -659,7 +660,8 @@ def _server_primitive(field: serializers.Field, name: str, value: Any, body: Any
     test_a_field_reading_another_key_validates_the_value_put_over_http, which
     fails without it), and so is a mapping, which a dict field reads back from
     a form as an empty dict. Any other body is taken as put, as a mapping body
-    is read.
+    is read, and so is every value on the kernel route's edge, which hands
+    ``body`` as ``None`` (``EdgeCallState.server_values_as_form``).
     """
     if isinstance(field, serializers.HiddenField):
         return serializers.empty

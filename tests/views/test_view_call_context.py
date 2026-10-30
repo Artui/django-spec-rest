@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import (
     Parameter,
     Parameters,
@@ -22,7 +23,7 @@ from rest_framework import serializers
 from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
 
-from django_spec_rest import SelectorRetrieveView, ServiceCreateView
+from django_spec_rest import SelectorRetrieveView, ServiceCreateView, ServiceViewSet
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from django_spec_rest.views.utils import view_call_context
@@ -146,3 +147,43 @@ def test_a_kernel_selector_is_handed_the_view_s_dict() -> None:
     assert response.status_code == 200
     assert seen["selector"] is seen["selector"]["view"]._call_context
     assert seen["selector"]["action"] is None
+
+
+def _needs_the_call_context(*, call_context: dict[str, Any]) -> int:
+    return 201
+
+
+def _finalize(*, response: Any, call_context: dict[str, Any]) -> Any:
+    return response
+
+
+@pytest.mark.parametrize(
+    "attrs",
+    [{"success_status": _needs_the_call_context}, {"response_finalizer": _finalize}],
+    ids=["success-status", "response-finalizer"],
+)
+@pytest.mark.parametrize("view", ["standalone", "viewset"])
+def test_a_status_or_finalizer_naming_the_call_context_is_refused_when_the_view_is_built(
+    attrs: dict[str, Any], view: str
+) -> None:
+    """Neither is offered the call's context, so one declaring it is refused by
+    ``as_view()``: a standalone view's, and a viewset's over a kernel
+    ``action_specs`` entry, which ``as_view()`` asks of each entry as the
+    standalone view asks of its spec."""
+    spec = ServiceSpec(
+        service=lambda *, data: None,
+        permissions=(Unrestricted(),),
+        validator=SerializerValidator(_NameIn),
+    )
+    if view == "standalone":
+        built = type("_View", (_KernelCreateView,), {"spec": spec, **attrs})
+        with pytest.raises(ImproperlyConfigured, match="call_context"):
+            built.as_view()
+    else:
+        built = type(
+            "_ViewSet",
+            (ServiceViewSet,),
+            {"queryset": Author.objects.all(), "action_specs": {"create": spec}, **attrs},
+        )
+        with pytest.raises(ImproperlyConfigured, match="call_context"):
+            built.as_view({"post": "create"})

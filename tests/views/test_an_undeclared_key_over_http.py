@@ -100,15 +100,6 @@ class _Nested(serializers.Serializer):
     tags = serializers.ListField(child=serializers.CharField(), required=False)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "the flat reader takes a form body's keys as sent, so DRF's prefixed spellings of a "
-        "nested or list field (v.tenant, tags[0]) are keys no parameter declares, and the "
-        "edge's IGNORE drops them: the client gets a 2xx and the field's value is lost, "
-        "where DRF builds the nested dict and the list from them"
-    ),
-)
 @pytest.mark.parametrize(
     ("body", "field", "value"),
     [

@@ -2,11 +2,13 @@
 
 On the kernel route the one seat filling a ``SerializerValidator`` field is the
 spec's ``input_data``: the kernel merges its answer over the caller's
-arguments before the Validator, and the serializer binds what the kernel
-hands it. So where a field reads more of a body than its own key - a nested
+arguments, and the edge puts it onto the request's body the serializer binds
+and records it as the server's value, which the Validator validates on its
+own. So where a field reads more of a body than its own key - a nested
 serializer, a dict, a nested ``many`` or a list a form body fills through
-``v.tenant`` or ``v[0]tenant`` - the server's value replaces the client's
-whole, and it is what the parameter, ``data`` and ``validated_data`` hold.
+``v.tenant`` or ``v[0]tenant``, or a field whose ``get_value`` reads another
+key - the server's value replaces the client's whole, and it is what the
+parameter, ``data`` and ``validated_data`` hold.
 
 A field named like a seed of the call is the serializer's alone, and
 ``input_data`` naming one is bound over the client's value
@@ -14,21 +16,18 @@ A field named like a seed of the call is the serializer's alone, and
 ``validate()`` all hold the server's value, while the service's parameter of
 that name stays the seed's.
 
-The spec's untyped ``kwargs`` provider fills a service keyword and never the
-Validator, so its value for a field's name reaches the parameter alone, the
-client's value validating into ``data``. That answer is held by
-``test_a_kwargs_value_named_like_a_field_is_the_service_s_alone`` in
-``tests/service_specs/``, and drfs' answer, the provider's value laid into the
-body too, waits on where the view's hooks map; only the wire-name half, which
-parameter the provider's value reaches, is asserted here.
+The spec's ``kwargs`` provider fills a service keyword and never the
+Validator, so over HTTP its answer naming a field's wire name is refused on the
+request that gets it (``test_a_kwargs_value_named_like_a_field_is_refused`` in
+``tests/service_specs/``); the wire-name case is asserted here too.
 
-Two answers part from drfs because of how the kernel route reads a body. A
-form body's prefixed keys (``v.tenant``) are no parameter to the kernel's flat
-reader, so under ``REJECT`` they are refused, a strict xfail, while under
-``IGNORE`` they are dropped and the server's value stands. And ``input_data``'s value is bound as the kernel merged it, so a
-form body's reading of it (one value for a list, an empty string left out) is
-a strict xfail. A field named like a seed a project registers is not ported:
-the HTTP views register none, and the kernel's dispatch holds that case.
+A form body's prefixed keys (``v.tenant``) are read as the field reads them,
+so under either policy they are the field's value and the server's value
+stands over it. One answer parts from drfs: ``input_data``'s value is validated
+as the author returned it, so a form body's reading of it (one value for a
+list, an empty string left out) is not this route's answer. A field named like a seed a project registers is not
+ported: the HTTP views register none, and the kernel's dispatch holds that
+case.
 """
 
 from __future__ import annotations
@@ -38,6 +37,7 @@ from typing import Any
 
 import pytest
 from django.contrib.auth.models import User
+from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import ServiceSpec, UnknownArguments
 from rest_framework import serializers
 from rest_framework.fields import empty
@@ -45,6 +45,7 @@ from rest_framework.fields import empty
 from django_spec_rest.dispatch import kernel_edge
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from tests.views.server_value_calls import CORES, FORMATS, OPEN, Core, post
+from tests.views.test_kernel_views import _CreateView
 
 pytestmark = pytest.mark.django_db
 
@@ -216,20 +217,11 @@ def test_input_data_is_the_value_put_however_the_field_reads_a_json_body_on_eith
 
 # A form body carries a nested or a list field as DRF's prefixed keys -
 # ``v.tenant``, ``v[0]tenant``, ``v[0]`` - which are DRF's spelling of the
-# declared field ``v``. The kernel's flat reader does not read them, so to the
-# kernel they are keys no parameter declares: under ``IGNORE`` they are dropped
-# and the server's value is the field's, and under ``REJECT`` the call is
-# refused, so no nested or list field can be filled from a form body there.
+# declared field ``v``. The edge reads them as the field does, so to the kernel
+# they are the field's value, under either policy, and the server's value is
+# the field's.
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "the kernel route reads a form body through flat_arguments, which does "
-        "not read DRF's prefixed keys for a nested or list field, so under REJECT "
-        "they are unknown arguments"
-    ),
-)
 @_READ
 def test_input_data_is_the_value_put_over_a_prefixed_form_key_under_reject(
     monkeypatch: pytest.MonkeyPatch,
@@ -246,6 +238,21 @@ def test_input_data_is_the_value_put_over_a_prefixed_form_key_under_reject(
 
     assert response.status_code == 204, response.data
     assert seen == {"v": server, "data": server, "validated": server}
+
+
+def test_a_spelling_its_field_does_not_read_is_an_unknown_argument(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A nested serializer reads ``v.tenant`` and never ``v[0]``, so ``v[0]`` is
+    no spelling of it: a key no parameter declares, refused under ``REJECT``."""
+    monkeypatch.setattr(kernel_edge, "UNKNOWN_ARGUMENTS", UnknownArguments.REJECT)
+    seen: dict[str, Any] = {}
+
+    response = post(_spec(_reads(seen), _Nested), {"v[0]": "evil"}, fmt="multipart")
+
+    assert response.status_code == 400
+    assert response.data["v[0]"][0].code == "unknown"
+    assert seen == {}
 
 
 @_READ
@@ -292,14 +299,6 @@ def test_a_key_only_a_fields_get_value_reads_is_an_unknown_argument_under_reject
     assert response.data["v_raw"][0].code == "unknown"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "the kernel route records no server_values for input_data's answer, so "
-        "the field validates what its get_value reads from the body, never the "
-        "value input_data put under its name"
-    ),
-)
 def test_a_field_reading_another_key_validates_the_value_put_under_ignore(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -371,33 +370,34 @@ def _with_default(seen: dict[str, Any]) -> Callable[..., None]:
     return service
 
 
-def _without_default(seen: dict[str, Any]) -> Callable[..., None]:
-    def service(*, data: Any, tenant: str) -> None:
-        seen.update(tenant=tenant, data=data.get("tenant_id"))
+@FORMATS
+def test_the_providers_value_by_wire_name_is_refused(fmt: str) -> None:
+    """The wire name is a parameter of the Validator, so the provider's value
+    would reach the service unvalidated: the request is refused, pointing at
+    ``input_data``, the seat that fills a field."""
+    seen: dict[str, Any] = {}
+    spec = _spec(_with_default(seen), _Sourced, kwargs=lambda: {"tenant": "srv"})
 
-    return service
+    with pytest.raises(ImproperlyConfigured, match="ServiceSpec.input_data"):
+        post(spec, {"tenant": "evil"}, fmt=fmt)
 
-
-_DEFAULTED = pytest.mark.parametrize(
-    "service_for", [_with_default, _without_default], ids=["with-default", "without-default"]
-)
+    assert seen == {}
 
 
 @FORMATS
-@_DEFAULTED
-def test_the_providers_value_by_wire_name_reaches_the_parameter_of_that_name(
-    fmt: str, service_for: Callable[..., Any]
+def test_a_get_service_kwargs_value_by_wire_name_reaches_the_parameter_of_that_name(
+    fmt: str,
 ) -> None:
-    """The author named the parameter, so the provider's ``tenant`` is the
-    service's ``tenant``, defaulted or not. What ``data`` holds is
-    ``test_a_kwargs_value_named_like_a_field_is_the_service_s_alone``'s."""
+    """A view's ``get_service_kwargs`` naming a field by its wire name names the
+    parameter of that name too, as drfs handed it: the field validates the
+    value under its ``source`` and the parameter is handed it as well."""
     seen: dict[str, Any] = {}
-    spec = _spec(service_for(seen), _Sourced, kwargs=lambda: {"tenant": "srv"})
+    hooked = type("_Hooked", (_CreateView,), {"get_service_kwargs": lambda self: {"tenant": "srv"}})
 
-    response = post(spec, {"tenant": "evil"}, fmt=fmt)
+    response = post(_spec(_with_default(seen), _Sourced), {"tenant": "evil"}, fmt=fmt, view=hooked)
 
     assert response.status_code == 204, response.data
-    assert seen["tenant"] == "srv"
+    assert seen == {"tenant": "srv", "data": "srv"}
 
 
 @FORMATS
