@@ -51,7 +51,6 @@ _AUTHOR = SelectorSpec(
     kind=SelectorKind.RETRIEVE,
     selector=lambda *, pk: Author.objects.filter(pk=pk).first(),
     reads=Parameters.of(Parameter("pk", "integer", required=True)),
-    permissions=_OPEN,
 )
 
 

@@ -70,7 +70,6 @@ class _UpsertView(ServiceCreateView):
         output_selector_spec=SelectorSpec(
             kind=SelectorKind.RETRIEVE,
             selector=_refetch,
-            permissions=_OPEN,
             presenter=SerializerPresenter(AuthorSerializer),
         ),
     )
@@ -95,7 +94,6 @@ _AUTHOR = SelectorSpec(
     kind=SelectorKind.RETRIEVE,
     selector=_author,
     reads=Parameters.of(Parameter("pk", "integer", required=True)),
-    permissions=_OPEN,
 )
 
 

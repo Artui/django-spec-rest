@@ -64,7 +64,6 @@ def _spec(filter_set: type) -> ServiceSpec:
             kind=SelectorKind.RETRIEVE,
             selector=_author_by_pk,
             reads=Parameters.of(Parameter("pk", "integer", required=True)),
-            permissions=_OPEN,
             filter_set=filter_set,
         ),
     )

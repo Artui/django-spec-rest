@@ -126,7 +126,6 @@ def test_an_update_s_serializer_is_bound_to_the_row_and_saves_it() -> None:
             kind=SelectorKind.RETRIEVE,
             selector=lambda *, pk: Post.objects.filter(pk=pk).first(),
             reads=Parameters.of(Parameter("pk", "integer", required=True)),
-            permissions=_OPEN,
         ),
     )
     view = type("_View", (_OwnPermissions, ServiceUpdateView), {"spec": spec})

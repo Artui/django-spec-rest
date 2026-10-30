@@ -26,6 +26,7 @@ refused at ``as_view()``, is still a strict xfail naming the edge's gap.
 
 from __future__ import annotations
 
+import dataclasses
 from typing import Any
 
 import pytest
@@ -183,16 +184,9 @@ def _output_seat() -> type:
     return type("_View", (_CreateView,), {"spec": spec})
 
 
-# The spec is built inside ``pytest.raises`` so the refusal flips the xfail wherever it
-# lands: at ``ServiceSpec`` construction (the kernel) or at ``as_view()`` (this edge).
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "neither as_view() nor the kernel refuses permissions on a kernel spec's nested "
-        "selector, which the kernel never asks, so a declared Deny guards nothing, where "
-        "drfs refused a nested spec's permission_classes at as_view()"
-    ),
-)
+# A nested selector is a step of the call, so the kernel never asks its
+# ``permissions``: one declared guards nothing, and drfs refused a nested spec's
+# permission classes for the same reason. The mount refuses it on each seat.
 @pytest.mark.parametrize(
     ("seat", "build"),
     [
@@ -204,3 +198,30 @@ def _output_seat() -> type:
 def test_a_nested_selector_s_permissions_are_refused(seat: str, build: Any) -> None:
     with pytest.raises(ImproperlyConfigured, match=seat):
         build().as_view()
+
+
+@pytest.mark.parametrize(
+    ("seat", "build"),
+    [
+        ("instance_selector_spec", _instance_seat),
+        ("collection_selector_spec", _collection_seat),
+        ("output_selector_spec", _output_seat),
+    ],
+)
+def test_a_nested_selector_declaring_no_permissions_mounts(seat: str, build: Any) -> None:
+    """The refusal is of a declaration: the default, ``None``, mounts on every seat."""
+    view_cls = build()
+    nested = dataclasses.replace(getattr(view_cls.spec, seat), permissions=None)
+    spec = dataclasses.replace(view_cls.spec, **{seat: nested})
+
+    type("_View", (view_cls,), {"spec": spec}).as_view()
+
+
+def test_an_unrestricted_nested_selector_is_refused_too() -> None:
+    """``Unrestricted()`` is a declaration that guards nothing, as a denying one is."""
+    view_cls = _collection_seat()
+    nested = dataclasses.replace(view_cls.spec.collection_selector_spec, permissions=_OPEN)
+    spec = dataclasses.replace(view_cls.spec, collection_selector_spec=nested)
+
+    with pytest.raises(ImproperlyConfigured, match="collection_selector_spec"):
+        type("_View", (view_cls,), {"spec": spec}).as_view()

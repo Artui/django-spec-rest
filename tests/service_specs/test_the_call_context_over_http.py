@@ -124,7 +124,6 @@ def test_a_target_lookup_and_the_service_share_the_dict() -> None:
             kind=SelectorKind.RETRIEVE,
             selector=lookup,
             reads=Parameters.of(Parameter("pk", "integer", required=True)),
-            permissions=_OPEN,
         ),
     )
 

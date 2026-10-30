@@ -74,7 +74,7 @@ def _view(base: type, spec: ServiceSpec, **attrs: Any) -> Any:
 
 
 def _collection(selector: Any = _all_posts, **seats: Any) -> SelectorSpec:
-    return SelectorSpec(kind=SelectorKind.LIST, selector=selector, permissions=_OPEN, **seats)
+    return SelectorSpec(kind=SelectorKind.LIST, selector=selector, **seats)
 
 
 class TestBulkCreateMany:
