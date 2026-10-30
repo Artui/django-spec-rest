@@ -4,9 +4,8 @@ A project tracking a long-running job (a task writing to a workflow model, a
 view pushing to a websocket) supplies its own reporter through the view's
 ``get_progress_reporter`` hook, which joins the call's reporter.
 
-``progress`` is a pool seed. drfs dropped a ``get_service_kwargs`` value of that
-name silently and the service reported into the no-op. The kernel refuses it
-instead, as ``ImproperlyConfigured`` raised per request, because a provider's
+``progress`` is a pool seed, so the kernel refuses a ``get_service_kwargs``
+value of that name, rather than dropping it silently, as ``ImproperlyConfigured`` raised per request, because a provider's
 value must never outrank a seeded one (the kernel's rule for any key a call
 seeds itself, ``view`` among them). The reporter comes only through the progress
 hook.

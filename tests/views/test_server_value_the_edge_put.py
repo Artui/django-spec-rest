@@ -23,7 +23,7 @@ request that gets it (``test_a_kwargs_value_named_like_a_field_is_refused`` in
 
 A form body's prefixed keys (``v.tenant``) are read as the field reads them,
 so under either policy they are the field's value and the server's value
-stands over it. One answer parts from drfs: ``input_data``'s value is validated
+stands over it. ``input_data``'s value is validated
 as the author returned it, so a form body's reading of it (one value for a
 list, an empty string left out) is not this route's answer. A field named like a seed a project registers is not
 ported: the HTTP views register none, and the kernel's dispatch holds that
@@ -303,14 +303,11 @@ def test_a_field_reading_another_key_validates_the_value_put_under_ignore(
     assert seen == {"v": "server", "data": "server", "validated": "server"}
 
 
-# On a form body drfs wrote the server's value into the form, so the field
-# read it as it reads a form: one value for a list a list of one, an empty
-# string for an optional field the field left out. The kernel route binds
-# ``input_data``'s value as the author returned it, so a server value means
+# The kernel route binds ``input_data``'s value as the author returned it, so a server value means
 # the same whatever the client's content type, and one its field refuses is
 # DRF's 400 keyed by the field, as
 # test_a_server_value_its_field_refuses_is_a_400_keyed_by_the_field holds on
-# a JSON body. The answer changes from drfs' by that choice.
+# a JSON body.
 
 
 class _Optional(serializers.Serializer):
@@ -380,7 +377,7 @@ def test_a_get_service_kwargs_value_by_wire_name_reaches_the_parameter_of_that_n
     fmt: str,
 ) -> None:
     """A view's ``get_service_kwargs`` naming a field by its wire name names the
-    parameter of that name too, as drfs handed it: the field validates the
+    parameter of that name too: the field validates the
     value under its ``source`` and the parameter is handed it as well."""
     seen: dict[str, Any] = {}
     hooked = type("_Hooked", (_CreateView,), {"get_service_kwargs": lambda self: {"tenant": "srv"}})

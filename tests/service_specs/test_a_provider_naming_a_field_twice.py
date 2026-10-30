@@ -11,10 +11,8 @@ the client sent, and ``kwargs``' ``tenant`` and ``org`` are the service's own,
 outranking what the Validator returns.
 
 Over HTTP a ``kwargs`` answer naming a field's wire name is refused with
-``ImproperlyConfigured`` on the request that gets it. drfs read both from one
-view hook, whose value named like a field was the serializer's as well, so
-the field validated it; the kernel's ``kwargs`` seat feeds the service alone,
-so such a value would reach it unvalidated. ``input_data`` is the seat that
+``ImproperlyConfigured`` on the request that gets it: the kernel's ``kwargs``
+seat feeds the service alone, so such a value would reach it unvalidated. ``input_data`` is the seat that
 fills a field. A key named like the field's ``source`` is no parameter of the
 Validator, so it stays the service's.
 """
@@ -132,9 +130,7 @@ _FMT = pytest.mark.parametrize("fmt", ["json", "multipart"])
 def test_a_kwargs_value_named_like_a_field_is_refused(fmt: str, providers: Any) -> None:
     """The wire name is a parameter of the Validator, so the provider's value
     would reach the service unvalidated: the request is refused, pointing at
-    ``input_data``, and the service never runs. drfs validated it as the
-    field's, so another user's key under a queryset scoped to the caller was
-    taken."""
+    ``input_data``, and the service never runs."""
     seen: dict[str, Any] = {}
 
     with pytest.raises(ImproperlyConfigured, match=r"answered 'tenant'.*ServiceSpec\.input_data"):

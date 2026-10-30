@@ -127,9 +127,7 @@ class TestTheSeatsCallable:
         assert output == {"base": "view", "shared": "spec", "spec_out": "hi"}
 
     def test_an_input_key_is_the_output_s_too_for_both_share_one_dict(self) -> None:
-        """Changed by design: drfs gave the input and the output serializer a copy of
-        the view's context each, so a key one seat's callable set never reached the
-        other. A kernel route builds one context dict per request and hands it to every
+        """A kernel route builds one context dict per request and hands it to every
         serializer, so the input callable's key is on the output serializer and the
         output callable's key lands on the very dict the input serializer holds."""
         contexts: list[dict[str, Any]] = []
@@ -226,11 +224,8 @@ class TestTheViewsHooks:
         assert seen == [{"base": "view", "shared": "hook", "hook_in": "in"}]
 
     def test_layer_over_the_view_s_own_context_on_the_output_with_the_result(self) -> None:
-        """Changed by design: the input hook's key is on the output serializer too.
-
-        drfs built each serializer's context from its own hook alone, so ``hook_in``
-        never reached the output; the kernel route's one dict per request carries
-        every layer to every serializer."""
+        """The input hook's key is on the output serializer too: the kernel route's
+        one dict per request carries every layer to every serializer."""
         output, _ = _post(_spec([]), _HookedView)
 
         assert output == {
@@ -318,7 +313,7 @@ class TestOnASelectorView:
 def test_one_dict_per_request_reaches_both_serializers_and_the_service() -> None:
     """A key the input serializer's ``validate()`` writes is the output's and the service's.
 
-    The inversion of drfs' per-serializer copy: the context the input
+    The context the input
     serializer is built under is the dict the view's ``get_serializer_context()``
     returned, the one dict of the request.
     """

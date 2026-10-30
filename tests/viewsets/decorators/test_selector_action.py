@@ -2,8 +2,7 @@
 
 The decorated action dispatches through the standalone selector views' own
 edge (``dispatch_kernel_selector``), and the spec is asked at decoration what
-``validate_selector_view_spec`` asks of a standalone view's, so each test fails
-against a tree whose decorator reads drfs fields off the spec.
+``validate_selector_view_spec`` asks of a standalone view's.
 """
 
 from __future__ import annotations

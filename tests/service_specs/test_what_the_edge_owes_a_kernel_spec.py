@@ -5,11 +5,10 @@ driven through ``as_view()``. The last, a nested selector's ``permissions``
 refused at ``as_view()``, is still a strict xfail naming the edge's gap.
 
 - **A description of the input serializer is handed the call's request and
-  view.** drfs described the serializer the call validates with in the call's
-  own context, so a ``get_fields`` scoped by ``self.context["request"]``
-  declares the fields the call validates. The kernel route describes it in
-  the call's own context too, so a request-scoped serializer builds its fields
-  for the caller (``test_a_request_scoped_serializer_describes_the_fields_the_call_validates``).
+  view.** The kernel route describes the serializer the call validates with in
+  the call's own context, so a ``get_fields`` scoped by
+  ``self.context["request"]`` declares the fields the call validates, built for
+  the caller (``test_a_request_scoped_serializer_describes_the_fields_the_call_validates``).
 - **A view's ``get_*_kwargs`` hooks and its ``get_input_serializer_context``
   layer reach the call.** A hook value for a service keyword arrives at the
   service, and the view's input context layer at the input serializer
@@ -17,9 +16,8 @@ refused at ``as_view()``, is still a strict xfail naming the edge's gap.
   ``test_the_view_s_input_context_layer_reaches_the_input_serializer``).
 - **A nested selector's ``permissions`` are refused at ``as_view()``.** The
   kernel asks the spec being dispatched, never the selector resolving its
-  target, so checks declared there guard nothing. drfs refused a nested
-  spec's ``permission_classes`` at ``as_view()`` for that reason; a kernel
-  spec declaring them is accepted, and they silently refuse nothing
+  target, so checks declared there guard nothing. Today a kernel spec
+  declaring them is accepted, and they silently refuse nothing
   (``test_enforce_permissions``'s
   ``test_a_collection_selector_s_own_classes_are_not_what_answers``).
 """
@@ -179,8 +177,7 @@ def _output_seat() -> type:
 
 
 # A nested selector is a step of the call, so the kernel never asks its
-# ``permissions``: one declared guards nothing, and drfs refused a nested spec's
-# permission classes for the same reason. The mount refuses it on each seat.
+# ``permissions``: one declared guards nothing, so the mount refuses it on each seat.
 @pytest.mark.parametrize(
     ("seat", "build"),
     [

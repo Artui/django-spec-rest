@@ -161,8 +161,7 @@ class _CreateView(ServiceCreateView):
 @pytest.mark.parametrize(
     ("error", "body"),
     [
-        # Changed by design: drfs answered a message as DRF's bare list,
-        # ``["Cannot render."]``. A kernel spec presents through the kernel's
+        # Not DRF's bare list, ``["Cannot render."]``: a kernel spec presents through the kernel's
         # ``present``, where the refusal is the dual class with the message
         # under the kernel's non-field key, and that mapping is the body.
         (ValidationError("Cannot render."), b'{"non_field_errors":["Cannot render."]}'),

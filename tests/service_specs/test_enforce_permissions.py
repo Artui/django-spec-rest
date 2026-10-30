@@ -1,17 +1,14 @@
 """DRF permission classes enforced on a kernel spec, by the kernel's own ``dispatch``.
 
-drfs' ``enforce_permissions`` asked a spec's ``permission_classes`` against a
-context the caller built. A kernel spec declares the same classes as a
+A kernel spec declares DRF permission classes as a
 ``DRFPermissionCheck`` in its ``permissions``, and the kernel asks them: the
 class-level check always, the object check only of a model row. The cases
 ``test_drf_permission_check`` already holds - a refusal's message and code,
 the first refusing class answering, a create or a collection never asked about
 an object, a target that is no model - are not repeated here.
 
-What changes by design: drfs refused a context with no request by name, as
-``ImproperlyConfigured``, because DRF would otherwise raise ``AttributeError``
-from inside the caller's class. A kernel call never reaches a class without a
-request, since the check builds the offline pair for whatever the call lacks,
+A kernel call never reaches a class without a request, where DRF would raise
+``AttributeError`` from inside the caller's class, since the check builds the offline pair for whatever the call lacks,
 so a call with no ``call_context`` at all is answered rather than refused.
 
 A hazard for a port: the kernel asks the spec being dispatched, never the
@@ -82,8 +79,8 @@ def test_the_class_level_check_still_refuses_a_list() -> None:
 def test_a_collection_selector_s_own_classes_are_not_what_answers() -> None:
     # The kernel asks the spec being dispatched, never the selector resolving
     # its target, so classes a port moves onto the nested selector refuse
-    # nothing: they belong on the service. drfs refused them at ``as_view()``;
-    # that refusal is owed, held as a strict xfail in
+    # nothing: they belong on the service. Refusing them at ``as_view()`` is
+    # owed, held as a strict xfail in
     # test_what_the_edge_owes_a_kernel_spec.
     Tag.objects.create(name="a")
     spec = ServiceSpec(

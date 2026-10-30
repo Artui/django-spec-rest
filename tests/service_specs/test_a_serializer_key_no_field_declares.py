@@ -1,7 +1,6 @@
 """A caller's ``serializer`` key no field declares is an unknown argument; a field of that name is the serializer's.
 
-drfs dropped a caller's ``serializer`` without a word, as it dropped
-``request``. The kernel route strips nothing: the key reaches the kernel's
+The kernel route strips nothing: the key reaches the kernel's
 closed argument set, which refuses it as "Unknown argument." under
 ``UnknownArguments.REJECT`` and drops it under ``IGNORE``, as every other
 transport answers. That is a change by design, and each test asserts both

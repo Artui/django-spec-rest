@@ -168,7 +168,7 @@ def test_a_service_s_refusal_is_answered_as_on_the_drfs_path(
     raised: BaseException, status: int, body: dict[str, Any]
 ) -> None:
     """``map_service_error``'s answers, the schema served as raised, ``False``
-    and all, as the drfs path's views serve it."""
+    and all."""
     response = _call(ServiceSpec(service=_raising(raised), permissions=(Unrestricted(),)))
     assert response.status_code == status
     assert response.data == body

@@ -8,8 +8,7 @@ per-action hooks, then the seat's own ``serializer_context``, later winning.
 
 The call's context is DRF's serializer context: one dict per request, the very
 object every serializer of the call is handed. So a key one layer writes is
-there for every later serializer of the call, and the drfs path's "does not
-leak into output" answers invert by design; those tests assert the new answer.
+there for every later serializer of the call, the output serializer included.
 
 What the kernel route does not carry yet is a strict xfail naming the file
 that owes it: a kernel selector is handed none of the view's output serializer
@@ -159,8 +158,7 @@ class TestTheInputSerializer:
 
     def test_the_directional_hook_s_key_is_there_for_the_output(self) -> None:
         """The context being one dict per request, the input hook's key reaches the
-        output serializer after it: the drfs path's "does not leak into output"
-        inverts by design."""
+        output serializer after it."""
 
         class _View(ServiceCreateView):
             spec = _spec()
@@ -290,7 +288,7 @@ class TestTheSeatsOwnContext:
 
     def test_the_validator_s_context_is_there_for_the_output(self) -> None:
         """One dict per request: the input seat's key reaches the output
-        serializer, where the drfs path held it to the input."""
+        serializer."""
 
         class _View(ServiceCreateView):
             spec = _spec(

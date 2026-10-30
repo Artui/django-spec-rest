@@ -1,7 +1,6 @@
 """A kernel selector spec's declared read is read off the query string, over HTTP.
 
-drfs' ``QueryParam`` declaration drops with its spec types; a kernel read is
-the declaration, read through ``flat_arguments`` and coerced to its type. The
+A kernel read is the declaration, read through ``flat_arguments`` and coerced to its type. The
 query string is the request's own: a permission class reads it before the
 dispatch, and the dispatch writes nothing back onto it.
 """
@@ -86,8 +85,8 @@ def test_a_missing_row_beside_an_unknown_key(
     monkeypatch: pytest.MonkeyPatch, policy: UnknownArguments
 ) -> None:
     """Under ``REJECT`` the kernel checks the arguments before it looks the row
-    up, so an unknown key beside a missing row answers 400, where drfs
-    answered the miss first, 404. Under ``IGNORE`` the key is dropped and the
+    up, so an unknown key beside a missing row answers 400, not the miss's 404.
+    Under ``IGNORE`` the key is dropped and the
     miss is the answer."""
     monkeypatch.setattr(kernel_edge, "UNKNOWN_ARGUMENTS", policy)
     spec = SelectorSpec(

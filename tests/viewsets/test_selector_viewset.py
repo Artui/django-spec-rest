@@ -114,7 +114,7 @@ class TestTheActions:
 
     def test_get_queryset_answers_the_list_spec_s_set(self, posts: tuple[Post, Post]) -> None:
         """A handler of the view's own reading ``get_queryset()`` reads the
-        spec's set, as on the drfs path."""
+        spec's set."""
 
         class _ViewSet(SelectorViewSet):
             queryset = Post.objects.none()

@@ -2,8 +2,8 @@
 
 A standalone view's ``spec``, an ``action_specs`` entry and the stamp
 ``@service_action`` / ``@selector_action`` leave on their handler each carry
-the kernel's own ``ServiceSpec`` or ``SelectorSpec``; each test fails against
-resolvers that recognise only drfs specs, which answer ``None`` for all three.
+the kernel's own ``ServiceSpec`` or ``SelectorSpec``, and each resolver answers
+the spec of its own kind on all three.
 """
 
 from __future__ import annotations

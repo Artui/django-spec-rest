@@ -493,7 +493,7 @@ def test_the_shape_check_refuses_what_drf_coerces_across_json_types(
     # renders would; a Python value no JSON body carries, which the kernel's
     # check, reading JSON values only, refuses where DRF reads it as parsed;
     # and the kernel's default bound on a list's length. Each is a difference
-    # from drfs' own dispatch that the CHANGELOG states; a case here that
+    # the CHANGELOG states; a case here that
     # starts passing is one to strike from it.
     assert _shape_check(field, value) == (True, False)
 
@@ -610,7 +610,7 @@ def _depth(param: Parameter | None, step: str) -> int:
 def test_a_recursive_serializer_is_truncated_to_an_open_object() -> None:
     params = _walk(_Tree)
     # The root is the first appearance, and three more nest below it before the
-    # next one is truncated: drfs' own schema allowance.
+    # next one is truncated.
     assert _depth(params.get("parent"), "parent") == 3
     assert _depth(params.get("children"), "children") == 3
     deepest = params.get("parent")

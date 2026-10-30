@@ -216,10 +216,10 @@ def test_a_bulk_row_refusal_is_drfs_own() -> None:
 def test_a_single_call_body_that_is_no_object_is_refused(
     body: Any, served: bytes, spec: Any
 ) -> None:
-    """Changed by design: the edge refuses a body that is no object as a whole,
-    a ``400`` in the kernel's words, before any serializer is asked. drfs answered
+    """The edge refuses a body that is no object as a whole,
+    a ``400`` in the kernel's words, before any serializer is asked, rather than
     DRF's ``{"non_field_errors": ["Invalid data. Expected a dictionary, but got
-    list."]}``; the answer is now the ``detail`` mapping below, pinned as served.
+    list."]}``; the answer is the ``detail`` mapping below, pinned as served.
     An ``input_data`` provider's keys have no object to go over, and the body is
     still refused rather than raising."""
     response = _view(_Lenient, **spec)(_request(body, "json"))
@@ -267,9 +267,9 @@ def test_a_validator_that_is_not_lenient_keeps_the_kernel_s_typed_check() -> Non
 def test_a_bulk_body_that_is_no_list_is_refused_under_the_many_argument(
     body: Any, answer: tuple[str, str], served: bytes
 ) -> None:
-    """Changed by design: the edge hands a ``many`` spec's body to the kernel under
+    """The edge hands a ``many`` spec's body to the kernel under
     its ``many_argument`` as sent, so the kernel's shape check refuses it there, in
-    its words and with DRF's code, where drfs answered DRF's list serializer's
+    its words and with DRF's code, rather than as DRF's list serializer's
     ``non_field_errors`` (``Expected a list of items but got type "dict".``,
     ``No data provided``). The wire is pinned as served."""
     request = (
@@ -314,10 +314,10 @@ def _decline_the_title() -> _OwnsTheTitle:
 
 @pytest.mark.parametrize("fmt", ["json", "multipart"])
 def test_a_declined_provider_owned_field_is_absent(fmt: str) -> None:
-    """Changed by design: a key the spec's typed ``input_data`` provider is annotated
+    """A key the spec's typed ``input_data`` provider is annotated
     to fill is the provider's alone, so declining it leaves it absent rather than
     the client's, as the kernel answers it for a declared field (the edge's module
-    docstring); drfs handed the client's value on. Absent from a required field,
+    docstring). Absent from a required field,
     the serializer refuses the call."""
     response = _view(_TitleIn, lenient=False, input_data=_decline_the_title)(
         _request({"title": "client"}, fmt)
@@ -445,8 +445,7 @@ def test_a_wrong_shaped_body_is_refused_for_a_serializer_needing_the_request(
 ) -> None:
     """The shape is refused before any field is read, so a serializer that cannot be
     built without the call's request still answers the shape's refusal over a live
-    view, as drfs answered DRF's words. Changed by design: the words are the kernel's
-    (see the two tests above)."""
+    view. The words are the kernel's (see the two tests above)."""
     request = (
         _factory.generic("POST", "/", "null", content_type="application/json")
         if body is None

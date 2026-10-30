@@ -1,7 +1,6 @@
 """How long a ``many`` kernel spec's body may be over HTTP.
 
-Changed by design: a drfs live view took a body of any length its list
-serializer did not bound, past the kernel's cap. A kernel spec's list is
+A kernel spec's list is
 bounded by its ``many_max_length``, else by ``SERVICE_SPECS_MAX_ARRAY_LENGTH``
 (1000 by default), on HTTP as on every transport, so a view taking longer
 bodies declares it on the spec. A list serializer's own bound still refuses.

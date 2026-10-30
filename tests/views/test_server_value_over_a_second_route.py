@@ -9,9 +9,9 @@ a ``validate()`` copying another field into it puts the client's value back
 under the key. The edge records the value the server put, which the Validator
 validates on its own and lays back over the key, so the service's parameter,
 its ``data`` and the bound serializer's ``validated_data`` all hold the
-server's value, as on drfs.
+server's value.
 
-Also as drfs answered: a dotted ``source`` a ``validate()`` replaced is left
+Also: a dotted ``source`` a ``validate()`` replaced is left
 as built, a key ``validate()`` renamed is not put back, a dataclass's ``data``
 is its instance, a ``many`` spec's rows are handed on as built, and a server
 value a field refuses is DRF's 400. A ``to_internal_value`` override reading a
@@ -23,10 +23,9 @@ The view's ``get_service_kwargs`` and ``get_input_data`` are the server's
 values as ``input_data``'s answer is, and hold through each of the three
 second routes.
 
-Not ported: the drfs ``NotClientInput`` parameter variant, whose marker has
-no reader on a kernel spec (a typed provider owning a key is its spelling,
-``test_a_typed_provider_owning_a_wire_name``); and the query counts of validating a related field's server value twice, a
-cost rather than an answer.
+A typed provider owning a key is ``test_a_typed_provider_owning_a_wire_name``'s.
+The query count of validating a related field's server value twice is not
+asserted: it is a cost rather than an answer.
 The ``kwargs`` provider's value outranking the Validator's for the service's
 parameter is ``test_author_values_outrank_the_validator``'s, and its value
 named like a field's wire name, refused over HTTP, is
@@ -36,11 +35,10 @@ A ``HiddenField`` takes no input from the server either: ``input_data`` or a
 view hook naming one leaves the field its default, and a partial call skips it,
 as DRF's loop does, whatever the client sent.
 
-Also not ported, each for the reason beside it:
+Not asserted here, each for the reason beside it:
 
 - ``input_data`` for a read-only field: it is no parameter, so the case is
-  what the kernel makes of an ``input_data`` key no parameter declares, and
-  drfs' answer turned on the ``NotClientInput`` parameter variant above;
+  what the kernel makes of an ``input_data`` key no parameter declares;
 - every refusal of five server values answered together, and the client's
   refusal answered before the server's value is validated: both are orders of
   the second validation, and the second reads a key no field declares;
@@ -147,7 +145,7 @@ def test_a_view_hook_s_value_outranks_a_second_route_over_http(
     hook: str, serializer: Any, body: dict[str, Any]
 ) -> None:
     """A view hook's value for a field is the server's as ``input_data``'s is:
-    drfs laid it back over every key, and the kernel route hands the service
+    the kernel route lays it back over every key, rather than handing the service
     the client's ``"evil"`` through the second route, for its parameter, its
     ``data`` and its ``validated_data`` alike."""
     seen: dict[str, Any] = {}

@@ -1,11 +1,8 @@
 """A target lookup reading a name that is also a writable input field.
 
-drfs dispatched this shape, a lookup by ``title`` and a body ``title``: the
-route's capture scoped the lookup and the body's value was the serializer's
-field. A kernel spec declares one source per name, and this one has two, so its
-``parameters()`` is refused in the kernel's words, and with it ``as_view()``:
-the kernel route's answer today, which no plan decision names yet, from a spec that dispatched to one refused when the view is
-built. The lookup reads a name of its own instead, which the route captures
+A lookup by ``title`` beside a body ``title`` declares two sources for one name,
+and a kernel spec declares one source per name, so its ``parameters()`` is
+refused in the kernel's words, and with it ``as_view()``. The lookup reads a name of its own instead, which the route captures
 and the client's body never moves.
 """
 

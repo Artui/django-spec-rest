@@ -190,8 +190,7 @@ class TestResponseFinalizerBulk:
 
 
 class TestAFinalizerTheViewCannotCall:
-    """Refused when the view is built, as a drfs spec's ``response_finalizer``
-    is, rather than raising ``TypeError`` once the service has committed."""
+    """Refused when the view is built, rather than raising ``TypeError`` once the service has committed."""
 
     def test_a_finalizer_requiring_a_key_the_framework_lacks_is_refused_at_as_view(
         self,

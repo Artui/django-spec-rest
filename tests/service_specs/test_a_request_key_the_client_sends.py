@@ -5,8 +5,7 @@ sending either names no argument of the spec. The edge strips nothing before it
 calls the kernel's ``dispatch``: under ``REJECT`` the key is refused as
 "Unknown argument.", a 400 naming it, as on every other transport; under
 ``IGNORE`` it is dropped unseen, and a callable declaring ``request`` is handed
-the view's own. drfs dropped a caller's ``request`` under either policy and
-refused only ``view``; that answer changes by design.
+the view's own.
 
 Which policy HTTP runs under is an open question, decided by one line,
 ``UNKNOWN_ARGUMENTS`` in ``dispatch/kernel_edge.py``, so each test sets it and

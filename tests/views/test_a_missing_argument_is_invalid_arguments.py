@@ -1,6 +1,6 @@
 """A missing required argument is refused as ``DRFInvalidArguments``, never as a service's refusal.
 
-The kernel refuses it, and the kernel route's refusal map leaves it as drfs'
+The kernel refuses it, and the kernel route's refusal map leaves it as the
 dual class: DRF's ``ValidationError`` and the kernel's ``InvalidArguments`` at
 once, so an ``except`` written against either catches it. It is neither a
 ``ServiceValidationError`` nor a ``ServiceError``, since a business rule a

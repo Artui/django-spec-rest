@@ -1,8 +1,7 @@
 """A nested selector's ``progress_reporter`` is refused before any view is built.
 
 Only the spec being dispatched runs, so only its ``progress_reporter`` reports.
-drfs refused one declared on a nested selector at ``as_view()``; the kernel
-refuses it when the spec is built, in the same words for each nested role, so a
+The kernel refuses one declared on a nested selector when the spec is built, in the same words for each nested role, so a
 view is never handed such a spec.
 """
 

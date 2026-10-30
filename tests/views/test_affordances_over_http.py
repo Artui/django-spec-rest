@@ -126,7 +126,7 @@ def test_a_row_condition_on_a_create_view_is_refused_at_as_view() -> None:
 
 @pytest.mark.parametrize("published", [True, False], ids=["unavailable", "available"])
 def test_a_caller_the_view_denies_the_row_learns_nothing_about_its_state(published: bool) -> None:
-    """The drfs subject: the view's own DRF ``has_object_permission``.
+    """The subject: the view's own DRF ``has_object_permission``.
 
     Both rows are answered 403 and leave the row as it was: the unavailable one
     must not hear its affordance's 409, and the available one must not be

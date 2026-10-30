@@ -141,8 +141,7 @@ def test_a_body_key_named_serializer_never_stands_in_for_it(
     policy: UnknownArguments, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Refused as an unknown argument under ``REJECT``; dropped unseen under
-    ``IGNORE``, the service still handed the bound serializer. On the drfs path
-    the edge stripped the key and the call went on, which ``IGNORE`` keeps."""
+    ``IGNORE``, the service still handed the bound serializer."""
     monkeypatch.setattr(kernel_edge, "UNKNOWN_ARGUMENTS", policy)
     captured: dict[str, Any] = {}
 

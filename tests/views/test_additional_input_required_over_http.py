@@ -14,9 +14,8 @@ alone (the exception type), a handler answering with a ``str`` body is left alon
 dict), a handler whose body has no ``schema`` key of its own is left alone (the key),
 and a body of ``None`` or a Django response with no ``.data`` is left alone.
 
-One difference is by design: an update or delete view that loads its row with
-``get_object()`` over a kernel spec naming no selector, where the drfs one answered
-422 with the schema, is refused when the view is built, since a kernel spec's target
+An update or delete view that loads its row with ``get_object()`` over a kernel
+spec naming no selector is refused when the view is built, since a kernel spec's target
 is its own lookup's and ``get_object()`` is never asked for one. The update and delete
 cases declare ``instance_selector_spec`` instead, its ``pk`` read required, since the
 kernel's ``check_seeds`` refuses an optional read over a keyword with no default.
@@ -114,8 +113,8 @@ _VIEWS: dict[str, tuple[type, str, bool]] = {
 }
 
 
-# The shape a drfs update or delete view was written in: the view loads the row with
-# ``get_object()`` and the spec names no selector. It answered 422 with the schema.
+# An update or delete view that loads the row with ``get_object()`` over a spec
+# naming no selector.
 class _PurgeUpdateByGetObject(ServiceUpdateView):
     queryset = Author.objects.all()
     spec = _PURGE_SPEC
@@ -155,8 +154,7 @@ def test_the_http_body_carries_the_schema_as_it_was_raised(entry: str) -> None:
     ids=["ServiceUpdateView", "ServiceDeleteView"],
 )
 def test_a_view_that_loads_its_row_with_get_object_is_refused_at_as_view(view: type) -> None:
-    """Changed by design: the drfs view answered 422 with the schema. A kernel spec's
-    target is its own lookup's, so one naming none would run on no row, and the view is
+    """A kernel spec's target is its own lookup's, so one naming none would run on no row, and the view is
     refused when it is built rather than answering anything."""
     with pytest.raises(ImproperlyConfigured, match="declares no target selector"):
         view.as_view()

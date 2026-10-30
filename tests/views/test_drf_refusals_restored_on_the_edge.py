@@ -135,7 +135,7 @@ def test_a_raise_with_no_context_is_restored_with_none(core: Callable[..., Any])
 
 @CORES
 def test_the_exception_keeps_the_cause_it_was_raised_from(core: Callable[..., Any]) -> None:
-    """``from original`` sets the cause and suppresses the context, as it did on the drfs path."""
+    """``from original`` sets the cause and suppresses the context, as Python's ``raise ... from`` does."""
     original = KeyError("original")
 
     def service(**_: Any) -> None:
@@ -240,7 +240,7 @@ def test_a_permission_class_s_raised_refusal_is_the_class_that_was_raised(
     assert type(excinfo.value) is error
 
 
-# --- Over HTTP, as the drfs path answered ------------------------------------
+# --- Over HTTP, as DRF answers the refusal raised ----------------------------
 
 
 def _served(view: Any, method: str = "post", data: Any = None) -> Any:
@@ -276,7 +276,7 @@ _SERVICE_HTTP_SEATS = pytest.mark.parametrize("seat", ["service", "precondition"
     ids=["message", "mapping", "permission-denied", "project-subclass"],
 )
 @_SERVICE_HTTP_SEATS
-def test_a_service_spec_s_refusal_answers_as_the_drfs_path_did(
+def test_a_service_spec_s_refusal_answers_as_drf_answers_it(
     error: Exception, status: int, body: bytes, seat: str
 ) -> None:
     response = _served(_create(error, seat))
@@ -303,7 +303,7 @@ def test_not_authenticated_answers_401_with_its_challenge(seat: str) -> None:
     ids=["message", "mapping", "permission-denied"],
 )
 @pytest.mark.parametrize("seat", ["selector", "selector_precondition", "selector_kwargs"])
-def test_a_selector_list_view_s_refusal_answers_as_the_drfs_path_did(
+def test_a_selector_list_view_s_refusal_answers_as_drf_answers_it(
     error: Exception, status: int, body: bytes, seat: str
 ) -> None:
     class _View(SelectorListView):
@@ -330,7 +330,7 @@ def test_a_selector_list_view_s_refusal_answers_as_the_drfs_path_did(
     ],
     ids=["not-authenticated", "permission-denied"],
 )
-def test_a_permission_class_s_raised_refusal_answers_as_the_drfs_path_did(
+def test_a_permission_class_s_raised_refusal_answers_as_drf_answers_it(
     permission: type[BasePermission], status: int, body: bytes, challenge: str | None
 ) -> None:
     post = Post.objects.create(title="t")

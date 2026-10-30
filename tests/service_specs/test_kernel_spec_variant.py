@@ -5,8 +5,8 @@ edge may still ask of it are two: a ``PATCH``'s, the spec with ``partial``
 set and relaxed by the kernel's ``relax_partial`` when it is dispatched, and a
 lenient one, its ``SerializerValidator`` declared ``lenient`` so DRF's own
 coercion answers. Both are built through the kernel's own ``derive``. Every
-other variant the drfs path compiles is a seat a kernel spec declares itself,
-and asking for one is refused. Each test reads the function through its
+other variant is a seat a kernel spec declares itself, and asking for one is
+refused. Each test reads the function through its
 public signature.
 """
 
@@ -186,8 +186,7 @@ def test_a_variant_with_nothing_to_change_is_the_spec_itself(
     """Returned as it is and held by nothing, so no source is kept alive by its own variant.
 
     A spec with no Validator has nothing a partial call may leave out, and the
-    kernel refuses ``partial=True`` on one, so a ``PATCH`` runs it whole, as
-    drfs compiles a spec with no ``input_serializer``. A Validator other than
+    kernel refuses ``partial=True`` on one, so a ``PATCH`` runs it whole. A Validator other than
     a ``SerializerValidator`` declares what it takes as it validates it, so
     ``lenient`` has nothing to relax. A selector spec has neither.
     """
@@ -203,7 +202,7 @@ def test_a_variant_with_nothing_to_change_is_the_spec_itself(
 def test_a_partial_variant_over_a_validator_that_cannot_be_partial_is_the_spec_itself(
     validator: Any,
 ) -> None:
-    """Validated whole, as drfs answered: a ``PATCH`` to a dataclass is not partial.
+    """Validated whole: a ``PATCH`` to a dataclass is not partial.
 
     Such a Validator builds every field, so the kernel refuses ``partial=True``
     at ``derive``; the variant is the spec instead, and held by nothing.
@@ -293,11 +292,9 @@ def test_partial_and_lenient_derive_one_variant_together() -> None:
     assert kernel_spec_variant(spec, partial=True, lenient=True) is both
 
 
-# drfs chose ``lenient`` per request: ``over_http(view)`` (dispatch/utils.py) was true for any
-# call a live view dispatched, so every request through a DRF view validated by its serializer
-# alone, whatever the spec's own Validator declared. The kernel route keeps that for a form
-# body, whose values are strings DRF's fields parse, and keeps the kernel's typed check for a
-# JSON body, whose client typed its values.
+# A live view validates a form body by its serializer alone, whatever the spec's own Validator
+# declares, because a form's values are strings DRF's fields parse; a JSON body keeps the
+# kernel's typed check, because its client typed its values.
 
 
 def _flag_view(lenient: bool) -> tuple[Any, dict[str, Any]]:
@@ -318,8 +315,7 @@ def _flag_view(lenient: bool) -> tuple[Any, dict[str, Any]]:
 @pytest.mark.django_db
 @pytest.mark.parametrize("fmt", ["multipart", None], ids=["multipart", "urlencoded"])
 def test_a_live_view_validates_a_form_body_by_its_serializer_alone(fmt: str | None) -> None:
-    """A checkbox's ``"on"`` is a 204 with ``published=True``, as drfs answered,
-    though the spec's Validator is not declared lenient."""
+    """A checkbox's ``"on"`` is a 204 with ``published=True``, though the spec's Validator is not declared lenient."""
     view, seen = _flag_view(lenient=False)
     factory = APIRequestFactory()
     request = (

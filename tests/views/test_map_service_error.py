@@ -74,7 +74,7 @@ class TestMapServiceError:
         """Every leaf of ``.detail`` is an ``ErrorDetail``, as on any other DRF
         exception, so a configured ``EXCEPTION_HANDLER`` walking it for codes
         still can. The schema as raised rides on ``.schema`` for whoever renders
-        it: drfs' own views put it back in the body, a direct caller reads it."""
+        it: the package's views put it back in the body, a direct caller reads it."""
         schema = {"confirmed": {"type": "boolean", "default": False}, "batches": {"maximum": 3}}
         exc = map_service_error(AdditionalInputRequired("Confirm to proceed.", schema=schema))
 

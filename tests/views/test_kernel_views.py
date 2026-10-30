@@ -1,17 +1,13 @@
 """A kernel spec set on a view's ``spec``, served by the kernel's own ``dispatch``.
 
-The views part from the drfs path at one predicate, inside
-``dispatch_mutation_for_spec`` and ``dispatch_selector_for_spec``. Every spec
+Every spec
 here is the kernel's own ``ServiceSpec`` or ``SelectorSpec``, with the DRF seats
 ``SerializerValidator`` and ``SerializerPresenter``, and every test drives a
 view through ``as_view()`` with nothing imported that the kernel route added,
 so each one fails against a tree without it.
 
-One of the views' own methods still reads a drfs-only field, and it is not
-this module's to change, so the views here stand in for it: the retrieve and
-list views render through ``get_serializer_class()``, which reads a drfs
-``output_serializer``, so the selector views here set ``serializer_class``,
-and what they render is DRF's, not the spec's presenter.
+The selector views here set ``serializer_class``, and what they render is
+DRF's, not the spec's presenter.
 """
 
 from __future__ import annotations
@@ -105,8 +101,7 @@ class TestACreateView:
         assert not Author.objects.exists()
 
     def test_a_kernel_spec_passes_as_view(self) -> None:
-        """``as_view()`` checks no drfs field on a kernel spec, which has none of
-        them; a kernel spec well declared passes the checks it does run."""
+        """A kernel spec well declared passes the checks ``as_view()`` runs."""
         assert callable(_CreateView.as_view())
 
     def test_a_kernel_selector_spec_on_a_mutation_view_is_refused_at_as_view(self) -> None:
