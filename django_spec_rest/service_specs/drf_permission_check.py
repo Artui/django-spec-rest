@@ -27,7 +27,7 @@ class DRFPermissionCheck(PermissionCheck):
     [`build_offline_context`][django_spec_rest.service_specs.build_offline_context.build_offline_context]
     builds for the principal. The first refusal
     raises the dual-base
-    [`DRFNotPermitted`][django_spec_rest.service_specs.drf_not_permitted.NotPermitted]
+    [`DRFNotPermitted`][django_spec_rest.service_specs.drf_not_permitted.DRFNotPermitted]
     with that class's own ``message`` and ``code``, so a client is told what
     a DRF view would have told it; returning ``False`` instead would leave the
     kernel to raise its own class with the generic wording. A class that

@@ -47,7 +47,7 @@ def translate_drf_refusals() -> Generator[None]:
       [`DRFServiceValidationError`][django_spec_rest.service_specs.drf_service_validation_error.DRFServiceValidationError],
       with the same detail and codes;
     - ``PermissionDenied`` as
-      [`DRFNotPermitted`][django_spec_rest.service_specs.drf_not_permitted.NotPermitted],
+      [`DRFNotPermitted`][django_spec_rest.service_specs.drf_not_permitted.DRFNotPermitted],
       with its message and code;
     - ``NotAuthenticated`` as
       [`DRFNotAuthenticated`][django_spec_rest.service_specs.drf_not_authenticated.DRFNotAuthenticated],

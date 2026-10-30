@@ -31,12 +31,12 @@ def translate_dispatch_errors() -> Generator[None]:
     inside this block:
 
     - the kernel's ``InvalidArguments`` leaves as
-      [`DRFInvalidArguments`][django_spec_rest.service_specs.drf_invalid_arguments.InvalidArguments],
+      [`DRFInvalidArguments`][django_spec_rest.service_specs.drf_invalid_arguments.DRFInvalidArguments],
       with the same tree and every message's code;
     - its ``DRFNotPermitted`` as
-      [`DRFNotPermitted`][django_spec_rest.service_specs.drf_not_permitted.NotPermitted],
+      [`DRFNotPermitted`][django_spec_rest.service_specs.drf_not_permitted.DRFNotPermitted],
       and its ``DRFPrincipalUnavailable`` as
-      [`DRFPrincipalUnavailable`][django_spec_rest.service_specs.drf_principal_unavailable.PrincipalUnavailable],
+      [`DRFPrincipalUnavailable`][django_spec_rest.service_specs.drf_principal_unavailable.DRFPrincipalUnavailable],
       each with the same message;
     - a subclass of any of the three leaves as that class's twin, with the
       subclass's message.

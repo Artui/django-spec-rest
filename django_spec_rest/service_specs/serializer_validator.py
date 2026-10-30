@@ -100,7 +100,7 @@ class SerializerValidator(Validator):
       between the two.
 
     A refusal is one
-    [`DRFInvalidArguments`][django_spec_rest.service_specs.drf_invalid_arguments.InvalidArguments],
+    [`DRFInvalidArguments`][django_spec_rest.service_specs.drf_invalid_arguments.DRFInvalidArguments],
     the kernel's refusal that is DRF's ``ValidationError`` as well, carrying
     the serializer's ``errors`` unchanged: DRF's ``ErrorDetail`` leaves, each
     with its code, cross-field messages under ``non_field_errors``, and a

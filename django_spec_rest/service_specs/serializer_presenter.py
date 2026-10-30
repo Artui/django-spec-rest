@@ -236,7 +236,7 @@ class SerializerPresenter(Presenter):
 
         A serializer refusing to render, DRF's ``ValidationError``, leaves as
         the dual-base
-        [`DRFInvalidArguments`][django_spec_rest.service_specs.drf_invalid_arguments.InvalidArguments],
+        [`DRFInvalidArguments`][django_spec_rest.service_specs.drf_invalid_arguments.DRFInvalidArguments],
         raised from it, so a route over the kernel's ``present`` reads the
         kernel's refusal of the arguments, a read-shaping ``fields`` naming no
         field among them. A mapping detail is kept as it is, and a list, which
