@@ -4,16 +4,21 @@ from __future__ import annotations
 
 from typing import Any
 
+from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
 from rest_framework.serializers import BaseSerializer, Serializer
 
 from django_spec_rest.dispatch.renderable_serializer_class import renderable_serializer_class
 from django_spec_rest.types.polymorphic_service_spec import PolymorphicServiceSpec
 from django_spec_rest.types.selector_spec import SelectorSpec
 from django_spec_rest.types.service_spec import ServiceSpec
+from django_spec_rest.views.mutation.kernel_input_serializer_class import (
+    kernel_input_serializer_class,
+)
 from django_spec_rest.viewsets.utils import (
     ActionSpec,
     _ActionSpecsMixin,
     polymorphic_inputs_disagree,
+    resolve_action_spec,
     resolve_action_spec_entry,
     resolves_action_serializers,
 )
@@ -82,6 +87,26 @@ class ActionSerializerResolver(_ActionSpecsMixin):
         # test_options_keeps_the_views_serializer_class_beside_a_spec_input.
         # Every other request skips this, held by
         # test_an_action_named_metadata_gets_its_output_serializer.
+        # A kernel service spec answers with its input serializer where the
+        # view sets none: only DRF's browsable renderer asks, building a form
+        # per write method under the action that method routes to, and a
+        # spec-only kernel viewset ended every HTML page in DRF's assertion
+        # (``kernel_input_serializer_class``). Read through
+        # ``resolve_action_spec``, so a spec ``@service_action`` stamped is
+        # found too; that is safe here as it is not for a drfs spec, because
+        # nothing a kernel spec runs renders through ``get_serializer()``.
+        # Each condition is held by a test of test_spec_options: the kernel
+        # spec by the service-viewset rows of
+        # test_options_rendered_as_html_answers (a selector spec falls through
+        # by test_a_kernel_list_without_a_presenter_still_needs_a_serializer_class),
+        # the missing ``serializer_class`` by the service-viewset row of
+        # test_a_kernel_views_own_serializer_class_draws_its_forms.
+        kernel = resolve_action_spec(self, self.action)
+        if (
+            isinstance(kernel, KernelServiceSpec)
+            and getattr(self, "serializer_class", None) is None
+        ):
+            return kernel_input_serializer_class(kernel)
         if self._describing_for_options() and getattr(self, "serializer_class", None) is None:
             described = _body_serializer(self._described_action_spec())
             # ``None``: no spec answers (a handler the view defines itself), so

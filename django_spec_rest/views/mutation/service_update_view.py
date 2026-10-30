@@ -8,9 +8,13 @@ from rest_framework import status as drf_status
 from rest_framework.generics import GenericAPIView
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework.serializers import BaseSerializer
 
 from django_spec_rest.dispatch.kernel_edge import runs_on_kernel
 from django_spec_rest.types.service_spec import ServiceSpec
+from django_spec_rest.views.mutation.kernel_input_serializer_class import (
+    standalone_form_serializer_class,
+)
 from django_spec_rest.views.mutation.mutation_flow_mixin import MutationFlowMixin
 from django_spec_rest.views.mutation.utils import resolve_mutation_instance
 from django_spec_rest.views.spec_options import spec_options
@@ -39,6 +43,11 @@ class ServiceUpdateView(MutationFlowMixin, GenericAPIView):
     def as_view(cls, **initkwargs: Any) -> Any:
         validate_mutation_view_spec(cls, has_instance=True)
         return super().as_view(**initkwargs)
+
+    def get_serializer_class(self) -> type[BaseSerializer[Any]]:
+        # Only DRF's browsable renderer asks a spec-only kernel view, for the
+        # forms it draws on every HTML page (``standalone_form_serializer_class``).
+        return standalone_form_serializer_class(self) or super().get_serializer_class()
 
     def options(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         # A kernel spec is described from the spec, never from DRF's probe of

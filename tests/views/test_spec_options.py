@@ -47,10 +47,12 @@ from django_spec_rest import (
     ServiceDeleteView,
     ServiceUpdateView,
     ServiceViewSet,
+    service_action,
 )
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from django_spec_rest.types.service_spec import ServiceSpec as DrfsServiceSpec
+from tests.testapp.models import Author
 from tests.testapp.serializers import AuthorSerializer
 
 pytestmark = pytest.mark.django_db
@@ -408,38 +410,49 @@ def test_a_drfs_spec_keeps_drfs_own_answer(base: type, method: str) -> None:
     assert set(response.data["actions"][method]) == {"id", "name"}
 
 
+class _Publishes(ServiceViewSet):
+    """A viewset whose one POST is a kernel spec stamped by ``@service_action``."""
+
+    @service_action(_create(), methods=["post"])
+    def publish(self, request: Any) -> Any: ...
+
+
+# (base, its attributes, the router's action map or ``None``, the route's
+# captures, whether a write form naming the ``name`` field is rendered).
 _HTML_ROUTES = [
-    pytest.param(ServiceCreateView, {"spec": _create()}, None, {}, id="create-view"),
-    pytest.param(ServiceUpdateView, {"spec": _update()}, None, _DETAIL, id="update-view"),
+    pytest.param(ServiceCreateView, {"spec": _create()}, None, {}, True, id="create-view"),
+    pytest.param(
+        ServiceCreateView,
+        {"spec": _write(validator=None, reads=Parameters(), kwargs=None, input_data=None)},
+        None,
+        {},
+        False,
+        id="create-view-with-no-validator",
+    ),
+    pytest.param(ServiceUpdateView, {"spec": _update()}, None, _DETAIL, True, id="update-view"),
+    pytest.param(ServiceDeleteView, {"spec": _destroy()}, None, _DETAIL, False, id="delete-view"),
     pytest.param(
         ServiceViewSet,
         {"action_specs": _all_actions()},
         _DETAIL_ROUTE,
         _DETAIL,
+        True,
         id="service-viewset-detail-route",
     ),
+    pytest.param(
+        ServiceViewSet,
+        {"action_specs": _all_actions()},
+        _LIST_ROUTE,
+        {},
+        True,
+        id="service-viewset-list-route",
+    ),
+    pytest.param(_Publishes, {}, {"post": "publish"}, {}, True, id="service-action"),
 ]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "BrowsableAPIRenderer builds the page's forms through view.get_serializer() "
-        "outside any try, and a spec-only kernel view resolves get_serializer_class() "
-        "to GenericAPIView's serializer_class assertion: the views' serializer "
-        "resolution (views/mutation/mutation_flow_mixin.py, "
-        "viewsets/action_serializer_resolver.py), not the OPTIONS description"
-    ),
-)
-@pytest.mark.parametrize(("base", "attrs", "actions", "captures"), _HTML_ROUTES)
-def test_options_rendered_as_html_answers(
-    base: type,
-    attrs: dict[str, Any],
-    actions: dict[str, str] | None,
-    captures: dict[str, str],
-    settings: Any,
-) -> None:
+@pytest.fixture
+def _browsable(settings: Any) -> None:
     settings.TEMPLATES = [
         {
             "BACKEND": "django.template.backends.django.DjangoTemplates",
@@ -447,9 +460,135 @@ def test_options_rendered_as_html_answers(
             "OPTIONS": {"context_processors": ["django.template.context_processors.request"]},
         }
     ]
-    view = _view(base, {"renderer_classes": [BrowsableAPIRenderer, JSONRenderer], **attrs}, actions)
+
+
+_RENDERERS = {"renderer_classes": [BrowsableAPIRenderer, JSONRenderer]}
+
+
+@pytest.mark.usefixtures("_browsable")
+@pytest.mark.parametrize(("base", "attrs", "actions", "captures", "form"), _HTML_ROUTES)
+def test_options_rendered_as_html_answers(
+    base: type,
+    attrs: dict[str, Any],
+    actions: dict[str, str] | None,
+    captures: dict[str, str],
+    form: bool,
+) -> None:
+    """The browsable renderer builds a form per write method through
+    ``get_serializer()``, outside any ``try``. A spec-only kernel route
+    answers it with the spec's input serializer, or one of no fields where the
+    spec declares none, and nothing of the spec runs."""
+    view = _view(base, {**_RENDERERS, **attrs}, actions)
 
     response = _options(view, captures, HTTP_ACCEPT="text/html")
     response.render()
 
     assert response.status_code == 200
+    assert ('name="name"' in response.content.decode()) is form
+    assert _RAN == ["throttle"]
+
+
+@pytest.mark.usefixtures("_browsable")
+def test_a_get_rendered_as_html_on_an_update_route_answers_405() -> None:
+    """An update view serves no GET: the browsable 405 page builds its write
+    forms the same way, and answers rather than ending in a 500."""
+    view = _view(ServiceUpdateView, {**_RENDERERS, "spec": _update()}, None)
+
+    response = view(factory.get("/", HTTP_ACCEPT="text/html"), **_DETAIL)
+    response.render()
+
+    assert response.status_code == 405
+    assert 'name="name"' in response.content.decode()
+
+
+@pytest.mark.usefixtures("_browsable")
+def test_a_get_rendered_as_html_on_a_kernel_detail_route_renders_its_forms() -> None:
+    """DRF binds the PUT form to the row the page presented. The spec's input
+    names ``slug``, which ``Author`` lacks, so a bound form read an attribute
+    the row does not have: the form is drawn unbound instead."""
+    author = Author.objects.create(name="Ada")
+    retrieve = SelectorSpec(
+        kind=SelectorKind.RETRIEVE,
+        selector=lambda *, pk: Author.objects.filter(pk=pk).first(),
+        reads=_BY_PK,
+        permissions=_OPEN,
+        presenter=_PRESENTER,
+    )
+    view = _view(
+        ServiceViewSet,
+        {**_RENDERERS, "action_specs": {**_all_actions(), "retrieve": retrieve}},
+        _DETAIL_ROUTE,
+    )
+
+    response = view(factory.get("/", HTTP_ACCEPT="text/html"), pk=str(author.pk))
+    response.render()
+
+    assert response.status_code == 200
+    content = response.content.decode()
+    assert "Ada" in content
+    assert 'name="name"' in content
+
+
+class _OwnForm(serializers.Serializer):
+    title = serializers.CharField()
+
+
+@pytest.mark.usefixtures("_browsable")
+@pytest.mark.parametrize(
+    ("base", "attrs", "actions"),
+    [
+        pytest.param(ServiceCreateView, {"spec": _create()}, None, id="create-view"),
+        pytest.param(
+            ServiceViewSet, {"action_specs": _all_actions()}, _LIST_ROUTE, id="service-viewset"
+        ),
+    ],
+)
+def test_a_kernel_views_own_serializer_class_draws_its_forms(
+    base: type, attrs: dict[str, Any], actions: dict[str, str] | None
+) -> None:
+    """A ``serializer_class`` the view declares outranks the spec's input
+    serializer in the forms the browsable renderer draws."""
+    view = _view(base, {**_RENDERERS, **attrs, "serializer_class": _OwnForm}, actions)
+
+    response = _options(view, {}, HTTP_ACCEPT="text/html")
+    response.render()
+
+    content = response.content.decode()
+    assert 'name="title"' in content
+    assert 'name="slug"' not in content
+
+
+@pytest.mark.usefixtures("_browsable")
+def test_a_drfs_spec_view_without_a_serializer_class_still_raises_in_html() -> None:
+    """The input serializer answers a kernel spec's form only. A drfs spec on a
+    view with no ``serializer_class`` resolves as DRF does, until that path
+    goes, and reaches DRF's own assertion."""
+    view = _view(
+        ServiceCreateView,
+        {**_RENDERERS, "spec": DrfsServiceSpec(service=_service, input_serializer=_NameIn)},
+        None,
+    )
+
+    with pytest.raises(AssertionError, match="should either include a `serializer_class`"):
+        _options(view, {}, HTTP_ACCEPT="text/html").render()
+
+
+@pytest.mark.usefixtures("_browsable")
+def test_a_kernel_list_without_a_presenter_still_needs_a_serializer_class() -> None:
+    """Only a service spec answers with an input serializer. A kernel list
+    selector with no presenter renders its rows through ``get_serializer()``,
+    so it still needs the view's ``serializer_class``, and DRF says so."""
+    listed = SelectorSpec(
+        kind=SelectorKind.LIST,
+        selector=lambda: Author.objects.all(),
+        reads=Parameters(),
+        permissions=_OPEN,
+    )
+    view = _view(
+        ServiceViewSet,
+        {**_RENDERERS, "action_specs": {**_all_actions(), "list": listed}},
+        _LIST_ROUTE,
+    )
+
+    with pytest.raises(AssertionError, match="should either include a `serializer_class`"):
+        view(factory.get("/", HTTP_ACCEPT="text/html")).render()
