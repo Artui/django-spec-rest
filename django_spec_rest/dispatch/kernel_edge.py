@@ -548,9 +548,7 @@ def _edge_state(
             call_context=call_context,
         )
 
-    return EdgeCallState(
-        view_hooks=hooks, describe_context=describe_context, server_values_as_form=False
-    )
+    return EdgeCallState(view_hooks=hooks, describe_context=describe_context)
 
 
 def _overlay(

@@ -8,7 +8,6 @@ from typing import Any
 
 from django.core.exceptions import ImproperlyConfigured
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.http import QueryDict
 from django_service_specs.parameters.parameters import Parameter, Parameters
 from django_service_specs.pool.reserved_pool_seeds import RESERVED_POOL_SEEDS
 from django_service_specs.validation.validated import Validated
@@ -26,14 +25,12 @@ from django_spec_rest.service_specs.utils import (
     bound_description,
     bound_instance,
     describe_serializer,
-    edge_call_state,
     input_parameters,
     input_view_layers,
     provider_owned,
     serializer_context,
     server_values,
     validator_input,
-    write_form_value,
 )
 from django_spec_rest.types.json_schema_registry import JsonSchemaRegistry
 
@@ -571,15 +568,13 @@ def _server_values(serializer: serializers.Serializer, put: Mapping[str, Any]) -
     is keyed by its field in DRF's shape, every refused field in one
     ``DRFInvalidArguments``, in the serializer's field order
     (test_every_server_value_its_field_refuses_is_answered_together), and a
-    field that skips - a partial call's ``HiddenField`` - holds nothing
-    (test_a_server_value_for_a_field_that_skips_is_left_out).
+    field that skips - a partial call's ``HiddenField`` - holds nothing (the
+    ``get_input_data-partial`` case of
+    test_a_hidden_field_takes_its_default_whatever_the_server_or_the_client_puts).
     """
     fields = serializer.fields
     held: dict[str, Any] = {}
     errors: dict[str, Any] = {}
-    # The body a value was put into, where a form's value is read as a form
-    # reads it, else none (``EdgeCallState.server_values_as_form``).
-    body = serializer.initial_data if edge_call_state().server_values_as_form else None
     # In the serializer's field order, as DRF's loop answers its refusals
     # (test_every_server_value_its_field_refuses_is_answered_together asserts
     # the order the keys come back in).
@@ -588,7 +583,7 @@ def _server_values(serializer: serializers.Serializer, put: Mapping[str, Any]) -
             continue
         method = getattr(serializer, f"validate_{name}", None)
         try:
-            value = field.run_validation(_server_primitive(field, name, put[name], body))
+            value = field.run_validation(_server_primitive(field, put[name]))
             if method is not None:
                 value = method(value)
         except serializers.ValidationError as exc:
@@ -604,45 +599,20 @@ def _server_values(serializer: serializers.Serializer, put: Mapping[str, Any]) -
     return held
 
 
-def _server_primitive(field: serializers.Field, name: str, value: Any, body: Any) -> Any:
-    """The server's ``value`` as ``field``, named ``name``, takes it from the body it was put into.
+def _server_primitive(field: serializers.Field, value: Any) -> Any:
+    """The server's ``value`` as ``field`` takes it: as put, unless the field takes no input.
 
     A ``HiddenField`` takes no input, so it takes its default, or skips a
-    partial call, whatever the server put
-    (test_input_data_naming_a_hidden_field_hands_the_parameter_the_fields_value,
-    test_a_server_value_for_a_field_that_skips_is_left_out).
-
-    On a form body a value other than a mapping - a string, any other single
-    value, a list - is read as the field reads a form holding only that
-    value, written as the edge wrote it (``write_form_value``), so it keeps
-    DRF's reading of one: one value for a list field is a list of one, and an
-    empty string for an optional field is the field left out
-    (test_a_server_value_on_a_form_body_is_read_as_a_form_reads_it). Where
-    the field reads nothing from that form for any value but an empty string -
-    a nested serializer or a nested ``many`` reading prefixed keys, a list
-    field given an empty list, a field whose ``get_value`` reads another key -
-    the value is taken as put
-    (test_the_servers_value_is_the_one_put_however_the_field_reads_the_body_off_http,
-    its ``form`` cases, and the ``multipart`` case of
-    test_a_field_reading_another_key_validates_the_value_put_over_http, which
-    fails without it), and so is a mapping, which a dict field reads back from
-    a form as an empty dict. Any other body is taken as put, as a mapping body
-    is read, and so is every value on the kernel route's edge, which hands
-    ``body`` as ``None`` (``EdgeCallState.server_values_as_form``).
+    partial call, whatever the server put and whatever the client sent
+    (test_server_value_over_a_second_route's
+    test_a_hidden_field_takes_its_default_whatever_the_server_or_the_client_puts,
+    whose ``get_input_data-full`` case fails without this). Every other value is taken as the
+    author returned it, on a form body as on a JSON one, as the kernel's shape
+    check read it (test_server_value_the_edge_put's
+    test_input_data_on_a_form_body_is_taken_as_the_author_returned_it).
     """
     if isinstance(field, serializers.HiddenField):
         return serializers.empty
-    # One arc to coverage, so each condition is named: a JSON body takes the
-    # value as put (test_a_server_value_on_a_json_body_is_taken_as_put), and a
-    # mapping, which a dict field reads back from a form as an empty dict
-    # rather than as nothing, is taken as put (the ``dict`` cases of
-    # test_the_servers_value_is_the_one_put_however_the_field_reads_the_body_off_http).
-    if isinstance(body, QueryDict) and not isinstance(value, Mapping):
-        form = QueryDict(mutable=True)
-        write_form_value(form, name, value)
-        read = field.get_value(form)
-        if read is not serializers.empty or value == "":
-            return read
     return value
 
 

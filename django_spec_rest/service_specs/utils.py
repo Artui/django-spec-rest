@@ -318,12 +318,9 @@ class EdgeCallState:
       as the edge put it. The Validator validates these, never what a field
       reads back from the body, and a key a callable of the call marks
       ``NotClientInput`` is handed on by name only from one of them
-      (``server_values``).
-    - ``server_values_as_form``: whether a server value on a form body is
-      read as the field reads a form holding only that value, as drfs' edge
-      wrote it there, or taken as the author returned it, as the kernel
-      route's edge takes it, since the kernel's shape check read the value as
-      returned (test_server_value_the_edge_put's
+      (``server_values``). On a form body as on any other, each is validated
+      as the author returned it, since the kernel's shape check read the value
+      as returned (test_server_value_the_edge_put's
       test_input_data_on_a_form_body_is_taken_as_the_author_returned_it).
     - ``author_keys``: for each of those a view hook or the spec's ``kwargs``
       provider gave, the key the author gave it under, the field's wire name or
@@ -366,7 +363,6 @@ class EdgeCallState:
     view_hooks: ViewHooks = dataclasses.field(default_factory=ViewHooks)
     validator_input: tuple[Any, Any] | None = None
     server_values: Mapping[str, Any] = dataclasses.field(default_factory=dict)
-    server_values_as_form: bool = True
     author_keys: Mapping[str, str] = dataclasses.field(default_factory=dict)
     provider_owned: frozenset[str] = frozenset()
     describe_context: Callable[..., dict[str, Any] | None] | None = None
