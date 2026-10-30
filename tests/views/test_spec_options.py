@@ -35,6 +35,7 @@ from django_service_specs import (
 )
 from rest_framework import serializers
 from rest_framework.permissions import IsAuthenticatedOrReadOnly
+from rest_framework.renderers import BrowsableAPIRenderer, JSONRenderer
 from rest_framework.test import APIRequestFactory
 from rest_framework.throttling import BaseThrottle
 
@@ -405,3 +406,50 @@ def test_a_drfs_spec_keeps_drfs_own_answer(base: type, method: str) -> None:
 
     assert response.status_code == 200
     assert set(response.data["actions"][method]) == {"id", "name"}
+
+
+_HTML_ROUTES = [
+    pytest.param(ServiceCreateView, {"spec": _create()}, None, {}, id="create-view"),
+    pytest.param(ServiceUpdateView, {"spec": _update()}, None, _DETAIL, id="update-view"),
+    pytest.param(
+        ServiceViewSet,
+        {"action_specs": _all_actions()},
+        _DETAIL_ROUTE,
+        _DETAIL,
+        id="service-viewset-detail-route",
+    ),
+]
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason=(
+        "BrowsableAPIRenderer builds the page's forms through view.get_serializer() "
+        "outside any try, and a spec-only kernel view resolves get_serializer_class() "
+        "to GenericAPIView's serializer_class assertion: the views' serializer "
+        "resolution (views/mutation/mutation_flow_mixin.py, "
+        "viewsets/action_serializer_resolver.py), not the OPTIONS description"
+    ),
+)
+@pytest.mark.parametrize(("base", "attrs", "actions", "captures"), _HTML_ROUTES)
+def test_options_rendered_as_html_answers(
+    base: type,
+    attrs: dict[str, Any],
+    actions: dict[str, str] | None,
+    captures: dict[str, str],
+    settings: Any,
+) -> None:
+    settings.TEMPLATES = [
+        {
+            "BACKEND": "django.template.backends.django.DjangoTemplates",
+            "APP_DIRS": True,
+            "OPTIONS": {"context_processors": ["django.template.context_processors.request"]},
+        }
+    ]
+    view = _view(base, {"renderer_classes": [BrowsableAPIRenderer, JSONRenderer], **attrs}, actions)
+
+    response = _options(view, captures, HTTP_ACCEPT="text/html")
+    response.render()
+
+    assert response.status_code == 200

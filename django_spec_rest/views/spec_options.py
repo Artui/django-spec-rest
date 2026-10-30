@@ -38,7 +38,7 @@ def spec_options(
     ``renders`` and ``parses`` exactly as DRF's ``SimpleMetadata`` reads them,
     and ``actions`` for a ``POST`` or ``PUT`` in ``served`` that the view
     allows. A view setting ``metadata_class = None`` refuses OPTIONS, as DRF's
-    does (test_spec_options' test_a_view_without_a_metadata_class_refuses_options).
+    does (test_options_metadata's test_a_view_without_a_metadata_class_refuses_options).
 
     Nothing of the spec runs. DRF's own metadata probes ``get_object()`` for a
     ``PUT`` and ``get_serializer()`` for each method, which runs the target
@@ -85,16 +85,18 @@ class _SpecMetadata(SimpleMetadata):
         actions: dict[str, Any] = {}
         for method in _DESCRIBED_METHODS:
             spec = self.served.get(method)
-            # One arc to coverage, so each condition is named: a method no
-            # spec serves by every route of test_every_route_answers_options_from_its_spec
-            # (the create view serves no PUT), and a method the view does not
-            # allow by test_a_method_the_view_does_not_allow_is_not_described.
+            # One arc to coverage, so each condition is named: a method the
+            # view allows that no kernel spec serves by test_options_metadata's
+            # test_allow_keeps_a_views_own_handler_without_a_spec and
+            # test_a_drfs_method_beside_a_kernel_spec_is_not_described, and a
+            # method the view does not allow by
+            # test_a_method_the_view_does_not_allow_is_not_described.
             if spec is None or method not in allowed:
                 continue
             if not _grants(view, request, method, spec, call_context):
                 continue
             try:
-                actions[method] = _described(spec, view)
+                declared = spec.parameters()
             except (AttributeError, KeyError, TypeError):
                 # A Validator whose serializer cannot be built without the
                 # call's context (a ``get_fields`` reading a key the view's
@@ -106,6 +108,7 @@ class _SpecMetadata(SimpleMetadata):
                 # in a 500 (test_options_metadata's
                 # test_a_context_dependent_input_is_left_out_rather_than_a_500).
                 continue
+            actions[method] = _described(spec, declared, view)
         return actions
 
 
@@ -128,8 +131,10 @@ def _grants(
     return True
 
 
-def _described(spec: KernelServiceSpec | KernelSelectorSpec, view: Any) -> dict[str, Any]:
-    """The JSON Schema of what the caller sends ``spec`` on this route."""
+def _described(
+    spec: KernelServiceSpec | KernelSelectorSpec, declared: Parameters, view: Any
+) -> dict[str, Any]:
+    """The JSON Schema of what the caller sends ``spec`` on this route, of the ``declared`` parameters."""
     owned = server_owned_keys(spec, pool_seeds=DEFAULT_POOL_SEEDS) | set(view.kwargs)
-    sent = Parameters.of(*(param for param in spec.parameters() if param.name not in owned))
+    sent = Parameters.of(*(param for param in declared if param.name not in owned))
     return parameters_schema(sent, unknown_arguments=UNKNOWN_ARGUMENTS)
