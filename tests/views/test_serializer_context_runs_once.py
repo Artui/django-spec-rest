@@ -228,7 +228,6 @@ def test_an_update_viewset_action_presents_under_one_context(two_authors: list[A
                     kind=SelectorKind.RETRIEVE,
                     selector=lambda *, pk: Author.objects.filter(pk=pk).first(),
                     reads=Parameters.of(Parameter("pk", "integer", required=True)),
-                    permissions=_OPEN,
                 ),
                 validator=SerializerValidator(_NameIn),
                 presenter=SerializerPresenter(AuthorSerializer, serializer_context=context),

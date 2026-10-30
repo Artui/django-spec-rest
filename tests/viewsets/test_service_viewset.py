@@ -417,6 +417,16 @@ class TestAsView:
         with pytest.raises(ImproperlyConfigured, match="declares no target selector"):
             viewset.as_view({"get": "list"})
 
+    @pytest.mark.parametrize("action", ["update", "partial_update", "destroy"])
+    def test_a_nested_selector_s_permissions_are_refused(self, action: str) -> None:
+        nested = _retrieve(presenter=None)
+        viewset = _viewset(action_specs={action: _update(instance_selector_spec=nested)})
+        with pytest.raises(
+            ImproperlyConfigured,
+            match=rf"action_specs\['{action}'\]\.spec\.instance_selector_spec declares permissions",
+        ):
+            viewset.as_view({"get": "list"})
+
     def test_a_create_with_no_target_passes(self) -> None:
         assert callable(_viewset(action_specs={"create": _create()}).as_view({"post": "create"}))
 

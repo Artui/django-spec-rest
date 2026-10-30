@@ -341,8 +341,10 @@ def _validate_kernel_action_spec(
     elif action in _SELECTOR_ACTION_KIND:
         # A viewset composing neither selector mixin has no default to
         # override, so any ``get_selector_kwargs`` it has is its own:
-        # ``is_overridden`` answers ``hasattr`` against a base declaring none
-        # (test_a_selector_hook_on_a_viewset_with_no_selector_mixin_is_refused).
+        # ``is_overridden`` answers ``hasattr`` against a base declaring none.
+        # Each arm is held by test_selector_viewset: ``object`` by
+        # test_a_viewset_with_no_selector_mixin_and_no_hook_passes,
+        # ``_SelectorHooks`` by test_the_default_selector_hook_is_not_an_override.
         validate_selector_view_spec(
             mounted,
             expected_kind=_SELECTOR_ACTION_KIND[action],

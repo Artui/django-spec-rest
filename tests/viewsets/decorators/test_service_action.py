@@ -214,6 +214,16 @@ class TestAtDecoration:
         with pytest.raises(ImproperlyConfigured, match=r"@service_action .*no target selector"):
             _viewset(_detail(instance_selector_spec=None), detail=True)
 
+    def test_a_nested_selector_s_permissions_are_refused(self) -> None:
+        nested = SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=lambda *, pk: None,
+            reads=Parameters.of(Parameter("pk", "integer", required=True)),
+            permissions=_OPEN,
+        )
+        with pytest.raises(ImproperlyConfigured, match="@service_action .*declares permissions"):
+            _viewset(_detail(instance_selector_spec=nested), detail=True)
+
     def test_a_collection_action_with_no_target_is_accepted(self) -> None:
         assert _viewset(_collection(), detail=False).act.detail is False
 
