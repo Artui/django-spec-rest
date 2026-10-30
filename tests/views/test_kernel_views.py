@@ -35,13 +35,14 @@ from django_service_specs import (
     Unrestricted,
     UnsetType,
 )
+from django_service_specs.types.unset import UNSET
 from rest_framework import serializers
 from rest_framework.permissions import BasePermission
 from rest_framework.response import Response
 from rest_framework.test import APIRequestFactory, force_authenticate
 from rest_framework.views import APIView
 
-from django_spec_rest import UNSET, SelectorListView, SelectorRetrieveView, ServiceCreateView
+from django_spec_rest import SelectorListView, SelectorRetrieveView, ServiceCreateView
 from django_spec_rest.dispatch import kernel_edge
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator

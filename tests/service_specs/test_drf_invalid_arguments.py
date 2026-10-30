@@ -15,11 +15,11 @@ from django_service_specs.parameters.coded_message import CodedMessage
 from django_service_specs.parameters.invalid_arguments import (
     InvalidArguments as KernelInvalidArguments,
 )
+from django_service_specs.services.service_error import ServiceError
 from django_service_specs.services.service_error import ServiceError as KernelServiceError
 from django_service_specs.types.dispatch_error import DispatchError
 from rest_framework.exceptions import ErrorDetail, ValidationError
 
-from django_spec_rest.exceptions.service_error import ServiceError
 from django_spec_rest.service_specs.drf_invalid_arguments import DRFInvalidArguments
 from tests.service_specs.served_status import served_status
 

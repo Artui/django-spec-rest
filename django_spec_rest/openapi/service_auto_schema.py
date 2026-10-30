@@ -1,4 +1,4 @@
-"""``ServiceAutoSchema`` — drf-spectacular ``AutoSchema`` aware of ``ServiceSpec``.
+"""``ServiceAutoSchema`` — drf-spectacular ``AutoSchema`` aware of kernel specs.
 
 Importing this module pulls in ``drf-spectacular``, so the package's top-level
 ``__init__.py`` does not load it; users opt in via
@@ -20,66 +20,41 @@ from django_service_specs import (
     relax_partial,
     server_owned_keys,
 )
+from django_service_specs.schema.can_present_nothing import can_present_nothing
 from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelectorSpec
 from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
-from drf_spectacular.contrib.django_filters import DjangoFilterExtension
 from drf_spectacular.openapi import AutoSchema
 from drf_spectacular.plumbing import build_array_type, build_parameter_type
 from drf_spectacular.utils import (
     OpenApiParameter,
     OpenApiRequest,
     OpenApiResponse,
-    PolymorphicProxySerializer,
 )
 from rest_framework.serializers import Serializer
 
-from django_spec_rest.can_present_nothing import can_present_nothing
 from django_spec_rest.dispatch.kernel_edge import UNKNOWN_ARGUMENTS
-from django_spec_rest.dispatch.renderable_serializer_class import renderable_serializer_class
 from django_spec_rest.openapi._resolve import (
-    resolve_polymorphic_spec,
     resolve_selector_spec,
     resolve_service_spec,
 )
-from django_spec_rest.openapi._to_serializer import to_serializer_class
 from django_spec_rest.openapi.service_error_serializer import (
     ServiceErrorSerializer,
 )
 from django_spec_rest.openapi.utils import default_status
 from django_spec_rest.service_specs.kernel_spec_variant import kernel_spec_variant
+from django_spec_rest.service_specs.renderable_serializer_class import renderable_serializer_class
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from django_spec_rest.views.mutation.utils import status_for_a_body
 
 
 class ServiceAutoSchema(AutoSchema):
-    """``AutoSchema`` that derives its request / response from a ``ServiceSpec``.
-
-    On mutation surfaces (standalone ``Service*View`` classes, the
-    ``ServiceViewSet`` action mixins, and ``@service_action``):
-
-    - Request body from ``spec.input_serializer``, a bare dataclass being auto-wrapped
-      in ``DataclassSerializer``, built with whatever partial flag ``spec.partial``
-      resolves to so the documented body matches what actually validates.
-    - Success response from ``spec.output_selector_spec.output_serializer``,
-      under the status the runtime serves a body under, which is ``200`` where
-      the status is ``204``; or, where no serializer is declared, a no-content
-      response at the status itself.
-    - A ``422`` documenting
-      [`ServiceErrorSerializer`][django_spec_rest.openapi.service_error_serializer.ServiceErrorSerializer],
-      as ``spec.document_service_error`` gates it.
-
-    Read surfaces (``Selector*View`` and the read-side action mixins) lean on
-    the base ``AutoSchema`` for their body: ``output_serializer`` is already
-    wired through ``get_serializer_class()``, which is what drf-spectacular
-    reads natively. The one addition is ``_get_filter_parameters``,
-    contributing the query parameters for a ``SelectorSpec.filter_set``, so
-    moving a FilterSet from a view-level ``filterset_class`` +
-    ``DjangoFilterBackend`` onto ``spec.filter_set`` leaves the generated
-    OpenAPI unchanged.
+    """``AutoSchema`` that derives its request / response from a kernel spec.
 
     A kernel ``ServiceSpec`` or ``SelectorSpec`` is read off its seats, as the
-    kernel route serves it:
+    route serves it, on every surface: the standalone ``Service*View`` and
+    ``Selector*View`` classes, the ``ServiceViewSet`` and ``SelectorViewSet``
+    action mixins, and ``@service_action`` / ``@selector_action``:
 
     - **The request body** is a ``SerializerValidator``'s serializer, so its
       component is drf-spectacular's name for the author's class, built partial
@@ -96,11 +71,10 @@ class ServiceAutoSchema(AutoSchema):
     - **The status** is the view's ``success_status`` where it is an ``int``,
       since a kernel spec declares none, over the action's default; a body is
       documented as the ``200`` it is served as where that is ``204``, and the
-      ``204`` beside it where ``can_present_nothing``, as for a drfs spec.
-    - **A** ``422`` is documented wherever the spec declares a Validator, the
-      drfs default, since a kernel spec has no ``document_service_error``.
+      ``204`` beside it where ``can_present_nothing``.
+    - **A** ``422`` is documented wherever the spec declares a Validator.
     - **A FilterSet's query parameters** are the kernel's
-      ``filter_set_parameters``, on a list operation only, as above.
+      ``filter_set_parameters``, on a list operation only.
 
     User-supplied ``@extend_schema`` annotations always win, and
     ``@extend_schema(parameters=...)`` merges over the filter parameters exactly
@@ -109,46 +83,9 @@ class ServiceAutoSchema(AutoSchema):
 
     def get_request_serializer(self) -> Any:
         spec = resolve_service_spec(self.view)
-        if isinstance(spec, KernelServiceSpec):
-            return self._kernel_request_body(spec)
-        poly = resolve_polymorphic_spec(self.view)
-        if poly is not None:
-            proxy = self._polymorphic_request_serializer(poly)
-            if proxy is not None:
-                return proxy
         if spec is not None:
-            cls = to_serializer_class(spec.input_serializer)
-            if cls is not None:
-                if spec.partial is not None:
-                    partial = spec.partial
-                else:
-                    partial = getattr(self.view, "action", None) == "partial_update"
-                return cls(partial=partial)
+            return self._kernel_request_body(spec)
         return super().get_request_serializer()
-
-    def _polymorphic_request_serializer(self, poly: Any) -> Any:
-        """Render a polymorphic action's request body as the variant union.
-
-        A ``PolymorphicProxySerializer`` over each variant's ``input_serializer``
-        with ``resource_type_field_name=None`` — an ``anyOf``, since the
-        framework discriminates on payload content rather than a type field.
-        Variants without an ``input_serializer`` contribute nothing; with none
-        at all, defer to the base body.
-        """
-        serializers = [
-            cls()
-            for cls in (to_serializer_class(v.input_serializer) for v in poly.specs.values())
-            if cls is not None
-        ]
-        if not serializers:
-            return None
-        view_name = type(self.view).__name__
-        action_name = getattr(self.view, "action", "") or ""
-        return PolymorphicProxySerializer(
-            component_name=f"{view_name}_{action_name}_Request",
-            serializers=serializers,
-            resource_type_field_name=None,
-        )
 
     def _kernel_request_body(self, spec: KernelServiceSpec) -> Any:
         """What a kernel ``spec``'s request body is documented by, or ``None`` for no body.
@@ -216,41 +153,24 @@ class ServiceAutoSchema(AutoSchema):
 
     def _get_request_body(self, direction: str = "request") -> Any:
         spec = resolve_service_spec(self.view)
-        if isinstance(spec, KernelServiceSpec):
-            if self.method == "DELETE":
-                # drf-spectacular documents no body on a ``DELETE``, and a
-                # kernel spec's is whatever ``_kernel_request_body`` reads, none
-                # included, so the call is presented as a ``POST``, which no
-                # body depends on (test_a_delete_with_a_validator_documents_its_body,
-                # test_a_spec_taking_nothing_documents_no_body).
-                return self._as_method("POST", direction)
-            if self.method == "PATCH" and not _partial_variant(spec).partial:
-                # drf-spectacular re-stamps a ``PATCH``'s serializer partial,
-                # where the route validates this one whole: its Validator cannot
-                # take a partial call. Presented as the ``PUT`` it is validated
-                # as (test_a_patch_a_dataclass_validates_whole_is_documented_whole);
-                # every other ``PATCH`` keeps the stamp, so an
-                # ``@extend_schema(request=...)`` serializer is documented
-                # partial as it is on any view
-                # (test_an_extend_schema_request_is_documented_partial_on_a_patch).
-                return self._as_method("PUT", direction)
+        if spec is None:
             return super()._get_request_body(direction)
-        # drf-spectacular hard-codes the body verbs to PUT/PATCH/POST. RFC 7231
-        # permits a body on DELETE and ``ServiceDeleteView`` /
-        # ``ServiceDestroyMixin`` use it, so swap ``self.method`` for the
-        # duration of the super call to coax the body out.
-        if self.method == "DELETE" and spec is not None and spec.input_serializer is not None:
+        if self.method == "DELETE":
+            # drf-spectacular documents no body on a ``DELETE``, and a
+            # kernel spec's is whatever ``_kernel_request_body`` reads, none
+            # included, so the call is presented as a ``POST``, which no
+            # body depends on (test_a_delete_with_a_validator_documents_its_body,
+            # test_a_spec_taking_nothing_documents_no_body).
             return self._as_method("POST", direction)
-        # spectacular unconditionally re-stamps ``partial=True`` on PATCH
-        # request serializers, which would override a forced
-        # ``spec.partial=False``; presenting the call as PUT keeps the
-        # full-update schema.
-        if (
-            self.method == "PATCH"
-            and spec is not None
-            and spec.partial is False
-            and spec.input_serializer is not None
-        ):
+        if self.method == "PATCH" and not _partial_variant(spec).partial:
+            # drf-spectacular re-stamps a ``PATCH``'s serializer partial,
+            # where the route validates this one whole: its Validator cannot
+            # take a partial call. Presented as the ``PUT`` it is validated
+            # as (test_a_patch_a_dataclass_validates_whole_is_documented_whole);
+            # every other ``PATCH`` keeps the stamp, so an
+            # ``@extend_schema(request=...)`` serializer is documented
+            # partial as it is on any view
+            # (test_an_extend_schema_request_is_documented_partial_on_a_patch).
             return self._as_method("PUT", direction)
         return super()._get_request_body(direction)
 
@@ -265,88 +185,18 @@ class ServiceAutoSchema(AutoSchema):
 
     def get_response_serializers(self) -> Any:
         spec = resolve_service_spec(self.view)
-        if isinstance(spec, KernelServiceSpec):
+        if spec is not None:
             return self._kernel_responses(spec)
-        if spec is None:
-            selector = resolve_selector_spec(self.view)
-            # A kernel selector spec with no presenter is rendered by the
-            # view's ``serializer_class``, which the base reads
-            # (test_no_presenter_is_the_view_s_serializer_class).
-            if isinstance(selector, KernelSelectorSpec) and selector.presenter is not None:
-                return self._kernel_rows(selector, selector.presenter)
-            return super().get_response_serializers()
-        # A callable ``success_status`` keys on the per-request result, so it
-        # can't be resolved statically; document the action default instead.
-        status = (
-            spec.success_status
-            if isinstance(spec.success_status, int)
-            else default_status(self.view)
-        )
-        output_serializer = (
-            spec.output_selector_spec.output_serializer
-            if spec.output_selector_spec is not None
-            else None
-        )
-        out_cls = to_serializer_class(output_serializer)
-        # spectacular accepts a Serializer subclass *or* an OpenApiResponse per
-        # status entry; mix them by whether a response body is configured. A
-        # declared serializer is a body, and the renderers answer a body under
-        # ``status_for_a_body``, so the schema asks it the same question rather
-        # than restating the answer: a destroy presenting a row, single-row or
-        # bulk, is documented as the ``200`` it is served as. Held by
-        # test_a_destroy_documents_the_response_it_serves.
-        #
-        # With no serializer declared there is no body the schema can describe,
-        # and whether the runtime sends one is decided by what the service
-        # returns, which nothing the schema reads declares. So the no-content
-        # response is documented at the status itself, which is what a destroy
-        # whose service returns ``None`` is answered with. A raw value returned
-        # instead, a count say, is served as a body under ``status_for_a_body``
-        # that the schema does not show. Held by
-        # test_an_undeclared_body_is_documented_as_no_content.
-        responses: dict[Any, Any] = (
-            {status_for_a_body(status): out_cls}
-            if out_cls is not None
-            else {status: OpenApiResponse(description="")}
-        )
-        # A declared body is not always sent. Where dispatch may present nothing,
-        # a re-read finding no row say, the renderers answer an empty ``204``
-        # rather than a row of blank fields, so the schema documents that response
-        # beside the body, asking ``can_present_nothing`` as every transport does.
-        # The body is never documented under ``204`` itself (``status_for_a_body``),
-        # so the two never collide. Without a serializer the empty response is
-        # already the one documented, at its status. One arc to coverage, so each
-        # operand names its test: the serializer,
-        # test_an_undeclared_body_is_documented_at_its_status_alone, and the
-        # question, test_a_create_that_cannot_present_nothing_documents_no_204.
-        # test_a_create_that_may_present_nothing_documents_its_empty_204 holds
-        # the branch.
-        #
-        # The rule is the spec's answer, and over-documents in three cases the
-        # OpenAPI page states, because the renderers decide the empty answer from
-        # more than the spec, inline rather than through a function this could
-        # ask: an explicit ``success_status`` with nothing to re-read answers empty
-        # at that status; an update that renders its target in place never answers
-        # empty; and the bulk path answers empty at the action's status. Where that
-        # status is the body's, one response per status could not tell the two
-        # apart anyway. Each is held, the status served beside the statuses
-        # documented, by
-        # test_an_empty_answer_at_an_explicit_status_is_documented_as_204_too,
-        # test_an_update_rendering_its_target_in_place_is_documented_with_a_204 and
-        # test_a_bulk_spec_answers_empty_at_its_status_beside_a_documented_204.
-        if out_cls is not None and can_present_nothing(spec):
-            responses[204] = OpenApiResponse(description="")
-        document_422 = (
-            spec.document_service_error
-            if spec.document_service_error is not None
-            else spec.input_serializer is not None
-        )
-        if document_422:
-            responses[422] = ServiceErrorSerializer
-        return responses
+        selector = resolve_selector_spec(self.view)
+        # A selector spec with no presenter is rendered by the view's
+        # ``serializer_class``, which the base reads
+        # (test_no_presenter_is_the_view_s_serializer_class).
+        if selector is not None and selector.presenter is not None:
+            return self._kernel_rows(selector, selector.presenter)
+        return super().get_response_serializers()
 
     def _kernel_responses(self, spec: KernelServiceSpec) -> dict[Any, Any]:
-        """A kernel service spec's responses, by the rules the drfs branch above states.
+        """A kernel service spec's responses.
 
         The status is the view's own ``success_status``, the hook the kernel
         route answers with (``MutationFlowMixin``), where it is an ``int``; a
@@ -354,8 +204,8 @@ class ServiceAutoSchema(AutoSchema):
         (test_the_view_s_status_is_documented,
         test_a_callable_status_documents_the_action_s_default). The body is
         the presenter the kernel's ``present`` renders with,
-        ``presenter_for_output()``. The ``204`` beside a body is the drfs
-        branch's arc, asked of the kernel spec; its operands are held here by
+        ``presenter_for_output()``. The ``204`` beside a body is where the spec
+        may present nothing; its operands are held here by
         test_no_presenter_documents_no_content_at_the_status (the body) and
         test_a_create_answers_201_with_its_presenter_s_serializer (the
         question), and the branch by
@@ -375,8 +225,7 @@ class ServiceAutoSchema(AutoSchema):
         )
         if body is not None and can_present_nothing(spec):
             responses[204] = OpenApiResponse(description="")
-        # A kernel spec declares no ``document_service_error``, so the drfs
-        # default is the rule: a Validator, whose refusal is a 422
+        # A Validator's refusal is a 422
         # (test_a_service_error_is_documented_where_there_is_a_validator).
         if spec.validator is not None:
             responses[422] = ServiceErrorSerializer
@@ -412,13 +261,9 @@ class ServiceAutoSchema(AutoSchema):
         if not self._is_list_view():
             return parameters
         spec = resolve_selector_spec(self.view)
-        if isinstance(spec, KernelSelectorSpec):
-            if spec.filter_set is None:
-                return parameters
-            return parameters + _kernel_filter_parameters(spec.filter_set)
-        if spec is None or spec.selector is None or spec.filter_set is None:
+        if spec is None or spec.filter_set is None:
             return parameters
-        return parameters + _filter_set_parameters(self, spec.filter_set)
+        return parameters + _kernel_filter_parameters(spec.filter_set)
 
 
 def _partial_variant(spec: KernelServiceSpec) -> KernelServiceSpec:
@@ -493,42 +338,3 @@ def _kernel_filter_parameters(filter_set: Any) -> list[Any]:
             )
         )
     return documented
-
-
-class _SpecFilterBackend:
-    """Minimal stand-in exposing the one method ``DjangoFilterExtension`` calls.
-
-    The extension resolves its FilterSet solely through
-    ``self.target.get_filterset_class(view, queryset)``, so returning
-    ``filter_set`` reproduces what a real ``DjangoFilterBackend`` with
-    ``view.filterset_class`` would — without importing ``django-filter`` or
-    mutating the inspected view.
-    """
-
-    def __init__(self, filter_set: Any) -> None:
-        self._filter_set = filter_set
-
-    def get_filterset_class(self, view: Any, queryset: Any = None) -> Any:
-        return self._filter_set
-
-
-def _filter_set_parameters(auto_schema: AutoSchema, filter_set: Any) -> list[Any]:
-    """OpenAPI query parameters for a spec-level ``filter_set``.
-
-    Reuses drf-spectacular's own ``DjangoFilterExtension``, so the output is
-    byte-identical to a view-level ``filterset_class`` + ``DjangoFilterBackend``
-    (same param names, types, enums, style / explode, required flags) and stays
-    in lockstep across versions. The extension imports ``django-filter`` only
-    lazily, inside its per-field resolution, so it is safe to import at module
-    top with the rest of the drf-spectacular surface.
-
-    ``SelectorSpec.filter_set`` is applied by the ``(data, queryset) -> .qs``
-    contract and need not be a real ``FilterSet``, so anything without
-    ``base_filters`` — a filter_set carried without the ``[filter]`` extra
-    installed — degrades to no parameters rather than raising, the same posture
-    ``filterset_to_json_schema`` takes.
-    """
-    if not hasattr(filter_set, "base_filters"):
-        return []
-    extension = DjangoFilterExtension(_SpecFilterBackend(filter_set))
-    return list(extension.get_schema_operation_parameters(auto_schema))

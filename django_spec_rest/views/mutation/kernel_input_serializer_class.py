@@ -9,7 +9,7 @@ from django_service_specs.specs.service_spec import ServiceSpec as KernelService
 from rest_framework.fields import empty
 from rest_framework.serializers import BaseSerializer, Serializer
 
-from django_spec_rest.dispatch.renderable_serializer_class import renderable_serializer_class
+from django_spec_rest.service_specs.renderable_serializer_class import renderable_serializer_class
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 
 
@@ -48,17 +48,12 @@ def standalone_form_serializer_class(view: Any) -> type[BaseSerializer[Any]] | N
 
     Asked by ``ServiceCreateView`` and ``ServiceUpdateView`` themselves rather
     than by ``MutationFlowMixin``, which every service viewset also carries
-    ahead of ``ActionSerializerResolver``: an override there would hide the
-    resolver's ``resolves_action_serializers`` marker from the viewset's OPTIONS
-    check, and a polymorphic POST whose variants disagree would reach DRF's
-    assertion again (the ``polymorphic-distinct-inputs`` row of
-    test_options_describes_every_spec_only_shape). A delete view draws no
-    write form, so it never asks.
+    ahead of ``ActionSerializerResolver``: an override there would take the
+    resolver's own answer away from the viewset. A delete view draws no write
+    form, so it never asks.
 
-    The two conditions are one arc to coverage, each held by a test of
-    test_spec_options: the kernel spec by
-    test_a_drfs_spec_view_without_a_serializer_class_still_raises_in_html, the
-    missing ``serializer_class`` by the create-view row of
+    The two conditions are one arc to coverage; the missing ``serializer_class``
+    is held by the create-view row of
     test_a_kernel_views_own_serializer_class_draws_its_forms.
     """
     spec = getattr(view, "spec", None)

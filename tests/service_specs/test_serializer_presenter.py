@@ -28,7 +28,6 @@ from django_service_specs.types.field_audience import FieldAudience
 from django_service_specs.types.selector_kind import SelectorKind
 from rest_framework import serializers
 
-from django_spec_rest.audience.build_audience_projection import build_audience_projection
 from django_spec_rest.service_specs.build_offline_context import build_offline_context
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from django_spec_rest.service_specs.utils import EDGE_CALL, EdgeCallState
@@ -375,15 +374,13 @@ def test_a_second_label_from_field_audiences_is_refused_where_it_is_projected() 
 
 
 # ---------------------------------------------------------------------------
-# The projection: one declaration, read by the kernel as drfs reads it today
+# The projection: one declaration, read by the kernel
 # ---------------------------------------------------------------------------
 
 
-def test_the_projection_equals_drfs_for_a_marked_serializer() -> None:
+def test_the_projection_of_a_marked_serializer() -> None:
     projection = audience_projection_for_spec(_spec(SerializerPresenter(_Invoice)))
 
-    assert projection == build_audience_projection(_Invoice)
-    # Equal, and not because both are empty.
     assert projection.label == "number"
     assert projection.audience("id") is FieldAudience.HANDLE
     assert projection.choice_labels["status"] == dict(STATUSES)
@@ -402,18 +399,17 @@ _OVERRIDES = {
 }
 
 
-def test_the_projection_equals_drfs_for_spec_level_overrides() -> None:
+def test_the_projection_of_spec_level_overrides() -> None:
     projection = audience_projection_for_spec(
         _spec(SerializerPresenter(_Invoice, field_audiences=_OVERRIDES))
     )
 
-    assert projection == build_audience_projection(_Invoice, overrides=_OVERRIDES)
     assert projection.label == "plain"
     assert projection.audience("note") is FieldAudience.HIDDEN
     assert projection.audience("etag") is FieldAudience.CONTENT
 
 
-def test_the_projection_equals_drfs_for_a_nested_serializer() -> None:
+def test_the_projection_of_a_nested_serializer() -> None:
     class _Leaf(serializers.Serializer):
         key = serializers.CharField(style={MARKING: FieldMarking.handle()})
         kind = serializers.ChoiceField(choices=[("x", "Ex")])
@@ -430,7 +426,6 @@ def test_the_projection_equals_drfs_for_a_nested_serializer() -> None:
 
     projection = audience_projection_for_spec(_spec(SerializerPresenter(_Tree)))
 
-    assert projection == build_audience_projection(_Tree)
     # Nothing marked at the top, everything two levels down.
     assert projection.fields == {}
     assert projection.nested["branch"].nested["leaves"].audience("key") is FieldAudience.HANDLE
@@ -446,7 +441,6 @@ def test_feeding_field_audiences_back_as_overrides_changes_nothing() -> None:
     declared = audience_projection_for_spec(spec)
 
     assert audience_projection_for_spec(spec, overrides=_OVERRIDES) == declared
-    assert build_audience_projection(_Invoice, overrides=_OVERRIDES) == declared
 
 
 # ---------------------------------------------------------------------------

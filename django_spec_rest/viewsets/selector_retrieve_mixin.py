@@ -4,13 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelectorSpec
 from rest_framework.mixins import RetrieveModelMixin
 from rest_framework.request import Request
 from rest_framework.response import Response
 
 from django_spec_rest.selectors.utils import dispatch_selector_for_spec, present_kernel_row
-from django_spec_rest.views.utils import _JsonNullResponse, add_affordances
+from django_spec_rest.views.utils import _JsonNullResponse
 from django_spec_rest.viewsets.utils import (
     _ActionSpecsMixin,
     _SelectorHooks,
@@ -21,23 +20,10 @@ from django_spec_rest.viewsets.utils import (
 class SelectorRetrieveMixin(RetrieveModelMixin, _SelectorHooks, _ActionSpecsMixin):
     """Compose with ``GenericViewSet``.
 
-    When ``action_specs["retrieve"]`` is a
-    [`SelectorSpec`][django_spec_rest.types.selector_spec.SelectorSpec] with
-    a non-``None`` ``selector``, ``get_object()`` invokes it instead of
-    falling through to DRF's standard lookup. The selector receives the
-    URL kwargs plus the standard pool. Returning ``None`` or raising
-    ``Model.DoesNotExist`` results in a 404 — or, when the spec sets
-    ``allow_none=True``, a ``200`` with a JSON ``null`` body (the
-    nullable-resource contract; the output serializer is skipped).
-
-    ``action_specs["retrieve"] = SelectorSpec(selector=None)`` or an absent
-    ``"retrieve"`` key both fall through to DRF's default ``get_object()``.
-    Any other entry type raises
-    ``ImproperlyConfigured``.
-
-    The selector applies wherever ``get_object()`` is called, including from
-    update/destroy actions composed alongside this mixin. If you need an
-    action-specific override, do it explicitly in your own ``get_object()``.
+    An absent ``"retrieve"`` key falls through to DRF's default ``get_object()``.
+    Any entry that is not a kernel
+    [`SelectorSpec`][django_service_specs.specs.selector_spec.SelectorSpec]
+    raises ``ImproperlyConfigured``.
 
     A kernel ``SelectorSpec`` under ``"retrieve"`` runs through the kernel's
     own ``dispatch``, as on ``SelectorRetrieveView``: the view's object
@@ -54,20 +40,10 @@ class SelectorRetrieveMixin(RetrieveModelMixin, _SelectorHooks, _ActionSpecsMixi
 
     def retrieve(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         spec = resolve_action_selector_spec(self.action_specs, "retrieve")
-        if isinstance(spec, KernelSelectorSpec):
-            row, data = present_kernel_row(self, spec)
-            return _JsonNullResponse() if row is None else Response(data)
-        if spec is None or (not spec.allow_none and spec.affordances is None):
+        if spec is None:
             return super().retrieve(request, *args, **kwargs)
-        # Nullable-resource contract: ``get_object()`` may resolve ``None``
-        # (instead of raising ``NotFound``); render it as a literal JSON
-        # ``null`` without invoking the output serializer. The same path renders
-        # a row with its affordance answers, which DRF's ``retrieve`` cannot add.
-        instance = self.get_object()
-        if instance is None:
-            return _JsonNullResponse()
-        serializer = self.get_serializer(instance)  # ty: ignore[unresolved-attribute]
-        return Response(add_affordances(spec, serializer.data, instance, many=False))
+        row, data = present_kernel_row(self, spec)
+        return _JsonNullResponse() if row is None else Response(data)
 
     def get_object(self) -> Any:
         """Resolve the target row through the retrieve selector, if one is wired.
@@ -82,15 +58,5 @@ class SelectorRetrieveMixin(RetrieveModelMixin, _SelectorHooks, _ActionSpecsMixi
         rule as ``SelectorSpec.filter_set`` — the sanctioned seam, applied by
         the dispatcher on both paths.
         """
-        # Before the selector runs: a non-detail PUT has no lookup kwarg for
-        # it, and DRF's OPTIONS probe would fail on that. See
-        # ``_ActionSpecsMixin._metadata_probe_has_no_row``.
-        if self._metadata_probe_has_no_row():
-            return None
         spec = resolve_action_selector_spec(self.action_specs, "retrieve")
-        obj = super().get_object() if spec is None else dispatch_selector_for_spec(self, spec)
-        # Stash the resolved instance so a SelectorSpec's output context
-        # provider can read it via the ``instance`` extra. See
-        # ``_ActionSpecsMixin.get_serializer_context``.
-        self._resolved_instance = obj
-        return obj
+        return super().get_object() if spec is None else dispatch_selector_for_spec(self, spec)  # ty: ignore[unresolved-attribute]

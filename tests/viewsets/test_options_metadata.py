@@ -40,7 +40,6 @@ from django_spec_rest import (
 )
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
-from django_spec_rest.types.service_spec import ServiceSpec as DrfsServiceSpec
 from tests.testapp.models import Author
 from tests.testapp.serializers import AuthorSerializer
 
@@ -216,18 +215,6 @@ def test_a_list_with_no_spec_stays_allowed() -> None:
     assert _allow(response) == {"GET", "HEAD", "POST", "OPTIONS"}
 
 
-def test_a_drfs_only_viewset_keeps_drfs_allow() -> None:
-    """A route serving no kernel spec keeps DRF's ``Allow``, which drfs'
-    OPTIONS path reads to leave an unserved method out of ``actions`` itself."""
-    viewset = _viewset(
-        serializer_class=AuthorSerializer,
-        action_specs={"create": DrfsServiceSpec(service=_service, input_serializer=_NameIn)},
-    )
-    response = _options(viewset, {"post": "create", "put": "update"}, pk=1)
-    assert _allow(response) == {"POST", "PUT", "OPTIONS"}
-    assert set(response.data["actions"]) == {"POST"}
-
-
 # ----- which spec a method is described by -----
 
 
@@ -240,22 +227,6 @@ def test_a_service_action_s_kernel_spec_is_described() -> None:
 
     response = _options(_ViewSet, {"post": "publish"})
     assert response.status_code == 200
-    assert _described(response) == {"POST": {"name"}}
-
-
-def test_a_drfs_method_beside_a_kernel_spec_is_not_described() -> None:
-    """On a viewset mixing the two kinds, a method a drfs spec serves is left
-    out of ``actions`` rather than probed through ``get_object()`` and
-    ``serializer_class``; the kernel method is described as on any route."""
-    viewset = _viewset(
-        action_specs={
-            "create": _create(),
-            "update": DrfsServiceSpec(service=_service, input_serializer=_NameIn),
-        }
-    )
-    response = _options(viewset, {"post": "create", "put": "update"}, pk=1)
-    assert response.status_code == 200
-    assert _allow(response) == {"POST", "PUT", "OPTIONS"}
     assert _described(response) == {"POST": {"name"}}
 
 

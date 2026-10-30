@@ -24,9 +24,7 @@ _SELECTOR = SelectorSpec(kind=SelectorKind.LIST, selector=lambda: None, permissi
 
 
 def test_a_write_action_resolves_a_kernel_service_spec() -> None:
-    assert resolve_action_service_spec({"create": _SERVICE}, "create", "POST", view=object()) is (
-        _SERVICE
-    )
+    assert resolve_action_service_spec({"create": _SERVICE}, "create", "POST") is (_SERVICE)
 
 
 def test_a_read_action_resolves_a_kernel_selector_spec() -> None:
@@ -36,7 +34,7 @@ def test_a_read_action_resolves_a_kernel_selector_spec() -> None:
 def test_a_write_action_resolved_to_a_kernel_selector_spec_raises() -> None:
     specs: dict[str, Any] = {"create": _SELECTOR}
     with pytest.raises(ImproperlyConfigured, match="must be a ServiceSpec, got SelectorSpec"):
-        resolve_action_service_spec(specs, "create", "POST", view=object())
+        resolve_action_service_spec(specs, "create", "POST")
 
 
 def test_a_read_action_resolved_to_a_kernel_service_spec_raises() -> None:

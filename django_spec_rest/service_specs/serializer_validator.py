@@ -32,7 +32,6 @@ from django_spec_rest.service_specs.utils import (
     provider_owned,
     serializer_context,
     server_values,
-    unexpected_arguments,
     validator_input,
     write_form_value,
 )
@@ -160,10 +159,8 @@ class SerializerValidator(Validator):
     keys each failing row by the index the caller's list gave it, whichever of
     DRF's two shapes the installed version reports item errors in, and whose
     list-level message sits under ``non_field_errors``. A live view's list
-    body (``EdgeCallState.body_rows``) is bound whole, every row as sent, and
-    what the list serializer refused is also left on the edge's state as DRF
-    reported it, for the edge to answer with as a view always did. Where the
-    kernel refused a row the edge sent, the rows it passed are read but the
+    body is bound as the kernel passed it: where the kernel refused a row the
+    edge sent, the rows it passed are read but the
     list is judged as sent: its length bounds count every row sent, and its
     list-level ``validate()`` does not run, as DRF never runs it past a
     refused row.
@@ -255,8 +252,8 @@ class SerializerValidator(Validator):
 
         A field named like a seed (``RESERVED_POOL_SEEDS``, ``BOUND`` or
         ``excluded``) is no parameter (see ``parameters()``), so the kernel has
-        nowhere to take its value from, while HTTP and ``dispatch_spec`` read it
-        from the body. Where the serializer *requires* such a field, a call
+        nowhere to take its value from, while an HTTP body carries it
+        by name. Where the serializer *requires* such a field, a call
         through the kernel's ``dispatch`` is refused for it however it is made.
         This names those fields, by the name ``parameters()`` would have
         declared them under, so a transport can refuse such a spec before a
@@ -326,19 +323,8 @@ class SerializerValidator(Validator):
     ) -> Validated:
         """The rows validated once as DRF's list serializer, the one serializer bound for the call."""
         self._refuse_partial(context)
-        state = edge_call_state()
         sent = validator_input(self, None)
-        # A live view's list body is bound whole, every row as it was sent, a
-        # row that is no object included, so DRF's list serializer answers it
-        # as a view's always did: in its own words, at its own positions
-        # (test_a_list_body_is_refused_as_its_list_serializer_refuses_it). One
-        # arc to coverage, so each condition is named: a body the edge holds
-        # for another Validator, a kernel call inside the service, is none of
-        # this one's (test_a_kernel_call_inside_a_bulk_service_binds_its_own_rows),
-        # and rows sent off HTTP keep the kernel's refusal of what its shape
-        # check refused (test_off_http_a_refused_row_keeps_the_kernels_shape_in_drfs_words).
-        whole = sent is not None and state.body_rows
-        indices = list(range(len(sent))) if whole else list(rows)
+        indices = list(rows)
         every_row = sent is not None and indices == list(range(len(sent)))
         if every_row:
             # Every row sent, in order: the body itself, which the call's
@@ -362,21 +348,7 @@ class SerializerValidator(Validator):
         if sent is not None and not every_row:
             return self._rows_past_a_refusal(serializer, arguments, sent, indices, many_argument)
         if not serializer.is_valid():
-            if whole:
-                state.row_errors = serializer.errors
             raise DRFInvalidArguments(_by_row(serializer.errors, indices))
-        # An argument sent beside the rows has nowhere to go, since the service
-        # is handed the rows alone, so it is refused under every
-        # ``UnknownArguments`` policy, as it always was, once the rows are valid
-        # (test_an_argument_beside_the_list_is_refused_under_every_policy, its
-        # ``ignore`` cases; ``REJECT`` refuses it before the rows are read).
-        # Only where every row sent reached the serializer: a row the kernel
-        # refused is answered first, as the rows always were
-        # (test_a_row_the_kernel_refuses_answers_before_an_argument_beside_the_list).
-        # In DRF's words and class, as 0.57.0 raised it: a kernel refusal from
-        # here would be keyed under the rows' argument.
-        if every_row and state.beside_rows:
-            raise unexpected_arguments(state.beside_rows)
         data: list[Any] = list(serializer.validated_data)
         return Validated(
             values={many_argument: [_values(row) for row in data]},
@@ -396,11 +368,7 @@ class SerializerValidator(Validator):
 
         DRF's list serializer checks the list's length before it reads a row,
         so a list sent out of its bounds is refused by the bound alone, its rows
-        unread, as 0.57.0 answered it. That refusal is also left on the edge's
-        state (``EdgeCallState.row_errors``), for the edge to answer it in place
-        of the kernel's refusals of rows
-        (test_over_a_live_view_a_length_bound_counts_every_row_sent_and_answers_alone).
-        Off HTTP the kernel holds the list to those bounds before this, in its
+        unread. Off HTTP the kernel holds the list to those bounds before this, in its
         own words. A list within them has its rows read, never counted: the
         rows left once the kernel refused one are fewer than were sent, and are
         no list the caller sent. DRF runs a list's ``validate()`` and
@@ -412,7 +380,6 @@ class SerializerValidator(Validator):
         """
         refusal = _bound_refusal(serializer, len(sent))
         if refusal is not None:
-            edge_call_state().row_errors = refusal
             raise DRFInvalidArguments(refusal)
         # The rows left are fewer than were sent, so they can fall below a
         # minimum the list sent met, never past a maximum it met.

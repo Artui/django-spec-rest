@@ -24,11 +24,12 @@ from typing import Any
 import pytest
 from asgiref.sync import async_to_sync
 from django_service_specs import ServiceSpec, ServiceValidationError, Unrestricted
+from django_service_specs.mutations.create_from_input import create_from_input
+from django_service_specs.relations.child_spec import ChildSpec
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 from rest_framework.test import APIRequestFactory
 
-from django_spec_rest import ChildSpec, create_from_input
 from django_spec_rest.dispatch.kernel_edge import adispatch_kernel_spec
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from tests.testapp.models import Catalog, Section

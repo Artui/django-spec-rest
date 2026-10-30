@@ -4,9 +4,7 @@ Every case hands a kernel spec to the kernel's ``authorize``, ``authorize_target
 or ``dispatch``, so the kernel's own reading of each opt-in - ``arguments``,
 ``call_context``, ``request`` and ``view`` - is what is tested, not a direct call
 that would pass whether or not the kernel ever handed them over. The route a
-kernel spec's check fills onto an offline view is ``route_reads`` alone: the
-``UrlKwarg`` and ``QueryParam`` declarations the check also takes are drfs' and
-stay with its tests.
+kernel spec's check fills onto an offline view is ``route_reads`` alone.
 """
 
 from __future__ import annotations

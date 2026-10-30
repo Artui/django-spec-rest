@@ -4,9 +4,8 @@ Utils-shaped: the helpers here are shared by the mutation views
 (``views/mutation/utils.py``), the selector views (``selectors/utils.py``) and
 ``as_view()``'s spec checks (``views/spec_validation.py``), and none is public
 API, so the module exports nothing and carries no ``__all__``. It sits beside
-``dispatch/utils.py`` rather than inside it because that module is the edge of
-the drfs path, ``dispatch_spec``, and this one shares none of its compile: a
-kernel spec is dispatched as declared.
+``dispatch/utils.py``, which holds the smaller helpers the views share: a kernel
+spec is dispatched as declared.
 
 What a view hands it, and what it does with each:
 
@@ -99,10 +98,10 @@ from django_service_specs.types.dispatch_error import DispatchError
 from django_service_specs.types.unknown_arguments import UnknownArguments
 from django_service_specs.types.unset import UNSET
 from rest_framework.request import Request
-from typing_extensions import TypeIs
 
 from django_spec_rest.dispatch.kernel_refusals import answering_refusals
 from django_spec_rest.service_specs.recording_spec import KernelSpec, recording_spec
+from django_spec_rest.service_specs.register_drf_row_errors import register_drf_row_errors
 from django_spec_rest.service_specs.seed_named_fields import seed_named_fields
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from django_spec_rest.service_specs.utils import (
@@ -116,6 +115,10 @@ from django_spec_rest.service_specs.utils import (
 )
 from django_spec_rest.types.view_hooks import ViewHooks
 
+# This package has no ``AppConfig`` to register from, and the edge is where a
+# nested write's DRF row refusals first need the kernel to know them. Idempotent.
+register_drf_row_errors()
+
 UNKNOWN_ARGUMENTS = UnknownArguments.IGNORE
 """What the kernel route does with an argument the spec declares no parameter for.
 
@@ -125,23 +128,6 @@ a whole row back (its ``id`` beside the fields it may write) is not refused.
 The kernel's own default is ``REJECT``, a ``400`` "Unknown argument.", and it
 stays the answer where a caller asks for it. Both cores pass this one value
 (test_an_undeclared_body_key_is_dropped_by_default_on_either_core)."""
-
-
-def runs_on_kernel(spec: object) -> TypeIs[KernelSpec]:
-    """Whether ``spec`` is a kernel spec, served by the kernel's ``dispatch`` as declared.
-
-    The one place the two paths part: a drfs ``ServiceSpec`` or ``SelectorSpec``
-    compiles to the kernel's and runs through ``dispatch_spec``, and a kernel
-    spec set on a view's ``spec`` runs through ``dispatch_kernel_spec`` here.
-    Asked of the spec's class, so every caller - the two dispatch functions and
-    ``as_view()``'s checks - decides by the one fact. A drfs spec is no subclass
-    of the kernel's, so no drfs spec answers ``True``
-    (test_a_drfs_spec_does_not_run_on_the_kernel). The union is one arc to
-    coverage, so each member is named: the service spec by
-    test_a_kernel_service_spec_runs_on_the_kernel, the selector spec by
-    test_a_kernel_selector_spec_runs_on_the_kernel.
-    """
-    return isinstance(spec, KernelServiceSpec | KernelSelectorSpec)
 
 
 def kernel_arguments(

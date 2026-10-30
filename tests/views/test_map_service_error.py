@@ -2,17 +2,15 @@
 
 from __future__ import annotations
 
+from django_service_specs.services.action_unavailable import ActionUnavailable
+from django_service_specs.services.additional_input_required import AdditionalInputRequired
+from django_service_specs.services.service_conflict import ServiceConflict
+from django_service_specs.services.service_error import ServiceError
+from django_service_specs.services.service_not_found import ServiceNotFound
+from django_service_specs.services.service_validation_error import ServiceValidationError
 from rest_framework import exceptions as drf_exceptions
 from rest_framework import status as drf_status
 
-from django_spec_rest.exceptions import (
-    ActionUnavailable,
-    AdditionalInputRequired,
-    ServiceConflict,
-    ServiceError,
-    ServiceNotFound,
-    ServiceValidationError,
-)
 from django_spec_rest.views.mutation.map_service_error import (
     _ConflictAPIException,
     _ServiceAPIException,

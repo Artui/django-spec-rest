@@ -31,9 +31,9 @@ import pytest
 from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import ServiceSpec, UnsetType
 from django_service_specs.dispatch.check_seeds import check_seeds
+from django_service_specs.types.unset import UNSET
 from rest_framework import serializers
 
-from django_spec_rest import UNSET
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from tests.views.server_value_calls import CORES, FORMATS, OPEN, Core, post
 from tests.views.test_kernel_views import _view

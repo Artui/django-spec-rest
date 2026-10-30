@@ -24,11 +24,11 @@ from django_service_specs.dispatch.dispatch_result import DispatchResult
 from django_service_specs.dispatch.present import present
 from django_service_specs.output.presentation_context import PresentationContext
 from django_service_specs.pool.pool_seeds import DEFAULT_POOL_SEEDS
+from django_service_specs.types.unset import UNSET
 from rest_framework import serializers
 
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
-from django_spec_rest.types.unset import UNSET
 from tests.testapp.models import Post
 
 _OPEN = (Unrestricted(),)

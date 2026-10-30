@@ -28,10 +28,10 @@ def build_offline_context(
     [`OfflineContext`][django_spec_rest.types.offline_context.OfflineContext] for
     dispatching a spec outside an HTTP request.
 
-    [`dispatch_spec`][django_spec_rest.dispatch.dispatch_spec.dispatch_spec]
+    [`dispatch`][django_service_specs.dispatch.dispatch.dispatch]
     forwards ``request`` / ``view`` to spec callables (``kwargs`` providers,
     ``extend_queryset``, context providers) that declare them, and
-    [`enforce_permissions`][django_spec_rest.dispatch.enforce_permissions.enforce_permissions]
+    the kernel's permission check
     needs a request + view to evaluate ``permission_classes``. This synthesizes both so
     a spec written for the HTTP transport keeps working when driven from a Pydantic-AI
     toolset, the MCP server, a management command, or a task runner.
@@ -44,7 +44,7 @@ def build_offline_context(
         params: Seeds ``request.data``, straight into DRF's parsed-data cache (a
             synthetic request has no stream to parse). It is *not* validated here — that
             is
-            [`dispatch_spec`][django_spec_rest.dispatch.dispatch_spec.dispatch_spec]'s
+            [`dispatch`][django_service_specs.dispatch.dispatch.dispatch]'s
             job, which takes ``params`` directly and never touches ``request.data``.
             Pass both the same value.
         http_request: An ambient Django request to wrap, so its headers / ``META`` are
@@ -63,7 +63,7 @@ def build_offline_context(
             [`OfflineServiceView`][django_spec_rest.types.offline_service_view.OfflineServiceView].
         kwargs: **The** channel for route-derived values — the off-HTTP counterpart of a
             view's URL captures.
-            [`dispatch_spec`][django_spec_rest.dispatch.dispatch_spec.dispatch_spec]
+            [`dispatch`][django_service_specs.dispatch.dispatch.dispatch]
             spreads it into the selector / target pools exactly where the HTTP path
             spreads ``extra_url_kwargs=view.kwargs``: authoritative over ``params`` on a
             key conflict, below a ``spec.kwargs`` provider, which also sees it as
@@ -73,7 +73,7 @@ def build_offline_context(
             inputs reach the serializer offline: a serializer branching on
             ``query_params``, and a request-scoped ``FilterSet`` reading
             ``self.request.query_params`` itself. It is not what a ``filter_set`` is
-            bound to: ``dispatch_spec`` binds a ``SelectorSpec``'s own, and a target
+            bound to: ``dispatch`` binds a ``SelectorSpec``'s own, and a target
             lookup's, to ``filter_data``, else to ``params``, and a service's
             ``output_selector_spec.filter_set`` to ``filter_data``, else to an empty
             mapping (always to an empty mapping under
@@ -94,7 +94,7 @@ def build_offline_context(
 
     Returns: The
         [`OfflineContext`][django_spec_rest.types.offline_context.OfflineContext]
-        to hand to ``dispatch_spec``.
+        to hand to ``dispatch``.
     """
     base: HttpRequest = (
         _copy_request(http_request) if http_request is not None else _synthesize_request(host)

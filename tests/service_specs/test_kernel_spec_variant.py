@@ -214,29 +214,6 @@ def test_a_partial_variant_over_a_validator_that_cannot_be_partial_is_the_spec_i
     assert id(spec) not in module._VARIANTS
 
 
-@pytest.mark.parametrize(
-    "keyword",
-    [
-        {"unguarded": True},
-        {"target": True},
-        {"server_input": False},
-        {"spread": True},
-        {"excluded": frozenset({"user"})},
-    ],
-    ids=["unguarded", "target", "server-input", "spread", "excluded"],
-)
-def test_a_drfs_only_variant_of_a_kernel_spec_is_refused(keyword: dict[str, Any]) -> None:
-    """Each is a seat a kernel spec declares itself: its ``permissions``, its
-    ``instance_selector_spec``, its providers, its Validator's ``excluded``.
-    Refused with or without a kernel variant beside it, rather than ignored."""
-    spec = _spec()
-
-    with pytest.raises(TypeError, match="declares the rest on itself"):
-        kernel_spec_variant(spec, **keyword)
-    with pytest.raises(TypeError, match="declares the rest on itself"):
-        kernel_spec_variant(spec, partial=True, lenient=True, **keyword)
-
-
 class _Flag(serializers.Serializer):
     published = serializers.BooleanField()
 

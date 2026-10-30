@@ -26,23 +26,17 @@ from __future__ import annotations
 
 import dataclasses
 import inspect
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from contextvars import ContextVar
 from typing import Any, Final, cast
 
-from django.core.exceptions import ImproperlyConfigured, ObjectDoesNotExist
-from django.db import DatabaseError
+from django.core.exceptions import ImproperlyConfigured
 from django.db.models import QuerySet
 from django.http import HttpRequest, QueryDict
-from django.utils.translation import gettext
 from django_service_specs.output.output import OutputField
-from django_service_specs.parameters.coded_message import CodedMessage
-from django_service_specs.parameters.invalid_arguments import (
-    InvalidArguments as KernelInvalidArguments,
-)
 from django_service_specs.parameters.parameters import Parameter, Parameters
 from django_service_specs.pool.resolve_callable_kwargs import resolve_callable_kwargs
-from django_service_specs.types.is_async import is_async
+from django_service_specs.types.unset import UNSET
 from django_service_specs.types.unset import UNSET as KERNEL_UNSET
 from rest_framework import ISO_8601, relations, serializers
 from rest_framework.settings import api_settings
@@ -51,23 +45,7 @@ from rest_framework_dataclasses.serializers import DataclassSerializer
 from django_spec_rest.service_specs.base_serializer_context import base_serializer_context
 from django_spec_rest.service_specs.build_offline_context import build_offline_context
 from django_spec_rest.types.json_schema_registry import JsonSchemaRegistry
-from django_spec_rest.types.unset import UNSET
 from django_spec_rest.types.view_hooks import ViewHooks
-
-# What building or reading an input serializer with no call may raise and
-# still be a serializer a call can describe: a request or view read unguarded
-# from a context that has none (``AttributeError``, ``KeyError``,
-# ``TypeError``), a table ``migrate`` has not made yet, and a row not loaded
-# yet. A spec compiles as it is declared, at import, so registering it never
-# needs either. A call's own refusal of a body that is no list binds the
-# list serializer with no context too (``_drf_body_refusal`` in dispatch).
-UNREADABLE_WITHOUT_A_CALL: tuple[type[Exception], ...] = (
-    AttributeError,
-    KeyError,
-    TypeError,
-    DatabaseError,
-    ObjectDoesNotExist,
-)
 
 MAX_SERIALIZER_APPEARANCES = 4
 """How many times one serializer class may appear on the walk's current path
@@ -153,20 +131,7 @@ def describe_serializer(declaration: Any) -> serializers.Serializer:
         )
     described = state.described.get(declaration)
     if described is None:
-        try:
-            described = _described(declaration, state.describe_binding, describe)
-        except (AttributeError, KeyError, TypeError):
-            # Read before the target lookup has found the row the serializer
-            # is built with, for the names the lookup's own arguments need, a
-            # serializer that cannot be built without its row is taken to
-            # declare no name, as a registration takes it
-            # (test_a_serializer_reading_its_row_validates_off_http). Once the
-            # row is found it is built with it, and what it raises then is
-            # raised as it is
-            # (test_a_serializer_failing_with_its_row_too_is_not_hidden).
-            if not state.row_pending:
-                raise
-            described = serializers.Serializer()
+        described = _described(declaration, state.describe_binding, describe)
         state.described[declaration] = described
     return _row_serializer(described)
 
@@ -300,34 +265,6 @@ def _same_objects(held: Mapping[str, Any], context: Mapping[str, Any]) -> bool:
     return held.keys() == context.keys() and all(held[key] is context[key] for key in context)
 
 
-def unexpected_arguments(names: Iterable[str]) -> serializers.ValidationError:
-    """DRF's refusal of ``names`` as arguments the call has nowhere to put, in this package's words."""
-    listed = ", ".join(repr(name) for name in sorted(names))
-    return serializers.ValidationError(
-        {
-            api_settings.NON_FIELD_ERRORS_KEY: [
-                serializers.ErrorDetail(f"Unexpected argument(s): {listed}.", code="invalid")
-            ]
-        }
-    )
-
-
-def writable_input_names(spec: Any) -> frozenset[str]:
-    """The names a service spec's input serializer takes from the body at the top level.
-
-    Each writable field's name, as the client sends it, read through
-    ``describe_serializer``. A ``many`` spec's fields are each row's and a spec
-    with no input serializer has none, so either answers no name; a read-only
-    field and a ``HiddenField`` take nothing from the body (``is_input``), so
-    neither is a name the body writes (the ``read-only-field`` and
-    ``hidden-field`` cases of test_a_read_no_field_takes_from_the_body_is_accepted).
-    """
-    if spec.input_serializer is None or spec.many:
-        return frozenset()
-    fields = describe_serializer(spec.input_serializer).fields
-    return frozenset(name for name, field in fields.items() if is_input(field))
-
-
 def bind_serializer(declaration: Any, **kwargs: Any) -> serializers.Serializer:
     """``declaration`` built as a serializer with ``kwargs``, or ``ImproperlyConfigured``."""
     if isinstance(declaration, type) and issubclass(declaration, serializers.Serializer):
@@ -341,169 +278,6 @@ def bind_serializer(declaration: Any, **kwargs: Any) -> serializers.Serializer:
 
 
 SERIALIZER_CONTEXT_SEED = "_serializer_context_layers"
-
-# The prefix of the name a server's value for a parameter is carried under
-# where a filter of the same name takes the client's (``server_channel``).
-SERVER_CHANNEL = "_server_owned_"
-
-
-def server_channel(name: str) -> str:
-    """The name the server's value for ``name`` travels under beside a filter's ``name``.
-
-    No read declares it, so the kernel takes no client's value for it.
-    """
-    return SERVER_CHANNEL + name
-
-
-def fills_its_own(fn: Callable[..., Any]) -> bool:
-    """Whether ``fn`` is a wrapper taking ``**kwargs`` that may fill its own parameters.
-
-    ``inspect.signature`` follows ``__wrapped__``, so a ``functools.wraps``
-    decorator reports the wrapped function's parameters, while the wrapper is
-    what runs and may fill any of them itself, as a decorator injecting a scope
-    does. Which ones cannot be read, so none of them is one the call may refuse
-    as missing (``left_to_the_callable``), as 0.57.0 asked none. Read off the
-    author's own callable, never a compiled one: the compiler's own forwarding
-    callables carry ``__wrapped__`` and a ``__signature__`` too. The two
-    conjuncts, one branch arc, each held in
-    ``tests/dispatch/test_a_wrapper_fills_its_own_parameter.py``:
-
-    - the signature that runs differs from the one read, so ``fn`` is a wrapper:
-      a plain ``**kwargs`` beside a required parameter fills nothing, and the
-      parameter is still missing (test_a_parameter_beside_var_keyword_is_still_missing).
-    - that signature takes ``**kwargs``: a wrapper naming its own parameters
-      receives only what dispatch passes, so it cannot fill one either
-      (test_a_wrapper_naming_its_own_parameters_is_still_refused).
-    """
-    read = inspect.signature(fn)
-    try:
-        runs = inspect.signature(fn, follow_wrapped=False)
-    except (TypeError, ValueError):
-        # A ``staticmethod`` or ``classmethod`` object: it has ``__wrapped__`` but
-        # no signature of its own, and calling it calls what it wraps, so the
-        # signature read is the one that runs
-        # (test_a_staticmethod_is_read_through_not_skipped).
-        runs = read
-    return runs != read and any(
-        parameter.kind is inspect.Parameter.VAR_KEYWORD for parameter in runs.parameters.values()
-    )
-
-
-class _LeftToTheCallable:
-    """The default ``left_to_the_callable`` reports: the callable fills the parameter or fails."""
-
-    def __repr__(self) -> str:
-        return "<left to the callable>"
-
-
-LEFT_TO_THE_CALLABLE = _LeftToTheCallable()
-
-
-def left_to_the_callable(fn: Callable[..., Any], names: frozenset[str] | None = None) -> Any:
-    """``fn``, reporting a default for each of ``names`` it requires (every one, for ``None``).
-
-    The kernel refuses a parameter the call left out as missing, by
-    ``fn``'s signature, where a caller could have filled it. A parameter
-    reported with a default is never refused: the call hands ``fn`` what the
-    pool holds of it, and nothing where the pool holds nothing, so the callable
-    fills it itself or fails as its own ``TypeError``, as on 0.57.0. Only the
-    signature changes: ``fn`` is called as it was, and an ``async def`` stays
-    one, since the kernel awaits it by its kind. ``fn`` itself is never
-    stamped, as it may be the author's own function.
-    """
-    signature = inspect.signature(fn)
-    # One arc to coverage, so each conjunct and the reordering are held by
-    # test_only_a_named_required_parameter_is_left_to_the_callable: a default
-    # stays the parameter's own, a positional-only parameter is never passed by
-    # name, and a name not asked for keeps its requirement.
-    relaxed = [
-        parameter.replace(default=LEFT_TO_THE_CALLABLE)
-        if parameter.default is inspect.Parameter.empty
-        and parameter.kind
-        in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
-        and (names is None or parameter.name in names)
-        else parameter
-        for parameter in signature.parameters.values()
-    ]
-    return _forwarding(fn, signature.replace(parameters=_by_name(relaxed)))
-
-
-def asked_of_the_caller(fn: Callable[..., Any], names: frozenset[str]) -> Any:
-    """``fn``, refusing a call that hands it none of ``names`` as the caller's to fill.
-
-    For a target lookup's read a spread service, or one of its preconditions,
-    names with no default: the caller sends it, so a call leaving it out is the
-    caller's ``400``, spelled and coded as the kernel refuses a missing
-    argument, rather than ``fn``'s own ``TypeError``. The kernel never asks for
-    a target read on the service's behalf, since the lookup consumed it, so the
-    refusal is made as ``fn`` is called, which is where 0.57.0 made it: after
-    the row is found, and after each precondition called before ``fn``. The
-    signature is ``fn``'s own, so the kernel binds the call as it would.
-    """
-
-    def refuse_a_missing_name(kwargs: Mapping[str, Any]) -> None:
-        missing = sorted(names - kwargs.keys())
-        if missing:
-            raise KernelInvalidArguments(
-                {
-                    name: [CodedMessage(gettext("This field is required."), "required")]
-                    for name in missing
-                }
-            )
-
-    return _forwarding(fn, inspect.signature(fn), before=refuse_a_missing_name)
-
-
-def _forwarding(
-    fn: Callable[..., Any],
-    signature: inspect.Signature,
-    *,
-    before: Callable[[Mapping[str, Any]], None] | None = None,
-) -> Any:
-    """A callable reporting ``signature`` that calls ``fn`` as it was called, once ``before`` passes.
-
-    An ``async def`` stays one, since the kernel awaits it by its kind, and
-    ``fn`` itself is never stamped, as it may be the author's own function.
-    """
-    if is_async(fn):
-
-        async def forward(*args: Any, **kwargs: Any) -> Any:
-            if before is not None:
-                before(kwargs)
-            return await fn(*args, **kwargs)
-    else:
-
-        def forward(*args: Any, **kwargs: Any) -> Any:
-            if before is not None:
-                before(kwargs)
-            return fn(*args, **kwargs)
-
-    forward.__name__ = getattr(fn, "__name__", "callable")
-    forward.__qualname__ = getattr(fn, "__qualname__", forward.__name__)
-    forward.__module__ = getattr(fn, "__module__", None) or __name__
-    # Read for an annotated ``**rest`` in ``fn``'s module, as the compiler's other
-    # forwarding callables are; ``inspect.signature`` stops at ``__signature__``.
-    forward.__annotations__ = dict(getattr(fn, "__annotations__", {}))
-    cast(Any, forward).__wrapped__ = fn
-    cast(Any, forward).__signature__ = signature
-    return forward
-
-
-def _by_name(parameters: list[inspect.Parameter]) -> list[inspect.Parameter]:
-    """``parameters`` with every one dispatch passes by name reported keyword-only.
-
-    Dispatch passes every argument by name, so the call is reported as it is
-    made, and a parameter reported with a default before one reported with
-    none is still a valid signature.
-    """
-    kinds = (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
-    return [
-        *(p for p in parameters if p.kind is inspect.Parameter.POSITIONAL_ONLY),
-        *(p for p in parameters if p.kind is inspect.Parameter.VAR_POSITIONAL),
-        *(p.replace(kind=inspect.Parameter.KEYWORD_ONLY) for p in parameters if p.kind in kinds),
-        *(p for p in parameters if p.kind is inspect.Parameter.VAR_KEYWORD),
-    ]
-
 
 """The key a DRF edge adds to a result's presentation context for the view's output layers.
 
@@ -528,12 +302,7 @@ class EdgeCallState:
     ``EDGE_CALL`` around the whole call, and the compiled pieces that need it
     read it from there:
 
-    - ``target_guard``: a selector spec's guard, run by the precondition the
-      edge prepends (``guarded_selector``).
-    - ``author_values``: a view hook's and the spec's ``kwargs`` provider's
-      values naming no argument, which the compiled spec's ``kwargs`` seat
-      (``author_values``) hands back over the Validator's values. On the
-      kernel route, the view's ``get_service_kwargs`` values alone, which the
+    - ``author_values``: the view's ``get_service_kwargs`` values, which the
       recording twin's ``kwargs`` seat lays beneath the spec's provider
       (``recording_spec``).
     - ``view_hooks``: the view's serializer context layers, whose input half
@@ -564,17 +333,6 @@ class EdgeCallState:
       annotated to fill, which no client's value becomes, declined or not:
       the Validator hands the client's value for one on in ``data`` alone
       (``provider_owned``).
-    - ``body_rows``: whether that body is a live view's list body, which the
-      Validator binds whole, every row as sent, as DRF's view bound it
-      (``SerializerValidator.validated_many``).
-    - ``beside_rows``: the keys a ``many`` call sent beside its rows under
-      ``many_argument`` that it declares no argument for, which the Validator
-      refuses once the rows are valid, whatever the ``UnknownArguments``
-      policy (``SerializerValidator.validated_many``).
-    - ``row_errors``: what the list serializer bound to that whole body
-      refused, as the installed DRF reports it, or its refusal by a length
-      bound of a list sent that the kernel refused a row of, which the edge
-      answers with in place of the kernel's rows (``edge_errors``).
     - ``describe_context``: builds the serializer context the call's input
       serializer is described with, its request, its view, the view's input
       layers and the spec's own context callable where the description can ask
@@ -598,27 +356,12 @@ class EdgeCallState:
       input serializer to (``describe_with``).
     - ``described``: the serializer each declaration is described with in
       the call, built once (``describe_serializer``).
-    - ``row_pending``: whether the row the call's input serializer is built
-      with is one the target lookup has still to find, so a description that
-      cannot be built without it declares no name until it is found
-      (``describe_serializer``).
-    - ``beside_filter``: the drfs selector spec - the call's own, or the
-      service's target lookup - whose ``filter_set`` reads names its callables
-      also take, and the value each callable is handed under each such name:
-      what the caller sent as an argument, a route capture, an author's value,
-      never ``filter_data`` and never what the filter reads
-      (``values_beside_filter``).
-    - ``filter_data``: the call's ``filter_data``, which a service spec's
-      output ``filter_set`` is bound to when it runs, after the service, unless
-      the spec sets ``output_filter_from_call=False`` (``as_kernel_spec``'s
-      ``_filtering_from_the_call``).
 
     Mutable, so the edge can set it before the sync step it hops to a thread
     for and fill it there, and the Validator can fill it during the kernel's
     call: the thread runs in a copy of the context that holds this same object.
     """
 
-    target_guard: Callable[[Any], None] | None = None
     author_values: Mapping[str, Any] = dataclasses.field(default_factory=dict)
     view_hooks: ViewHooks = dataclasses.field(default_factory=ViewHooks)
     validator_input: tuple[Any, Any] | None = None
@@ -626,9 +369,6 @@ class EdgeCallState:
     server_values_as_form: bool = True
     author_keys: Mapping[str, str] = dataclasses.field(default_factory=dict)
     provider_owned: frozenset[str] = frozenset()
-    body_rows: bool = False
-    beside_rows: tuple[str, ...] = ()
-    row_errors: Any = None
     describe_context: Callable[..., dict[str, Any] | None] | None = None
     base_context: tuple[Any, Any, dict[str, Any]] | None = None
     context_answers: dict[tuple[Any, ...], tuple[Any, Mapping[str, Any]]] = dataclasses.field(
@@ -637,9 +377,6 @@ class EdgeCallState:
     offline_pairs: dict[tuple[Any, ...], tuple[Any, ...]] = dataclasses.field(default_factory=dict)
     describe_binding: DescribeBinding | None = None
     described: dict[Any, serializers.Serializer] = dataclasses.field(default_factory=dict)
-    row_pending: bool = False
-    beside_filter: tuple[Any, dict[str, Any]] | None = None
-    filter_data: Mapping[str, Any] | None = None
 
 
 EDGE_CALL: ContextVar[EdgeCallState | None] = ContextVar("django_spec_rest_edge_call", default=None)
@@ -798,31 +535,6 @@ def provider_owned(validator: Any) -> frozenset[str]:
 def _names(state: EdgeCallState, validator: Any) -> bool:
     held = state.validator_input
     return held is not None and held[0] is validator
-
-
-def values_beside_filter(spec: Any) -> dict[str, Any] | None:
-    """What the edge call in progress hands ``spec``'s callables under its filter's names.
-
-    ``None`` outside an edge call that prepared them for ``spec`` - a
-    dispatch of the compiled spec through the kernel's own ``dispatch``, or
-    another spec's call - where a callable is handed what the kernel's pool
-    holds (test_through_the_kernel_a_selector_still_reads_the_filter_s_value,
-    whose ``held`` check it is; the spec check is held by
-    test_a_kernel_call_inside_the_selector_is_handed_its_own_pool).
-    """
-    held = edge_call_state().beside_filter
-    return held[1] if held is not None and held[0] is spec else None
-
-
-def author_values() -> dict[str, Any]:
-    """The author values a DRF edge carries for the call, as a ``kwargs`` provider answers.
-
-    The compiled form of a service spec the edge dispatches carries this as its
-    ``kwargs`` provider (``kernel_spec_variant(server_input=False)``), since the
-    edge calls the spec's own provider itself. Empty outside an edge call, and
-    for a call that carries none.
-    """
-    return dict(edge_call_state().author_values)
 
 
 def input_view_layers() -> Mapping[str, Any] | None:

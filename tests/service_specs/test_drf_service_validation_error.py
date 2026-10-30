@@ -5,13 +5,13 @@ from __future__ import annotations
 from django_service_specs.parameters.invalid_arguments import (
     InvalidArguments as KernelInvalidArguments,
 )
+from django_service_specs.services.service_validation_error import ServiceValidationError
 from django_service_specs.services.service_validation_error import (
     ServiceValidationError as KernelServiceValidationError,
 )
 from django_service_specs.types.dispatch_error import DispatchError
 from rest_framework.exceptions import ErrorDetail, ValidationError
 
-from django_spec_rest import ServiceValidationError
 from django_spec_rest.service_specs.drf_service_validation_error import (
     DRFServiceValidationError,
 )

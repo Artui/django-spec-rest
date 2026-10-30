@@ -55,4 +55,4 @@ def test_every_module_imports_before_django_setup() -> None:
 
     assert result.returncode == 0, result.stderr
     # The walk found the package's modules rather than an empty path.
-    assert int(result.stdout) > 100
+    assert int(result.stdout) > 50

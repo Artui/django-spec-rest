@@ -15,6 +15,7 @@ from django.utils.translation import gettext_lazy
 from django_service_specs.parameters.check_arguments import check_arguments
 from django_service_specs.parameters.invalid_arguments import InvalidArguments
 from django_service_specs.parameters.parameters import Parameter, Parameters
+from django_service_specs.types.unset import UNSET
 from django_service_specs.types.unset import UNSET as KERNEL_UNSET
 from rest_framework import ISO_8601, serializers
 from rest_framework_dataclasses.serializers import DataclassSerializer
@@ -24,7 +25,6 @@ from django_spec_rest.service_specs.utils import (
     input_parameters,
     serializer_context,
 )
-from django_spec_rest.types.unset import UNSET
 from tests.testapp.models import Post, Tag
 
 

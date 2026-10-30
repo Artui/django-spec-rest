@@ -51,7 +51,6 @@ from django_spec_rest import (
 )
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
-from django_spec_rest.types.service_spec import ServiceSpec as DrfsServiceSpec
 from tests.testapp.models import Author
 from tests.testapp.serializers import AuthorSerializer
 
@@ -387,29 +386,6 @@ def test_a_method_the_view_does_not_allow_is_not_described() -> None:
     assert "actions" not in response.data
 
 
-@pytest.mark.parametrize(
-    ("base", "method"), [(ServiceCreateView, "POST"), (ServiceUpdateView, "PUT")], ids=str
-)
-def test_a_drfs_spec_keeps_drfs_own_answer(base: type, method: str) -> None:
-    """Until the drfs path goes, a drfs spec is described by DRF's metadata, off
-    the view's ``serializer_class``, as before."""
-
-    view = _view(
-        base,
-        {
-            "spec": DrfsServiceSpec(service=_service, input_serializer=_NameIn),
-            "serializer_class": AuthorSerializer,
-            "get_object": lambda self: None,
-        },
-        None,
-    )
-
-    response = _options(view, {})
-
-    assert response.status_code == 200
-    assert set(response.data["actions"][method]) == {"id", "name"}
-
-
 class _Publishes(ServiceViewSet):
     """A viewset whose one POST is a kernel spec stamped by ``@service_action``."""
 
@@ -556,21 +532,6 @@ def test_a_kernel_views_own_serializer_class_draws_its_forms(
     content = response.content.decode()
     assert 'name="title"' in content
     assert 'name="slug"' not in content
-
-
-@pytest.mark.usefixtures("_browsable")
-def test_a_drfs_spec_view_without_a_serializer_class_still_raises_in_html() -> None:
-    """The input serializer answers a kernel spec's form only. A drfs spec on a
-    view with no ``serializer_class`` resolves as DRF does, until that path
-    goes, and reaches DRF's own assertion."""
-    view = _view(
-        ServiceCreateView,
-        {**_RENDERERS, "spec": DrfsServiceSpec(service=_service, input_serializer=_NameIn)},
-        None,
-    )
-
-    with pytest.raises(AssertionError, match="should either include a `serializer_class`"):
-        _options(view, {}, HTTP_ACCEPT="text/html").render()
 
 
 @pytest.mark.usefixtures("_browsable")

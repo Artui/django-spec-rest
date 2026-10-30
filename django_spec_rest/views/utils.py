@@ -9,15 +9,12 @@ from typing import Any
 from django_service_specs.pool.resolve_callable_kwargs import (
     resolve_callable_kwargs as bind_by_name_only,
 )
+from django_service_specs.types.unset import UNSET
 from rest_framework.renderers import JSONRenderer
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from django_spec_rest.audience.utils import rendered_affordances, with_affordances
 from django_spec_rest.dispatch.utils import fill_call_context
-from django_spec_rest.types.selector_spec import SelectorSpec
-from django_spec_rest.types.service_spec import ServiceSpec
-from django_spec_rest.types.unset import UNSET
 from django_spec_rest.types.view_hooks import ViewHooks
 
 
@@ -25,22 +22,20 @@ def resolve_extra_kwargs(
     view: Any,
     request: Request,
     *,
-    spec_kwargs: Callable[..., dict[str, Any]] | None,
     action_hook: str | None,
     catch_all_hook: str,
 ) -> dict[str, Any]:
     """Collect the extras that should be merged into a service/selector pool.
 
-    Three layers, merged with ``dict.update`` in increasing specificity so the
-    spec-level provider has the final say on overlapping keys. Each is invoked
+    Two layers, merged with ``dict.update`` in increasing specificity so the
+    per-action hook has the final say on overlapping keys. Each is invoked
     through the framework's provider convention (``_invoke_provider``),
     receiving only the subset of ``{view, request, call_context}`` it declares,
     or ``{view, request}`` via ``**kwargs``: the call's context is offered by
-    name only.
+    name only. The spec's own ``kwargs`` provider is the kernel's layer and runs
+    there, so resolving it here too would invoke it twice.
 
     Args:
-        spec_kwargs: The spec's own ``ServiceSpec.kwargs`` /
-            ``SelectorSpec.kwargs`` provider — the most specific layer.
         action_hook: Per-action view method, e.g. ``get_create_service_kwargs``
             / ``get_list_selector_kwargs``. ``None`` (standalone single-purpose
             views) or an absent method skips the layer.
@@ -49,10 +44,7 @@ def resolve_extra_kwargs(
     """
     extras: dict[str, Any] = {}
     # The request's one dict, for every layer. Its hand-off to the two view
-    # hooks is held by test_a_create_hands_every_provider_the_request_s_context,
-    # and to the spec layer, which only a direct caller fills (``dispatch_spec``
-    # runs the spec's own provider on a live view), by
-    # test_the_spec_kwargs_layer_is_handed_the_view_s_dict.
+    # hooks is held by test_a_create_hands_every_provider_the_request_s_context.
     context = view_call_context(view, request)
     catch_all = getattr(view, catch_all_hook, None)
     if catch_all is not None:
@@ -65,12 +57,6 @@ def resolve_extra_kwargs(
             extras.update(
                 _invoke_provider(hook, view=view, request=request, extras={}, call_context=context)
             )
-    if spec_kwargs is not None:
-        extras.update(
-            _invoke_provider(
-                spec_kwargs, view=view, request=request, extras={}, call_context=context
-            )
-        )
     return extras
 
 
@@ -78,7 +64,6 @@ def resolve_input_extras(
     view: Any,
     request: Request,
     *,
-    spec_input_data: Callable[..., Mapping[str, Any]] | None,
     action_hook: str | None,
     catch_all_hook: str,
     extras: Mapping[str, Any] | None = None,
@@ -86,8 +71,7 @@ def resolve_input_extras(
     """Collect the extras to merge into the serializer input dict.
 
     ``resolve_extra_kwargs``'s layering — ``catch_all_hook`` view method,
-    then ``action_hook``, then the spec's ``ServiceSpec.input_data``
-    provider — applied to the ``input_serializer``-bound data rather than the
+    then ``action_hook`` — applied to the ``input_serializer``-bound data rather than the
     service-call pool.
 
     Args:
@@ -97,9 +81,8 @@ def resolve_input_extras(
     """
     payload: Mapping[str, Any] = extras if extras is not None else {}
     collected: dict[str, Any] = {}
-    # As in ``resolve_extra_kwargs``: the hooks' hand-off is held by
-    # test_a_create_hands_every_provider_the_request_s_context, the spec
-    # layer's by test_the_spec_input_data_layer_is_handed_the_view_s_dict.
+    # As in ``resolve_extra_kwargs``: the hand-off is held by
+    # test_a_create_hands_every_provider_the_request_s_context.
     context = view_call_context(view, request)
     catch_all = getattr(view, catch_all_hook, None)
     if catch_all is not None:
@@ -116,12 +99,6 @@ def resolve_input_extras(
                     hook, view=view, request=request, extras=payload, call_context=context
                 )
             )
-    if spec_input_data is not None:
-        collected.update(
-            _invoke_provider(
-                spec_input_data, view=view, request=request, extras=payload, call_context=context
-            )
-        )
     return collected
 
 
@@ -138,7 +115,7 @@ def view_call_context(view: Any, request: Request) -> dict[str, Any]:
     spec, are one call and share it
     (test_an_update_and_the_retrieve_that_finds_its_row_share_the_request_s_dict).
 
-    A view hands this object to ``dispatch_spec`` as its ``call_context=`` and
+    A view hands this object to the kernel's ``dispatch`` as its ``call_context=`` and
     to ``render_spec_output``, so the spec's own callables are offered it as
     the edge offers them, and it offers it itself to each callable it invokes:
 
@@ -157,12 +134,10 @@ def view_call_context(view: Any, request: Request) -> dict[str, Any]:
     from them, carry no ``call_context``
     (test_a_catch_all_callable_on_a_live_view_is_never_handed_the_call_context).
     ``success_status`` and ``response_finalizer`` are not offered it, and one
-    declaring it is refused when the view is built: a drfs spec's fields of
-    those names by ``validate_service_spec``, and a view's attributes of those
-    names over a kernel spec by ``validate_mutation_view_spec``: a standalone
-    mutation view's over its ``spec``, and a viewset's over each kernel
-    ``action_specs`` entry, which its ``as_view()`` asks as the standalone view
-    asks of its spec
+    declaring it is refused when the view is built, by
+    ``validate_mutation_view_spec``: a standalone mutation view's over its
+    ``spec``, and a viewset's over each ``action_specs`` entry, which its
+    ``as_view()`` asks as the standalone view asks of its spec
     (test_a_status_or_finalizer_naming_the_call_context_is_refused_when_the_view_is_built).
     """
     context: dict[str, Any] | None = getattr(view, "_call_context", None)
@@ -225,42 +200,41 @@ def layer_serializer_context(
     view: Any,
     request: Request,
     *,
-    direction_hook: str | None,
+    direction_hook: str,
     action_hook: str | None,
-    spec_provider: Callable[..., Mapping[str, Any]] | None = None,
     extras: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Layer the directional, action, and spec context hooks onto ``base``.
+    """Layer the directional and action context hooks onto ``base``.
 
-    ``resolve_serializer_context``'s precedence rules with layer 1 handed in
-    rather than read from ``view.get_serializer_context()`` — for overrides of
-    that method which need to extend ``super()``'s result without recursing. See
-    there for ``action_hook`` / ``spec_provider`` / ``extras``.
+    Merged with ``dict.update`` in increasing specificity: ``base`` (DRF's
+    ``view.get_serializer_context()``, handed in so an override of that method
+    can extend ``super()``'s result without recursing) -> ``view.<direction_hook>()``
+    -> ``view.<action_hook>()``. An absent view method skips its layer, so plain
+    DRF viewsets work unchanged.
 
     Args:
-        base: The layer-1 context to build on.
-        direction_hook: Directional view hook name; ``None`` skips the layer.
-            That is what ``_ActionSpecsMixin.get_serializer_context`` needs:
-            [`MutationFlowMixin`][django_spec_rest.views.mutation.mutation_flow_mixin.MutationFlowMixin]'s default
-            ``get_output_serializer_context`` would recurse back into
-            ``get_serializer_context``.
+        direction_hook: ``get_input_serializer_context`` /
+            ``get_output_serializer_context``.
+        action_hook: Per-action override, e.g.
+            ``get_create_input_serializer_context``. ``None`` on standalone
+            single-purpose views.
+        extras: The resolved data about to be serialized (a mutation's
+            ``result``), offered to each layer by keyword only when declared.
     """
     payload: Mapping[str, Any] = extras if extras is not None else {}
     # The request's one dict, the object the edge handed its own stages. Each
     # layer's hand-off is held: the directional hook's by
-    # test_a_selector_action_hands_its_providers_the_request_s_context, the
-    # action hook's by test_a_selector_viewset_hands_its_providers_the_request_s_context,
-    # and the spec provider's by test_a_selector_view_hands_its_providers_the_request_s_context.
+    # test_a_selector_action_hands_its_providers_the_request_s_context and the
+    # action hook's by test_a_selector_viewset_hands_its_providers_the_request_s_context.
     call: dict[str, Any] = view_call_context(view, request)
     context: dict[str, Any] = dict(base)
-    if direction_hook is not None:
-        direction = getattr(view, direction_hook, None)
-        if direction is not None:
-            context.update(
-                _invoke_provider(
-                    direction, view=view, request=request, extras=payload, call_context=call
-                )
+    direction = getattr(view, direction_hook, None)
+    if direction is not None:
+        context.update(
+            _invoke_provider(
+                direction, view=view, request=request, extras=payload, call_context=call
             )
+        )
     if action_hook is not None:
         hook = getattr(view, action_hook, None)
         if hook is not None:
@@ -269,52 +243,7 @@ def layer_serializer_context(
                     hook, view=view, request=request, extras=payload, call_context=call
                 )
             )
-    if spec_provider is not None:
-        context.update(
-            _invoke_provider(
-                spec_provider, view=view, request=request, extras=payload, call_context=call
-            )
-        )
     return context
-
-
-def resolve_serializer_context(
-    view: Any,
-    request: Request,
-    *,
-    direction_hook: str,
-    action_hook: str | None,
-    spec_provider: Callable[..., Mapping[str, Any]] | None = None,
-    extras: Mapping[str, Any] | None = None,
-) -> dict[str, Any]:
-    """Build the serializer context dict for one direction (input or output).
-
-    Four layers, merged with ``dict.update`` in increasing specificity so the
-    spec-level provider has the final say on overlapping keys:
-    ``view.get_serializer_context()`` (DRF's own) → ``view.<direction_hook>()``
-    → ``view.<action_hook>()`` → ``spec_provider``. An absent view method skips
-    its layer, so plain DRF viewsets work unchanged.
-
-    Args:
-        direction_hook: ``get_input_serializer_context`` /
-            ``get_output_serializer_context``.
-        action_hook: Per-action override, e.g.
-            ``get_create_input_serializer_context``. ``None`` on standalone
-            single-purpose views.
-        spec_provider: The spec's own ``*_serializer_context`` provider.
-        extras: The resolved data about to be serialized (a mutation's
-            ``result``, the retrieved ``instance``, or the list ``page``),
-            offered to the last three layers by keyword only when declared.
-    """
-    return layer_serializer_context(
-        view.get_serializer_context(),
-        view,
-        request,
-        direction_hook=direction_hook,
-        action_hook=action_hook,
-        spec_provider=spec_provider,
-        extras=extras,
-    )
 
 
 def get_class_attr(view: Any, name: str) -> Any:
@@ -356,25 +285,6 @@ def resolve_callable_kwargs(
     return {name: pool[name] for name in declared_names if name in pool}
 
 
-def request_seeds(request: Any) -> dict[str, Any]:
-    """The pool seeds an HTTP request carries: ``request``, ``user`` and, where DRF
-    recorded one, ``view``.
-
-    What ``call_service``, ``call_selector`` and their async twins seed, so a
-    callable they invoke from inside a view sees the names the DRF edge seeds for
-    the views' own dispatch. DRF records the view on the ``Request`` it builds
-    (``parser_context["view"]``); a plain ``HttpRequest`` carries none, and then
-    ``view`` is left to the caller rather than seeded as ``None``. ``user`` is
-    ``None`` on a request that bypassed authentication middleware.
-    """
-    seeds: dict[str, Any] = {"request": request, "user": getattr(request, "user", None)}
-    parser_context = getattr(request, "parser_context", None)
-    view = parser_context.get("view") if isinstance(parser_context, dict) else None
-    if view is not None:
-        seeds["view"] = view
-    return seeds
-
-
 def resolve_progress_hook(view: Any, request: Request, *, action: str | None) -> Any:
     """First progress reporter the view offers: per-action hook, then catch-all.
 
@@ -383,7 +293,7 @@ def resolve_progress_hook(view: Any, request: Request, *, action: str | None) ->
     a view that wants that composes them itself with
     ``combine_progress``. ``None`` when the view
     offers neither, which leaves the seed as
-    [`null_progress`][django_spec_rest.dispatch.null_progress.null_progress].
+    [`null_progress`][django_service_specs.pool.null_progress.null_progress].
 
     A hook naming ``call_context`` is handed the request's dict
     (``view_call_context``), and one taking ``**kwargs`` alone is not.
@@ -414,24 +324,17 @@ def resolve_view_hooks(
     view: Any,
     request: Request,
     *,
-    chain: str = "service",
     instance: Any = None,
 ) -> ViewHooks:
     """Resolve the calling view's hook chains into a
     [`ViewHooks`][django_spec_rest.types.view_hooks.ViewHooks] carrier.
 
-    **View layers only** — every ``spec_*`` argument below is deliberately ``None``. The
-    chains run ``view.get_<x>`` → ``view.get_<action>_<x>`` → ``spec.<x>``, and
-    ``dispatch_spec`` owns that last layer; resolving the spec provider here too would
-    invoke it **twice**, which is not safe for a provider that queries the database. See
-    [`ViewHooks`][django_spec_rest.types.view_hooks.ViewHooks].
+    **View layers only.** The chains run ``view.get_<x>`` → ``view.get_<action>_<x>`` →
+    ``spec.<x>``, and the kernel owns that last layer; resolving the spec provider here
+    too would invoke it **twice**, which is not safe for a provider that queries the
+    database. See [`ViewHooks`][django_spec_rest.types.view_hooks.ViewHooks].
 
     Args:
-        chain: Which kwargs chain to collect — ``"service"`` for mutations,
-            ``"selector"`` for reads. Only the view-method names differ, which is
-            why one carrier serves both. The input-phase fields are mutation-only
-            and stay unset for a selector: a read has no payload to merge into
-            and no input serializer to give context to.
         instance: The resolved mutation target (``None`` on create and on every
             bulk path), offered to the ``input_data`` providers that declare it.
     """
@@ -439,20 +342,16 @@ def resolve_view_hooks(
     extra_kwargs = resolve_extra_kwargs(
         view,
         request,
-        spec_kwargs=None,
-        action_hook=f"get_{action}_{chain}_kwargs" if action else None,
-        catch_all_hook=f"get_{chain}_kwargs",
+        action_hook=f"get_{action}_service_kwargs" if action else None,
+        catch_all_hook="get_service_kwargs",
     )
     progress = resolve_progress_hook(view, request, action=action)
-    if chain != "service":
-        return ViewHooks(extra_kwargs=extra_kwargs, progress=progress)
     return ViewHooks(
         extra_kwargs=extra_kwargs,
         progress=progress,
         input_data=resolve_input_extras(
             view,
             request,
-            spec_input_data=None,
             action_hook=f"get_{action}_input_data" if action else None,
             catch_all_hook="get_input_data",
             extras={"instance": instance},
@@ -473,47 +372,6 @@ def resolve_view_hooks(
             extras={"result": result},
         ),
     )
-
-
-# --- affordances over HTTP --------------------------------------------------------
-#
-# The transport-neutral render path (``render_spec_output``) adds a spec's
-# affordance answers to what it renders. DRF's generic views serialize for
-# themselves, so each HTTP render site calls through here instead -- the same
-# helper, applied after the serializer, so a browser reads exactly the object an
-# agent transport renders. A spec that declares none takes DRF's own path
-# untouched, which is what keeps its responses byte-identical.
-
-
-def add_affordances(
-    spec: ServiceSpec[Any, Any, Any] | SelectorSpec[Any, Any], data: Any, value: Any, *, many: bool
-) -> Any:
-    """``data`` with the rendering spec's affordance answers, when it declares any.
-
-    ``value`` is what the serializer rendered -- the row, the page, or the
-    queryset it iterated, whose result cache the second walk reuses. Nothing is
-    added to a ``None`` value, which renders as nothing to carry answers.
-    """
-    affordances = rendered_affordances(spec)
-    if affordances is None or value is None:
-        return data
-    return with_affordances(data, value, affordances, many=many)
-
-
-def list_with_affordances(view: Any, spec: SelectorSpec[Any, Any]) -> Response:
-    """DRF's ``ListModelMixin.list``, with each rendered row carrying its answers.
-
-    The same filter, paginate and serialize steps in the same order; the answers
-    are added to the serialized rows before a paginator wraps them, so every
-    paginator's envelope holds the same objects the unpaginated response does.
-    """
-    queryset = view.filter_queryset(view.get_queryset())
-    page = view.paginate_queryset(queryset)
-    if page is not None:
-        serializer = view.get_serializer(page, many=True)
-        return view.get_paginated_response(add_affordances(spec, serializer.data, page, many=True))
-    serializer = view.get_serializer(queryset, many=True)
-    return Response(add_affordances(spec, serializer.data, queryset, many=True))
 
 
 class _JsonNullResponse(Response):

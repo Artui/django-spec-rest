@@ -37,13 +37,10 @@ from rest_framework import serializers
 from rest_framework.parsers import JSONParser
 from rest_framework.test import APIRequestFactory, force_authenticate
 
-from django_spec_rest import SelectorKind, SelectorSpec
-from django_spec_rest import ServiceSpec as DrfsServiceSpec
 from django_spec_rest.dispatch import kernel_edge
 from django_spec_rest.dispatch.kernel_edge import (
     adispatch_kernel_spec,
     dispatch_kernel_spec,
-    runs_on_kernel,
 )
 from django_spec_rest.dispatch.kernel_refusals import KernelDispatchRefused
 from django_spec_rest.service_specs import recording_spec as recording_spec_module
@@ -61,20 +58,6 @@ pytestmark = pytest.mark.django_db
 
 factory = APIRequestFactory()
 _OPEN = (Unrestricted(),)
-
-
-def test_a_kernel_service_spec_runs_on_the_kernel() -> None:
-    assert runs_on_kernel(_CREATE)
-
-
-def test_a_kernel_selector_spec_runs_on_the_kernel() -> None:
-    assert runs_on_kernel(_ONE)
-
-
-def test_a_drfs_spec_does_not_run_on_the_kernel() -> None:
-    assert not runs_on_kernel(DrfsServiceSpec(service=lambda: None))
-    assert not runs_on_kernel(SelectorSpec(kind=SelectorKind.LIST, selector=lambda: []))
-    assert not runs_on_kernel(None)
 
 
 def test_another_validator_s_body_is_stripped_of_nothing(monkeypatch: pytest.MonkeyPatch) -> None:

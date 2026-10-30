@@ -21,8 +21,8 @@ from django_spec_rest.viewsets.utils import (
 class ServiceUpdateMixin(MutationFlowMixin, _ActionSpecsMixin):
     """Provides ``update`` (``PUT``) and ``partial_update`` (``PATCH``) actions.
 
-    Looks up the instance via ``spec.instance_selector_spec`` when set,
-    falling back to DRF's ``get_object()``. ``PUT`` reads its config from
+    The row is the spec's own target selector's, never ``get_object()``'s.
+    ``PUT`` reads its config from
     ``action_specs["update"]``; ``PATCH`` reads ``action_specs["partial_update"]``
     first and falls back to ``"update"`` — defining *only*
     ``"partial_update"`` yields a PATCH-only endpoint (PUT raises
@@ -48,7 +48,6 @@ class ServiceUpdateMixin(MutationFlowMixin, _ActionSpecsMixin):
             self.action_specs,
             "partial_update" if partial else "update",
             "PATCH" if partial else "PUT",
-            view=self,
         )
         return self._run_mutation(
             request,

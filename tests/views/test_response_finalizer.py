@@ -21,11 +21,12 @@ from django_service_specs import (
     ServiceSpec,
     Unrestricted,
 )
+from django_service_specs.mutations.delete_collection import delete_collection
 from rest_framework import serializers
 from rest_framework.response import Response
 from rest_framework.test import APIRequestFactory
 
-from django_spec_rest import ServiceCreateView, ServiceDeleteView, delete_collection
+from django_spec_rest import ServiceCreateView, ServiceDeleteView
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from tests.testapp.models import Author, Post

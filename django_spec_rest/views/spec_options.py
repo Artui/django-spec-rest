@@ -88,8 +88,7 @@ class _SpecMetadata(SimpleMetadata):
             spec = self.served.get(method)
             # One arc to coverage, so each condition is named: a method the
             # view allows that no kernel spec serves by test_options_metadata's
-            # test_allow_keeps_a_views_own_handler_without_a_spec and
-            # test_a_drfs_method_beside_a_kernel_spec_is_not_described, and a
+            # test_allow_keeps_a_views_own_handler_without_a_spec, and a
             # method the view does not allow by
             # test_a_method_the_view_does_not_allow_is_not_described.
             if spec is None or method not in allowed:

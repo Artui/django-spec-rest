@@ -21,7 +21,7 @@ class OfflineServiceView:
     management command) there is no DRF view, so this frozen value stands in:
 
     - ``request`` — the synthetic DRF ``Request`` built by
-      [`build_offline_context`][django_spec_rest.dispatch.build_offline_context.build_offline_context].
+      [`build_offline_context`][django_spec_rest.service_specs.build_offline_context.build_offline_context].
     - ``action`` — an optional label identifying the operation; ``None`` when the caller
       has no meaningful action name.
     - ``kwargs`` — the URL-kwargs equivalent (e.g. parent ids), empty by default.
