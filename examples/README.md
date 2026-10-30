@@ -21,6 +21,7 @@ The tests assert, one class each:
 | Class | Behaviour |
 |---|---|
 | `SpecOnAViewSetTests` | A create validated by the serializer and presented by another; a retrieve reading `pk` from the route; a `PATCH` validating only what it sends and a `PUT` validating every required field |
+| `OffHttpTests` | The viewset's update spec run through the kernel's `dispatch` with no request |
 | `SpecOnAViewTests` | A standalone `SelectorListView` answering its selector's rows |
 | `FilterOffTheQueryStringTests` | `?status=` and `?customer=` narrowing the list through the spec's `filter_set`; a blank `?status=` read as absent; a value the filter refuses answered 400 under its name |
 | `OptionsOnADetailRouteTests` | `Allow` naming only the methods a spec serves (no `DELETE`, which answers 405); `actions["PUT"]` a JSON Schema object leaving out the route's `pk`; no query run, so no stage of the spec |

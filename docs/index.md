@@ -1,46 +1,30 @@
 # django-spec-rest
 
-A **service / selector layer** for Django REST Framework.
+Serve [django-service-specs](https://artui.github.io/django-service-specs/)
+over Django REST Framework.
 
-DRF's default mode for mutating endpoints is "the serializer is the business
-logic". That's fine for thin CRUD, but it falls apart the moment you need
-to compose with an external system, fan out side effects, or write logic
-that doesn't belong on a model. `django-spec-rest` keeps DRF's
-routing, validation, and serialization for what they're good at, and gives
-you a precise, well-typed seam for the bits in the middle.
+A kernel spec declares an operation once: the callable that runs it, the
+arguments it reads, who may call it, how its input is validated and how its
+result is presented. `django-spec-rest` serves that spec on a DRF view or
+viewset, and lets DRF fill three of its seats: a serializer validates the
+input (`SerializerValidator`), a serializer renders the result
+(`SerializerPresenter`), and DRF permission classes decide who may call it
+(`DRFPermissionCheck`). The same spec runs off HTTP through the kernel's own
+`dispatch`, and on any other transport that serves kernel specs.
 
 ## What you get
 
-- **Services** — plain callables. The library does not define a `Service`
-  base class or prescribe a signature.
-- **Selectors** — plain callables that override `get_queryset()` /
-  `get_object()`. Filter backends, pagination, and serialization stay
-  vanilla DRF.
-- **Mutation helpers** — `create_from_input`, `update_from_input`,
-  `apply_input`, plus async siblings `acreate_from_input` /
-  `aupdate_from_input`, with change tracking, no surprises.
-- **Sync and async** services and selectors, transparently dispatched.
-- **Atomic by default**, opt-out per spec.
-- **Framework-agnostic exceptions** — services don't import from DRF.
-- **Typed end-to-end** — generic `ServiceSpec[InputT, ResultT, ExtraT]` plus
-  lenient and strict Protocols that catch signature drift at type-check
-  time, with fail-fast validation at `as_view()`. See
-  [Typing](typing.md).
-
-## When to use this
-
-Reach for it when an endpoint:
-
-- coordinates more than one model write
-- talks to an external system (payments, email, queue)
-- has business rules that don't belong on a model or in a serializer
-- needs to differ in input shape vs. output shape (computed fields,
-  hidden columns, denormalised joins)
-- needs to mix sync and async paths
-
-Skip it when an endpoint is "serialize → save → respond". DRF's
-`ModelSerializer` already does that well; this library is for the cases
-where it doesn't.
+- **Views and viewsets that take a kernel spec**: `ServiceCreateView`,
+  `ServiceUpdateView`, `ServiceDeleteView`, `SelectorListView`,
+  `SelectorRetrieveView`, `ServiceViewSet`, `SelectorViewSet`, the per-action
+  mixins, and `@service_action` / `@selector_action` for custom routes.
+- **One reading of a request**: route captures, the query string and the body
+  become the spec's arguments by the kernel's rules, and a refusal comes back
+  as DRF's answer with DRF's status.
+- **DRF's seats**: serializers for input and output, permission classes for
+  authorization, with one serializer context per request.
+- **OPTIONS and OpenAPI read off the spec**: the opt-in `drf-spectacular`
+  integration describes each route's request and response.
 
 ## Install
 
@@ -50,24 +34,21 @@ pip install django-spec-rest
 uv add django-spec-rest
 ```
 
-That brings in `djangorestframework-dataclasses` automatically — it's
-the recommended way to wire dataclass-shaped inputs and outputs. Plain
-`Serializer` / `ModelSerializer` work everywhere too.
+The package is not a Django app and needs no `INSTALLED_APPS` entry. A spec's
+`filter_set` needs the kernel's `filter` extra
+(`pip install "django-service-specs[filter]"`), and the OpenAPI integration
+needs `pip install "django-spec-rest[spectacular]"`.
 
 ## Where to next
 
-- **[Quickstart](quickstart.md)** — a `POST /authors/` endpoint, end to end.
-- **[Concepts](concepts.md)** — the three building blocks (service,
-  selector, view) and how dispatch works.
-- **[Mutation helpers](mutation-helpers.md)** — `create_from_input`,
-  `update_from_input`, `apply_input`, and the `ChangeResult` they return.
-- **[Typing](typing.md)** — lenient and strict Protocols, per-spec
-  `kwargs=` providers, fail-fast `as_view()` validation.
-- **[Errors & atomic](errors-and-atomic.md)** — framework-agnostic
-  exceptions and the transaction model.
-- **[Async](async.md)** — when and how to use `async def` services.
-- **[Recipes](recipes/index.md)** — task-shaped how-tos.
-- **[Reference](reference/index.md)** — autodocumented public API.
+- **[Quickstart](quickstart.md)**: a resource served on a viewset.
+- **[Concepts](concepts.md)**: what the edge reads from a request, and how each
+  refusal is answered.
+- **[Recipes](recipes/index.md)**: custom actions, hooks, permissions,
+  filtering, serializer context, calling a spec off HTTP.
+- **[Moving from djangorestframework-services](moving-from-drfs.md)**: the
+  import map and every change a client sees.
+- **[Reference](reference/index.md)**: the API, generated from the source.
 
 ## Compatibility
 

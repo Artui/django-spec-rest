@@ -8,7 +8,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from invoices.models import Invoice
-from invoices.views import SEND_SPEC
+from invoices.views import SEND_SPEC, UPDATE_SPEC
 
 
 def _invoice(**fields: object) -> Invoice:
@@ -50,6 +50,24 @@ class SpecOnAViewSetTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(set(response.data), {"customer", "amount_cents"})
+
+
+class OffHttpTests(APITestCase):
+    """The update spec the viewset serves runs through the kernel's ``dispatch``."""
+
+    def test_the_kernel_s_dispatch_runs_the_route_s_spec(self) -> None:
+        invoice = _invoice()
+        user = User.objects.create_user("clerk")
+
+        result = dispatch(
+            UPDATE_SPEC,
+            principal=user,
+            arguments={"pk": invoice.pk, "customer": "Acme Ltd", "amount_cents": 4200},
+        )
+
+        self.assertEqual(result.value.customer, "Acme Ltd")
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.customer, "Acme Ltd")
 
 
 class SpecOnAViewTests(APITestCase):

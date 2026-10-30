@@ -1,5 +1,5 @@
 site_name: django-spec-rest
-site_description: A service / selector layer for Django REST Framework — precise, controllable side effects for mutating endpoints.
+site_description: Serve django-service-specs kernel specs over Django REST Framework.
 site_url: https://artui.github.io/django-spec-rest/
 repo_url: https://github.com/Artui/django-spec-rest
 repo_name: Artui/django-spec-rest
@@ -42,15 +42,11 @@ plugins:
   - mkdocstrings:
       handlers:
         python:
-          # The kernel's docstrings cross-reference its own pages; a re-exported
-          # name renders here, so those targets have to resolve to its site.
+          # The docstrings here cross-reference the kernel's specs, seats and
+          # refusals, so those targets resolve to the kernel's own site.
           inventories:
             - https://artui.github.io/django-service-specs/objects.inv
           options:
-            # Names drfs keeps at their old paths are the kernel's objects, so the
-            # alias target has to be loaded for a reference page to render them.
-            preload_modules:
-              - django_service_specs
             docstring_style: google
             show_root_heading: true
             show_root_full_path: false
@@ -83,28 +79,16 @@ nav:
   - Home: index.md
   - Quickstart: quickstart.md
   - Concepts: concepts.md
-  - Mutation helpers: mutation-helpers.md
-  - Default model services: default-model-services.md
-  - Errors & atomic: errors-and-atomic.md
-  - Typing: typing.md
   - OpenAPI: openapi.md
-  - Async: async.md
+  - Moving from djangorestframework-services: moving-from-drfs.md
   - Recipes:
       - recipes/index.md
-      - Custom action with @service_action: recipes/service-action.md
-      - Compose your own viewset: recipes/compose-viewset.md
-      - Pass extra kwargs to services: recipes/extra-kwargs.md
-      - Per-action permissions on the spec: recipes/permissions.md
-      - State rules with preconditions: recipes/preconditions.md
-      - What can be done right now: recipes/affordances.md
-      - Per-spec queryset shaping: recipes/queryset-shaping.md
+      - Viewsets and custom actions: recipes/service-action.md
+      - View hooks and providers: recipes/extra-kwargs.md
+      - DRF permission classes: recipes/permissions.md
       - Filter a selector with filter_set: recipes/selector-filtering.md
-      - Nested writes for every relation kind: recipes/nested-writes.md
-      - Bulk & collection mutations: recipes/bulk-mutations.md
-      - Customise serializer context: recipes/serializer-context.md
-      - Declare specs once for many transports: recipes/spec-registry.md
-      - Mark fields for an agent audience: recipes/agent-audience.md
-      - URL-derived & required inputs off-HTTP: recipes/off-http-inputs.md
+      - Serializer context: recipes/serializer-context.md
+      - Calling a spec off HTTP: recipes/off-http-inputs.md
   - Reference:
       - reference/index.md
       - Views: reference/views.md
