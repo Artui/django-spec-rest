@@ -124,6 +124,15 @@ def test_a_row_condition_on_a_create_view_is_refused_at_as_view() -> None:
         type("_View", (ServiceCreateView,), {"spec": spec}).as_view()
 
 
+def test_a_row_condition_on_a_create_view_is_refused_at_dispatch() -> None:
+    """Accepted at ``as_view()`` (the strict xfail above), the condition is
+    refused on the first request, before the service runs."""
+    spec = ServiceSpec(service=lambda: None, permissions=_OPEN, affordances=[UNPUBLISHED])
+    view = type("_View", (ServiceCreateView,), {"spec": spec}).as_view()
+    with pytest.raises(ImproperlyConfigured, match="needs a resolved model instance"):
+        view(factory.post("/", {}, format="json"))
+
+
 @pytest.mark.parametrize("published", [True, False], ids=["unavailable", "available"])
 def test_a_caller_the_view_denies_the_row_learns_nothing_about_its_state(published: bool) -> None:
     """The subject: the view's own DRF ``has_object_permission``.

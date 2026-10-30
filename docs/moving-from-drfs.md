@@ -220,10 +220,11 @@ The query string is read by the kernel's flat reader:
   and validated without the value the client sent where it is optional. Name
   the field otherwise and give it `source="user"` where the row must still
   carry that key.
-- The input serializer is built more than once per call, once to describe its
-  fields and once to validate, so the queries its `__init__` or `get_fields`
-  makes run more than once. Where their count matters, move them to the
-  service, or to a validator method, which only the validating build runs.
+- The input serializer is built several times per call, to describe its
+  fields as well as to validate, so the queries its `__init__` or
+  `get_fields` makes run several times. Where their count matters, move them
+  to the service, or to `validate()` or a `validate_<field>()`, which only the
+  validating build runs.
 - A row condition among a create spec's `affordances` is refused only when the
   view dispatches, with `ImproperlyConfigured` on the first request, not at
   `as_view()`. Declare row conditions only on a spec with an
