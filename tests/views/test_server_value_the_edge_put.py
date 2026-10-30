@@ -99,7 +99,7 @@ def test_input_data_for_a_field_named_user_outranks_the_clients_over_http(fmt: s
     assert [alice] == _VALIDATED
 
 
-def test_input_data_for_a_field_named_user_outranks_the_clients_on_either_core() -> None:
+def test_input_data_for_a_field_named_user_outranks_the_clients_through_the_edge() -> None:
     alice = User.objects.create(username="alice")
     bob = User.objects.create(username="bob")
     seen: dict[str, Any] = {}
@@ -194,7 +194,7 @@ def test_input_data_is_the_value_put_however_the_field_reads_a_json_body(
 
 
 @_READ
-def test_input_data_is_the_value_put_however_the_field_reads_a_json_body_on_either_core(
+def test_input_data_is_the_value_put_however_the_field_reads_a_json_body_through_the_edge(
     serializer: Any, server: Any, form: dict[str, Any], body: dict[str, Any]
 ) -> None:
     seen: dict[str, Any] = {}

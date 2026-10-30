@@ -170,7 +170,7 @@ def test_input_data_outranks_a_second_route_in_a_form_body(
 
 
 @_SHAPE
-def test_input_data_outranks_a_second_route_on_either_core(
+def test_input_data_outranks_a_second_route_through_the_edge(
     serializer: Any, body: dict[str, Any]
 ) -> None:
     seen: dict[str, Any] = {}

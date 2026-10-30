@@ -125,7 +125,7 @@ key no serializer field declares, so a client sending
 a whole row back (its ``id`` beside the fields it may write) is not refused.
 The kernel's own default is ``REJECT``, a ``400`` "Unknown argument.", and it
 stays the answer where a caller asks for it. Both cores pass this one value
-(test_an_undeclared_body_key_is_dropped_by_default_on_either_core)."""
+(test_an_undeclared_body_key_is_dropped_by_default)."""
 
 
 def kernel_arguments(

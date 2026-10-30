@@ -103,7 +103,7 @@ def test_a_declined_owned_source_hands_its_parameter_none_of_the_clients_value(f
     assert seen == _DECLINED
 
 
-def test_a_declined_owned_source_hands_its_parameter_none_of_the_clients_value_on_either_core() -> (
+def test_a_declined_owned_source_hands_its_parameter_none_of_the_clients_value_through_the_edge() -> (
     None
 ):
     seen: dict[str, Any] = {}

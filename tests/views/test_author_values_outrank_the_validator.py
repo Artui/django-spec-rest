@@ -116,7 +116,7 @@ def test_the_specs_provider_outranks_the_validators_over_http(
 
 @_SHAPE
 @_PROVIDER
-def test_the_specs_provider_outranks_the_validators_on_either_core(
+def test_the_specs_provider_outranks_the_validators_through_the_edge(
     serializer: Any, body: dict[str, Any], provider: Callable[..., Any]
 ) -> None:
     seen: dict[str, Any] = {}

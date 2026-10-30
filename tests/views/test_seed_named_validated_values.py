@@ -69,7 +69,7 @@ def test_a_current_user_hidden_field_named_user_validates_over_http(fmt: str) ->
     assert seen == {"data": {"title": "t", "user": alice}, "user": alice}
 
 
-def test_a_current_user_hidden_field_named_user_validates_on_either_core() -> None:
+def test_a_current_user_hidden_field_named_user_validates_through_the_edge() -> None:
     seen: dict[str, Any] = {}
     alice = User.objects.create(username="alice")
 
