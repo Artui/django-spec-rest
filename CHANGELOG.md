@@ -87,6 +87,10 @@ lists each with what a project rewrites.
   declares its reads, shapes, providers and permissions itself.
 - **`dispatch_spec` and `adispatch_spec`**, the `jsonschema/`, `audience/` and
   `registry/` modules, and every re-export of a kernel name.
+- **`JsonSchemaRegistry`'s `filters` and `python_types` rules**, which
+  nothing read: a kernel spec's `filter_set` is described by the kernel's
+  `filter_set_parameters`, and each read declares its own type. `fields` is the
+  one rule left.
 - **The `startserviceapp` management command** and its app template.
 - **The package is no longer a Django app.** It has no models, migrations,
   templates, static files or URLs, so it needs no `INSTALLED_APPS` entry.

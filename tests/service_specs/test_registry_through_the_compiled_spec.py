@@ -168,11 +168,7 @@ class _Order:
 
 def test_a_dataclass_input_takes_a_rule_on_the_field_class_it_is_read_through() -> None:
     """A dataclass is read through its ``DataclassSerializer``'s fields, so a rule
-    keyed on its Python type is not read, and one on the field class is."""
-    by_type = JsonSchemaRegistry(python_types=((Decimal, {"type": "string", "pattern": "^1"}),))
-    parameter = _amount_parameter(_service_spec(by_type, input_serializer=_Order))
-    assert (parameter.format, parameter.json_schema_extra) == ("decimal", None)
-
+    on the field class a ``Decimal`` is read through reaches it."""
     by_field = JsonSchemaRegistry(
         fields=((serializers.DecimalField, {"type": "string", "pattern": "^1"}),)
     )

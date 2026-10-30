@@ -5,8 +5,7 @@ the kernel's shape check before the serializer runs; a keyword left in
 ``json_schema_extra`` is advertised and not checked.
 
 A selector's reads take no registry: a kernel spec declares each read as a
-``Parameter`` with its own type, so the rule drfs read off a selector's Python
-annotations (``python_types``) has nothing to type.
+``Parameter`` with its own type.
 """
 
 from __future__ import annotations

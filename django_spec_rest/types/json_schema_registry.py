@@ -10,9 +10,8 @@ from typing import Any
 _Rule = tuple[type, dict[str, Any]]
 
 
-# The built-in mappings live with the walkers, not here (the filter built-ins
-# import django-filter lazily): a registry carries only consumer additions, so
-# the empty default stays dependency-free.
+# The built-in mappings live with the walkers, not here: a registry carries
+# only consumer additions, so the empty default stays dependency-free.
 @dataclass(frozen=True)
 class JsonSchemaRegistry:
     """Consumer-extensible ``type → JSON Schema fragment`` rules for the DRF seats.
@@ -46,29 +45,13 @@ class JsonSchemaRegistry:
         fields: DRF ``Field`` subclasses, matched by ``isinstance`` when a
             ``SerializerValidator`` or ``SerializerPresenter`` walks its
             serializer.
-        filters: ``django-filter`` ``Filter`` subclasses, matched by
-            ``isinstance``.
-        python_types: Bare Python types, matched by *identity*.
     """
 
     fields: tuple[_Rule, ...] = ()
-    filters: tuple[_Rule, ...] = ()
-    python_types: tuple[_Rule, ...] = ()
 
-    def extend(
-        self,
-        *,
-        fields: Sequence[_Rule] = (),
-        filters: Sequence[_Rule] = (),
-        python_types: Sequence[_Rule] = (),
-    ) -> JsonSchemaRegistry:
+    def extend(self, *, fields: Sequence[_Rule] = ()) -> JsonSchemaRegistry:
         """Return a new registry with the given rules prepended (they win first)."""
-        return replace(
-            self,
-            fields=tuple(fields) + self.fields,
-            filters=tuple(filters) + self.filters,
-            python_types=tuple(python_types) + self.python_types,
-        )
+        return replace(self, fields=tuple(fields) + self.fields)
 
 
 DEFAULT_JSON_SCHEMA_REGISTRY: JsonSchemaRegistry = JsonSchemaRegistry()

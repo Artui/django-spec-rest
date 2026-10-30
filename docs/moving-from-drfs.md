@@ -67,6 +67,11 @@ spec is the kernel's, and each drfs field maps onto one of its seats:
 | `PolymorphicServiceSpec` | one kernel spec per route or action; the polymorphic request body and its `{View}_{action}_Request` OpenAPI component are gone |
 | `TargetGuard` | the kernel's preconditions and object permission, which see the row |
 
+`JsonSchemaRegistry` keeps its `fields` rules alone. Its `filters` and
+`python_types` rules are gone: a `filter_set` is described by the kernel's
+`filter_set_parameters`, and each read is a `Parameter` declaring its own type,
+so a project passing either to `extend()` or the constructor drops it.
+
 The example project's [views](https://github.com/Artui/django-spec-rest/blob/main/examples/invoices/views/__init__.py)
 declare every seat above.
 
