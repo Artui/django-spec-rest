@@ -59,13 +59,12 @@ from typing import Any
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django_service_specs import ServiceSpec, UnknownArguments
+from django_service_specs import UnknownArguments
 from rest_framework import serializers
 
 from django_spec_rest.dispatch import kernel_edge
-from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from tests.testapp.models import Author
-from tests.views.server_value_calls import CORES, OPEN, Core, post
+from tests.views.server_value_calls import CORES, Core, open_spec, post
 from tests.views.test_kernel_views import _CreateView
 
 pytestmark = pytest.mark.django_db
@@ -130,23 +129,13 @@ def _plain(seen: dict[str, Any]) -> Callable[..., None]:
     return service
 
 
-def _spec(service: Callable[..., Any], serializer: Any, **fields: Any) -> ServiceSpec:
-    return ServiceSpec(
-        service=service,
-        permissions=OPEN,
-        validator=SerializerValidator(serializer),
-        atomic=False,
-        **fields,
-    )
-
-
 @_SHAPE
 def test_input_data_outranks_a_second_route_over_http(
     serializer: Any, body: dict[str, Any]
 ) -> None:
     seen: dict[str, Any] = {}
 
-    response = post(_spec(_plain(seen), serializer, input_data=_server), body)
+    response = post(open_spec(_plain(seen), serializer, input_data=_server), body)
 
     assert response.status_code == 204, response.data
     assert seen == _SERVER
@@ -164,7 +153,7 @@ def test_a_view_hook_s_value_outranks_a_second_route_over_http(
     seen: dict[str, Any] = {}
     hooked = type("_Hooked", (_CreateView,), {hook: lambda self, *_: _server()})
 
-    response = post(_spec(_plain(seen), serializer), body, view=hooked)
+    response = post(open_spec(_plain(seen), serializer), body, view=hooked)
 
     assert response.status_code == 204, response.data
     assert seen == _SERVER
@@ -176,7 +165,7 @@ def test_input_data_outranks_a_second_route_in_a_form_body(
 ) -> None:
     seen: dict[str, Any] = {}
 
-    response = post(_spec(_plain(seen), serializer, input_data=_server), body, fmt="multipart")
+    response = post(open_spec(_plain(seen), serializer, input_data=_server), body, fmt="multipart")
 
     assert response.status_code == 204, response.data
     assert seen == _SERVER
@@ -189,7 +178,7 @@ def test_input_data_outranks_a_second_route_on_either_core(
 ) -> None:
     seen: dict[str, Any] = {}
 
-    core(_spec(_plain(seen), serializer, input_data=_server), body)
+    core(open_spec(_plain(seen), serializer, input_data=_server), body)
 
     assert seen == _SERVER
 
@@ -205,7 +194,7 @@ def test_a_provider_naming_the_field_input_data_fills_is_refused(core: Core) -> 
     seen: dict[str, Any] = {}
 
     with pytest.raises(ImproperlyConfigured, match="ServiceSpec.input_data"):
-        core(_spec(_plain(seen), _Alias, input_data=_server, kwargs=_authored), {})
+        core(open_spec(_plain(seen), _Alias, input_data=_server, kwargs=_authored), {})
 
     assert seen == {}
 
@@ -219,7 +208,7 @@ def test_the_value_laid_back_is_the_fields_validate_method_s() -> None:
     """The field's value as ``validated_data`` would have held it: after ``validate_<field>``."""
     seen: dict[str, Any] = {}
 
-    response = post(_spec(_plain(seen), _Shouting, input_data=_server), {"alias": "evil"})
+    response = post(open_spec(_plain(seen), _Shouting, input_data=_server), {"alias": "evil"})
 
     assert response.status_code == 204, response.data
     assert seen == {"tenant": "SERVER", "data": "SERVER", "validated": "SERVER"}
@@ -238,7 +227,7 @@ def test_a_validate_rewrite_of_the_servers_own_value_is_laid_over() -> None:
     """``validate()`` cannot tell the server's value from a client's, and neither
     can the lay-back, so the service sees the value as its field validated it."""
     seen: dict[str, Any] = {}
-    spec = _spec(_plain(seen), _Lowers, input_data=lambda: {"tenant": "SERVER"})
+    spec = open_spec(_plain(seen), _Lowers, input_data=lambda: {"tenant": "SERVER"})
 
     response = post(spec, {"tenant": "client"})
 
@@ -262,7 +251,7 @@ def test_the_value_laid_back_is_the_fields_validated_value() -> None:
     def service(*, data: Any, author: Any = None) -> None:
         seen.update(author=author, data=data["author"])
 
-    spec = _spec(service, _AuthorIn, input_data=lambda: {"author": mine.pk})
+    spec = open_spec(service, _AuthorIn, input_data=lambda: {"author": mine.pk})
 
     response = post(spec, {"writer": theirs.pk})
 
@@ -293,7 +282,7 @@ def _data(seen: dict[str, Any]) -> Callable[..., None]:
 def test_a_dotted_source_is_laid_back_where_it_nests() -> None:
     seen: dict[str, Any] = {}
 
-    response = post(_spec(_data(seen), _Dotted, input_data=_server), {"alias": "evil"})
+    response = post(open_spec(_data(seen), _Dotted, input_data=_server), {"alias": "evil"})
 
     assert response.status_code == 204, response.data
     assert seen["data"] == {"scope": {"inner": {"tenant": "server"}}}
@@ -303,7 +292,7 @@ def test_a_dotted_source_a_validate_replaced_is_left_as_built() -> None:
     """Where the nesting a dotted ``source`` names is no longer a mapping, ``data`` is as built."""
     seen: dict[str, Any] = {}
 
-    response = post(_spec(_data(seen), _DottedFlattened, input_data=_server), {"alias": "evil"})
+    response = post(open_spec(_data(seen), _DottedFlattened, input_data=_server), {"alias": "evil"})
 
     assert response.status_code == 204, response.data
     assert seen["data"] == {"scope": "evil"}
@@ -328,7 +317,7 @@ def test_a_key_validate_removed_is_not_put_back(core: Core) -> None:
     def service(*, data: Any) -> None:
         seen["data"] = dict(data)
 
-    core(_spec(service, _Renames, input_data=_server), {"tenant": "c1"})
+    core(open_spec(service, _Renames, input_data=_server), {"tenant": "c1"})
 
     assert seen["data"] == {"tenant_id": "server"}
 
@@ -346,7 +335,7 @@ def test_a_dataclass_input_holds_the_servers_value_its_field_validated(core: Cor
     def service(*, data: Any, tenant: str = "default") -> None:
         seen.update(tenant=tenant, data=data.tenant)
 
-    core(_spec(service, _TenantInput, input_data=_server), {"tenant": "c1"})
+    core(open_spec(service, _TenantInput, input_data=_server), {"tenant": "c1"})
 
     assert seen == {"tenant": "server", "data": "server"}
 
@@ -365,7 +354,7 @@ def test_a_key_validate_drops_still_reaches_the_parameter() -> None:
     def service(*, data: Any, tenant: str = "default") -> None:
         seen.update(tenant=tenant, data=dict(data))
 
-    response = post(_spec(service, _Drops, input_data=_server), {"tenant": "c1"})
+    response = post(open_spec(service, _Drops, input_data=_server), {"tenant": "c1"})
 
     assert response.status_code == 204, response.data
     assert seen == {"tenant": "server", "data": {}}
@@ -387,7 +376,7 @@ def test_a_bulk_row_is_handed_on_as_its_serializer_built_it(
     def service(*, data: Any) -> None:
         seen["data"] = [item["tenant"] for item in data]
 
-    core(_spec(service, serializer, many=True, input_data=_server), [row])
+    core(open_spec(service, serializer, many=True, input_data=_server), [row])
 
     assert seen == {"data": ["evil"]}
 
@@ -443,7 +432,7 @@ def test_an_overrides_undeclared_key_is_an_unknown_argument_under_reject(
     monkeypatch.setattr(kernel_edge, "UNKNOWN_ARGUMENTS", UnknownArguments.REJECT)
     seen: dict[str, Any] = {}
 
-    response = post(_spec(_plain(seen), serializer, input_data=_server), {"other": "evil"})
+    response = post(open_spec(_plain(seen), serializer, input_data=_server), {"other": "evil"})
 
     assert response.status_code == 400
     assert response.data["other"][0].code == "unknown"
@@ -461,7 +450,7 @@ def test_an_overrides_undeclared_key_under_ignore_is_covered_by_the_server_value
     monkeypatch.setattr(kernel_edge, "UNKNOWN_ARGUMENTS", UnknownArguments.IGNORE)
     seen: dict[str, Any] = {}
 
-    core(_spec(_plain(seen), serializer, input_data=_server), {"other": "evil"})
+    core(open_spec(_plain(seen), serializer, input_data=_server), {"other": "evil"})
 
     assert seen == _SERVER
 
@@ -475,7 +464,7 @@ _TOO_LONG = {"tenant": ["Ensure this field has no more than 6 characters."]}
 
 def test_a_server_value_its_field_refuses_is_a_400_keyed_by_the_field() -> None:
     seen: dict[str, Any] = {}
-    spec = _spec(_plain(seen), _Bounded, input_data=lambda: {"tenant": "far-too-long"})
+    spec = open_spec(_plain(seen), _Bounded, input_data=lambda: {"tenant": "far-too-long"})
 
     response = post(spec, {})
 
@@ -489,7 +478,7 @@ def test_a_server_value_a_field_never_ran_on_is_still_refused_by_it() -> None:
     """``_BuildsTheKey`` never runs its field, so only validating the server's
     value on its own refuses what the field alone refuses."""
     seen: dict[str, Any] = {}
-    spec = _spec(_plain(seen), _BuildsTheKey, input_data=lambda: {"tenant": "far-too-long"})
+    spec = open_spec(_plain(seen), _BuildsTheKey, input_data=lambda: {"tenant": "far-too-long"})
 
     response = post(spec, {})
 
@@ -510,7 +499,7 @@ def test_a_django_refusal_of_the_server_value_is_answered_as_drfs_loop_answers_i
     validated on its own, meets ``validate_tenant``: its Django refusal is a
     400 keyed by the field, its code kept, as DRF's own field loop answers one."""
     seen: dict[str, Any] = {}
-    spec = _spec(_plain(seen), _BuildsAndChecks, input_data=_server)
+    spec = open_spec(_plain(seen), _BuildsAndChecks, input_data=_server)
 
     response = post(spec, {"other": "evil"})
 
@@ -549,7 +538,7 @@ def test_a_hidden_field_takes_its_default_whatever_the_server_or_the_client_puts
     )
 
     response = post(
-        _spec(_hidden(seen), _HiddenTenant, partial=partial, **fields),
+        open_spec(_hidden(seen), _HiddenTenant, partial=partial, **fields),
         {"tenant": "evil", "title": "t"},
         view=view,
     )

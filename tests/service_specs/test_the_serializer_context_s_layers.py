@@ -250,14 +250,6 @@ class TestTheViewsHooks:
         assert output["hook_out"] == "hi"
 
 
-class _PostOut(serializers.Serializer):
-    title = serializers.CharField()
-    context = serializers.SerializerMethodField()
-
-    def get_context(self, obj: Any) -> dict[str, Any]:
-        return {key: self.context[key] for key in _KEYS if key in self.context}
-
-
 class _ContextHook:
     """A selector view whose ``get_serializer_context`` is the view layer, none of the
     directional hooks: a selector view has only the one output serializer."""
@@ -285,7 +277,7 @@ class TestOnASelectorView:
                 else (lambda: Post.objects.order_by("id"))
             ),
             permissions=_OPEN,
-            presenter=SerializerPresenter(_PostOut, **options),
+            presenter=SerializerPresenter(_Out, **options),
         )
 
     def test_a_retrieve_view_layers_the_seat_s_callable_over_its_own_context(self) -> None:

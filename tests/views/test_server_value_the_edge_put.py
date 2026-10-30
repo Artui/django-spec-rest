@@ -38,26 +38,15 @@ from typing import Any
 import pytest
 from django.contrib.auth.models import User
 from django.core.exceptions import ImproperlyConfigured
-from django_service_specs import ServiceSpec, UnknownArguments
+from django_service_specs import UnknownArguments
 from rest_framework import serializers
 from rest_framework.fields import empty
 
 from django_spec_rest.dispatch import kernel_edge
-from django_spec_rest.service_specs.serializer_validator import SerializerValidator
-from tests.views.server_value_calls import CORES, FORMATS, OPEN, Core, post
+from tests.views.server_value_calls import CORES, FORMATS, Core, open_spec, post
 from tests.views.test_kernel_views import _CreateView
 
 pytestmark = pytest.mark.django_db
-
-
-def _spec(service: Callable[..., Any], serializer: Any, **fields: Any) -> ServiceSpec:
-    return ServiceSpec(
-        service=service,
-        permissions=OPEN,
-        validator=SerializerValidator(serializer),
-        atomic=False,
-        **fields,
-    )
 
 
 # A field named like a seed of the call: ``user``, the reserved one.
@@ -101,7 +90,7 @@ def test_input_data_for_a_field_named_user_outranks_the_clients_over_http(fmt: s
     alice = User.objects.create(username="alice")
     bob = User.objects.create(username="bob")
     seen: dict[str, Any] = {}
-    spec = _spec(_owned(seen), _OwnedIn, input_data=_owner)
+    spec = open_spec(_owned(seen), _OwnedIn, input_data=_owner)
 
     response = post(spec, {"title": "t", "user": bob.pk}, fmt=fmt, user=alice)
 
@@ -117,7 +106,9 @@ def test_input_data_for_a_field_named_user_outranks_the_clients_on_either_core(c
     seen: dict[str, Any] = {}
 
     core(
-        _spec(_owned(seen), _OwnedIn, input_data=_owner), {"title": "t", "user": bob.pk}, user=alice
+        open_spec(_owned(seen), _OwnedIn, input_data=_owner),
+        {"title": "t", "user": bob.pk},
+        user=alice,
     )
 
     assert seen == {"data": alice, "validated": alice, "user": alice}
@@ -138,7 +129,7 @@ def test_the_clients_value_for_a_field_named_user_stays_the_fields_with_no_input
     seen: dict[str, Any] = {}
 
     response = post(
-        _spec(_owned(seen), _OwnedIn), {"title": "t", "user": bob.pk}, fmt=fmt, user=alice
+        open_spec(_owned(seen), _OwnedIn), {"title": "t", "user": bob.pk}, fmt=fmt, user=alice
     )
 
     assert response.status_code == 204, response.data
@@ -195,7 +186,7 @@ def test_input_data_is_the_value_put_however_the_field_reads_a_json_body(
     serializer: Any, server: Any, form: dict[str, Any], body: dict[str, Any]
 ) -> None:
     seen: dict[str, Any] = {}
-    spec = _spec(_reads(seen), serializer, input_data=lambda: {"v": server})
+    spec = open_spec(_reads(seen), serializer, input_data=lambda: {"v": server})
 
     response = post(spec, body)
 
@@ -210,7 +201,7 @@ def test_input_data_is_the_value_put_however_the_field_reads_a_json_body_on_eith
 ) -> None:
     seen: dict[str, Any] = {}
 
-    core(_spec(_reads(seen), serializer, input_data=lambda: {"v": server}), body)
+    core(open_spec(_reads(seen), serializer, input_data=lambda: {"v": server}), body)
 
     assert seen == {"v": server, "data": server, "validated": server}
 
@@ -232,7 +223,7 @@ def test_input_data_is_the_value_put_over_a_prefixed_form_key_under_reject(
 ) -> None:
     monkeypatch.setattr(kernel_edge, "UNKNOWN_ARGUMENTS", UnknownArguments.REJECT)
     seen: dict[str, Any] = {}
-    spec = _spec(_reads(seen), serializer, input_data=lambda: {"v": server})
+    spec = open_spec(_reads(seen), serializer, input_data=lambda: {"v": server})
 
     response = post(spec, form, fmt="multipart")
 
@@ -248,7 +239,7 @@ def test_a_spelling_its_field_does_not_read_is_an_unknown_argument(
     monkeypatch.setattr(kernel_edge, "UNKNOWN_ARGUMENTS", UnknownArguments.REJECT)
     seen: dict[str, Any] = {}
 
-    response = post(_spec(_reads(seen), _Nested), {"v[0]": "evil"}, fmt="multipart")
+    response = post(open_spec(_reads(seen), _Nested), {"v[0]": "evil"}, fmt="multipart")
 
     assert response.status_code == 400
     assert response.data["v[0]"][0].code == "unknown"
@@ -265,7 +256,7 @@ def test_input_data_is_the_value_put_over_a_prefixed_form_key_under_ignore(
 ) -> None:
     monkeypatch.setattr(kernel_edge, "UNKNOWN_ARGUMENTS", UnknownArguments.IGNORE)
     seen: dict[str, Any] = {}
-    spec = _spec(_reads(seen), serializer, input_data=lambda: {"v": server})
+    spec = open_spec(_reads(seen), serializer, input_data=lambda: {"v": server})
 
     response = post(spec, form, fmt="multipart")
 
@@ -291,7 +282,7 @@ def test_a_key_only_a_fields_get_value_reads_is_an_unknown_argument_under_reject
     """The key is no parameter, so the kernel's closed argument set refuses it
     before the field could read it."""
     monkeypatch.setattr(kernel_edge, "UNKNOWN_ARGUMENTS", UnknownArguments.REJECT)
-    spec = _spec(_reads({}), _Raw, input_data=lambda: {"v": "server"})
+    spec = open_spec(_reads({}), _Raw, input_data=lambda: {"v": "server"})
 
     response = post(spec, {"v_raw": "evil"})
 
@@ -304,7 +295,7 @@ def test_a_field_reading_another_key_validates_the_value_put_under_ignore(
 ) -> None:
     monkeypatch.setattr(kernel_edge, "UNKNOWN_ARGUMENTS", UnknownArguments.IGNORE)
     seen: dict[str, Any] = {}
-    spec = _spec(_reads(seen), _Raw, input_data=lambda: {"v": "server"})
+    spec = open_spec(_reads(seen), _Raw, input_data=lambda: {"v": "server"})
 
     response = post(spec, {"v_raw": "evil"})
 
@@ -346,7 +337,7 @@ def test_input_data_on_a_form_body_is_taken_as_the_author_returned_it(
     serializer: Any, server: Any, refusal: dict[str, Any], code: str
 ) -> None:
     seen: dict[str, Any] = {}
-    spec = _spec(_reads(seen), serializer, input_data=lambda: {"v": server})
+    spec = open_spec(_reads(seen), serializer, input_data=lambda: {"v": server})
 
     response = post(spec, {"v": "evil"}, fmt="multipart")
 
@@ -376,7 +367,7 @@ def test_the_providers_value_by_wire_name_is_refused(fmt: str) -> None:
     would reach the service unvalidated: the request is refused, pointing at
     ``input_data``, the seat that fills a field."""
     seen: dict[str, Any] = {}
-    spec = _spec(_with_default(seen), _Sourced, kwargs=lambda: {"tenant": "srv"})
+    spec = open_spec(_with_default(seen), _Sourced, kwargs=lambda: {"tenant": "srv"})
 
     with pytest.raises(ImproperlyConfigured, match="ServiceSpec.input_data"):
         post(spec, {"tenant": "evil"}, fmt=fmt)
@@ -394,7 +385,9 @@ def test_a_get_service_kwargs_value_by_wire_name_reaches_the_parameter_of_that_n
     seen: dict[str, Any] = {}
     hooked = type("_Hooked", (_CreateView,), {"get_service_kwargs": lambda self: {"tenant": "srv"}})
 
-    response = post(_spec(_with_default(seen), _Sourced), {"tenant": "evil"}, fmt=fmt, view=hooked)
+    response = post(
+        open_spec(_with_default(seen), _Sourced), {"tenant": "evil"}, fmt=fmt, view=hooked
+    )
 
     assert response.status_code == 204, response.data
     assert seen == {"tenant": "srv", "data": "srv"}
@@ -405,7 +398,7 @@ def test_input_data_by_wire_name_leaves_the_parameter_of_that_name_its_default(f
     """``input_data`` is the body's, never an author's naming of a parameter:
     the field validates it under its ``source``."""
     seen: dict[str, Any] = {}
-    spec = _spec(_with_default(seen), _Sourced, input_data=lambda: {"tenant": "srv"})
+    spec = open_spec(_with_default(seen), _Sourced, input_data=lambda: {"tenant": "srv"})
 
     response = post(spec, {"tenant": "evil"}, fmt=fmt)
 
@@ -439,7 +432,7 @@ def test_input_data_for_a_read_only_field_with_a_default_holds_no_server_value()
 
     hooked = type("_Hooked", (_CreateView,), {"get_input_data": lambda self, *_: {"ro": "srv"}})
 
-    response = post(_spec(service, _ReadOnlyWithADefault), {"title": "t"}, view=hooked)
+    response = post(open_spec(service, _ReadOnlyWithADefault), {"title": "t"}, view=hooked)
 
     assert response.status_code == 204, response.data
     assert seen == {"data": {"title": "t"}, "ro": "parameter-default"}
@@ -460,7 +453,7 @@ def test_a_dotted_fields_server_value_reaches_the_parameter_named_like_the_field
 
     hooked = type("_Hooked", (_CreateView,), {"get_input_data": lambda self, *_: {"tenant": "srv"}})
 
-    response = post(_spec(service, _DottedTenant), {"tenant": "evil"}, view=hooked)
+    response = post(open_spec(service, _DottedTenant), {"tenant": "evil"}, view=hooked)
 
     assert response.status_code == 204, response.data
     assert seen == {"data": {"org": {"name": "srv"}}, "tenant": "srv", "org": {"name": "srv"}}

@@ -33,7 +33,7 @@ from rest_framework import serializers
 from typing_extensions import TypedDict
 
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
-from tests.views.server_value_calls import CORES, OPEN, Core, post
+from tests.views.server_value_calls import CORES, OPEN, Core, open_spec, post
 from tests.views.test_kernel_views import _CreateView
 
 pytestmark = pytest.mark.django_db
@@ -98,13 +98,7 @@ def _recording(seen: dict[str, Any]) -> Callable[..., None]:
 
 
 def _spec(seen: dict[str, Any], serializer: Any, **fields: Any) -> ServiceSpec:
-    return ServiceSpec(
-        service=_recording(seen),
-        permissions=OPEN,
-        validator=SerializerValidator(serializer),
-        atomic=False,
-        **fields,
-    )
+    return open_spec(_recording(seen), serializer, **fields)
 
 
 @_SHAPE
