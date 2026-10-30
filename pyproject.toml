@@ -70,7 +70,10 @@ dependencies = [
     # call seeds ``request`` and ``view`` by name (``CALL_SEEDS``), the
     # registration check ``check_seeds``, and ``flat_arguments``, the reader a
     # query string or form body goes through before ``dispatch``.
-    "django-service-specs>=0.20.0",
+    # 0.21.1 carries ``Validator.unsendable`` as the ABC's default, which the
+    # serializer validator answers, and the refusal by ``check_seeds`` of an array
+    # read that declares no ``items``.
+    "django-service-specs>=0.21.1",
 ]
 
 [project.optional-dependencies]
