@@ -1,140 +1,104 @@
-"""The stable dispatch surface: blessed top-level re-exports.
+"""The root surface: what ``django_spec_rest`` exports, and that nothing is shadowed.
 
-Stable since 0.17: the dispatch leaves alternate transports build on are part
-of the documented public API. This test pins the contract: every blessed
-symbol is importable from the top-level package and is *the same object*
-as its leaf-module home (no divergent copies). The private ``_compat``
-package was removed in the same release — downstreams re-point their
-imports here when they bump past 0.17.
+The package exports what it owns and nothing of the kernel's: a spec, a dispatch
+function or a refusal is imported from ``django_service_specs``. This pins the
+contract in both directions. Every exported name is *the same object* as its
+home module's, so no copy diverges, and the export list is exactly this set, so a
+kernel name creeping back into the root fails here rather than in a downstream
+import.
 """
 
 from __future__ import annotations
 
-from django_service_specs.affordances.operation_affordances import operation_affordances
-from django_service_specs.pool.provider_keys import provider_keys
-from django_service_specs.pool.reserved_pool_seeds import RESERVED_POOL_SEEDS
-from django_service_specs.registry.registered_spec import RegisteredSpec
-from django_service_specs.registry.spec_registry import SpecRegistry
-from django_service_specs.selectors.amaterialize_retrieve import amaterialize_retrieve
-from django_service_specs.selectors.arun_selector import arun_selector
-from django_service_specs.selectors.is_queryset import is_queryset
-from django_service_specs.selectors.materialize_retrieve import materialize_retrieve
-from django_service_specs.selectors.run_selector import run_selector
-from django_service_specs.services.arun_service import arun_service
-from django_service_specs.services.run_service import run_service
-from django_service_specs.types.is_async import is_async
-from django_service_specs.types.provider_keys import ProviderKeys
+import importlib
+from types import ModuleType
+
+import pytest
 
 import django_spec_rest as pkg
-from django_spec_rest.can_present_nothing import can_present_nothing
-from django_spec_rest.dispatch.adispatch_spec import adispatch_spec
-from django_spec_rest.dispatch.aenforce_affordances import aenforce_affordances
-from django_spec_rest.dispatch.aunmet_operation_affordance import (
-    aunmet_operation_affordance,
-)
-from django_spec_rest.dispatch.dispatch_spec import dispatch_spec
-from django_spec_rest.dispatch.enforce_affordances import enforce_affordances
-from django_spec_rest.dispatch.enforce_permissions import enforce_permissions
-from django_spec_rest.dispatch.render_spec_output import render_spec_output
-from django_spec_rest.dispatch.unmet_operation_affordance import (
-    unmet_operation_affordance,
-)
-from django_spec_rest.dispatch.utils import server_owned_keys
-from django_spec_rest.jsonschema.filterset_to_json_schema import filterset_to_json_schema
-from django_spec_rest.jsonschema.output_to_json_schema import output_to_json_schema
-from django_spec_rest.jsonschema.serializer_to_json_schema import serializer_to_json_schema
-from django_spec_rest.jsonschema.spec_to_json_schema import spec_to_json_schema
-from django_spec_rest.registry.capability_manifest import capability_manifest
-from django_spec_rest.selectors.utils import apply_queryset_shaping
+from django_spec_rest.service_specs.base_serializer_context import base_serializer_context
 from django_spec_rest.service_specs.build_offline_context import build_offline_context
 from django_spec_rest.service_specs.renderable_serializer_class import renderable_serializer_class
-from django_spec_rest.views.mutation.utils import (
-    build_input_serializer,
-    build_input_serializer_from_data,
-    resolve_mutation_instance,
-    validate_input,
+from django_spec_rest.types.field_marking import MARKING
+from django_spec_rest.types.http_extras import HttpExtras
+from django_spec_rest.types.json_schema_registry import (
+    DEFAULT_JSON_SCHEMA_REGISTRY,
+    JsonSchemaRegistry,
 )
-from django_spec_rest.views.utils import resolve_callable_kwargs
+from django_spec_rest.types.offline_context import OfflineContext
+from django_spec_rest.types.offline_http_request import OfflineHttpRequest
+from django_spec_rest.types.offline_service_view import OfflineServiceView
+from django_spec_rest.types.service_view import ServiceView
+from django_spec_rest.types.view_hooks import ViewHooks
+from django_spec_rest.views.mutation.mutation_flow_mixin import MutationFlowMixin
+from django_spec_rest.views.mutation.service_create_view import ServiceCreateView
+from django_spec_rest.views.mutation.service_delete_view import ServiceDeleteView
+from django_spec_rest.views.mutation.service_update_view import ServiceUpdateView
+from django_spec_rest.views.mutation.utils import resolve_mutation_instance
+from django_spec_rest.views.query.selector_list_view import SelectorListView
+from django_spec_rest.views.query.selector_retrieve_view import SelectorRetrieveView
+from django_spec_rest.viewsets.action_serializer_resolver import ActionSerializerResolver
+from django_spec_rest.viewsets.decorators.selector_action import selector_action
+from django_spec_rest.viewsets.decorators.service_action import service_action
+from django_spec_rest.viewsets.selector_list_mixin import SelectorListMixin
+from django_spec_rest.viewsets.selector_retrieve_mixin import SelectorRetrieveMixin
+from django_spec_rest.viewsets.selector_viewset import SelectorViewSet
+from django_spec_rest.viewsets.service_create_mixin import ServiceCreateMixin
+from django_spec_rest.viewsets.service_destroy_mixin import ServiceDestroyMixin
+from django_spec_rest.viewsets.service_update_mixin import ServiceUpdateMixin
+from django_spec_rest.viewsets.service_viewset import ServiceViewSet
 
-# Blessed name → the leaf-module original it must alias.
+# Exported name -> the leaf-module original it must alias.
 _SURFACE = {
-    # What ``provider_keys`` answers, so a transport can annotate the value it
-    # holds without importing from a leaf module.
-    "ProviderKeys": ProviderKeys,
-    # Adapters are told to import this rather than keep a copy of the seed
-    # names, so it has to be reachable from the same place as the rest of
-    # the dispatch surface.
-    "RESERVED_POOL_SEEDS": RESERVED_POOL_SEEDS,
-    "RegisteredSpec": RegisteredSpec,
-    "SpecRegistry": SpecRegistry,
-    "adispatch_spec": adispatch_spec,
-    # A transport that runs a service without the dispatch core -- a chain step --
-    # re-runs the affordance check through these, as it re-runs permissions.
-    "aenforce_affordances": aenforce_affordances,
-    # A transport that runs a ``RETRIEVE`` selector without the dispatch core
-    # collapses its return through these, or its object-level permissions judge a
-    # queryset and skip ``has_object_permission``.
-    "amaterialize_retrieve": amaterialize_retrieve,
-    "apply_queryset_shaping": apply_queryset_shaping,
-    "arun_selector": arun_selector,
-    "arun_service": arun_service,
-    # A transport deciding which operations to offer -- a tool list, an agent's
-    # toolset -- asks these, rather than re-deriving which names a condition sees.
-    "aunmet_operation_affordance": aunmet_operation_affordance,
-    "build_input_serializer": build_input_serializer,
-    "build_input_serializer_from_data": build_input_serializer_from_data,
+    "ActionSerializerResolver": ActionSerializerResolver,
+    "DEFAULT_JSON_SCHEMA_REGISTRY": DEFAULT_JSON_SCHEMA_REGISTRY,
+    "HttpExtras": HttpExtras,
+    "JsonSchemaRegistry": JsonSchemaRegistry,
+    "MARKING": MARKING,
+    "MutationFlowMixin": MutationFlowMixin,
+    "OfflineContext": OfflineContext,
+    "OfflineHttpRequest": OfflineHttpRequest,
+    "OfflineServiceView": OfflineServiceView,
+    "SelectorListMixin": SelectorListMixin,
+    "SelectorListView": SelectorListView,
+    "SelectorRetrieveMixin": SelectorRetrieveMixin,
+    "SelectorRetrieveView": SelectorRetrieveView,
+    "SelectorViewSet": SelectorViewSet,
+    "ServiceCreateMixin": ServiceCreateMixin,
+    "ServiceCreateView": ServiceCreateView,
+    "ServiceDeleteView": ServiceDeleteView,
+    "ServiceDestroyMixin": ServiceDestroyMixin,
+    "ServiceUpdateMixin": ServiceUpdateMixin,
+    "ServiceUpdateView": ServiceUpdateView,
+    "ServiceView": ServiceView,
+    "ServiceViewSet": ServiceViewSet,
+    "ViewHooks": ViewHooks,
+    "base_serializer_context": base_serializer_context,
     "build_offline_context": build_offline_context,
-    # A transport advertising an output schema of its own asks this whether
-    # dispatch may present ``None``, rather than deriving the ``null`` again.
-    "can_present_nothing": can_present_nothing,
-    "capability_manifest": capability_manifest,
-    "dispatch_spec": dispatch_spec,
-    "enforce_affordances": enforce_affordances,
-    "enforce_permissions": enforce_permissions,
-    "filterset_to_json_schema": filterset_to_json_schema,
-    "is_async": is_async,
-    "is_queryset": is_queryset,
-    "materialize_retrieve": materialize_retrieve,
-    # A transport skips building a pool or taking a thread hop for an operation
-    # with nothing to ask at list time by reading this, rather than re-deriving
-    # which conditions are answered without a row.
-    "operation_affordances": operation_affordances,
-    "output_to_json_schema": output_to_json_schema,
-    # A transport building a schema or refusing a call reads which names a
-    # ``kwargs=`` provider fills through this, rather than keeping a copy of the
-    # reader, as both spec transports once did.
-    "provider_keys": provider_keys,
-    "render_spec_output": render_spec_output,
-    # A transport that renders an output declaration outside ``render_spec_output``
-    # resolves the class through this, or a dataclass output raises there.
+    # A transport that renders an output declaration itself resolves the class
+    # through this, or a dataclass output raises there.
     "renderable_serializer_class": renderable_serializer_class,
-    "resolve_callable_kwargs": resolve_callable_kwargs,
     "resolve_mutation_instance": resolve_mutation_instance,
-    "run_selector": run_selector,
-    "run_service": run_service,
-    "serializer_to_json_schema": serializer_to_json_schema,
-    # A transport building an input schema of its own -- a service tool merging its
-    # target lookup's keys -- subtracts this, the set dispatch strips, rather than
-    # reading each callable's markers again and missing the ones another hides.
-    "server_owned_keys": server_owned_keys,
-    "spec_to_json_schema": spec_to_json_schema,
-    "unmet_operation_affordance": unmet_operation_affordance,
-    "validate_input": validate_input,
+    "selector_action": selector_action,
+    "service_action": service_action,
 }
 
 
-def test_every_blessed_symbol_is_a_top_level_export() -> None:
+def test_every_exported_symbol_is_its_leaf_modules_original() -> None:
     for name, original in _SURFACE.items():
-        assert name in pkg.__all__, f"{name} missing from __all__"
         assert getattr(pkg, name) is original, f"{name} diverged from its leaf module"
 
 
-def test_the_compat_package_is_gone() -> None:
-    # Removed in 0.17 — anything still importing it should fail loudly here
-    # rather than in a downstream release.
-    import importlib.util
+def test_the_root_exports_exactly_the_names_it_owns() -> None:
+    assert sorted(pkg.__all__) == sorted(_SURFACE)
 
-    assert importlib.util.find_spec("django_spec_rest._compat") is None
+
+@pytest.mark.parametrize(
+    "kernel_name",
+    ["ServiceSpec", "SelectorSpec", "dispatch", "NotPermitted", "UNSET"],
+)
+def test_a_name_the_kernel_owns_is_not_exported(kernel_name: str) -> None:
+    assert kernel_name not in pkg.__all__
 
 
 def test_no_export_is_shadowed_by_its_own_submodule() -> None:
@@ -149,21 +113,16 @@ def test_no_export_is_shadowed_by_its_own_submodule() -> None:
     module where a callable was expected, at import time, far from the edit
     that caused it.
 
-    ``dispatch/__init__.py`` carries a hand-written comment pinning one such
-    ordering. ⇒ *an invariant maintained by a comment is maintained until
-    someone sorts the imports.* This asserts it for every export in every
-    package instead, so a future reordering fails here rather than downstream.
+    ⇒ *an invariant maintained by a comment is maintained until someone sorts
+    the imports.* This asserts it for every export in every package instead, so
+    a future reordering fails here rather than downstream.
     """
-    import importlib
-    from types import ModuleType
-
     packages = [
         "django_spec_rest",
-        "django_spec_rest.dispatch",
-        "django_spec_rest.mutations",
-        "django_spec_rest.selectors",
-        "django_spec_rest.services",
+        "django_spec_rest.openapi",
         "django_spec_rest.types",
+        "django_spec_rest.views",
+        "django_spec_rest.viewsets",
     ]
     shadowed: list[str] = []
     for name in packages:
