@@ -66,6 +66,55 @@ as `data`.
 `PATCH` validates only the fields sent. A spec declaring `partial=True`
 validates `PUT` partially too.
 
+### Bulk writes
+
+A spec declaring `many=True` takes a JSON list of rows, each validated by its
+`SerializerValidator`, and the service is handed the validated rows as `data`,
+a list. A row that fails is refused at the index it was sent at, under the
+spec's `many_argument` (`items` by default), every failing row in one 400, and
+the service never runs:
+
+```python
+from django_service_specs import ServiceSpec, Unrestricted
+from rest_framework import serializers
+
+from django_spec_rest import ServiceCreateView
+from django_spec_rest.service_specs.serializer_validator import SerializerValidator
+
+
+def create_lines(*, data):
+    return [Line.objects.create(**row) for row in data]
+
+
+class LineIn(serializers.Serializer):
+    sku = serializers.CharField()
+    quantity = serializers.IntegerField()
+
+
+class LinesCreateView(ServiceCreateView):
+    spec = ServiceSpec(
+        service=create_lines,
+        permissions=(Unrestricted(),),
+        validator=SerializerValidator(LineIn),
+        many=True,
+    )
+```
+
+```http
+POST /lines/
+[{"sku": "a", "quantity": 1}, {"sku": "", "quantity": 1},
+ {"sku": "a", "quantity": 1}, {"sku": "", "quantity": 1}]
+
+400 Bad Request
+{"items": {"1": {"sku": ["This field may not be blank."]},
+           "3": {"sku": ["This field may not be blank."]}}}
+```
+
+A body that is no list is refused as a whole, `{"items": ["Expected an
+array."]}`, and so is a list longer than the spec's `many_max_length`, else the
+kernel's `SERVICE_SPECS_MAX_ARRAY_LENGTH` (1000 by default), with a 400 under
+`items`. A view taking longer lists declares `many_max_length` on its spec.
+
 ## Hooks and providers
 
 Three layers feed a write beyond the client's body, the more specific winning
