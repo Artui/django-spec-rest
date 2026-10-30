@@ -20,7 +20,7 @@ from django_service_specs.parameters.invalid_arguments import (
 from django_service_specs.relations.child_spec import ChildSpec
 from rest_framework.exceptions import ErrorDetail, ValidationError
 
-from django_spec_rest.service_specs.invalid_arguments import InvalidArguments
+from django_spec_rest.service_specs.drf_invalid_arguments import DRFInvalidArguments
 from django_spec_rest.service_specs.register_drf_row_errors import (
     register_drf_row_errors,
 )
@@ -64,7 +64,7 @@ class TestARowsDrfRefusal:
         assert excinfo.value.get_codes() == {"sections": {1: {"non_field_errors": ["invalid"]}}}
 
     def test_the_dual_class_leaves_a_row_as_the_kernels_class(self) -> None:
-        # Recorded, not chosen: the kernel reads its own ``InvalidArguments``
+        # Recorded, not chosen: the kernel reads its own ``DRFInvalidArguments``
         # before any registered class, so the dual class leaves a nested write
         # as the kernel's bare one, which DRF does not answer. A drfs path
         # calling a kernel write has to go through ``translate_dispatch_errors``.
@@ -73,7 +73,7 @@ class TestARowsDrfRefusal:
             create_from_input(
                 Catalog,
                 _ROWS,
-                relations=_sections_refusing(InvalidArguments({"title": ["No."]})),
+                relations=_sections_refusing(DRFInvalidArguments({"title": ["No."]})),
             )
         assert type(excinfo.value) is KernelInvalidArguments
         assert excinfo.value.detail == {"sections": {1: {"title": ["No."]}}}

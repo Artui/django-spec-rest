@@ -15,9 +15,9 @@ from django_service_specs.parameters.invalid_arguments import (
 from django_service_specs.types.dispatch_error import DispatchError
 from rest_framework.exceptions import APIException
 
-from django_spec_rest.service_specs.invalid_arguments import InvalidArguments
-from django_spec_rest.service_specs.not_permitted import NotPermitted
-from django_spec_rest.service_specs.principal_unavailable import PrincipalUnavailable
+from django_spec_rest.service_specs.drf_invalid_arguments import DRFInvalidArguments
+from django_spec_rest.service_specs.drf_not_permitted import DRFNotPermitted
+from django_spec_rest.service_specs.drf_principal_unavailable import DRFPrincipalUnavailable
 
 
 @contextmanager
@@ -31,12 +31,12 @@ def translate_dispatch_errors() -> Generator[None]:
     inside this block:
 
     - the kernel's ``InvalidArguments`` leaves as
-      [`InvalidArguments`][django_spec_rest.service_specs.invalid_arguments.InvalidArguments],
+      [`DRFInvalidArguments`][django_spec_rest.service_specs.drf_invalid_arguments.InvalidArguments],
       with the same tree and every message's code;
-    - its ``NotPermitted`` as
-      [`NotPermitted`][django_spec_rest.service_specs.not_permitted.NotPermitted],
-      and its ``PrincipalUnavailable`` as
-      [`PrincipalUnavailable`][django_spec_rest.service_specs.principal_unavailable.PrincipalUnavailable],
+    - its ``DRFNotPermitted`` as
+      [`DRFNotPermitted`][django_spec_rest.service_specs.drf_not_permitted.NotPermitted],
+      and its ``DRFPrincipalUnavailable`` as
+      [`DRFPrincipalUnavailable`][django_spec_rest.service_specs.drf_principal_unavailable.PrincipalUnavailable],
       each with the same message;
     - a subclass of any of the three leaves as that class's twin, with the
       subclass's message.
@@ -77,15 +77,15 @@ def _drf_twin(exc: DispatchError) -> DispatchError | None:
 
     One ``isinstance`` per branch, so each has the test that takes it. A dual
     class is a subclass of the kernel's it twins, so the check for a DRF
-    exception comes first or a dual ``InvalidArguments`` would be rebuilt as
+    exception comes first or a dual ``DRFInvalidArguments`` would be rebuilt as
     itself.
     """
     if isinstance(exc, APIException):
         return None
     if isinstance(exc, KernelInvalidArguments):
-        return InvalidArguments.from_kernel(exc)
+        return DRFInvalidArguments.from_kernel(exc)
     if isinstance(exc, KernelNotPermitted):
-        return NotPermitted.from_kernel(exc)
+        return DRFNotPermitted.from_kernel(exc)
     if isinstance(exc, KernelPrincipalUnavailable):
-        return PrincipalUnavailable.from_kernel(exc)
+        return DRFPrincipalUnavailable.from_kernel(exc)
     return None

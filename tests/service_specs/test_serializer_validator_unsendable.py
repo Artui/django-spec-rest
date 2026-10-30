@@ -210,22 +210,11 @@ class _Bare(Validator):
         return dict(arguments)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AttributeError,
-    reason=(
-        "kernel item 13: Validator.unsendable is not on the kernel's Validator ABC yet, "
-        "so a Validator that does not define it has no empty default to answer"
-    ),
-)
 def test_a_validator_that_does_not_define_it_answers_the_empty_default() -> None:
-    """Once the kernel's ABC declares the default, a reader stops needing ``getattr``.
+    """The kernel's ``Validator`` declares the empty default, so a reader needs no ``getattr``.
 
-    Asked of a subclass defining only the abstract methods, so a kernel
-    release that adds the property to its own validators alone still fails
-    here. Strict, so the release that declares it on the ABC turns this green
-    and fails the suite until the xfail is lifted and the ``getattr`` readers
-    move.
+    Asked of a subclass defining only the abstract methods, so the default is
+    the ABC's own and not one the kernel's validators each define.
     """
     validator: Any = _Bare()
 

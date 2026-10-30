@@ -60,7 +60,7 @@ from django_spec_rest.service_specs.as_kernel_spec import (
     as_kernel_spec,
     required_for_having_no_default,
 )
-from django_spec_rest.service_specs.invalid_arguments import InvalidArguments
+from django_spec_rest.service_specs.drf_invalid_arguments import DRFInvalidArguments
 from django_spec_rest.service_specs.kernel_spec_variant import kernel_spec_variant
 from django_spec_rest.types.input_required import InputRequired
 from django_spec_rest.types.query_param import QueryParam
@@ -528,7 +528,7 @@ class TestTheEdgeRefusesAMissingReadAsBefore:
         ],
     )
     def test_the_key_is_asked_for_in_the_drfs_words(self, edge: Any, spec: Any, name: str) -> None:
-        with pytest.raises(InvalidArguments) as refused:
+        with pytest.raises(DRFInvalidArguments) as refused:
             edge(spec, params={})
 
         assert set(refused.value.detail) == {name}

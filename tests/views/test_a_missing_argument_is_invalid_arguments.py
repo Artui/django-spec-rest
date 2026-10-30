@@ -1,4 +1,4 @@
-"""A missing required argument is refused as ``InvalidArguments``, never as a service's refusal.
+"""A missing required argument is refused as ``DRFInvalidArguments``, never as a service's refusal.
 
 The kernel refuses it, and the kernel route's refusal map leaves it as drfs'
 dual class: DRF's ``ValidationError`` and the kernel's ``InvalidArguments`` at
@@ -30,7 +30,7 @@ from django_service_specs import (
 from rest_framework.exceptions import ValidationError
 from rest_framework.test import APIRequestFactory
 
-from django_spec_rest.service_specs.invalid_arguments import InvalidArguments
+from django_spec_rest.service_specs.drf_invalid_arguments import DRFInvalidArguments
 from tests.views.test_kernel_edge import CORES, _parts
 from tests.views.test_kernel_views import _CreateView
 
@@ -80,7 +80,7 @@ def test_a_missing_argument_is_caught_as_drf_and_the_kernel_catch_it(
         with pytest.raises(caught) as raised:
             core(spec, **_parts({}))
 
-        assert type(raised.value) is InvalidArguments
+        assert type(raised.value) is DRFInvalidArguments
         assert not isinstance(raised.value, ServiceValidationError | ServiceError)
         assert [str(error) for error in raised.value.detail["tenant"]] == [
             "This field is required."

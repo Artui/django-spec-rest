@@ -25,8 +25,8 @@ from rest_framework.request import Request
 from rest_framework.views import APIView
 
 from django_spec_rest.service_specs.build_offline_context import build_offline_context
+from django_spec_rest.service_specs.drf_not_permitted import DRFNotPermitted
 from django_spec_rest.service_specs.drf_permission_check import DRFPermissionCheck
-from django_spec_rest.service_specs.not_permitted import NotPermitted
 from django_spec_rest.types.query_param import QueryParam
 from django_spec_rest.types.selector_kind import SelectorKind
 from django_spec_rest.types.selector_spec import SelectorSpec
@@ -100,7 +100,7 @@ class TestTheRouteIsFilledBeforeTheClassLevelCheck:
         )
 
         authorize(spec, AnonymousUser(), arguments={"pk": 7})
-        with pytest.raises(NotPermitted):
+        with pytest.raises(DRFNotPermitted):
             authorize(spec, AnonymousUser(), arguments={"pk": 8})
 
     def test_a_retrieve_s_own_reads_are_its_route(self) -> None:
@@ -194,7 +194,7 @@ class TestARefusal:
             kind=SelectorKind.RETRIEVE, selector=_lookup, permission_classes=[_OnlySeven]
         )
 
-        with pytest.raises(NotPermitted) as refused:
+        with pytest.raises(DRFNotPermitted) as refused:
             authorize(spec, AnonymousUser(), arguments={"pk": 1})
 
         assert isinstance(refused.value, KernelNotPermitted)
@@ -209,7 +209,7 @@ class TestARefusal:
             permission_classes=[_OnlySeven, _Records],
         )
 
-        with pytest.raises(NotPermitted):
+        with pytest.raises(DRFNotPermitted):
             authorize(spec, AnonymousUser(), arguments={"pk": 1})
 
         assert _SEEN == []
@@ -223,7 +223,7 @@ class TestTheObjectCheck:
             kind=SelectorKind.RETRIEVE, selector=_lookup, permission_classes=[_NoObjects]
         )
 
-        with pytest.raises(NotPermitted):
+        with pytest.raises(DRFNotPermitted):
             dispatch(spec, principal=AnonymousUser(), arguments={"pk": post.pk})
 
     def test_a_model_row_every_class_admits_is_returned(self) -> None:

@@ -11,7 +11,7 @@ from django_service_specs.parameters.invalid_arguments import (
 from rest_framework.exceptions import ValidationError
 
 
-class InvalidArguments(KernelInvalidArguments, ValidationError):
+class DRFInvalidArguments(KernelInvalidArguments, ValidationError):
     """The arguments were refused, as both the kernel's ``InvalidArguments`` and DRF's ``ValidationError``.
 
     Every published consumer of this package catches DRF's ``ValidationError``
@@ -46,7 +46,7 @@ class InvalidArguments(KernelInvalidArguments, ValidationError):
         ValidationError.__init__(self, self.detail, code)
 
     @classmethod
-    def from_kernel(cls, exc: KernelInvalidArguments) -> InvalidArguments:
+    def from_kernel(cls, exc: KernelInvalidArguments) -> DRFInvalidArguments:
         """The kernel's ``exc`` as this class: the same tree, every message's code and ``message``.
 
         The kernel's class takes no message, so one a subclass declares is

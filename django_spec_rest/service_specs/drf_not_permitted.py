@@ -6,7 +6,7 @@ from django_service_specs.authorization.not_permitted import NotPermitted as Ker
 from rest_framework.exceptions import PermissionDenied
 
 
-class NotPermitted(KernelNotPermitted, PermissionDenied):
+class DRFNotPermitted(KernelNotPermitted, PermissionDenied):
     """A permission check refused the principal, as both the kernel's ``NotPermitted`` and DRF's ``PermissionDenied``.
 
     Every published consumer of this package catches DRF's
@@ -35,7 +35,7 @@ class NotPermitted(KernelNotPermitted, PermissionDenied):
         PermissionDenied.__init__(self, self.message, code)
 
     @classmethod
-    def from_kernel(cls, exc: KernelNotPermitted) -> NotPermitted:
+    def from_kernel(cls, exc: KernelNotPermitted) -> DRFNotPermitted:
         """The kernel's denial ``exc`` as this class, with its message.
 
         Shared by the kernel route's refusal map and ``translate_dispatch_errors``.

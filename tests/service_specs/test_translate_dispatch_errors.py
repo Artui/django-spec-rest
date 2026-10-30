@@ -20,9 +20,9 @@ from django_service_specs.services.service_error import ServiceError as KernelSe
 from django_service_specs.types.dispatch_error import DispatchError
 from rest_framework.exceptions import ErrorDetail, ValidationError
 
-from django_spec_rest.service_specs.invalid_arguments import InvalidArguments
-from django_spec_rest.service_specs.not_permitted import NotPermitted
-from django_spec_rest.service_specs.principal_unavailable import PrincipalUnavailable
+from django_spec_rest.service_specs.drf_invalid_arguments import DRFInvalidArguments
+from django_spec_rest.service_specs.drf_not_permitted import DRFNotPermitted
+from django_spec_rest.service_specs.drf_principal_unavailable import DRFPrincipalUnavailable
 from django_spec_rest.service_specs.translate_dispatch_errors import (
     translate_dispatch_errors,
 )
@@ -41,9 +41,9 @@ class TestTheKernelsRefusals:
             {"title": [CodedMessage("Required.", "required")], "rows": {2: {"n": ["Bad."]}}}
         )
         translated = _raised_through(error)
-        assert type(translated) is InvalidArguments
+        assert type(translated) is DRFInvalidArguments
         assert translated.__cause__ is error
-        assert isinstance(translated, InvalidArguments)
+        assert isinstance(translated, DRFInvalidArguments)
         assert translated.detail == {"title": ["Required."], "rows": {2: {"n": ["Bad."]}}}
         assert isinstance(translated.detail["title"][0], ErrorDetail)
         assert translated.get_codes() == {"title": ["required"], "rows": {2: {"n": ["invalid"]}}}
@@ -51,9 +51,9 @@ class TestTheKernelsRefusals:
     def test_not_permitted_leaves_as_the_dual_class_with_its_message(self) -> None:
         error = KernelNotPermitted("Only the owner may archive this.")
         translated = _raised_through(error)
-        assert type(translated) is NotPermitted
+        assert type(translated) is DRFNotPermitted
         assert translated.__cause__ is error
-        assert isinstance(translated, NotPermitted)
+        assert isinstance(translated, DRFNotPermitted)
         assert translated.message == "Only the owner may archive this."
         assert translated.detail == "Only the owner may archive this."
         assert translated.get_codes() == "permission_denied"
@@ -61,9 +61,9 @@ class TestTheKernelsRefusals:
     def test_principal_unavailable_leaves_as_the_dual_class_with_its_message(self) -> None:
         error = KernelPrincipalUnavailable()
         translated = _raised_through(error)
-        assert type(translated) is PrincipalUnavailable
+        assert type(translated) is DRFPrincipalUnavailable
         assert translated.__cause__ is error
-        assert isinstance(translated, PrincipalUnavailable)
+        assert isinstance(translated, DRFPrincipalUnavailable)
         assert translated.message == KernelPrincipalUnavailable.default_message
         assert translated.detail == KernelPrincipalUnavailable.default_message
 
@@ -72,7 +72,7 @@ class TestTheKernelsRefusals:
             default_message = "Only the owner may do this."
 
         translated = _raised_through(_OwnerOnly())
-        assert type(translated) is NotPermitted
+        assert type(translated) is DRFNotPermitted
         assert translated.detail == "Only the owner may do this."
 
     def test_an_invalid_arguments_subclass_keeps_its_message(self) -> None:
@@ -80,15 +80,15 @@ class TestTheKernelsRefusals:
             default_message = "Some rows were refused."
 
         translated = _raised_through(_RowsRefused({"rows": {0: {"n": ["Bad."]}}}))
-        assert type(translated) is InvalidArguments
-        assert isinstance(translated, InvalidArguments)
+        assert type(translated) is DRFInvalidArguments
+        assert isinstance(translated, DRFInvalidArguments)
         assert translated.message == "Some rows were refused."
 
     async def test_it_translates_around_an_await(self) -> None:
         async def refuse() -> None:
             raise KernelNotPermitted()
 
-        with pytest.raises(NotPermitted), translate_dispatch_errors():
+        with pytest.raises(DRFNotPermitted), translate_dispatch_errors():
             await refuse()
 
     async def test_as_a_decorator_on_an_async_def_it_translates_nothing(self) -> None:
@@ -107,9 +107,9 @@ class TestWhatItLeavesAlone:
     @pytest.mark.parametrize(
         "error",
         [
-            pytest.param(InvalidArguments({"title": ["No."]}), id="dual-invalid-arguments"),
-            pytest.param(NotPermitted(), id="dual-not-permitted"),
-            pytest.param(PrincipalUnavailable(), id="dual-principal-unavailable"),
+            pytest.param(DRFInvalidArguments({"title": ["No."]}), id="dual-invalid-arguments"),
+            pytest.param(DRFNotPermitted(), id="dual-not-permitted"),
+            pytest.param(DRFPrincipalUnavailable(), id="dual-principal-unavailable"),
         ],
     )
     def test_a_refusal_drf_already_answers_passes_through(self, error: DispatchError) -> None:

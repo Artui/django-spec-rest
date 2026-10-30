@@ -12,7 +12,7 @@ import pytest
 from rest_framework import serializers
 
 from django_spec_rest.dispatch.dispatch_spec import dispatch_spec
-from django_spec_rest.service_specs.invalid_arguments import InvalidArguments
+from django_spec_rest.service_specs.drf_invalid_arguments import DRFInvalidArguments
 from django_spec_rest.types.json_schema_registry import JsonSchemaRegistry
 from django_spec_rest.types.selector_kind import SelectorKind
 from django_spec_rest.types.selector_spec import SelectorSpec
@@ -57,7 +57,7 @@ _SELECTOR = SelectorSpec(
 
 
 def _codes(spec: Any, params: dict[str, Any]) -> Any:
-    with pytest.raises(InvalidArguments) as excinfo:
+    with pytest.raises(DRFInvalidArguments) as excinfo:
         dispatch_spec(spec, user=None, params=params)
     return excinfo.value.get_codes()
 

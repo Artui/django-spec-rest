@@ -32,8 +32,8 @@ from rest_framework.test import APIRequestFactory
 
 from django_spec_rest import SelectorListView, SelectorRetrieveView, ServiceCreateView
 from django_spec_rest.dispatch.kernel_edge import adispatch_kernel_spec, dispatch_kernel_spec
+from django_spec_rest.service_specs.drf_not_permitted import DRFNotPermitted
 from django_spec_rest.service_specs.drf_permission_check import DRFPermissionCheck
-from django_spec_rest.service_specs.not_permitted import NotPermitted
 from django_spec_rest.service_specs.translating_drf_refusals import translating_drf_refusals
 from tests.service_specs.test_drf_refusals_on_the_kernel_route import (
     _SERVICE_SEATS,
@@ -154,17 +154,17 @@ def test_the_exception_keeps_the_cause_it_was_raised_from(core: Callable[..., An
 def test_a_refusal_raised_from_another_is_restored_from_the_marker_not_the_cause(
     core: Callable[..., Any],
 ) -> None:
-    """The package's own ``NotPermitted`` is left as raised, so it carries no marker to restore.
+    """The package's own ``DRFNotPermitted`` is left as raised, so it carries no marker to restore.
 
     Its cause is a DRF ``PermissionDenied``, which a restore that read the
     exception's cause rather than the marker would raise in its place.
     """
-    error = NotPermitted("x")
+    error = DRFNotPermitted("x")
 
     def service(**_: Any) -> None:
         raise error from PermissionDenied("y")
 
-    with pytest.raises(NotPermitted) as excinfo:
+    with pytest.raises(DRFNotPermitted) as excinfo:
         core(
             ServiceSpec(permissions=_OPEN, service=translating_drf_refusals(service)), **_parts({})
         )
@@ -177,13 +177,13 @@ def test_the_kernel_s_denial_still_leaves_as_the_package_s_not_permitted(
     core: Callable[..., Any],
 ) -> None:
     """Answered by the map, which the restore leaves alone."""
-    with pytest.raises(NotPermitted) as excinfo:
+    with pytest.raises(DRFNotPermitted) as excinfo:
         core(
             ServiceSpec(permissions=_OPEN, service=_raising(KernelNotPermitted("kernel's"))),
             **_parts({}),
         )
 
-    assert type(excinfo.value) is NotPermitted
+    assert type(excinfo.value) is DRFNotPermitted
     assert str(excinfo.value.detail) == "kernel's"
 
 

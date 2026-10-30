@@ -36,8 +36,8 @@ from rest_framework.views import APIView
 
 from django_spec_rest.service_specs.build_offline_context import build_offline_context
 from django_spec_rest.service_specs.drf_not_authenticated import DRFNotAuthenticated
+from django_spec_rest.service_specs.drf_not_permitted import DRFNotPermitted
 from django_spec_rest.service_specs.drf_permission_check import DRFPermissionCheck
-from django_spec_rest.service_specs.not_permitted import NotPermitted
 from tests.testapp.models import Post
 
 _SEEN: list[dict[str, Any]] = []
@@ -121,7 +121,7 @@ class TestTheRouteIsFilledBeforeTheClassLevelCheck:
         )
 
         authorize(spec, AnonymousUser(), arguments={"pk": 7})
-        with pytest.raises(NotPermitted):
+        with pytest.raises(DRFNotPermitted):
             authorize(spec, AnonymousUser(), arguments={"pk": 8})
 
     def test_an_argument_the_check_names_no_route_read_for_is_not_its_route(self) -> None:
@@ -154,7 +154,7 @@ class TestTheRouteIsFilledBeforeTheClassLevelCheck:
 
 class TestARefusal:
     def test_carries_the_class_s_message_and_code_as_both_bases(self) -> None:
-        with pytest.raises(NotPermitted) as refused:
+        with pytest.raises(DRFNotPermitted) as refused:
             authorize(_retrieve(_OnlySeven), AnonymousUser(), arguments={"pk": 1})
 
         assert isinstance(refused.value, KernelNotPermitted)
@@ -163,7 +163,7 @@ class TestARefusal:
         assert refused.value.get_codes() == "not_seven"
 
     def test_the_first_refusing_class_answers_and_the_rest_are_not_asked(self) -> None:
-        with pytest.raises(NotPermitted):
+        with pytest.raises(DRFNotPermitted):
             authorize(_retrieve(_OnlySeven, _Records), AnonymousUser(), arguments={"pk": 1})
 
         assert _SEEN == []
@@ -183,7 +183,7 @@ class TestARefusal:
         with pytest.raises(KernelNotPermitted) as refused:
             dispatch(spec, principal=AnonymousUser(), arguments={})
 
-        assert isinstance(refused.value, NotPermitted)
+        assert isinstance(refused.value, DRFNotPermitted)
         assert refused.value.message == "Not on Sundays."
         assert refused.value.get_codes() == "sunday"
 
@@ -204,7 +204,7 @@ class TestTheObjectCheck:
     def test_a_model_row_is_asked_about(self) -> None:
         post = Post.objects.create(title="t")
 
-        with pytest.raises(NotPermitted):
+        with pytest.raises(DRFNotPermitted):
             dispatch(_retrieve(_NoObjects), principal=AnonymousUser(), arguments={"pk": post.pk})
 
     def test_a_model_row_every_class_admits_is_returned(self) -> None:
@@ -376,7 +376,7 @@ class TestTheCallsRequestAndView:
         spec = ServiceSpec(service=_create, permissions=_check(_OnlyPublish))
 
         dispatch(spec, principal=AnonymousUser(), arguments={}, call_context={"action": "publish"})
-        with pytest.raises(NotPermitted):
+        with pytest.raises(DRFNotPermitted):
             dispatch(
                 spec, principal=AnonymousUser(), arguments={}, call_context={"action": "archive"}
             )

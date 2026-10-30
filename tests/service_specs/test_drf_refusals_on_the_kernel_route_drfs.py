@@ -47,8 +47,8 @@ from rest_framework.exceptions import (
 from rest_framework.permissions import AllowAny, BasePermission
 
 from django_spec_rest import SelectorKind, SelectorSpec, ServiceSpec
-from django_spec_rest.service_specs.invalid_arguments import InvalidArguments
-from django_spec_rest.service_specs.not_permitted import NotPermitted
+from django_spec_rest.service_specs.drf_invalid_arguments import DRFInvalidArguments
+from django_spec_rest.service_specs.drf_not_permitted import DRFNotPermitted
 from tests.testapp.models import Post
 
 pytestmark = pytest.mark.django_db
@@ -348,8 +348,8 @@ class _BothValidationErrors(KernelServiceValidationError, ValidationError):
         KernelNotPermitted("kernel's own"),
         KernelServiceValidationError({"title": ["kernel's own"]}),
         # DRF's classes as well, so only the check for the kernel's keeps them.
-        NotPermitted("drfs' dual class"),
-        InvalidArguments({"title": ["drfs' dual class"]}),
+        DRFNotPermitted("drfs' dual class"),
+        DRFInvalidArguments({"title": ["drfs' dual class"]}),
         _BothValidationErrors({"title": ["a twin, translated by an inner callable"]}),
     ],
     ids=["dispatch-error", "service-error", "dual-not-permitted", "dual-invalid", "twin"],

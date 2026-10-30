@@ -55,9 +55,9 @@ from rest_framework.exceptions import (
 )
 from rest_framework.permissions import BasePermission
 
+from django_spec_rest.service_specs.drf_invalid_arguments import DRFInvalidArguments
+from django_spec_rest.service_specs.drf_not_permitted import DRFNotPermitted
 from django_spec_rest.service_specs.drf_permission_check import DRFPermissionCheck
-from django_spec_rest.service_specs.invalid_arguments import InvalidArguments
-from django_spec_rest.service_specs.not_permitted import NotPermitted
 from django_spec_rest.service_specs.translating_drf_refusals import translating_drf_refusals
 from tests.testapp.models import Post
 
@@ -333,8 +333,8 @@ class _BothValidationErrors(KernelServiceValidationError, ValidationError):
         KernelNotPermitted("kernel's own"),
         KernelServiceValidationError({"title": ["kernel's own"]}),
         # DRF's classes as well, so only the check for the kernel's keeps them.
-        NotPermitted("the dual class"),
-        InvalidArguments({"title": ["the dual class"]}),
+        DRFNotPermitted("the dual class"),
+        DRFInvalidArguments({"title": ["the dual class"]}),
         _BothValidationErrors({"title": ["a twin, translated by an inner callable"]}),
     ],
     ids=["dispatch-error", "service-error", "dual-not-permitted", "dual-invalid", "twin"],

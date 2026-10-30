@@ -26,7 +26,7 @@ from rest_framework.validators import UniqueValidator
 from rest_framework_dataclasses.serializers import DataclassSerializer
 
 from django_spec_rest.service_specs.build_offline_context import build_offline_context
-from django_spec_rest.service_specs.invalid_arguments import InvalidArguments
+from django_spec_rest.service_specs.drf_invalid_arguments import DRFInvalidArguments
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from django_spec_rest.service_specs.translate_dispatch_errors import (
     translate_dispatch_errors,
@@ -133,7 +133,7 @@ def test_a_value_is_keyed_by_its_source_attribute() -> None:
 
 
 def test_a_refusal_is_invalid_arguments_carrying_drf_s_detail() -> None:
-    with pytest.raises(InvalidArguments) as raised:
+    with pytest.raises(DRFInvalidArguments) as raised:
         SerializerValidator(_Note).validate({"title": "too long", "count": "x"}, _context())
     detail = raised.value.detail
     assert detail == {
@@ -152,7 +152,7 @@ def test_a_cross_field_refusal_sits_under_non_field_errors() -> None:
         def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
             raise serializers.ValidationError("No.")
 
-    with pytest.raises(InvalidArguments) as raised:
+    with pytest.raises(DRFInvalidArguments) as raised:
         SerializerValidator(S).validate({"a": 1}, _context())
     assert raised.value.detail == {"non_field_errors": ["No."]}
 
@@ -194,7 +194,7 @@ def test_a_partial_call_takes_a_required_field_left_out_and_returns_what_was_sen
 
 
 def test_a_whole_call_refuses_a_required_field_left_out() -> None:
-    with pytest.raises(InvalidArguments) as raised:
+    with pytest.raises(DRFInvalidArguments) as raised:
         SerializerValidator(_Note).validate({"count": 2}, _context())
     assert raised.value.detail == {"title": ["This field is required."]}
 
@@ -217,7 +217,7 @@ def test_an_update_s_uniqueness_check_excludes_the_target() -> None:
 @pytest.mark.django_db
 def test_a_create_s_uniqueness_check_refuses_a_taken_value() -> None:
     Post.objects.create(title="taken")
-    with pytest.raises(InvalidArguments) as raised:
+    with pytest.raises(DRFInvalidArguments) as raised:
         SerializerValidator(_UniqueTitle).validate({"title": "taken"}, _context())
     assert [d.code for d in raised.value.detail["title"]] == ["unique"]
 
@@ -225,7 +225,7 @@ def test_a_create_s_uniqueness_check_refuses_a_taken_value() -> None:
 @pytest.mark.django_db
 def test_a_collection_target_binds_as_a_create() -> None:
     Post.objects.create(title="taken")
-    with pytest.raises(InvalidArguments) as raised:
+    with pytest.raises(DRFInvalidArguments) as raised:
         SerializerValidator(_UniqueTitle).validate(
             {"title": "taken"}, _context(target=Post.objects.all())
         )
@@ -244,7 +244,7 @@ def test_a_model_serializer_s_own_uniqueness_check_excludes_the_target() -> None
     user = user_model.objects.create(username="ada")
     validator = SerializerValidator(S)
     assert validator.validate({"username": "ada"}, _context(target=user)) == {"username": "ada"}
-    with pytest.raises(InvalidArguments):
+    with pytest.raises(DRFInvalidArguments):
         validator.validate({"username": "ada"}, _context())
 
 
@@ -294,7 +294,7 @@ def test_an_object_a_validate_returns_is_data_and_spreads_nothing() -> None:
 
 
 def test_a_dataclass_s_row_refusal_names_the_row() -> None:
-    with pytest.raises(InvalidArguments) as raised:
+    with pytest.raises(DRFInvalidArguments) as raised:
         SerializerValidator(_Order).validate(
             {"name": "n", "rows": [{"title": "t"}, {}]}, _context()
         )
@@ -321,7 +321,7 @@ def test_a_declared_dataclass_serializer_hands_its_instance_and_its_fields() -> 
 
 
 def test_a_declared_dataclass_serializer_s_own_validate_refuses() -> None:
-    with pytest.raises(InvalidArguments) as raised:
+    with pytest.raises(DRFInvalidArguments) as raised:
         SerializerValidator(_MoveInSerializer).validate({"event_id": 7, "day": "mon"}, _context())
     assert raised.value.detail == {
         "non_field_errors": ["Pass both day and start_hour, or neither."]
@@ -442,7 +442,7 @@ def test_validated_many_keys_a_row_s_refusal_by_the_caller_s_index_not_the_posit
     # The shape check refused row 1, so the Validator is handed rows 0 and 2;
     # DRF counts the second as position 1. The caller's list is what the
     # error must name.
-    with pytest.raises(InvalidArguments) as raised:
+    with pytest.raises(DRFInvalidArguments) as raised:
         SerializerValidator(_Note).validated_many(
             {0: {"title": "ok"}, 2: {"title": "too long"}}, _context(), many_argument="items"
         )
@@ -453,7 +453,7 @@ def test_validated_many_keys_a_row_s_refusal_by_the_caller_s_index_not_the_posit
 
 
 def test_validated_many_reports_every_failing_row_at_once() -> None:
-    with pytest.raises(InvalidArguments) as raised:
+    with pytest.raises(DRFInvalidArguments) as raised:
         SerializerValidator(_Note).validated_many(
             {0: {"title": "too long"}, 1: {"title": "ok"}, 2: {"title": "also too long"}},
             _context(),
@@ -479,7 +479,7 @@ class _Listed(serializers.Serializer):
 def test_a_list_level_refusal_sits_under_non_field_errors() -> None:
     # Only a call validated as a list can reach the list serializer's own
     # validate(): a per-row loop never builds one.
-    with pytest.raises(InvalidArguments) as raised:
+    with pytest.raises(DRFInvalidArguments) as raised:
         SerializerValidator(_Listed).validated_many(
             {0: {"title": "a"}, 1: {"title": "b"}}, _context(), many_argument="items"
         )
@@ -502,7 +502,7 @@ class _OldShaped(serializers.Serializer):
 
 
 def test_item_errors_reported_as_a_list_are_keyed_by_the_callers_index_too() -> None:
-    with pytest.raises(InvalidArguments) as raised:
+    with pytest.raises(DRFInvalidArguments) as raised:
         SerializerValidator(_OldShaped).validated_many(
             {0: {"title": "a"}, 4: {"title": "bb"}, 5: {"title": "c"}, 9: {"title": "dd"}},
             _context(),
@@ -574,7 +574,7 @@ def test_dispatch_reports_a_many_call_s_rows_under_the_argument_beside_the_shape
     assert rows[1] == {"title": ["Ensure this field has no more than 5 characters."]}
     # DRF's code survives the kernel re-raising the list's tree and the edge's
     # translation, so the wire a many call answers with keeps its codes.
-    with pytest.raises(InvalidArguments) as translated, translate_dispatch_errors():
+    with pytest.raises(DRFInvalidArguments) as translated, translate_dispatch_errors():
         raise raised.value
     assert translated.value.get_codes()["items"][1] == {"title": ["max_length"]}
 
@@ -590,7 +590,7 @@ def test_a_refusal_is_a_drf_validation_error_as_well() -> None:
             {0: {"title": "too long"}}, _context(), many_argument="items"
         )
     for raised in (single.value, many.value):
-        assert isinstance(raised, InvalidArguments)
+        assert isinstance(raised, DRFInvalidArguments)
         assert raised.status_code == 400
 
 

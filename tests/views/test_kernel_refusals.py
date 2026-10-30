@@ -4,12 +4,12 @@ Every row has a test asserting its own answer and asserting that it is not the
 answer of the row the refusal falls to with that row deleted, so mutating a
 row out fails a named test even where the map stays total:
 
-- ``APIException`` (falls to the ``InvalidArguments`` row, which would rebuild
+- ``APIException`` (falls to the ``DRFInvalidArguments`` row, which would rebuild
   the dual-base refusal as a new one):
   ``test_a_refusal_that_is_drf_s_already_leaves_as_raised``, and the author's
   own exception where the refusal was translated from one
   (``tests/views/test_drf_refusals_restored_on_the_edge.py``);
-- ``InvalidArguments`` (falls to ``DispatchError``, a ``detail`` sentence):
+- ``DRFInvalidArguments`` (falls to ``DispatchError``, a ``detail`` sentence):
   ``test_a_missing_argument_is_drf_s_400_by_field``;
 - ``NotPermitted`` / ``PrincipalUnavailable`` (fall to ``DispatchError``, a
   ``400``): ``test_a_denied_principal_is_403``,
@@ -51,7 +51,7 @@ from rest_framework.response import Response
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from django_spec_rest.dispatch.kernel_refusals import KERNEL_REFUSALS, answer_refusal
-from django_spec_rest.service_specs.invalid_arguments import InvalidArguments
+from django_spec_rest.service_specs.drf_invalid_arguments import DRFInvalidArguments
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from tests.views.test_kernel_views import _CreateView
 
@@ -91,7 +91,7 @@ def test_the_map_answers_every_refusal_the_kernel_raises() -> None:
 
 
 def test_a_refusal_that_is_drf_s_already_leaves_as_raised() -> None:
-    raised = InvalidArguments({"title": ["Too long."]})
+    raised = DRFInvalidArguments({"title": ["Too long."]})
     assert answer_refusal(raised) is raised
 
 
@@ -111,7 +111,7 @@ def test_a_subclass_of_the_kernel_s_invalid_arguments_keeps_its_message() -> Non
         default_message = "Worded otherwise."
 
     answer = answer_refusal(_Worded({"title": ["x"]}))
-    assert isinstance(answer, InvalidArguments)
+    assert isinstance(answer, DRFInvalidArguments)
     assert answer.message == "Worded otherwise."
 
 

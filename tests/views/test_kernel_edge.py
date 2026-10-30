@@ -47,7 +47,7 @@ from django_spec_rest.dispatch.kernel_edge import (
 )
 from django_spec_rest.dispatch.kernel_refusals import KernelDispatchRefused
 from django_spec_rest.service_specs import recording_spec as recording_spec_module
-from django_spec_rest.service_specs.invalid_arguments import InvalidArguments
+from django_spec_rest.service_specs.drf_invalid_arguments import DRFInvalidArguments
 from django_spec_rest.service_specs.recording_spec import recording_spec
 from django_spec_rest.service_specs.seed_named_fields import seed_named_fields
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
@@ -170,7 +170,7 @@ def test_a_seed_named_field_validates_from_the_body(core: Callable[..., Any]) ->
 
 @CORES
 def test_a_refused_argument_leaves_as_drf_s_400(core: Callable[..., Any]) -> None:
-    with pytest.raises(InvalidArguments) as raised:
+    with pytest.raises(DRFInvalidArguments) as raised:
         core(_CREATE, **_parts({}))
     assert raised.value.detail["name"][0].code == "required"
 
@@ -538,7 +538,7 @@ def test_with_no_query_handed_the_request_s_is_read(
     seen: list[str] = []
     parts = _listing("name=sent&page=2")
     if policy is UnknownArguments.REJECT:
-        with pytest.raises(InvalidArguments) as refused:
+        with pytest.raises(DRFInvalidArguments) as refused:
             core(_named_list(seen), **parts)
         assert list(refused.value.detail) == ["page"]
         assert seen == []

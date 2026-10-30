@@ -19,7 +19,7 @@ from rest_framework.fields import get_error_detail
 from rest_framework.settings import api_settings
 from rest_framework_dataclasses.serializers import DataclassSerializer
 
-from django_spec_rest.service_specs.invalid_arguments import InvalidArguments
+from django_spec_rest.service_specs.drf_invalid_arguments import DRFInvalidArguments
 from django_spec_rest.service_specs.utils import (
     author_keys,
     bind_serializer,
@@ -105,7 +105,7 @@ class SerializerValidator(Validator):
       between the two.
 
     A refusal is one
-    [`InvalidArguments`][django_spec_rest.service_specs.invalid_arguments.InvalidArguments],
+    [`DRFInvalidArguments`][django_spec_rest.service_specs.drf_invalid_arguments.InvalidArguments],
     the kernel's refusal that is DRF's ``ValidationError`` as well, carrying
     the serializer's ``errors`` unchanged: DRF's ``ErrorDetail`` leaves, each
     with its code, cross-field messages under ``non_field_errors``, and a
@@ -156,7 +156,7 @@ class SerializerValidator(Validator):
     ``validate()`` run), with the call's context and partial flag. The one
     list serializer is bound for the call as ``serializer``, ``data`` is the
     list of each row's ``validated_data`` and the values are the rows' values
-    under ``many_argument``. A refusal is an ``InvalidArguments`` whose detail
+    under ``many_argument``. A refusal is an ``DRFInvalidArguments`` whose detail
     keys each failing row by the index the caller's list gave it, whichever of
     DRF's two shapes the installed version reports item errors in, and whose
     list-level message sits under ``non_field_errors``. A live view's list
@@ -262,7 +262,7 @@ class SerializerValidator(Validator):
         declared them under, so a transport can refuse such a spec before a
         call reaches it::
 
-            getattr(compiled.validator, "unsendable", frozenset())
+            compiled.validator.unsendable
 
         - **Only what ``parameters()`` omits.** A field the Validator declares
           a parameter for is never named, even one a seed, a server argument or
@@ -310,7 +310,7 @@ class SerializerValidator(Validator):
         )
 
     def validate(self, arguments: Mapping[str, Any], context: ValidationContext) -> dict[str, Any]:
-        """The validated values, keyed by source, or ``InvalidArguments`` carrying DRF's detail."""
+        """The validated values, keyed by source, or ``DRFInvalidArguments`` carrying DRF's detail."""
         return self._validated(arguments, context).values
 
     def validated(self, arguments: Mapping[str, Any], context: ValidationContext) -> Validated:
@@ -364,7 +364,7 @@ class SerializerValidator(Validator):
         if not serializer.is_valid():
             if whole:
                 state.row_errors = serializer.errors
-            raise InvalidArguments(_by_row(serializer.errors, indices))
+            raise DRFInvalidArguments(_by_row(serializer.errors, indices))
         # An argument sent beside the rows has nowhere to go, since the service
         # is handed the rows alone, so it is refused under every
         # ``UnknownArguments`` policy, as it always was, once the rows are valid
@@ -413,7 +413,7 @@ class SerializerValidator(Validator):
         refusal = _bound_refusal(serializer, len(sent))
         if refusal is not None:
             edge_call_state().row_errors = refusal
-            raise InvalidArguments(refusal)
+            raise DRFInvalidArguments(refusal)
         # The rows left are fewer than were sent, so they can fall below a
         # minimum the list sent met, never past a maximum it met.
         serializer.allow_empty = True
@@ -421,7 +421,7 @@ class SerializerValidator(Validator):
         try:
             data = list(serializer.to_internal_value(arguments))
         except serializers.ValidationError as exc:
-            raise InvalidArguments(_by_row(exc.detail, indices)) from None
+            raise DRFInvalidArguments(_by_row(exc.detail, indices)) from None
         return Validated(
             values={many_argument: [_values(row) for row in data]},
             data=data,
@@ -434,7 +434,7 @@ class SerializerValidator(Validator):
         self._refuse_partial(context)
         serializer = self._bind(arguments, context)
         if not serializer.is_valid():
-            raise InvalidArguments(serializer.errors)
+            raise DRFInvalidArguments(serializer.errors)
         data: Any = serializer.validated_data
         held = _server_values(serializer, server_values(self))
         _lay_back(data, serializer, held)
@@ -602,7 +602,7 @@ def _server_values(serializer: serializers.Serializer, put: Mapping[str, Any]) -
     or Django's from ``validate_<field>``
     (test_a_django_refusal_of_the_server_value_is_answered_as_drfs_loop_answers_it),
     is keyed by its field in DRF's shape, every refused field in one
-    ``InvalidArguments``, in the serializer's field order
+    ``DRFInvalidArguments``, in the serializer's field order
     (test_every_server_value_its_field_refuses_is_answered_together), and a
     field that skips - a partial call's ``HiddenField`` - holds nothing
     (test_a_server_value_for_a_field_that_skips_is_left_out).
@@ -632,7 +632,7 @@ def _server_values(serializer: serializers.Serializer, put: Mapping[str, Any]) -
         else:
             held[name] = value
     if errors:
-        raise InvalidArguments(errors)
+        raise DRFInvalidArguments(errors)
     return held
 
 

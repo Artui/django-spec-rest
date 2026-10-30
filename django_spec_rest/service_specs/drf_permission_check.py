@@ -11,7 +11,7 @@ from django_service_specs.authorization.permission_check import PermissionCheck
 from rest_framework.permissions import BasePermission
 
 from django_spec_rest.service_specs.build_offline_context import build_offline_context
-from django_spec_rest.service_specs.not_permitted import NotPermitted
+from django_spec_rest.service_specs.drf_not_permitted import DRFNotPermitted
 from django_spec_rest.service_specs.translate_drf_refusals import translate_drf_refusals
 from django_spec_rest.service_specs.utils import carried, offline_action
 from django_spec_rest.types.offline_context import OfflineContext
@@ -30,13 +30,13 @@ class DRFPermissionCheck(PermissionCheck):
     [`build_offline_context`][django_spec_rest.service_specs.build_offline_context.build_offline_context]
     builds for the principal. The first refusal
     raises the dual-base
-    [`NotPermitted`][django_spec_rest.service_specs.not_permitted.NotPermitted]
+    [`DRFNotPermitted`][django_spec_rest.service_specs.drf_not_permitted.NotPermitted]
     with that class's own ``message`` and ``code``, so a client is told what
     a DRF view would have told it; returning ``False`` instead would leave the
     kernel to raise its own class with the generic wording. A class that
     raises its own refusal is asked inside
     [`translate_drf_refusals`][django_spec_rest.service_specs.translate_drf_refusals.translate_drf_refusals],
-    so DRF's ``PermissionDenied`` leaves as that ``NotPermitted`` with the
+    so DRF's ``PermissionDenied`` leaves as that ``DRFNotPermitted`` with the
     class's message and code, and ``NotAuthenticated`` as
     [`DRFNotAuthenticated`][django_spec_rest.service_specs.drf_not_authenticated.DRFNotAuthenticated],
     which DRF still answers 401
@@ -244,4 +244,4 @@ def _routed(
 
 
 def _deny(permission: BasePermission) -> None:
-    raise NotPermitted(getattr(permission, "message", None), getattr(permission, "code", None))
+    raise DRFNotPermitted(getattr(permission, "message", None), getattr(permission, "code", None))

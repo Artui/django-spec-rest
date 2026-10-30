@@ -22,7 +22,7 @@ from rest_framework.exceptions import ValidationError
 from django_spec_rest import SelectorKind, SelectorSpec, ServiceSpec
 from django_spec_rest.dispatch.adispatch_spec import adispatch_spec
 from django_spec_rest.dispatch.dispatch_spec import dispatch_spec
-from django_spec_rest.service_specs.invalid_arguments import InvalidArguments
+from django_spec_rest.service_specs.drf_invalid_arguments import DRFInvalidArguments
 
 
 class _TitleIn(serializers.Serializer):
@@ -53,7 +53,7 @@ _SPECS = pytest.mark.parametrize(
 @_SPECS
 @pytest.mark.parametrize(("params", "sent"), [([{"title": "t"}], "list"), ("x", "str"), (5, "int")])
 def test_it_names_what_arrived(dispatch: Any, spec: Any, params: Any, sent: str) -> None:
-    with pytest.raises(InvalidArguments) as excinfo:
+    with pytest.raises(DRFInvalidArguments) as excinfo:
         dispatch(spec, params=params)
 
     assert excinfo.value.detail == {

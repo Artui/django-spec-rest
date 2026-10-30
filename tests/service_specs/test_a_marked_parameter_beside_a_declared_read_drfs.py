@@ -7,7 +7,7 @@ kernel's input schema, as it is with no read declared. Three consequences:
 - off a handed row, the parameter is refused when left out, even with a
   ``None`` default (the marker is what the callable declared);
 - a required key of an ``Unpack``-ed ``TypedDict`` left out is refused as
-  ``InvalidArguments`` rather than raising ``KeyError`` in the callable;
+  ``DRFInvalidArguments`` rather than raising ``KeyError`` in the callable;
 - the DRF edge, which never runs a target lookup for a row a view hands in,
   still answers without the lookup's key.
 """
@@ -31,7 +31,7 @@ from rest_framework.test import APIRequestFactory
 from typing_extensions import TypedDict, Unpack
 
 from django_spec_rest import adispatch_spec, dispatch_spec
-from django_spec_rest.service_specs.invalid_arguments import InvalidArguments
+from django_spec_rest.service_specs.drf_invalid_arguments import DRFInvalidArguments
 from django_spec_rest.types.input_required import InputRequired
 from django_spec_rest.types.query_param import QueryParam
 from django_spec_rest.types.selector_kind import SelectorKind
@@ -179,7 +179,7 @@ def test_a_marked_parameter_stays_required_under_a_declared_read(
     compiled = kernel_spec(spec)
     assert compiled.parameters().get("ticket").required is True
     assert "ticket" in spec_input_schema(compiled)["required"]
-    with pytest.raises(InvalidArguments) as refused:
+    with pytest.raises(DRFInvalidArguments) as refused:
         dispatch_spec(spec, user=None, params={})
     assert set(refused.value.detail) == {"ticket"}
 

@@ -37,7 +37,7 @@ from django_spec_rest.service_specs.as_kernel_spec import (
     compiled_partial,
     lookup_keys_the_service_names,
 )
-from django_spec_rest.service_specs.invalid_arguments import InvalidArguments
+from django_spec_rest.service_specs.drf_invalid_arguments import DRFInvalidArguments
 from django_spec_rest.service_specs.kernel_spec_variant import kernel_spec_variant
 from django_spec_rest.service_specs.translate_dispatch_errors import (
     translate_dispatch_errors,
@@ -1892,7 +1892,7 @@ def edge_errors(
     - A validation error a service or a precondition raises is keyed by the
       names the request used, where the input serializer's ``source=`` makes
       them differ from the ones the service saw. Never the kernel's own
-      ``InvalidArguments``, which is already keyed by them.
+      ``DRFInvalidArguments``, which is already keyed by them.
     - Arguments that are not what the input serializer takes - no object for
       a single call or for a ``many`` spec's argument object, no list for a
       ``many`` spec's bare rows - are refused as DRF refuses them, in its
@@ -1917,7 +1917,7 @@ def edge_errors(
                     raise raised
                 finally:
                     raised.__context__ = context
-    except InvalidArguments as exc:
+    except DRFInvalidArguments as exc:
         drf = _drf_body_refusal(spec, params, bare_rows=bare_rows)
         if drf is not None:
             raise drf from exc
@@ -1947,7 +1947,7 @@ def edge_errors(
         # refusal (test_a_refusal_with_nothing_to_reshape_leaves_as_translated).
         if detail == exc.detail:
             raise
-        raise InvalidArguments(detail) from exc
+        raise DRFInvalidArguments(detail) from exc
     except (ServiceValidationError, ValidationError) as exc:
         serializer = getattr(spec, "input_serializer", None)
         if serializer is None:
@@ -2020,7 +2020,7 @@ def _drf_body_refusal(
     message = f"Invalid data. Expected a dictionary, but got {type(params).__name__}."
     if not spec.many:
         message += " Only a spec declaring many=True accepts a list payload."
-    return InvalidArguments(
+    return DRFInvalidArguments(
         {api_settings.NON_FIELD_ERRORS_KEY: [ErrorDetail(message, code="invalid")]}
     )
 

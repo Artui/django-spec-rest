@@ -2,7 +2,7 @@
 
 The kernel refuses a principal whose ``is_active`` is false before any
 permission check runs, so a view declaring no ``permission_classes`` at all
-refuses it too. The refusal is ``PrincipalUnavailable``:
+refuses it too. The refusal is ``DRFPrincipalUnavailable``:
 ``{"detail": "The acting principal is unavailable."}``, code
 ``permission_denied``. The same user, active, is served, so each test holds the
 flag rather than the view.
@@ -34,7 +34,7 @@ from django_spec_rest import (
     ServiceViewSet,
 )
 from django_spec_rest.dispatch.kernel_edge import adispatch_kernel_spec
-from django_spec_rest.service_specs.principal_unavailable import PrincipalUnavailable
+from django_spec_rest.service_specs.drf_principal_unavailable import DRFPrincipalUnavailable
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from django_spec_rest.views.utils import view_call_context
@@ -222,7 +222,7 @@ async def test_the_async_core_refuses_it_on_a_live_view() -> None:
     view.request.user = user
     view.args, view.kwargs, view.format_kwarg = (), {}, None
 
-    with pytest.raises(PrincipalUnavailable):
+    with pytest.raises(DRFPrincipalUnavailable):
         await adispatch_kernel_spec(
             _writes(_acreate),
             view=view,

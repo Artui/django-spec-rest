@@ -37,7 +37,7 @@ from django_spec_rest import (
     adispatch_spec,
     dispatch_spec,
 )
-from django_spec_rest.service_specs.not_permitted import NotPermitted
+from django_spec_rest.service_specs.drf_not_permitted import DRFNotPermitted
 from tests.testapp.models import Post
 
 pytestmark = pytest.mark.django_db
@@ -201,17 +201,17 @@ def test_the_exception_keeps_the_cause_it_was_raised_from(dispatch: Any) -> None
 def test_a_refusal_raised_from_another_is_restored_from_the_marker_not_the_cause(
     dispatch: Any,
 ) -> None:
-    """drfs' own ``NotPermitted`` is left as raised, so it carries no marker to restore.
+    """drfs' own ``DRFNotPermitted`` is left as raised, so it carries no marker to restore.
 
     Its cause is a DRF ``PermissionDenied``, which a restore that read the
     exception's cause rather than the marker would raise in its place.
     """
-    error = NotPermitted("x")
+    error = DRFNotPermitted("x")
 
     def service(**_: Any) -> None:
         raise error from PermissionDenied("y")
 
-    with pytest.raises(NotPermitted) as excinfo:
+    with pytest.raises(DRFNotPermitted) as excinfo:
         dispatch(ServiceSpec(service=service), params={})
 
     assert excinfo.value is error
@@ -220,18 +220,18 @@ def test_a_refusal_raised_from_another_is_restored_from_the_marker_not_the_cause
 @_CORES
 def test_the_kernel_s_denial_still_leaves_as_drfs_not_permitted(dispatch: Any) -> None:
     """Translated by ``translate_dispatch_errors``, which the restore leaves alone."""
-    with pytest.raises(NotPermitted) as excinfo:
+    with pytest.raises(DRFNotPermitted) as excinfo:
         dispatch(ServiceSpec(service=_raising(KernelNotPermitted("kernel's"))), params={})
 
-    assert type(excinfo.value) is NotPermitted
+    assert type(excinfo.value) is DRFNotPermitted
     assert str(excinfo.value.detail) == "kernel's"
 
 
 @_CORES
 def test_drfs_own_not_permitted_leaves_exactly_as_raised(dispatch: Any) -> None:
-    error = NotPermitted("drfs' own")
+    error = DRFNotPermitted("drfs' own")
 
-    with pytest.raises(NotPermitted) as excinfo:
+    with pytest.raises(DRFNotPermitted) as excinfo:
         dispatch(ServiceSpec(service=_raising(error)), params={})
 
     assert excinfo.value is error

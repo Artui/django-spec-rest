@@ -182,7 +182,7 @@ with the spec's `field_audiences` layered over the serializer's own markings.
 
 `DRFPermissionCheck` asks each class in order against the offline request and
 view built for the principal. The first refusal raises
-[`NotPermitted`][django_spec_rest.service_specs.not_permitted.NotPermitted]
+[`NotPermitted`][django_spec_rest.service_specs.drf_not_permitted.NotPermitted]
 with that class's `message` and `code`.
 
 Before the class-level check, `view.kwargs` is filled from the call's arguments
@@ -199,7 +199,7 @@ inside [`translate_drf_refusals`](#an-authors-drf-refusals-as-the-kernels): its
 
 ::: django_spec_rest.service_specs.drf_permission_check.DRFPermissionCheck
 
-::: django_spec_rest.service_specs.not_permitted.NotPermitted
+::: django_spec_rest.service_specs.drf_not_permitted.NotPermitted
 
 ::: django_spec_rest.service_specs.build_offline_context.build_offline_context
 
@@ -231,11 +231,11 @@ A deactivated principal is `PrincipalUnavailable`, a 403.
 
 ### `InvalidArguments`
 
-::: django_spec_rest.service_specs.invalid_arguments.InvalidArguments
+::: django_spec_rest.service_specs.drf_invalid_arguments.InvalidArguments
 
 ### `PrincipalUnavailable`
 
-::: django_spec_rest.service_specs.principal_unavailable.PrincipalUnavailable
+::: django_spec_rest.service_specs.drf_principal_unavailable.PrincipalUnavailable
 
 ### `register_drf_row_errors`
 

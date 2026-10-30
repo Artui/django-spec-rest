@@ -29,8 +29,8 @@ from django_service_specs import SelectorKind, SelectorSpec, ServiceSpec
 from django_service_specs.dispatch.dispatch import dispatch
 from rest_framework.permissions import BasePermission, IsAdminUser
 
+from django_spec_rest.service_specs.drf_not_permitted import DRFNotPermitted
 from django_spec_rest.service_specs.drf_permission_check import DRFPermissionCheck
-from django_spec_rest.service_specs.not_permitted import NotPermitted
 from tests.testapp.models import Tag
 
 pytestmark = pytest.mark.django_db
@@ -75,7 +75,7 @@ def test_a_list_s_queryset_is_never_asked_about_an_object() -> None:
 
 
 def test_the_class_level_check_still_refuses_a_list() -> None:
-    with pytest.raises(NotPermitted):
+    with pytest.raises(DRFNotPermitted):
         dispatch(_every_tag(_DenyRequest), principal=User(), arguments={})
 
 
@@ -105,7 +105,7 @@ def test_a_call_with_no_call_context_is_answered_rather_than_refused(
     if admitted:
         assert dispatch(spec, principal=principal, arguments={}).value == "ran"
     else:
-        with pytest.raises(NotPermitted):
+        with pytest.raises(DRFNotPermitted):
             dispatch(spec, principal=principal, arguments={})
 
 

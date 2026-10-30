@@ -258,9 +258,9 @@ ALLOWED_EDGE_DRF_IMPORTS: dict[str, frozenset[str]] = {
     # that catches DRF's still catches it.
     "service_specs/drf_not_authenticated.py": frozenset({"rest_framework.exceptions"}),
     "service_specs/drf_service_validation_error.py": frozenset({"rest_framework.exceptions"}),
-    "service_specs/invalid_arguments.py": frozenset({"rest_framework.exceptions"}),
-    "service_specs/not_permitted.py": frozenset({"rest_framework.exceptions"}),
-    "service_specs/principal_unavailable.py": frozenset({"rest_framework.exceptions"}),
+    "service_specs/drf_invalid_arguments.py": frozenset({"rest_framework.exceptions"}),
+    "service_specs/drf_not_permitted.py": frozenset({"rest_framework.exceptions"}),
+    "service_specs/drf_principal_unavailable.py": frozenset({"rest_framework.exceptions"}),
     "service_specs/register_drf_row_errors.py": frozenset({"rest_framework.exceptions"}),
     "service_specs/renderable_serializer_class.py": frozenset({"rest_framework.serializers"}),
     # The serializer is the spec's Presenter and Validator.

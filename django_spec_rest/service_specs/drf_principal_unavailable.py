@@ -8,7 +8,7 @@ from django_service_specs.authorization.principal_unavailable import (
 from rest_framework.exceptions import PermissionDenied
 
 
-class PrincipalUnavailable(KernelPrincipalUnavailable, PermissionDenied):
+class DRFPrincipalUnavailable(KernelPrincipalUnavailable, PermissionDenied):
     """The principal cannot act, as both the kernel's ``PrincipalUnavailable`` and DRF's ``PermissionDenied``.
 
     Raised for an identifier naming nobody or a deactivated account, before
@@ -37,7 +37,7 @@ class PrincipalUnavailable(KernelPrincipalUnavailable, PermissionDenied):
         PermissionDenied.__init__(self, self.message, code)
 
     @classmethod
-    def from_kernel(cls, exc: KernelPrincipalUnavailable) -> PrincipalUnavailable:
+    def from_kernel(cls, exc: KernelPrincipalUnavailable) -> DRFPrincipalUnavailable:
         """The kernel's refusal ``exc`` as this class, with its message.
 
         Shared by the kernel route's refusal map and ``translate_dispatch_errors``.

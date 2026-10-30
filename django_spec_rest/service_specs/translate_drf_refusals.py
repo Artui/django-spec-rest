@@ -16,10 +16,10 @@ from rest_framework.exceptions import (
 )
 
 from django_spec_rest.service_specs.drf_not_authenticated import DRFNotAuthenticated
+from django_spec_rest.service_specs.drf_not_permitted import DRFNotPermitted
 from django_spec_rest.service_specs.drf_service_validation_error import (
     DRFServiceValidationError,
 )
-from django_spec_rest.service_specs.not_permitted import NotPermitted
 
 TRANSLATED_FROM: Final = "_translated_from"
 """The attribute a translated refusal carries the exception it was translated from under.
@@ -47,7 +47,7 @@ def translate_drf_refusals() -> Generator[None]:
       [`DRFServiceValidationError`][django_spec_rest.service_specs.drf_service_validation_error.DRFServiceValidationError],
       with the same detail and codes;
     - ``PermissionDenied`` as
-      [`NotPermitted`][django_spec_rest.service_specs.not_permitted.NotPermitted],
+      [`DRFNotPermitted`][django_spec_rest.service_specs.drf_not_permitted.NotPermitted],
       with its message and code;
     - ``NotAuthenticated`` as
       [`DRFNotAuthenticated`][django_spec_rest.service_specs.drf_not_authenticated.DRFNotAuthenticated],
@@ -111,7 +111,7 @@ def _built(exc: APIException) -> APIException | None:
     if isinstance(exc, NotAuthenticated):
         return DRFNotAuthenticated(_message(exc))
     if isinstance(exc, PermissionDenied):
-        return NotPermitted(_message(exc))
+        return DRFNotPermitted(_message(exc))
     if isinstance(exc, ValidationError):
         return DRFServiceValidationError(exc.detail)
     return None

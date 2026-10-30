@@ -20,7 +20,7 @@ from rest_framework import serializers
 from rest_framework.fields import empty as _drf_empty
 
 from django_spec_rest.service_specs.base_serializer_context import base_serializer_context
-from django_spec_rest.service_specs.invalid_arguments import InvalidArguments
+from django_spec_rest.service_specs.drf_invalid_arguments import DRFInvalidArguments
 from django_spec_rest.service_specs.renderable_serializer_class import (
     renderable_serializer_class,
 )
@@ -236,7 +236,7 @@ class SerializerPresenter(Presenter):
 
         A serializer refusing to render, DRF's ``ValidationError``, leaves as
         the dual-base
-        [`InvalidArguments`][django_spec_rest.service_specs.invalid_arguments.InvalidArguments],
+        [`DRFInvalidArguments`][django_spec_rest.service_specs.drf_invalid_arguments.InvalidArguments],
         raised from it, so a route over the kernel's ``present`` reads the
         kernel's refusal of the arguments, a read-shaping ``fields`` naming no
         field among them. A mapping detail is kept as it is, and a list, which
@@ -255,7 +255,7 @@ class SerializerPresenter(Presenter):
             raise
         except serializers.ValidationError as exc:
             detail = exc.detail
-            raise InvalidArguments(
+            raise DRFInvalidArguments(
                 detail if isinstance(detail, Mapping) else {NON_FIELD_ERRORS: detail}
             ) from exc
 

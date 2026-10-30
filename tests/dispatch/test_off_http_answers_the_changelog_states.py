@@ -45,7 +45,7 @@ from django_spec_rest import (
     create_model,
     dispatch_spec,
 )
-from django_spec_rest.service_specs.invalid_arguments import InvalidArguments
+from django_spec_rest.service_specs.drf_invalid_arguments import DRFInvalidArguments
 from django_spec_rest.types.offline_service_view import OfflineServiceView
 from django_spec_rest.types.unset import UNSET
 from django_spec_rest.types.view_hooks import ViewHooks
@@ -448,18 +448,18 @@ def test_bare_rows_are_refused_with_drfs_validation_error_not_invalid_arguments(
         dispatch_spec(_BULK, user=None, params=params, **kwargs)
 
     assert type(excinfo.value) is ValidationError
-    assert not isinstance(excinfo.value, InvalidArguments)
+    assert not isinstance(excinfo.value, DRFInvalidArguments)
 
 
 @pytest.mark.django_db
 def test_a_refused_argument_is_invalid_arguments_a_drf_validation_error() -> None:
-    with pytest.raises(InvalidArguments) as excinfo:
+    with pytest.raises(DRFInvalidArguments) as excinfo:
         dispatch_spec(
             _BULK, user=None, params={"items": [{"title": "toolong"}]}, many_as_argument=True
         )
 
     assert isinstance(excinfo.value, ValidationError)
-    assert "InvalidArguments" not in django_spec_rest.__all__
+    assert "DRFInvalidArguments" not in django_spec_rest.__all__
 
 
 def _no_serializer(*, data: Any = "default", title: str = "default") -> dict[str, Any]:

@@ -40,7 +40,7 @@ from django_spec_rest import (
     UnknownArguments,
     dispatch_spec,
 )
-from django_spec_rest.service_specs.invalid_arguments import InvalidArguments
+from django_spec_rest.service_specs.drf_invalid_arguments import DRFInvalidArguments
 from tests.testapp.models import Post
 
 _SEEDS = DEFAULT_POOL_SEEDS.extend(tenant=lambda: "acme")
@@ -205,7 +205,7 @@ def test_a_lookup_reading_a_seed_beside_a_field_of_its_name_answers_as_before(
     assert seen == {"lookup": "acme"}
 
     # The field is the serializer's to demand, so leaving it out is its refusal.
-    with pytest.raises(InvalidArguments) as excinfo:
+    with pytest.raises(DRFInvalidArguments) as excinfo:
         dispatch_spec(
             spec,
             user=None,

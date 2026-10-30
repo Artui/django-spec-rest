@@ -26,9 +26,9 @@ from django_service_specs.types.dispatch_error import DispatchError
 from rest_framework import status as drf_status
 from rest_framework.exceptions import APIException
 
-from django_spec_rest.service_specs.invalid_arguments import InvalidArguments
-from django_spec_rest.service_specs.not_permitted import NotPermitted
-from django_spec_rest.service_specs.principal_unavailable import PrincipalUnavailable
+from django_spec_rest.service_specs.drf_invalid_arguments import DRFInvalidArguments
+from django_spec_rest.service_specs.drf_not_permitted import DRFNotPermitted
+from django_spec_rest.service_specs.drf_principal_unavailable import DRFPrincipalUnavailable
 from django_spec_rest.service_specs.translate_drf_refusals import TRANSLATED_FROM
 from django_spec_rest.views.mutation.map_service_error import map_service_error
 
@@ -71,13 +71,13 @@ KERNEL_REFUSALS: tuple[tuple[type[BaseException], Callable[[Any], APIException]]
     # is not the answer of the row the refusal falls to with that row deleted
     # (the module docstring of the test names them).
     #
-    # A DRF exception first: the dual-base ``InvalidArguments`` a
+    # A DRF exception first: the dual-base ``DRFInvalidArguments`` a
     # ``SerializerValidator`` or ``SerializerPresenter`` raises is the
     # kernel's class as well, and is already DRF's answer.
     (APIException, _as_raised),
-    (KernelInvalidArguments, InvalidArguments.from_kernel),
-    (KernelNotPermitted, NotPermitted.from_kernel),
-    (KernelPrincipalUnavailable, PrincipalUnavailable.from_kernel),
+    (KernelInvalidArguments, DRFInvalidArguments.from_kernel),
+    (KernelNotPermitted, DRFNotPermitted.from_kernel),
+    (KernelPrincipalUnavailable, DRFPrincipalUnavailable.from_kernel),
     (DispatchError, _dispatch_refused),
     # Every ``ServiceError`` is one row on purpose, answered by
     # ``map_service_error``, which is the drfs answer and carries as its own

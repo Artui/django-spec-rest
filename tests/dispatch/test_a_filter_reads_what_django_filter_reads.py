@@ -28,7 +28,7 @@ from django_spec_rest import (
     adispatch_spec,
     dispatch_spec,
 )
-from django_spec_rest.service_specs.invalid_arguments import InvalidArguments
+from django_spec_rest.service_specs.drf_invalid_arguments import DRFInvalidArguments
 from tests.testapp.models import Post
 
 
@@ -138,7 +138,7 @@ def test_none_narrows_nothing(dispatch: Callable[..., DispatchResult], pks: list
 def test_an_unknown_ordering_is_refused_as_the_filter_set_refuses_it(
     dispatch: Callable[..., DispatchResult], pks: list[int], sent: Any
 ) -> None:
-    with pytest.raises(InvalidArguments) as caught:
+    with pytest.raises(DRFInvalidArguments) as caught:
         dispatch(params={"ordering": sent})
 
     errors = caught.value.detail["ordering"]
@@ -154,7 +154,7 @@ def test_a_multiple_choice_filter_still_refuses_a_bare_value(
     dispatch: Callable[..., DispatchResult], pks: list[int]
 ) -> None:
     """Only a CSV filter splits a string: a multiple choice filter never took one."""
-    with pytest.raises(InvalidArguments):
+    with pytest.raises(DRFInvalidArguments):
         dispatch(params={"kinds": "a"})
 
     assert _titles(dispatch(params={"kinds": ["a", "b"]})) == ["b", "a"]
@@ -215,7 +215,7 @@ def test_a_selector_s_own_list_parameter_keeps_its_refusal_at_the_index(
         kind=SelectorKind.LIST, selector=posts, filter_set=_Posts, permission_classes=[]
     )
 
-    with pytest.raises(InvalidArguments) as caught:
+    with pytest.raises(DRFInvalidArguments) as caught:
         call(spec, user=None, params={"ids": ["x"]})
 
     assert set(caught.value.detail["ids"]) == {0}
@@ -255,7 +255,7 @@ def test_a_target_lookup_s_filter_takes_what_its_filter_set_reads(
 def test_a_target_lookup_s_filter_is_refused_as_its_filter_set_refuses_it(
     call: Callable[..., DispatchResult], pks: list[int]
 ) -> None:
-    with pytest.raises(InvalidArguments) as caught:
+    with pytest.raises(DRFInvalidArguments) as caught:
         call(_a_post_by(), user=None, params={"pk": pks[1], "ordering": ["bogus"]})
 
     assert [str(error) for error in caught.value.detail["ordering"]] == [

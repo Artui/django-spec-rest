@@ -4,7 +4,7 @@ The kernel refuses the list under the argument that carries it (``items``, or
 the spec's ``many_argument``) and each invalid row under its ``int`` index, a
 valid row having no entry. DRF below 3.18 reports a list with an empty entry
 per valid row and 3.18 a mapping of the invalid rows' indexes; both reach a
-client as the latter. The tree is the dual-base ``InvalidArguments``, so it is
+client as the latter. The tree is the dual-base ``DRFInvalidArguments``, so it is
 DRF's ``ValidationError`` too, and renders as JSON with the indexes as string
 keys.
 
@@ -46,7 +46,7 @@ from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 from rest_framework.test import APIRequestFactory
 
-from django_spec_rest.service_specs.invalid_arguments import InvalidArguments
+from django_spec_rest.service_specs.drf_invalid_arguments import DRFInvalidArguments
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from tests.views.test_kernel_edge import CORES, _parts
 from tests.views.test_kernel_views import _CreateView
@@ -112,8 +112,8 @@ def _spec(
     )
 
 
-def _refusal(core: Callable[..., Any], spec: ServiceSpec, rows: Any) -> InvalidArguments:
-    with pytest.raises(InvalidArguments) as caught:
+def _refusal(core: Callable[..., Any], spec: ServiceSpec, rows: Any) -> DRFInvalidArguments:
+    with pytest.raises(DRFInvalidArguments) as caught:
         core(spec, **_parts(rows))
     return caught.value
 
