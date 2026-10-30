@@ -9,9 +9,11 @@ from rest_framework.generics import GenericAPIView
 from rest_framework.request import Request
 from rest_framework.response import Response
 
+from django_spec_rest.dispatch.kernel_edge import runs_on_kernel
 from django_spec_rest.types.service_spec import ServiceSpec
 from django_spec_rest.views.mutation.mutation_flow_mixin import MutationFlowMixin
 from django_spec_rest.views.mutation.utils import resolve_mutation_instance
+from django_spec_rest.views.spec_options import spec_options
 from django_spec_rest.views.spec_validation import validate_mutation_view_spec
 
 
@@ -37,6 +39,14 @@ class ServiceUpdateView(MutationFlowMixin, GenericAPIView):
     def as_view(cls, **initkwargs: Any) -> Any:
         validate_mutation_view_spec(cls, has_instance=True)
         return super().as_view(**initkwargs)
+
+    def options(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        # A kernel spec is described from the spec, never from DRF's probe of
+        # ``get_object()`` and ``serializer_class`` (``spec_options``); a drfs
+        # spec keeps DRF's own answer until that path goes.
+        if runs_on_kernel(self.spec):
+            return spec_options(self, request, {"PUT": self.spec})
+        return super().options(request, *args, **kwargs)
 
     def put(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         return self._run(request, partial=False)

@@ -18,6 +18,7 @@ from django_spec_rest.types.selector_spec import SelectorSpec
 from django_spec_rest.types.service_spec import ServiceSpec
 from django_spec_rest.views.mutation.mutation_flow_mixin import MutationFlowMixin
 from django_spec_rest.views.mutation.utils import _ServesRaisedSchema, mutation_target_source
+from django_spec_rest.views.spec_options import spec_options
 from django_spec_rest.views.spec_validation import (
     is_overridden,
     validate_filter_set_no_backend_conflict,
@@ -86,7 +87,8 @@ def dispatches_action_specs(handler: _HandlerT) -> _HandlerT:
     """Mark a viewset handler as this package's own ``action_specs`` dispatcher.
 
     Such a handler answers 405 when no spec serves its action, so OPTIONS can
-    leave that method out rather than describe a body nobody accepts. A
+    leave that method out rather than describe a body nobody accepts, and on a
+    route serving a kernel spec ``Allow`` leaves it out too. A
     handler the view defines itself, even one calling ``super()``, is not
     marked: what it accepts is its own business, and OPTIONS describes it as
     DRF always has.
@@ -474,17 +476,77 @@ class _ActionSpecsMixin(_ServesRaisedSchema):
         return self.action_map.get(self.request.method.lower(), "")
 
     def options(self, request: Any, *args: Any, **kwargs: Any) -> Any:
-        """Answer OPTIONS as DRF does, marking the view as describing itself.
+        """Answer OPTIONS from the kernel specs the route serves, or as DRF does.
 
-        DRF sets ``self.action = "metadata"`` for an OPTIONS request, but also
-        for a real request routed to a view's own action named ``metadata``.
-        The flag set here is what tells the two apart. It is set on the view
-        instance, so it holds through DRF's per-method probe, which swaps in a
-        clone of the request on that same instance. A view overriding
-        ``options()`` without calling ``super()`` gets DRF's own answers.
+        A route serving any kernel spec is described from its specs
+        (``spec_options``): no spec stage runs, and only a method a kernel spec
+        serves is described, so on a viewset mixing the two kinds a method a
+        drfs spec serves is left out of ``actions`` rather than probed
+        (test_options_metadata's test_a_drfs_method_beside_a_kernel_spec_is_not_described).
+
+        A route serving none answers as DRF does, marking the view as
+        describing itself. DRF sets ``self.action = "metadata"`` for an
+        OPTIONS request, but also for a real request routed to a view's own
+        action named ``metadata``. The flag set here is what tells the two
+        apart. It is set on the view instance, so it holds through DRF's
+        per-method probe, which swaps in a clone of the request on that same
+        instance. A view overriding ``options()`` without calling ``super()``
+        gets DRF's own answers.
         """
+        served = self._kernel_specs_served()
+        if served:
+            return spec_options(self, request, served)
         self._answering_options = True
         return super().options(request, *args, **kwargs)  # ty: ignore[unresolved-attribute]
+
+    def _kernel_specs_served(self) -> dict[str, KernelServiceSpec | KernelSelectorSpec]:
+        """Each method the route maps to an action served by a kernel spec, and that spec.
+
+        Read through ``resolve_action_spec``, as dispatch and
+        ``get_permissions`` resolve a spec, so the ``"partial_update"`` to
+        ``"update"`` fallback and a spec stamped by ``@service_action`` or
+        ``@selector_action`` are both served here too. Empty where the view
+        has no action map: built other than by ``as_view(actions)``.
+        """
+        served: dict[str, KernelServiceSpec | KernelSelectorSpec] = {}
+        for method, action in getattr(self, "action_map", {}).items():
+            spec = resolve_action_spec(self, action)
+            if runs_on_kernel(spec):
+                served[method.upper()] = spec
+        return served
+
+    @property
+    def allowed_methods(self) -> list[str]:
+        """DRF's, less a method this package's own handler would refuse, on a kernel route.
+
+        DRF lists every method the action map binds a handler to, so a router
+        mapping PUT to ``update`` on a viewset with no ``update`` spec put PUT
+        in ``Allow`` while the handler answers 405. On a route serving a
+        kernel spec, a method bound to a handler marked
+        ``dispatches_action_specs`` with no spec behind it is left out, which
+        ``Allow`` on every response and OPTIONS' ``actions`` both read
+        (test_options_metadata's test_allow_names_only_the_methods_a_spec_serves).
+        A handler the view defines itself, and the list and retrieve handlers,
+        which fall back to DRF's own queryset, stay. A drfs-only route keeps
+        DRF's list, which its OPTIONS path relies on to leave such a method
+        out of ``actions`` itself.
+        """
+        methods: list[str] = super().allowed_methods  # ty: ignore[unresolved-attribute]
+        if not self._kernel_specs_served():
+            return methods
+        return [method for method in methods if not self._refuses(method.lower())]
+
+    def _refuses(self, method: str) -> bool:
+        """Whether ``method`` reaches one of this package's dispatchers with no spec to serve it."""
+        # ``""`` for a method the action map does not bind (``options``, which
+        # DRF serves itself), so the lookups below answer "not refused"
+        # without a branch of their own, as ``_described_action`` does. One
+        # arc to coverage, so each condition is named: the marker by
+        # test_allow_keeps_a_views_own_handler_without_a_spec, the missing
+        # spec by test_allow_names_only_the_methods_a_spec_serves.
+        action = getattr(self, "action_map", {}).get(method, "")
+        marked = getattr(getattr(self, action, None), "_dispatches_action_specs", False)
+        return marked and resolve_action_spec(self, action) is None
 
     def _describing_for_options(self) -> bool:
         """Whether this is DRF's OPTIONS metadata describing the view.
@@ -496,7 +558,7 @@ class _ActionSpecsMixin(_ServesRaisedSchema):
         held by test_the_browsable_options_page_renders_forms_as_before. The
         action alone is also ``"metadata"`` for a real request to a view's own
         action of that name, held by the five tests of a real action named
-        ``metadata`` in test_options_metadata.py.
+        ``metadata`` in test_options_metadata_drfs.py.
         """
         return self.action == "metadata" and self._answering_options
 

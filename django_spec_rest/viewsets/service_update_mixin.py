@@ -39,6 +39,7 @@ class ServiceUpdateMixin(MutationFlowMixin, _ActionSpecsMixin):
     def update(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         return self._update(request, partial=False)
 
+    @dispatches_action_specs
     def partial_update(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         return self._update(request, partial=True)
 

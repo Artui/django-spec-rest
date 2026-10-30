@@ -13,6 +13,7 @@ from django_spec_rest.views.mutation.mutation_flow_mixin import MutationFlowMixi
 from django_spec_rest.views.mutation.utils import resolve_mutation_instance
 from django_spec_rest.viewsets.utils import (
     _ActionSpecsMixin,
+    dispatches_action_specs,
     resolve_action_service_spec,
 )
 
@@ -30,6 +31,7 @@ class ServiceDestroyMixin(MutationFlowMixin, _ActionSpecsMixin):
     # Provided at runtime by ``GenericAPIView`` / ``GenericViewSet``.
     get_object: Callable[..., Any]
 
+    @dispatches_action_specs
     def destroy(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         spec = resolve_action_service_spec(self.action_specs, "destroy", "DELETE", view=self)
         return self._run_mutation(
