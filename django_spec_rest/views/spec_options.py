@@ -56,8 +56,9 @@ def spec_options(
 
     The description is ``parameters_schema`` over ``spec.parameters()`` less
     what the server fills for the call: ``server_owned_keys`` (the seeds and
-    every key a typed provider fills) and the route's own captures, which the
-    edge reads from the URL over anything the body sends. It is built under
+    every key a typed provider fills), the route's own captures, which the
+    edge reads from the URL over anything the body sends, and on a ``PUT`` the
+    target selector's reads, which an update never reads from the body. It is built under
     the edge's unknown-argument policy, so under ``IGNORE`` it states no
     ``additionalProperties``.
     """
@@ -108,7 +109,7 @@ class _SpecMetadata(SimpleMetadata):
                 # in a 500 (test_options_metadata's
                 # test_a_context_dependent_input_is_left_out_rather_than_a_500).
                 continue
-            actions[method] = _described(spec, declared, view)
+            actions[method] = _described(spec, declared, view, method)
         return actions
 
 
@@ -132,9 +133,26 @@ def _grants(
 
 
 def _described(
-    spec: KernelServiceSpec | KernelSelectorSpec, declared: Parameters, view: Any
+    spec: KernelServiceSpec | KernelSelectorSpec, declared: Parameters, view: Any, method: str
 ) -> dict[str, Any]:
-    """The JSON Schema of what the caller sends ``spec`` on this route, of the ``declared`` parameters."""
+    """The JSON Schema of what the caller sends ``spec`` by ``method``, of the ``declared`` parameters.
+
+    Left out: what the server fills (``server_owned_keys``), the route's own
+    captures, which the edge reads from the URL over the body
+    (test_options_metadata's test_a_route_capture_is_not_described_as_input),
+    and on a PUT the target selector's reads, which an update takes from the
+    route and the query string and never from the body
+    (test_a_put_s_target_reads_are_not_described_as_input). A POST acting on
+    a row keeps them, being no update
+    (test_a_post_s_target_reads_stay_described).
+    """
     owned = server_owned_keys(spec, pool_seeds=DEFAULT_POOL_SEEDS) | set(view.kwargs)
+    target = spec.target_selector_spec() if isinstance(spec, KernelServiceSpec) else None
+    # One arc to coverage, so each condition is named: the method by
+    # test_a_post_s_target_reads_stay_described, the target by
+    # test_a_bulk_put_with_no_target_is_described, a ``many`` update having
+    # none to read.
+    if method == "PUT" and target is not None:
+        owned |= target.reads.names()
     sent = Parameters.of(*(param for param in declared if param.name not in owned))
     return parameters_schema(sent, unknown_arguments=UNKNOWN_ARGUMENTS)

@@ -260,14 +260,55 @@ def test_a_drfs_method_beside_a_kernel_spec_is_not_described() -> None:
 
 
 def test_a_route_capture_is_not_described_as_input() -> None:
-    """The edge reads ``pk`` from the route over anything the body sends, so a
-    detail route does not ask the caller for it; on a route with no capture
-    it is still the caller's to send."""
+    """The edge reads a declared capture from the route over anything the body
+    sends, so a route carrying it does not ask the caller for it; on a route
+    with no such capture it is still the caller's to send."""
+    spec = ServiceSpec(
+        service=_service,
+        permissions=_OPEN,
+        validator=SerializerValidator(_NameIn),
+        reads=Parameters.of(Parameter("org", "string", required=True)),
+    )
+    viewset = _viewset(action_specs={"create": spec})
+    captured = _options(viewset, {"post": "create"}, org="acme")
+    assert _described(captured) == {"POST": {"name"}}
+    uncaptured = _options(viewset, {"post": "create"})
+    assert _described(uncaptured) == {"POST": {"name", "org"}}
+
+
+def test_a_put_s_target_reads_are_not_described_as_input() -> None:
+    """An update never reads its target's lookup from the body, only from the
+    route and the query string, so PUT's body schema leaves it out on any
+    route, a list route with no capture included."""
     viewset = _viewset(action_specs={"update": _update()})
-    detail = _options(viewset, {"put": "update"}, pk=1)
-    assert _described(detail) == {"PUT": {"name"}}
-    listing = _options(viewset, {"put": "update"})
-    assert _described(listing) == {"PUT": {"name", "pk"}}
+    for captures in ({"pk": 1}, {}):
+        assert _described(_options(viewset, {"put": "update"}, **captures)) == {"PUT": {"name"}}
+
+
+def test_a_bulk_put_with_no_target_is_described() -> None:
+    """A ``many`` update declares no target selector, so there is no lookup to
+    leave out: its body is the list of rows."""
+    spec = ServiceSpec(
+        service=_service, permissions=_OPEN, validator=SerializerValidator(_NameIn), many=True
+    )
+    response = _options(_viewset(action_specs={"update": spec}), {"put": "update"})
+    assert response.status_code == 200
+    assert _described(response) == {"PUT": {spec.many_argument}}
+
+
+def test_a_post_s_target_reads_stay_described() -> None:
+    """Only an update's target lookup is kept off the body: a custom POST
+    acting on a row still asks the caller for its lookup where the route
+    does not carry it."""
+
+    class _ViewSet(ServiceViewSet):
+        queryset = Author.objects.all()
+
+        @service_action(_update(), methods=["post"], detail=True)
+        def publish(self, request: Any, pk: Any = None) -> Any: ...
+
+    response = _options(_ViewSet, {"post": "publish"})
+    assert _described(response) == {"POST": {"name", "pk"}}
 
 
 # ----- what drfs' metadata could not describe -----
