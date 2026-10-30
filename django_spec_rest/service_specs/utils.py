@@ -292,11 +292,17 @@ def call_base_context(*, view: Any, request: Any) -> dict[str, Any]:
     """
     state = EDGE_CALL.get()
     held = state.base_context if state is not None else None
+    # One arc to coverage, so each identity is named: the request by
+    # test_call_base_context's test_a_call_carrying_another_request_is_answered_for_it,
+    # the view by test_a_call_carrying_another_view_is_answered_for_it.
     if held is not None and held[0] is request and held[1] is view:
         return dict(held[2])
     context = base_serializer_context(view=view, request=request)
     if state is not None:
         state.base_context = (request, view, context)
+    # Both copies, since a caller lays its layers on the dict it is handed:
+    # test_a_layer_one_call_lays_on_its_copy_never_reaches_the_next fails
+    # without either.
     return dict(context)
 
 
@@ -759,7 +765,10 @@ def _answerable(fn: Callable[..., Any], pool: Mapping[str, Any]) -> bool:
     once (test_a_live_view_describes_a_serializer_needing_a_whole_pool_callable,
     a strict xfail that passes without the check). A parameter
     named with no default must be in ``pool``; a ``*args`` with no default is
-    not looked for there.
+    not looked for there. Each condition is held by its own test of
+    ``test_utils``: the default by
+    test_a_parameter_with_a_default_is_not_looked_for_in_the_pool, the kind by
+    test_a_var_positional_parameter_is_not_looked_for_in_the_pool.
     """
     if takes_the_whole_pool(fn):
         return False

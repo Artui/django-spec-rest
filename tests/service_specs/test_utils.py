@@ -21,6 +21,7 @@ from rest_framework import ISO_8601, serializers
 from rest_framework_dataclasses.serializers import DataclassSerializer
 
 from django_spec_rest.service_specs.utils import (
+    _answerable,
     describe_serializer,
     input_parameters,
     serializer_context,
@@ -657,3 +658,27 @@ def test_a_call_context_is_offered_to_the_callable_as_the_call_s_own_dict() -> N
     )
 
     assert context["same"] is True
+
+
+# --- whether a description can ask a context callable -----------------------------
+
+
+def test_a_parameter_with_a_default_is_not_looked_for_in_the_pool() -> None:
+    """A defaulted parameter is answered by its default where the pool lacks it,
+    so the callable is still asked."""
+
+    def fn(request: Any, tenant: Any = None) -> dict[str, Any]:
+        return {}
+
+    assert _answerable(fn, {"request": object()})
+    assert not _answerable(fn, {})
+
+
+def test_a_var_positional_parameter_is_not_looked_for_in_the_pool() -> None:
+    """``*args`` has no default, yet the pool is keyed by name and never fills
+    it, so only the named parameters decide."""
+
+    def fn(request: Any, *args: Any) -> dict[str, Any]:
+        return {}
+
+    assert _answerable(fn, {"request": object()})
