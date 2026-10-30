@@ -28,8 +28,9 @@ def renderable_serializer_class(declared: type | None) -> type[BaseSerializer[An
     handed ``many=`` / ``context=``; resolving it here first is what lets both
     shapes render.
 
-    Every render site in this package resolves through it: ``SerializerPresenter``,
-    which every view, viewset and action presents through and whose ``output()``
+    Every render site in this package resolves through it: a spec's
+    ``SerializerPresenter``, which a view, viewset or action presents through and
+    whose ``output()``
     [`audience_projection_for_spec`][django_service_specs.dispatch.audience_projection_for_spec.audience_projection_for_spec]
     reads, so an agent is shaped by the markings of the class it is actually
     rendered with; the OpenAPI schema; and the browsable API's form serializer.

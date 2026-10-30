@@ -200,7 +200,9 @@ class EdgeCallState:
       as the edge put it. The Validator validates these, never what a field
       reads back from the body, and a key the Validator's ``server_owned``
       names is handed on by name only from one of them
-      (``server_values``). On a form body as on any other, each is validated
+      (test_a_server_owned_name's
+      test_the_clients_value_for_an_owned_name_is_data_and_never_the_parameter
+      and test_the_servers_value_for_an_owned_name_reaches_its_source). On a form body as on any other, each is validated
       as the author returned it, since the kernel's shape check read the value
       as returned (test_server_value_the_edge_put's
       test_input_data_on_a_form_body_is_taken_as_the_author_returned_it).
