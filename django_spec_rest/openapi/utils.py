@@ -8,8 +8,7 @@ from rest_framework import status as drf_status
 
 # Default success status by action / view kind. Mirrors the runtime defaults
 # in the standalone views and viewset mixins so the schema lines up with
-# what the framework actually returns when no success status is set: a drfs
-# ``ServiceSpec.success_status``, or for a kernel spec the view's own.
+# what the framework actually returns when the view sets no success status.
 _ACTION_DEFAULT_STATUS: dict[str, int] = {
     "create": drf_status.HTTP_201_CREATED,
     "update": drf_status.HTTP_200_OK,

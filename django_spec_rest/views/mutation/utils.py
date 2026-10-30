@@ -233,9 +233,9 @@ def restore_raised_schema(exc: Exception, response: Response) -> Response:
     exception, and any response without a ``schema`` key of its own, comes back
     as it was.
 
-    Called from two places, which between them cover every route drfs ships to a
-    mapped ``ServiceError``: ``_ServesRaisedSchema`` below, for drfs' views and
-    viewset bases, and the exception handler ``@service_action`` hands
+    Called from two places, which between them cover every route the package
+    ships to a mapped ``ServiceError``: ``_ServesRaisedSchema`` below, for its
+    views and viewset bases, and the exception handler ``@service_action`` hands
     ``APIView.handle_exception`` on whatever viewset declares it. Where both run,
     the second writes what the first wrote, so the body is the same. A handler
     that declines the error answers ``None``, which comes back as ``None`` for
@@ -272,15 +272,15 @@ class _ServesRaisedSchema:
     """Runs ``restore_raised_schema`` over every response ``handle_exception`` builds.
 
     Inherited by ``MutationFlowMixin`` (the three mutation views and the
-    viewset mixins) and ``_ActionSpecsMixin`` (every drfs viewset base,
+    viewset mixins) and ``_ActionSpecsMixin`` (every viewset base,
     ``ActionSerializerResolver`` included), which between them are every class
-    drfs ships that maps a ``ServiceError`` into a response. Defined once, so a
+    the package ships that maps a ``ServiceError`` into a response. Defined once, so a
     class inheriting both runs it once.
 
     It runs only where it precedes DRF's view in the bases: in
     ``class V(GenericViewSet, ActionSerializerResolver)``, ``APIView``'s own
-    ``handle_exception`` answers first and never calls this one. Nothing drfs
-    ships is composed that way. A user who lists a drfs mixin after
+    ``handle_exception`` answers first and never calls this one. Nothing the
+    package ships is composed that way. A user who lists one of its mixins after
     ``GenericViewSet`` gets DRF's method, and that mixin's own actions serve the
     schema stringified; ``@service_action`` restores it itself on any viewset.
     The restoring half is held by

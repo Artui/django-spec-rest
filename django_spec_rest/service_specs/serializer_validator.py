@@ -41,11 +41,10 @@ BOUND: frozenset[str] = frozenset({"serializer"})
 class SerializerValidator(Validator):
     """A Validator whose declaration is a DRF serializer, or a dataclass read through one.
 
-    It takes what a drfs spec's ``input_serializer`` takes: a ``Serializer``
-    subclass, ``ModelSerializer`` and ``DataclassSerializer`` included, or a
-    dataclass, which is validated through a ``DataclassSerializer`` exactly as
-    drfs' dispatch validates it. Anything else is refused with
-    ``ImproperlyConfigured`` when the Validator is built.
+    It takes a ``Serializer`` subclass, ``ModelSerializer`` and
+    ``DataclassSerializer`` included, or a dataclass, which is validated
+    through a ``DataclassSerializer`` built for it. Anything else is refused
+    with ``ImproperlyConfigured`` when the Validator is built.
 
     ``parameters()`` walks the serializer's fields, in order, as the field walk
     in ``service_specs/utils.py`` reads them: a nested serializer is an object
@@ -66,8 +65,7 @@ class SerializerValidator(Validator):
 
     - **with the target as** ``instance``, so an update's uniqueness checks
       exclude the row being updated. The queryset a collection selector
-      resolves is no row, so a call over one binds as a create, as drfs'
-      dispatch binds it; the target is handed over as it is, since a
+      resolves is no row, so a call over one binds as a create; the target is handed over as it is, since a
       serializer, unlike a ``ModelForm``, writes nothing onto its instance
       while it validates.
     - **partial as the call is**, the context's ``partial``, so a partial call
@@ -105,12 +103,11 @@ class SerializerValidator(Validator):
     with its code, cross-field messages under ``non_field_errors``, and a
     nested list's errors in whichever shape the installed DRF writes them.
 
-    ``validated()`` hands the service what drfs' dispatch hands it: ``data``
-    is the serializer's ``validated_data`` - the validated mapping, or the
-    dataclass instance a ``DataclassSerializer`` builds - and the bound
-    serializer is bound for the call as ``serializer``. ``values`` follow
-    what ``validated_data`` is, as drfs' dispatch reads it: a mapping's
-    entries, keyed as DRF keys them, by each field's ``source``; a dataclass
+    ``validated()`` hands the service ``data``, the serializer's
+    ``validated_data`` - the validated mapping, or the dataclass instance a
+    ``DataclassSerializer`` builds - and the bound serializer is bound for the
+    call as ``serializer``. ``values`` follow what ``validated_data`` is: a
+    mapping's entries, keyed as DRF keys them, by each field's ``source``; a dataclass
     instance's ``__init__`` fields, whether a dataclass was declared or a
     ``DataclassSerializer`` subclass was; and nothing for any other object a
     serializer's ``validate()`` returns, which reaches the service only as
@@ -118,7 +115,7 @@ class SerializerValidator(Validator):
     ``data``: DRF's ``HiddenField(default=CurrentUserDefault())`` named
     ``user``, or a key a ``validate()`` adds named ``result``, stays in
     ``validated_data`` as the serializer built it, and the service's ``user``
-    is the call's principal, as drfs always handed them (see ``_unseeded``).
+    is the call's principal (see ``_unseeded``).
     **So is a key named in** ``server_owned``, the names the caller declares
     the server's: the client's value is the service's in ``data`` alone, unless the edge put the server's
     value into the field it comes from (see ``_unowned``). **Where the edge did,
@@ -666,7 +663,7 @@ def _unseeded(values: Mapping[str, Any], context: ValidationContext) -> dict[str
 
 
 def _values(data: Any) -> dict[str, Any]:
-    """The values a call's ``validated_data`` spreads by name, as drfs' dispatch spreads them.
+    """The values a call's ``validated_data`` spreads by name.
 
     Read off the value rather than the declaration, so a declared
     ``DataclassSerializer`` subclass is read as the dataclass it builds

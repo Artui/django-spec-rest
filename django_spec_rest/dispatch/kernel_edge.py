@@ -123,7 +123,7 @@ UNKNOWN_ARGUMENTS = UnknownArguments.IGNORE
 """What the kernel route does with an argument the spec declares no parameter for.
 
 ``IGNORE``: an undeclared body or query key is dropped unseen, as DRF drops a
-key no serializer field declares and as drfs over HTTP did, so a client sending
+key no serializer field declares, so a client sending
 a whole row back (its ``id`` beside the fields it may write) is not refused.
 The kernel's own default is ``REJECT``, a ``400`` "Unknown argument.", and it
 stays the answer where a caller asks for it. Both cores pass this one value

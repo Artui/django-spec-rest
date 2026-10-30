@@ -108,8 +108,8 @@ def _kernel_changes(spec: KernelServiceSpec, partial: bool | None, lenient: bool
     # ``no-validator`` without the second (the kernel refuses ``partial=True``
     # there), ``already-whole`` / ``already-partial`` without the third, and, for
     # the fourth, test_a_partial_variant_over_a_validator_that_cannot_be_partial_is_the_spec_itself
-    # (a Validator that builds every field is validated whole, as drfs validated a
-    # ``PATCH`` to a dataclass, where ``derive`` would refuse ``partial=True``).
+    # (a Validator that builds every field, as a dataclass's does, is validated
+    # whole, where ``derive`` would refuse ``partial=True``).
     if (
         partial is not None
         and validator is not None

@@ -14,12 +14,7 @@ throughout is therefore that a declaration may be incomplete and never
 stricter than the field: a field with no single JSON type of its own - a
 ``JSONField``, a related field, which DRF reads from a string as readily as
 from a number, or a field this walk does not know - declares ``any``, which
-the shape check passes on as it came. It is the same policy drfs' own input
-schema follows, which writes ``{}`` for each of them.
-
-What a field means is read as drfs' ``serializer_to_json_schema`` reads it, so
-the two describe one serializer alike; the parity test names each place the
-two dialects differ and why.
+the shape check passes on as it came.
 """
 
 from __future__ import annotations
@@ -51,12 +46,10 @@ MAX_SERIALIZER_APPEARANCES = 4
 """How many times one serializer class may appear on the walk's current path
 before the next appearance is truncated to an open object.
 
-drfs' own input schema's allowance, and for the same reason: a
-self-referential serializer is an ordinary shape and must not raise
+A self-referential serializer is an ordinary shape and must not raise
 ``RecursionError`` while a transport describes it, and a serializer bounding
 its own depth with a countdown is usually written three levels below its root,
-so four appearances describe it as written. Kept equal to drfs' so the two
-truncate one declaration at the same node."""
+so four appearances describe it as written."""
 
 _SCALARS: tuple[tuple[type[serializers.Field], str, str | None], ...] = (
     (serializers.BooleanField, "boolean", None),
@@ -85,9 +78,9 @@ within the CharField family, which ends the string rows."""
 def describe_serializer(declaration: Any, validator: Any = None) -> serializers.Serializer:
     """The serializer ``declaration`` describes its fields with: the call's own, inside one.
 
-    ``declaration`` is what a drfs spec's ``input_serializer`` takes: a
-    ``Serializer`` subclass, or a dataclass, which is read through a
-    ``DataclassSerializer`` exactly as dispatch validates it. Anything else is
+    ``declaration`` is what a ``SerializerValidator`` takes: a ``Serializer``
+    subclass, or a dataclass, which is read through a ``DataclassSerializer``
+    exactly as the Validator validates it. Anything else is
     refused with ``ImproperlyConfigured``. ``validator`` is the Validator
     asking, whose ``serializer`` it is, or ``None`` for a reader that is no
     Validator's.
@@ -540,7 +533,7 @@ def serializer_context(
        A client's argument never stands in for one of the call's own objects
        (test_an_argument_never_stands_in_for_the_request_the_callable_declares).
        A key it answers with ``UNSET`` is declined, leaving the layer beneath,
-       as on every transport drfs has (test_an_unset_value_declines_the_key_and_keeps_the_layer_beneath).
+       on every transport (test_an_unset_value_declines_the_key_and_keeps_the_layer_beneath).
        ``call_context`` is the call's own dict, so a callable reads what an
        earlier stage left there (test_the_output_callable_may_name_the_call_s_context)
        and writes to the one object the call shares. It is offered only when
@@ -558,8 +551,8 @@ def serializer_context(
     test_every_serializer_s_context_is_the_request_s_one_dict). The view's
     ``get_serializer_context`` answer goes beneath the entries the dict
     already holds (``_context_for``). Anywhere else each serializer is built
-    with a dict of its own: on drfs' edge, which registers the request and
-    view as seeds, and off a request, where the offline pair is the
+    with a dict of its own: for a caller that registers the request and view
+    as seeds, and off a request, where the offline pair is the
     serializer's and never the transport's (``TestOffARequest``).
 
     One branch to coverage for the offline pair: a request alone is held
@@ -867,12 +860,11 @@ def input_parameter(
     is reported only when it is a literal (see ``literal_default``).
 
     A field a ``registry`` rule matches is declared by the rule's fragment
-    before any built-in reading, a nested serializer's included, as drfs'
-    ``serializer_to_json_schema`` describes it
+    before any built-in reading, a nested serializer's included
     (test_a_rule_wins_over_the_walk_of_a_nested_serializer). The fragment is
     split by ``fragment_keywords``; the field's own ``required`` and
     ``default`` stand, and its ``allow_null`` and ``help_text`` stand beside
-    the fragment's, as drfs' walk writes them over it
+    the fragment's, written over it
     (test_the_field_s_own_help_label_and_null_stand_beside_the_fragment).
     """
     common: dict[str, Any] = {
@@ -938,7 +930,7 @@ def registered_fragment(
 ) -> Mapping[str, Any] | None:
     """The fragment of the first ``registry.fields`` rule ``field`` is an instance of, or ``None``.
 
-    First match wins, as in drfs' own serializer walk. Held by
+    First match wins. Held by
     test_a_rule_wins_over_the_walk_of_a_nested_serializer.
     """
     if registry is None:
@@ -956,9 +948,8 @@ def fragment_keywords(fragment: Mapping[str, Any], *, output: bool) -> dict[str,
     """A registry fragment as keyword arguments for a ``Parameter``, or an ``OutputField`` when ``output``.
 
     The compiled spec takes what the kernel can state of the fragment and drops
-    the rest, so a registry drfs' own builders describe never stops a spec
-    compiling, and those builders keep describing the whole fragment. Split in
-    two, each class held by its tests in ``test_registered_fragments``:
+    the rest, so a rule carrying a keyword the kernel has no seat for never
+    stops a spec compiling. Split in two, each class held by its tests in ``test_registered_fragments``:
 
     - **The keywords a field spells set it**
       (test_a_keyword_a_parameter_field_spells_sets_that_field,
@@ -1184,8 +1175,7 @@ def field_choices(field: serializers.Field) -> FieldChoices | None:
     parameter's ``nullable``, not a choice.
 
     DRF matches a value by its ``str``, so it also takes ``"1"`` for the choice
-    ``1``; the declaration states the type the values are written in, as drfs'
-    own schema does.
+    ``1``; the declaration states the type the values are written in.
     """
     if not isinstance(field, serializers.ChoiceField):
         return None
@@ -1213,7 +1203,7 @@ def literal_default(field: serializers.Field) -> Any:
 
     A callable default - a function, ``CurrentUserDefault``,
     ``CreateOnlyDefault`` - is computed per call, so no one value is its
-    default. DRF's ``empty`` and drfs' ``UNSET`` both mean no default; ``empty``
+    default. DRF's ``empty`` and the kernel's ``UNSET`` both mean no default; ``empty``
     is a class, so it is callable, and the one test answers for it too
     (test_a_required_field_is_required_and_takes_no_null). One branch to
     coverage, so each condition is held by its own test:
@@ -1317,7 +1307,7 @@ def _lengths(field: Any) -> dict[str, Any]:
 
     Declared so the shape check holds a list to what DRF holds it to; a list
     declaring no maximum is held to the kernel's own default by the shape
-    check, which drfs' schema never stated.
+    check.
     """
     minimum: int | None = getattr(field, "min_length", None)
     if not field.allow_empty:

@@ -80,8 +80,7 @@ KERNEL_REFUSALS: tuple[tuple[type[BaseException], Callable[[Any], APIException]]
     (KernelPrincipalUnavailable, DRFPrincipalUnavailable.from_kernel),
     (DispatchError, _dispatch_refused),
     # Every ``ServiceError`` is one row on purpose, answered by
-    # ``map_service_error``, which is the drfs answer and carries as its own
-    # public function: ``ServiceValidationError`` 400,
+    # ``map_service_error``, which is a public function of its own: ``ServiceValidationError`` 400,
     # ``ServiceNotFound`` 404, ``ActionUnavailable`` and ``ServiceConflict``
     # 409, ``AdditionalInputRequired`` 422 with its schema, any other 422. A
     # row per subclass pointing at that function would be one answer written

@@ -216,14 +216,12 @@ def _serves_the_other_kind(view_cls: type, spec: Any, served: type) -> str:
 def _check_kernel_seeds(spec: KernelServiceSpec | KernelSelectorSpec) -> None:
     """Refuse at ``as_view()`` what the kernel's ``check_seeds`` refuses of ``spec``.
 
-    Most of what ``validate_service_spec`` and ``validate_selector_spec`` check
-    of a drfs spec's signatures is a question this one answers for a kernel
-    spec: a keyword nothing fills, a positional-only parameter, an optional
-    read over a keyword that requires it, a parameter a seed occupies. Not
-    all of it: ``check_seeds`` reads no output selector, so a keyword an
-    ``output_selector_spec``'s selector requires and nothing fills, which drfs
-    refused here, is met only when the call reaches the re-read, after the
-    service has run. It is asked with the kernel's default seeds because
+    It answers the questions a spec's signatures raise: a keyword nothing
+    fills, a positional-only parameter, an optional read over a keyword that
+    requires it, a parameter a seed occupies. Not every one: ``check_seeds``
+    reads no output selector, so a keyword an ``output_selector_spec``'s
+    selector requires and nothing fills is met only when the call reaches the
+    re-read, after the service has run. It is asked with the kernel's default seeds because
     those are the seeds the edge dispatches with (``dispatch_kernel_spec``
     registers none), and only where nothing fills a keyword it cannot see:
     a mutation view overriding a service-kwargs hook hands the edge's
@@ -233,7 +231,7 @@ def _check_kernel_seeds(spec: KernelServiceSpec | KernelSelectorSpec) -> None:
     (``_refuse_selector_hooks``), so a selector view has no overlay to hide
     a keyword.
     The fields a kernel spec declares are checked when it is built, by its own
-    ``__post_init__``, so nothing of a drfs spec's field checks is owed here.
+    ``__post_init__``, so no field check is owed here.
     Held on a mutation view by test_a_keyword_nothing_fills_is_refused and on
     a selector view by test_a_list_selector_requiring_data_is_refused.
 
@@ -277,8 +275,7 @@ def refuse_a_nested_selectors_permissions(spec: KernelServiceSpec, *, label: str
     A nested selector is a step of the spec's call, not a call of its own: the
     kernel authorizes the spec being dispatched and never asks the nested
     selector's ``permissions``, so one declared guards nothing and reads as if
-    it did. drfs refused a nested spec's ``permission_classes`` for the same
-    reason. Any declaration is refused, ``Unrestricted()`` included: the
+    it did. Any declaration is refused, ``Unrestricted()`` included: the
     default is ``None``, which the kernel already refuses an empty sequence
     beside, so a nested selector declaring nothing mounts.
 
@@ -354,8 +351,8 @@ def _refuse_a_detail_spec_with_no_target(
 ) -> None:
     """Refuse an update or delete view's kernel spec that names nothing for it to act on.
 
-    A drfs spec naming no target lookup was scoped by the view's
-    ``get_object()``; a kernel spec never asks it, since the kernel refuses a
+    A kernel spec never asks the view's ``get_object()`` for its row, since
+    the kernel refuses a
     ``target=`` handed to a spec declaring no target selector, so such a spec
     would run on no row at all (test_service_update_view's
     test_a_detail_view_s_kernel_spec_with_no_target_selector_is_refused_at_as_view).

@@ -122,17 +122,16 @@ def recording_spec(spec: KernelSpec, *, lenient: bool = False) -> KernelSpec:
     # itself, by test_another_validator_s_kwargs_provider_is_not_checked.
     refusing = spec.kwargs is not None and isinstance(spec.validator, SerializerValidator)
     # The view hooks' values go beneath the spec's own provider in its seat,
-    # where they outrank what the Validator computes, as on drfs; in the
-    # kernel's overlay they sit beneath it. Only where a Validator computes
-    # anything: a saving rather than a check, since without a Validator the
+    # where they outrank what the Validator computes; in the kernel's overlay
+    # they sit beneath it. Only where a Validator computes anything: a saving rather than a check, since without a Validator the
     # overlay already reaches the service with the same values, held by
     # test_kernel_edge's test_a_spec_with_nothing_to_record_is_dispatched_as_it_is
     # with the call carrying no hook value.
     authored = bool(edge_call_state().author_values) and spec.validator is not None
     if refusing or authored:
         changes["kwargs"] = _providing(spec.kwargs, spec.validator if refusing else None)
-    # A form body is validated by the serializer alone, as drfs validated every
-    # request a view dispatched: its values are strings DRF's fields parse (a
+    # A form body is validated by the serializer alone, as a DRF view validates
+    # one: its values are strings DRF's fields parse (a
     # checkbox's ``"on"``), which the kernel's typed check of the flat values
     # would refuse (test_kernel_spec_variant's
     # test_a_live_view_validates_a_form_body_by_its_serializer_alone). Only a
@@ -219,8 +218,8 @@ def _refuse_parameters(
 
     The kernel merges a ``kwargs`` provider's answer into the service's pool
     alone, after the Validator, so a value under a field's wire name reaches
-    the service unvalidated, where drfs validated it as the field's: another
-    user's primary key under a queryset scoped to the caller was taken. The
+    the service unvalidated, never checked as the field's: another user's
+    primary key under a queryset scoped to the caller would be taken. The
     kernel refuses a typed provider annotated to fill such a key when the spec
     is built; an untyped one shows its keys only when it is called, so the
     first request answering one is refused, loudly, as the author's error

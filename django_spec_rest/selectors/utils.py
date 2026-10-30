@@ -154,8 +154,7 @@ class _ViewObjectPermission(PermissionCheck):
         # (test_the_view_s_check_asked_with_no_call_context_refuses).
         if call_context is None:
             return False
-        # Per-row, as DRF's ``get_object()`` and the drfs path's target hook
-        # ask it: a value that is no model row, a dataclass or a mapping a
+        # Per-row, as DRF's ``get_object()`` asks it: a value that is no model row, a dataclass or a mapping a
         # selector built, is handed to no DRF class's ``has_object_permission``,
         # which would read ``obj._meta`` off it
         # (test_a_row_that_is_no_model_is_not_asked_of_the_view).
