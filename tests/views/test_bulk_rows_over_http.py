@@ -8,15 +8,18 @@ refusal map's; this module holds which rows are refused and that nothing runs.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 import pytest
+from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import ServiceSpec, Unrestricted
 from rest_framework import serializers
 from rest_framework.test import APIRequestFactory
 
 from django_spec_rest import ServiceCreateView
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
+from tests.views.server_value_calls import CORES, open_spec, post
 
 pytestmark = pytest.mark.django_db
 
@@ -147,3 +150,32 @@ def test_a_lists_own_checks_judge_the_rows_the_kernel_passed() -> None:
     assert sorted(rows, key=str) == [1, "non_field_errors"]
     assert rows["non_field_errors"] == ["Each title once."]
     assert ran == []
+
+
+def _refused(call: Callable[..., Any]) -> None:
+    seen: dict[str, Any] = {}
+
+    def service(*, data: Any, title: Any = None) -> None:
+        seen.update(data=data, title=title)
+
+    spec = open_spec(service, _Row, kwargs=lambda: {"title": "from-provider"}, many=True)
+
+    with pytest.raises(ImproperlyConfigured, match=r"answered 'title'.*ServiceSpec\.input_data"):
+        call(spec, [{"title": "t"}])
+
+    assert seen == {}
+
+
+def test_a_kwargs_value_named_like_a_row_field_is_refused() -> None:
+    """A ``many`` spec's ``kwargs`` provider is held to what a single-object
+    spec's is: its answer naming a row field's wire name would reach the
+    service unvalidated, beside the rows the Validator checked, so the request
+    is refused and the service never runs."""
+    _refused(post)
+
+
+@CORES
+def test_each_core_refuses_a_kwargs_value_named_like_a_row_field(
+    core: Callable[..., Any],
+) -> None:
+    _refused(core)

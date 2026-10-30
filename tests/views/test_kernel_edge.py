@@ -300,6 +300,8 @@ def test_a_spec_with_nothing_to_record_is_dispatched_as_it_is() -> None:
         spec(validator=DataclassValidator(_TitleIn), input_data=lambda: {}),
     ):
         assert recording_spec(unrecorded) is unrecorded
+    many = spec(many=True, **provided)
+    assert recording_spec(many, lenient=True) is many
     recorded = spec(**provided)
     assert recording_spec(recorded) is not recorded
 

@@ -89,30 +89,37 @@ def recording_spec(spec: KernelSpec, *, lenient: bool = False) -> KernelSpec:
     may query (test_the_async_core_builds_the_twin_off_the_loop).
 
     Built once per spec and set of names, since ``derive`` re-runs the spec's
-    checks. Only a single-object service spec with a ``kwargs`` provider over
-    a ``SerializerValidator``, an ``input_data`` provider over a
-    ``SerializerValidator`` with a writable field, or a Validator and a call
-    carrying a view hook's values, has one; the kernel refuses an ``async`` provider when
+    checks. Only a service spec with a ``kwargs`` provider over a
+    ``SerializerValidator``, a Validator and a call carrying a view hook's
+    values, or, for a single-object spec, an ``input_data`` provider over a
+    ``SerializerValidator`` with a writable field, has one; the kernel refuses an ``async`` provider when
     the spec is built, so the wrapper is sync alone. The twin shares every
     seat but those it wraps and its Validator, so presenting the result through the view's own
     spec is unchanged. A kernel ``Grant`` covers a call only for the spec it
     was minted for, by identity, so a caller passing one must mint it for, or
     compare it against, the twin.
     """
-    # One arc to coverage, so each disjunct is named: a selector spec and a
-    # ``many`` spec by test_kernel_edge's
-    # test_a_spec_with_nothing_to_record_is_dispatched_as_it_is, which also
-    # holds a spec with no provider and one with no writable field.
-    if not isinstance(spec, KernelServiceSpec) or spec.many:
+    # A selector spec has no seat to watch (test_kernel_edge's
+    # test_a_spec_with_nothing_to_record_is_dispatched_as_it_is). A ``many``
+    # spec goes on: its ``kwargs`` answer is refused as a single-object
+    # spec's is (test_bulk_rows_over_http's
+    # test_a_kwargs_value_named_like_a_row_field_is_refused), while its rows
+    # have no single body to record into or parse leniently.
+    if not isinstance(spec, KernelServiceSpec):
         return spec
     changes: dict[str, Any] = {}
     names = frozenset[str]()
-    # One arc to coverage, so each conjunct is named, both by test_kernel_edge's
-    # test_a_spec_with_nothing_to_record_is_dispatched_as_it_is: a spec with no
-    # ``input_data`` provider, and a Validator that is no serializer's, whose
-    # input is the kernel's arguments; so is a serializer no caller's value
-    # reaches, with no name to record.
-    if spec.input_data is not None and isinstance(spec.validator, SerializerValidator):
+    # One arc to coverage, so each conjunct is named, all by test_kernel_edge's
+    # test_a_spec_with_nothing_to_record_is_dispatched_as_it_is: a ``many``
+    # spec, whose provider's answer goes over each row rather than into one
+    # body; a spec with no ``input_data`` provider; and a Validator that is no
+    # serializer's, whose input is the kernel's arguments; so is a serializer
+    # no caller's value reaches, with no name to record.
+    if (
+        not spec.many
+        and spec.input_data is not None
+        and isinstance(spec.validator, SerializerValidator)
+    ):
         names = spec.validator.parameters().names() | seed_named_fields(spec.validator)
         if names:
             changes["input_data"] = _recording(spec.input_data, names)
@@ -138,8 +145,10 @@ def recording_spec(spec: KernelSpec, *, lenient: bool = False) -> KernelSpec:
     # serializer's Validator has a check of its own to fall to: a spec with
     # none keeps the kernel's (test_kernel_views'
     # test_a_capture_outranks_a_form_body, which fails without the
-    # ``isinstance``).
-    lenient = lenient and isinstance(spec.validator, SerializerValidator)
+    # ``isinstance``). A ``many`` spec's body is a list, never a form's
+    # (test_a_spec_with_nothing_to_record_is_dispatched_as_it_is, which fails
+    # without the ``not spec.many``).
+    lenient = not spec.many and lenient and isinstance(spec.validator, SerializerValidator)
     if lenient:
         relaxed = copy.copy(cast(SerializerValidator, spec.validator))
         relaxed.lenient = True
