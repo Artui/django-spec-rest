@@ -404,6 +404,30 @@ def test_a_current_user_default_reads_the_principal_under_dispatch() -> None:
 
 
 @pytest.mark.django_db
+def test_a_key_a_validate_adds_named_like_a_registered_seed_stays_in_data() -> None:
+    """``tenant`` is a seed the caller registered: the service's ``tenant`` is the
+    seed's, and the key the serializer added is the service's in ``data`` alone."""
+    received: dict[str, Any] = {}
+
+    class S(serializers.Serializer):
+        title = serializers.CharField()
+
+        def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+            return {**attrs, "tenant": "added"}
+
+    def service(*, data: Any, tenant: str) -> None:
+        received.update(data=dict(data), tenant=tenant)
+
+    spec = ServiceSpec(
+        service=service, permissions=[Unrestricted()], validator=SerializerValidator(S)
+    )
+    seeds = DEFAULT_POOL_SEEDS.extend(tenant=lambda: "seeded")
+    dispatch(spec, principal=None, arguments={"title": "hi"}, pool_seeds=seeds)
+
+    assert received == {"data": {"title": "hi", "tenant": "added"}, "tenant": "seeded"}
+
+
+@pytest.mark.django_db
 def test_a_many_spec_validates_once_and_binds_one_list_serializer() -> None:
     received: dict[str, Any] = {}
 
