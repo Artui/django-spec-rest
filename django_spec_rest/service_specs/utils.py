@@ -443,8 +443,8 @@ def validator_input(validator: Any, arguments: Any) -> Any:
     Only the Validator the edge call names reads the edge's body, so a kernel
     call made inside the service, of another spec or of this one, binds its
     own arguments (test_a_kernel_call_inside_the_service_binds_its_own_arguments).
-    Never set for a ``many`` call, whose ``validated_many`` asks with no
-    arguments.
+    Never set for a ``many`` call, and ``validated_many`` never asks: it binds
+    the rows the kernel hands it.
     """
     held = edge_call_state().validator_input
     if held is None or held[0] is not validator:

@@ -121,3 +121,30 @@ def test_a_bulk_row_s_writable_user_validates_from_the_body() -> None:
     response = _post(_view(_UserRow), [{"title": "a", "user": 3}])
     assert response.status_code == 201
     assert response.data == [{"title": "a", "user": 3}]
+
+
+class _DistinctTitles(serializers.ListSerializer):
+    """A list-level ``validate()``, which DRF runs once every row it binds is valid."""
+
+    def validate(self, attrs: Any) -> Any:
+        if len({row["title"] for row in attrs}) < len(attrs):
+            raise serializers.ValidationError("Each title once.")
+        return attrs
+
+
+class _DistinctRow(_Row):
+    class Meta:
+        list_serializer_class = _DistinctTitles
+
+
+def test_a_lists_own_checks_judge_the_rows_the_kernel_passed() -> None:
+    """The kernel refuses the row that is no object before the Validator binds a
+    row, and the Validator binds the rows left, so the list's own ``validate()``
+    runs over them and its refusal sits beside the row's, every row keyed by the
+    index it was sent at."""
+    response = _post(_view(_DistinctRow), [{"title": "a"}, 5, {"title": "a"}])
+    assert response.status_code == 400
+    rows = response.data["items"]
+    assert sorted(rows, key=str) == [1, "non_field_errors"]
+    assert rows["non_field_errors"] == ["Each title once."]
+    assert ran == []
