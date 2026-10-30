@@ -264,7 +264,8 @@ _UNBOUND = pytest.mark.xfail(
     reason=(
         "the kernel route's edge sets no describe_binding for a kernel spec, so its "
         "SerializerValidator describes the serializer for parameters() with no body, no "
-        "row and partial unset: a field the body or the row adds is refused, a field an "
+        "row and partial unset: a field the body or the row adds is refused, or dropped "
+        "under the edge's IGNORE so its value never reaches the service, a field an "
         "update never writes is required, and a serializer reading either raises"
     ),
 )

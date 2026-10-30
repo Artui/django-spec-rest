@@ -148,8 +148,8 @@ def test_a_writable_field_named_user_is_still_required() -> None:
     strict=True,
     reason=(
         "the kernel route hands a many spec's rows to the kernel as sent, so a "
-        "row's seed-named field is refused there as an unknown argument rather "
-        "than validated into the row"
+        "row's seed-named field is an unknown argument there, dropped under the "
+        "edge's IGNORE and so refused as required, rather than validated into the row"
     ),
 )
 def test_a_writable_field_named_user_validates_in_each_row() -> None:

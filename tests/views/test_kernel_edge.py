@@ -508,6 +508,25 @@ def test_a_query_handed_over_is_read_in_place_of_the_request_s(
     assert seen == ["handed"]
 
 
+class _OptionalTitle(serializers.Serializer):
+    title = serializers.CharField(required=False)
+
+
+@CORES
+def test_an_undeclared_body_key_is_dropped_by_default_on_either_core(
+    core: Callable[..., Any],
+) -> None:
+    """Both cores pass the edge's one policy, ``IGNORE``, set nowhere here."""
+    received: list[dict[str, Any]] = []
+    spec = ServiceSpec(
+        service=lambda *, data: received.append(data),
+        permissions=_OPEN,
+        validator=SerializerValidator(_OptionalTitle),
+    )
+    core(spec, **_parts({"title": "t", "id": 1}))
+    assert received == [{"title": "t"}]
+
+
 @CORES
 @_POLICIES
 def test_with_no_query_handed_the_request_s_is_read(
