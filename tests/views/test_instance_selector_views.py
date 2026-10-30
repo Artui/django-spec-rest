@@ -19,6 +19,7 @@ from django_service_specs import (
     SelectorKind,
     SelectorSpec,
     ServiceSpec,
+    UnknownArguments,
     Unrestricted,
 )
 from rest_framework import serializers
@@ -26,6 +27,7 @@ from rest_framework.permissions import BasePermission
 from rest_framework.test import APIRequestFactory
 
 from django_spec_rest import ServiceDeleteView, ServiceUpdateView
+from django_spec_rest.dispatch import kernel_edge
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from tests.testapp.models import Author
@@ -146,11 +148,8 @@ class _ScopeIsMine(BasePermission):
 
 
 class TestALookupsFilterSet:
-    @pytest.mark.xfail(
-        strict=True,
-        reason="kernel_arguments reads a service spec's body and route alone, so the query "
-        "string never reaches its lookup's filter_set; an ask on dispatch/kernel_edge.py",
-    )
+    """The lookup's filter reads the route and the query string, never the body."""
+
     def test_the_query_string_is_the_scope(self, author: Author) -> None:
         request = factory.patch("/?scope=someone-else", {"name": "new"}, format="json")
         response = _view(ServiceUpdateView, _update_spec(filter_set=_ByName))(
@@ -158,20 +157,22 @@ class TestALookupsFilterSet:
         )
         assert response.status_code == 404
 
-    @pytest.mark.xfail(
-        strict=True,
-        raises=AssertionError,
-        reason="open owner decision: on a mutation a body key sets the lookup's filter_set "
-        "scope, past a permission reading the query string",
-    )
-    def test_what_the_body_sends_for_the_filter(self) -> None:
+    def test_the_query_string_s_scope_finds_its_row(self, author: Author) -> None:
+        request = factory.patch("/?scope=orig", {"name": "new"}, format="json")
+        response = _view(ServiceUpdateView, _update_spec(filter_set=_ByName))(
+            request, pk=str(author.pk)
+        )
+        assert response.status_code == 200, response.data
+        author.refresh_from_db()
+        assert author.name == "new"
+
+    @pytest.mark.parametrize("fmt", ["json", "multipart"])
+    def test_what_the_body_sends_for_the_filter(self, fmt: str) -> None:
         """The kernel has one argument namespace, so a body key named like the
-        lookup's filter is that filter's value: the client's body picks the row
-        a mutation reaches, where drfs read the scope off the query string alone.
-        A permission class that checks ``?scope`` is then no guard, since the
-        body names another tenant's row. The safe answer, asserted here: the
-        body's ``scope`` does not choose the row, so ``?scope=mine`` finds none
-        (404) and the victim's row is unchanged."""
+        lookup's filter would be that filter's value, and the client's body
+        would pick the row a write reaches past a permission that checks
+        ``?scope``. The edge drops it, so ``?scope=mine`` finds no row (404)
+        and the victim's row is unchanged."""
         victim = Author.objects.create(name="victim")
         view = type(
             "_View",
@@ -181,8 +182,32 @@ class TestALookupsFilterSet:
                 "permission_classes": [_ScopeIsMine],
             },
         ).as_view()
-        request = factory.patch("/?scope=mine", {"name": "pwned", "scope": "victim"}, format="json")
+        request = factory.patch("/?scope=mine", {"name": "pwned", "scope": "victim"}, format=fmt)
         response = view(request, pk=str(victim.pk))
         assert response.status_code == 404
         victim.refresh_from_db()
         assert victim.name == "victim"
+
+    @pytest.mark.parametrize("fmt", ["json", "multipart"])
+    def test_a_body_s_filter_key_alone_scopes_nothing(self, author: Author, fmt: str) -> None:
+        """With no ``?scope``, a body's ``scope`` is no filter value at all: the
+        row the route names is the one found, whatever the body says the scope
+        is. Read off the body, ``nobody`` would have found no row."""
+        request = factory.patch("/", {"name": "new", "scope": "nobody"}, format=fmt)
+        response = _view(ServiceUpdateView, _update_spec(filter_set=_ByName))(
+            request, pk=str(author.pk)
+        )
+        assert response.status_code == 200, response.data
+        author.refresh_from_db()
+        assert author.name == "new"
+
+    def test_the_rest_of_a_write_s_query_string_is_no_argument(self, author: Author) -> None:
+        """Only the filter's keys are read off a write's query string: ``?format``
+        and any other key there are DRF's, never an unknown argument."""
+        request = factory.patch("/?scope=orig&format=json&page=2", {"name": "new"}, format="json")
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setattr(kernel_edge, "UNKNOWN_ARGUMENTS", UnknownArguments.REJECT)
+            response = _view(ServiceUpdateView, _update_spec(filter_set=_ByName))(
+                request, pk=str(author.pk)
+            )
+        assert response.status_code == 200, response.data
