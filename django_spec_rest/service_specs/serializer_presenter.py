@@ -133,8 +133,8 @@ class SerializerPresenter(Presenter):
         call carries is left as it is. A list result is presented row by row by the kernel's ``present``,
         each row with the same context, which is what a ``many=True`` render is.
         Over that, the output half of the view hooks a DRF edge adds to the
-        result's context (``output_view_layers``), resolved with the value, then ``serializer_context``, the
-        spec's own ``output_serializer_context``, each winning on a key it shares
+        result's context (``output_view_layers``), resolved with the value, then
+        this Presenter's own ``serializer_context``, each winning on a key it shares
         with what it layers over (see
         ``serializer_context`` in ``service_specs/utils.py``).
         The callable declares what it reads from the call's pool, ``request``,

@@ -87,8 +87,8 @@ class SerializerValidator(Validator):
       rather than a ``KeyError``. What a registered request's ``user`` is, is
       the transport's to make the principal; the Validator never writes to a
       call's own objects. Over that, the input half of the view hooks a DRF
-      edge carries for the call (``input_view_layers``), then ``serializer_context``, the spec's own
-      ``input_serializer_context``, each winning on a key it shares with what
+      edge carries for the call (``input_view_layers``), then this Validator's
+      own ``serializer_context``, each winning on a key it shares with what
       it layers over (see
       ``serializer_context`` in ``service_specs/utils.py``).
       The callable declares what it reads from the call's pool:

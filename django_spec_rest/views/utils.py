@@ -118,14 +118,11 @@ def view_call_context(view: Any, request: Request) -> dict[str, Any]:
     to ``render_spec_output``, so the spec's own callables are offered it as
     the edge offers them, and it offers it itself to each callable it invokes:
 
-    - the hooks ``get_service_kwargs`` / ``get_selector_kwargs``,
-      ``get_input_data``, ``get_input_serializer_context`` and
-      ``get_output_serializer_context``, and the per-action form of each
-      (``get_<action>_service_kwargs`` and so on);
-    - the spec's ``*_serializer_context`` provider where the view builds the
-      serializer context itself;
-    - ``get_progress_reporter`` and ``get_<action>_progress_reporter``;
-    - a ``PolymorphicServiceSpec``'s ``discriminator``.
+    - the hooks ``get_service_kwargs``, ``get_input_data``,
+      ``get_input_serializer_context`` and ``get_output_serializer_context``,
+      and the per-action form of each (``get_<action>_service_kwargs`` and so
+      on);
+    - ``get_progress_reporter`` and ``get_<action>_progress_reporter``.
 
     Each is offered it **by name only**, as the kernel binds it: a callable
     declaring a ``call_context`` parameter is handed this dict, and one taking
