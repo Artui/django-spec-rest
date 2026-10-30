@@ -38,8 +38,11 @@ from django_service_specs import (
     Validator,
 )
 from drf_spectacular.generators import SchemaGenerator
+from drf_spectacular.utils import extend_schema
 from rest_framework import serializers
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.routers import DefaultRouter
+from rest_framework.test import APIRequestFactory
 from rest_framework.viewsets import GenericViewSet
 
 from django_spec_rest import (
@@ -203,6 +206,15 @@ def _get_post(*, pk: int) -> Post | None:
 _POSTS = SerializerPresenter(PostSerializer)
 
 
+class _AnnotatedUpdateView(ServiceUpdateView):
+    queryset = Author.objects.all()
+    spec = _update()
+
+    @extend_schema(request=ReasonSerializer)
+    def patch(self, request: Any, *args: Any, **kwargs: Any) -> Any:
+        return super().patch(request, *args, **kwargs)
+
+
 class _AuthorViewSet(ServiceViewSet):
     queryset = Author.objects.all()
     action_specs = {
@@ -293,6 +305,7 @@ urlpatterns = [
         "update-whole/<int:pk>/",
         _view(ServiceUpdateView, _update(validator=SerializerValidator(_NameRow))).as_view(),
     ),
+    path("update-annotated/<int:pk>/", _AnnotatedUpdateView.as_view()),
     path("update-partial/<int:pk>/", _view(ServiceUpdateView, _update(partial=True)).as_view()),
     path(
         "update-own/<int:author>/",
@@ -318,6 +331,18 @@ urlpatterns = [
     path(
         "authors-list-bare/",
         _view(SelectorListView, _list(presenter=None), serializer_class=AuthorSerializer).as_view(),
+    ),
+    path(
+        "authors-paged/",
+        _view(SelectorListView, _list(), pagination_class=PageNumberPagination).as_view(),
+    ),
+    path(
+        "authors-paged-dataclass/",
+        _view(
+            SelectorListView,
+            _list(presenter=DataclassPresenter(_Named)),
+            pagination_class=PageNumberPagination,
+        ).as_view(),
     ),
     path("author/<int:pk>/", _view(SelectorRetrieveView, _retrieve()).as_view()),
     path(
@@ -408,6 +433,15 @@ class TestTheRequestBody:
         body = _body(schema, "/update-whole/{id}/", "patch")
         assert "Patched" not in body["$ref"]
         assert _component(schema, body["$ref"])["required"] == ["name"]
+
+    def test_an_extend_schema_request_is_documented_partial_on_a_patch(
+        self, schema: dict[str, Any]
+    ) -> None:
+        # The author's annotation wins, and drf-spectacular documents it under
+        # a PATCH as it does on any view.
+        assert _body(schema, "/update-annotated/{id}/", "patch") == {
+            "$ref": "#/components/schemas/PatchedReason"
+        }
 
     def test_a_partial_spec_documents_its_put_partial(self, schema: dict[str, Any]) -> None:
         assert _body(schema, "/update-partial/{id}/", "put") == {
@@ -573,6 +607,33 @@ class TestTheReadSide:
         assert parameters["published"]["schema"] == {"type": "boolean"}
         assert parameters["kind"]["schema"]["enum"] == ["a", "b"]
         assert parameters["pks"]["schema"]["type"] == "array"
+
+    def test_a_paged_list_is_the_paginator_s_envelope(self, schema: dict[str, Any]) -> None:
+        # Once, whichever the presenter: a serializer's rows under the paged
+        # component drf-spectacular names, a raw row inside the envelope.
+        assert _response(schema, "/authors-paged/", "get", "200") == {
+            "$ref": "#/components/schemas/PaginatedAuthorList"
+        }
+        envelope = schema["components"]["schemas"]["PaginatedAuthorList"]
+        assert envelope["properties"]["results"] == {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/Author"},
+        }
+        raw = _response(schema, "/authors-paged-dataclass/", "get", "200")
+        assert raw["properties"]["results"]["type"] == "array"
+        assert set(raw["properties"]["results"]["items"]["properties"]) == {"id", "name"}
+
+    @pytest.mark.django_db
+    def test_an_array_filter_is_read_from_a_repeated_key(self) -> None:
+        # The documented style is OpenAPI's default for an array, one key per
+        # value, which the route reads as it reads a comma list.
+        author = Author.objects.create(name="a")
+        posts = [Post.objects.create(title=str(i), author=author) for i in range(3)]
+        view = urlpatterns[[str(u.pattern) for u in urlpatterns].index("posts/")].callback
+        request = APIRequestFactory().get(f"/posts/?pks={posts[0].pk}&pks={posts[2].pk}")
+        response = view(request)
+        assert response.status_code == 200
+        assert [row["id"] for row in response.data] == [posts[0].pk, posts[2].pk]
 
     def test_a_retrieve_documents_no_filter_parameters(self, schema: dict[str, Any]) -> None:
         names = {p["name"] for p in _op(schema, "/post/{id}/", "get")["parameters"]}

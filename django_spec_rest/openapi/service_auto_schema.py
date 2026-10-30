@@ -163,12 +163,7 @@ class ServiceAutoSchema(AutoSchema):
         test_a_many_spec_takes_an_array_of_rows). Any other Validator, or
         none, is ``_parameters_body`` (test_another_validator_is_its_parameters_schema).
         """
-        # The variant of a service spec is a service spec; the function is
-        # annotated for both kinds it compiles.
-        variant = cast(
-            "KernelServiceSpec",
-            kernel_spec_variant(spec, partial=True if self.method == "PATCH" else None),
-        )
+        variant = _partial_variant(spec) if self.method == "PATCH" else spec
         validator = variant.validator
         if isinstance(validator, SerializerValidator):
             serializer = renderable_serializer_class(validator.serializer)
@@ -219,35 +214,27 @@ class ServiceAutoSchema(AutoSchema):
         """
         return [converter or group for converter, group in _ROUTE_CAPTURE.findall(self.path_regex)]
 
-    def _get_request_for_media_type(self, serializer: Any, direction: str = "request") -> Any:
-        if isinstance(resolve_service_spec(self.view), KernelServiceSpec):
-            # The one method this step reads is ``PATCH``, whose serializer
-            # drf-spectacular re-stamps partial, where the route validates one
-            # whole when its Validator cannot take a partial call.
-            # ``_kernel_request_body`` has already built the serializer as
-            # partial as the route validates, under the real method, so this
-            # step is presented as a ``POST`` for every method
-            # (test_a_patch_a_dataclass_validates_whole_is_documented_whole).
-            saved = self.method
-            self.method = "POST"
-            try:
-                return super()._get_request_for_media_type(serializer, direction)
-            finally:
-                self.method = saved
-        return super()._get_request_for_media_type(serializer, direction)
-
     def _get_request_body(self, direction: str = "request") -> Any:
         spec = resolve_service_spec(self.view)
         if isinstance(spec, KernelServiceSpec):
-            if self.method != "DELETE":
-                return super()._get_request_body(direction)
-            # drf-spectacular documents no body on a ``DELETE``, and a kernel
-            # spec's is whatever ``_kernel_request_body`` reads, none included,
-            # so the call is presented as a ``POST``, which no body depends on
-            # (test_a_delete_with_a_validator_documents_its_body,
-            # test_a_spec_taking_nothing_documents_no_body). A ``PATCH`` is
-            # ``_get_request_for_media_type``'s.
-            return self._as_method("POST", direction)
+            if self.method == "DELETE":
+                # drf-spectacular documents no body on a ``DELETE``, and a
+                # kernel spec's is whatever ``_kernel_request_body`` reads, none
+                # included, so the call is presented as a ``POST``, which no
+                # body depends on (test_a_delete_with_a_validator_documents_its_body,
+                # test_a_spec_taking_nothing_documents_no_body).
+                return self._as_method("POST", direction)
+            if self.method == "PATCH" and not _partial_variant(spec).partial:
+                # drf-spectacular re-stamps a ``PATCH``'s serializer partial,
+                # where the route validates this one whole: its Validator cannot
+                # take a partial call. Presented as the ``PUT`` it is validated
+                # as (test_a_patch_a_dataclass_validates_whole_is_documented_whole);
+                # every other ``PATCH`` keeps the stamp, so an
+                # ``@extend_schema(request=...)`` serializer is documented
+                # partial as it is on any view
+                # (test_an_extend_schema_request_is_documented_partial_on_a_patch).
+                return self._as_method("PUT", direction)
+            return super()._get_request_body(direction)
         # drf-spectacular hard-codes the body verbs to PUT/PATCH/POST. RFC 7231
         # permits a body on DELETE and ``ServiceDeleteView`` /
         # ``ServiceDestroyMixin`` use it, so swap ``self.method`` for the
@@ -432,6 +419,18 @@ class ServiceAutoSchema(AutoSchema):
         if spec is None or spec.selector is None or spec.filter_set is None:
             return parameters
         return parameters + _filter_set_parameters(self, spec.filter_set)
+
+
+def _partial_variant(spec: KernelServiceSpec) -> KernelServiceSpec:
+    """The variant the route dispatches ``spec`` as for a ``PATCH``: partial where it can be.
+
+    ``kernel_spec_variant``'s, held per spec, so the schema reads the very
+    spec a ``PATCH`` runs. It is ``spec`` itself where no partial call is
+    possible: a Validator that cannot take one, or none at all.
+    """
+    # The variant of a service spec is a service spec; the function is
+    # annotated for both kinds it compiles.
+    return cast("KernelServiceSpec", kernel_spec_variant(spec, partial=True))
 
 
 _ROUTE_CAPTURE = re.compile(r"<(?:[^<>:]+:)?([^<>:]+)>|\(\?P<([^<>]+)>")
