@@ -36,7 +36,7 @@ These are non-negotiable. They are what keep the package navigable.
 
 1. **One exported class or function per file.** The file is named after the exported symbol in `snake_case`. `MyClass` lives in `my_class.py`; `do_thing` lives in `do_thing.py`.
 2. **Private helpers used only in one file** stay in that file with a `_name` prefix.
-3. **Non-exported helpers shared across files in a package** go in that package's `utils.py`. Classes are allowed in `utils.py` if they're internal infrastructure (e.g. `MutationFlowMixin` lived there before being promoted to its own file when it became public).
+3. **Non-exported helpers shared across files in a package** go in that package's `utils.py`. Classes are allowed in `utils.py` if they're internal infrastructure; one that becomes public moves to its own file.
 4. **Top-level imports only.** Lazy / function-local imports are forbidden unless a circular import is diagnosed and proven, *or* the import targets a proven optional dependency (declared in `[project.optional-dependencies]` and gated behind an explicit `enable_*()` opt-in helper). In either case document the reason inline. Canonical optional-dep example: `django_spec_rest/openapi/enable_openapi.py`.
 5. **Full type annotations on every function and method signature.** `Any` is allowed at integration boundaries (DRF serializers, Django ORM); avoid it inside the package.
 6. **Re-exports go in `__init__.py`.** Each package's `__init__.py` lists its public surface in `__all__`. The top-level `django_spec_rest/__init__.py` re-exports the user-facing API. Two packages carry no `__all__`: `service_specs/`, whose names are imported from their leaf modules (`django_spec_rest.service_specs.serializer_validator.SerializerValidator`), and `dispatch/`, which has no public name at all.
@@ -224,8 +224,6 @@ If `released=true`, the workflow then:
   dist/*.whl dist/*.tar.gz`.
 - `mkdocs gh-deploy --force --clean` to `gh-pages` (skipped if `mkdocs.yml`
   is missing).
-
-The previous tag-trigger flow has been removed.
 
 ### Cutting a release
 
