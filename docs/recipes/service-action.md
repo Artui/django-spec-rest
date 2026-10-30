@@ -1,134 +1,105 @@
-# Custom action with `@service_action`
+# Viewsets and custom actions
 
-DRF's `@action` decorator adds extra routes to a viewset. `@service_action`
-wraps `@action` and routes the call through the same
-validate-dispatch-render plumbing as the standard mutation actions —
-input is validated against the spec's `input_serializer`, the service
-is dispatched with `resolve_callable_kwargs`, exceptions are mapped to
-DRF responses, output is rendered through `output_serializer`, and the
-whole call is wrapped in `transaction.atomic()` (unless the spec opts
-out).
+## The standard actions
 
-## Example: approve an invoice
+`ServiceViewSet` serves `list`, `retrieve`, `create`, `update`,
+`partial_update` and `destroy`, each from its entry in `action_specs`.
+`SelectorViewSet` serves `list` and `retrieve`. An action with no entry falls
+back to DRF's own behaviour for the reads (`get_queryset()`, `get_object()`)
+and answers 405 for the writes, and `Allow` leaves an unserved write out.
 
 ```python
-from dataclasses import dataclass
+from django_spec_rest import ServiceViewSet
 
-from rest_framework_dataclasses.serializers import DataclassSerializer
+
+class InvoiceViewSet(ServiceViewSet):
+    action_specs = {
+        "list": LIST_SPEC,
+        "retrieve": RETRIEVE_SPEC,
+        "create": CREATE_SPEC,
+        "update": UPDATE_SPEC,
+        # "partial_update" is optional: PATCH falls back to "update",
+        # validated partially. Declare it to give PATCH a spec of its own,
+        # or alone for a PATCH-only route.
+    }
+```
+
+An entry under `list` or `retrieve` must be a `SelectorSpec`, and under a write
+key a `ServiceSpec`. An entry under a key no action dispatches is refused at
+`as_view()`, since nothing would ask its permissions: a custom route takes its
+spec through a decorator.
+
+## A custom write: `@service_action`
+
+```python
+from typing import Any
+
+from django_spec_rest import ServiceViewSet, service_action
+
+
+class InvoiceViewSet(ServiceViewSet):
+    action_specs = {...}
+
+    @service_action(SEND_SPEC, detail=True, methods=["post"])
+    def send(self, request: Any, pk: Any = None) -> None:
+        """Mark a draft as sent."""
+```
+
+The method's body never runs: the decorator supplies the handler, and the
+method gives DRF's `@action` its name. `detail`, `methods`, `url_path`,
+`url_name` and any other keyword go to DRF's `@action`. On a detail route the
+row is the spec's own target selector's, read from the route's `pk`, never
+`get_object()`'s. The answer is the spec's presenter's, under the viewset's
+`success_status` (200 by default).
+
+## A custom read: `@selector_action`
+
+```python
+from django_spec_rest import SelectorViewSet, selector_action
+
+
+class InvoiceViewSet(SelectorViewSet):
+    @selector_action(OVERDUE_SPEC)
+    def overdue(self, request: Any) -> None:
+        """Invoices past their due date."""
+```
+
+The spec's `kind` sets the route's shape: a `LIST` spec is a collection action,
+paginated where the viewset paginates, and a `RETRIEVE` spec a detail action,
+answering 404 for a miss or `null` under `allow_none`.
+
+## Composing your own viewset
+
+Each standard action is a mixin over `GenericViewSet`, so a viewset takes only
+the actions it serves:
+
+```python
+from rest_framework.viewsets import GenericViewSet
+
 from django_spec_rest import (
-    SelectorKind,
-    SelectorSpec,
-    ServiceSpec,
-    ServiceViewSet,
-    service_action,
+    ActionSerializerResolver,
+    SelectorListMixin,
+    ServiceCreateMixin,
 )
 
 
-@dataclass
-class ApproveInput:
-    note: str = ""
-
-
-@dataclass
-class InvoiceDetail:
-    id: int
-    customer: str
-    amount_cents: int
-    status: str
-
-
-class InvoiceDetailSerializer(DataclassSerializer):
-    class Meta:
-        dataclass = InvoiceDetail
-
-
-def approve_invoice(*, instance, data):
-    instance.status = "approved"
-    instance.note = data.note
-    instance.save(update_fields=["status", "note"])
-    return instance
-
-
-class InvoiceViewSet(ServiceViewSet):
-    queryset = Invoice.objects.all()
-    serializer_class = InvoiceDetailSerializer
-
-    @service_action(
-        ServiceSpec(
-            service=approve_invoice,
-            input_serializer=ApproveInput,
-            output_selector_spec=SelectorSpec(
-                kind=SelectorKind.RETRIEVE,
-                output_serializer=InvoiceDetailSerializer,
-            ),
-        ),
-        detail=True,
-        methods=["post"],
-    )
-    def approve(self, request, pk=None):
-        """Approve an invoice."""
+class InboxViewSet(ServiceCreateMixin, SelectorListMixin, ActionSerializerResolver, GenericViewSet):
+    action_specs = {"list": INBOX_SPEC, "create": POST_MESSAGE_SPEC}
 ```
 
-Routed as `POST /invoices/{pk}/approve/`. The decorated method body is
-**not executed** — the decorator supplies the handler. Keep the body
-because:
+`ActionSerializerResolver` answers `get_serializer_class()` per action: a write
+spec's input serializer where the viewset sets no `serializer_class`, which
+DRF's browsable API asks to draw its forms, and the viewset's
+`serializer_class` otherwise.
 
-- the docstring becomes the action description (visible in the browsable
-  API and DRF spectacular),
-- the function name becomes the URL segment unless you set `url_path`,
-- it's a place to attach `@action`-compatible kwargs (`url_path`,
-  `url_name`, `throttle_classes`, `serializer_class`, …).
+## A standalone view
 
-For per-action permissions, prefer `ServiceSpec.permission_classes` on
-the spec itself — it surfaces in both router-driven and direct-`as_view`
-setups, and travels with the spec. See the
-[permissions recipe](permissions.md). If you pass `permission_classes`
-both via the spec and as an `@action` kwarg, the `@action` kwarg wins
-(the spec's value is forwarded to DRF first, then the explicit kwargs
-override it).
-
-## Read-only actions
-
-Skip `input_serializer` for actions that don't take a body. The service
-just receives `instance` (and any other kwargs it asks for):
+A single route needs no viewset:
 
 ```python
-def export_invoice(*, instance):
-    return render_pdf(instance)
+from django_spec_rest import SelectorListView
 
 
-class InvoiceViewSet(ServiceViewSet):
-    @service_action(
-        ServiceSpec(service=export_invoice),
-        detail=True,
-        methods=["get"],
-    )
-    def export(self, request, pk=None):
-        """Render the invoice as PDF."""
+class SentInvoiceListView(SelectorListView):
+    spec = SENT_SPEC
 ```
-
-## Collection-level actions
-
-Set `detail=False` and the URL is `<basename>/<action>/`:
-
-```python
-@service_action(
-    ServiceSpec(service=archive_old_invoices),
-    detail=False,
-    methods=["post"],
-)
-def archive_old(self, request):
-    """Archive every invoice older than 90 days."""
-```
-
-The service receives `request` (and not `instance`). `archive_old_invoices`
-can declare any subset of `{request, user}` it needs — plus `data` only if
-the spec sets an `input_serializer`.
-
-## Why not just `@action`?
-
-`@action` gives you the URL, but you write the dispatch yourself —
-validation, kwarg pool, exception mapping, atomic wrapping. `@service_action`
-does that for you. If you're already paying the cost of writing a
-service for the standard CRUD actions, custom actions get the same
-treatment for free.

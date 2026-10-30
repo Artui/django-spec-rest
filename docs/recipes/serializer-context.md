@@ -1,340 +1,90 @@
-# Customise serializer context
+# Serializer context
 
-DRF's `get_serializer_context()` lives on every `GenericAPIView` and
-returns `{"request", "view", "format"}` by default. When the standard
-viewset shape uses one serializer per action it's enough — but service-
-backed views run **two** serializers per request (input and output), and
-sometimes those two need different context. The library plumbs that
-without forcing you to override `get_serializer_context()` and branch on
-direction.
+## One dict per request
 
-Four layers, later wins on overlap:
-
-1. **DRF default** — `view.get_serializer_context()`. Always applied.
-2. **Directional fallback** — `get_input_serializer_context()` /
-   `get_output_serializer_context()` on the view. Skipped when the method
-   is absent, so plain DRF viewsets work unchanged.
-3. **Per-action override** — `get_<action>_input_serializer_context()` /
-   `get_<action>_output_serializer_context()`. Viewset-only; skipped on
-   standalone single-purpose views.
-4. **Per-spec callable** — `ServiceSpec.input_serializer_context` /
-   `ServiceSpec.output_selector_spec.output_serializer_context` /
-   `SelectorSpec.output_serializer_context`. Co-located with the spec
-   that backs the action. Has the final say.
-
-The resolver is wired into service-backed views, viewset mixins,
-`@service_action`, and `@selector_action`. The standalone
-`SelectorListView` / `SelectorRetrieveView` override
-`get_serializer_context()` directly; the `SelectorListMixin` /
-`SelectorRetrieveMixin` viewset mixins inherit the same override from
-`_ActionSpecsMixin`. Either way, a `SelectorSpec.output_serializer_context`
-flows into DRF's `ListModelMixin` / `RetrieveModelMixin` dispatch.
-
-## Different context for input vs. output
-
-A common case: the input serializer needs a "current tenant" for
-cross-field validation, but the output serializer doesn't.
+Over HTTP the view builds one context dict per request, holding DRF's
+`request`, `view` and `format`, the viewset's `action`, and every key the
+view's `get_serializer_context()` adds. The input serializer, the output
+serializer and the service's `call_context` are all handed that same dict, as
+one serializer validating and rendering in a stock `ModelViewSet` sees one
+context:
 
 ```python
-class AuthorViewSet(ServiceViewSet):
-    queryset = Author.objects.all()
-    action_specs = {
-        "create": ServiceSpec(
-            service=create_author,
-            input_serializer=CreateAuthorInput,
-            output_selector_spec=SelectorSpec(
-                kind=SelectorKind.RETRIEVE,
-                output_serializer=AuthorOutputSerializer,
-            ),
-        ),
-    }
+from rest_framework import serializers
 
-    def get_input_serializer_context(self):
-        return {"tenant": self.request.tenant}
+
+class InvoiceInput(serializers.Serializer):
+    amount_cents = serializers.IntegerField(min_value=0)
+
+    def validate(self, attrs):
+        if attrs["amount_cents"] == 0:
+            self.context.setdefault("warnings", []).append("The amount is zero.")
+        return attrs
+
+
+class InvoiceSerializer(serializers.ModelSerializer):
+    warnings = serializers.SerializerMethodField()
+
+    def get_warnings(self, invoice):
+        return list(self.context.get("warnings", []))
+
+
+def create_invoice(*, data, call_context):
+    call_context.get("warnings")  # the same list
 ```
 
-Inside the input serializer:
+The example project asserts the warning `validate()` writes is rendered in the
+answer.
+
+`format` is the route's: on a route with a format suffix, `format` is the
+suffix even where an overriding `get_serializer_context()` answers another
+value for it.
+
+## Keys a spec adds
+
+`SerializerValidator(serializer_context=...)` and
+`SerializerPresenter(serializer_context=...)` take a callable returning keys for
+their serializer. Over HTTP the validator's keys are written into the request's
+one dict, so the service and the output serializer see them too.
 
 ```python
-class CreateAuthorInput(serializers.Serializer):
-    name = serializers.CharField()
-
-    def validate_name(self, value):
-        tenant = self.context["tenant"]
-        if Author.objects.filter(tenant=tenant, name=value).exists():
-            raise serializers.ValidationError("name already taken in this tenant")
-        return value
-```
-
-The output serializer keeps the default DRF context.
-
-## Per-action override
-
-When only one action needs the extra key, name the hook after the
-action — no branching on `self.action`:
-
-```python
-_author_out = SelectorSpec(
-    kind=SelectorKind.RETRIEVE,
-    output_serializer=AuthorOutputSerializer,
+CREATE_SPEC = ServiceSpec(
+    service=create_invoice,
+    validator=SerializerValidator(InvoiceInput, serializer_context=lambda: {"currency": "EUR"}),
+    presenter=SerializerPresenter(InvoiceSerializer),
+    permissions=OPEN,
 )
-
-
-class AuthorViewSet(ServiceViewSet):
-    action_specs = {
-        "create": ServiceSpec(
-            service=create_author,
-            input_serializer=CreateAuthorInput,
-            output_selector_spec=_author_out,
-        ),
-        "update": ServiceSpec(
-            service=update_author,
-            input_serializer=UpdateAuthorInput,
-            output_selector_spec=_author_out,
-        ),
-    }
-
-    def get_create_input_serializer_context(self):
-        return {"signup_token": self.request.headers.get("X-Signup-Token")}
 ```
 
-`update` keeps the directional / DRF default; `create` adds the token on
-top.
+A presenter's `serializer_context` callable runs once for each row it renders,
+so for a list it runs once per row, not once for the page: a callable that
+queries runs its query per row. Load what every row needs in the selector
+(`select_related`, `prefetch_related`, `annotations`) instead.
 
-## Per-spec context (the fourth layer)
+## Keys a view adds
 
-When context belongs *with* the spec rather than the view, put it on the
-spec. This pairs the input/output context with the service/selector it
-feeds — no second method on the view, no `if self.action == ...`.
+A mutation view's hooks layer keys over DRF's context, view-wide then per
+action:
 
-```python
-class AuthorViewSet(ServiceViewSet):
-    queryset = Author.objects.all()
-    action_specs = {
-        "create": ServiceSpec(
-            service=create_author,
-            input_serializer=CreateAuthorInput,
-            input_serializer_context=lambda view, request: {
-                "tenant": request.tenant,
-            },
-            output_selector_spec=SelectorSpec(
-                kind=SelectorKind.RETRIEVE,
-                output_serializer=AuthorOutputSerializer,
-                output_serializer_context=lambda view, request: {
-                    "include_links": "links" in request.query_params,
-                },
-            ),
-        ),
-        "list": SelectorSpec(
-            kind=SelectorKind.LIST,
-            selector=list_authors,
-            output_serializer=AuthorOutputSerializer,
-            output_serializer_context=lambda view, request: {
-                "include_links": True,
-            },
-        ),
-    }
-```
+| Serializer | View-wide | Per action |
+| --- | --- | --- |
+| input | `get_input_serializer_context()` | `get_<action>_input_serializer_context()` |
+| output | `get_output_serializer_context()` | `get_<action>_output_serializer_context()` |
 
-`SelectorSpec` carries only `output_serializer_context` — selectors don't
-validate input, so there's no symmetrical input hook. On `ServiceSpec`,
-the output hook lives on the nested `output_selector_spec`; the input
-hook stays at the top level. The callable receives the calling view
-(typed as `ServiceView`) and the DRF `Request`.
+Both view-wide hooks default to `get_serializer_context()`. A selector spec's
+presenter is not handed the per-action output hook: declare its context on its
+`SerializerPresenter`.
 
-## Output context that depends on the resolved data
+## Off HTTP
 
-Sometimes the output serializer needs data derived from the very objects
-it's about to render — and you want that derived data fetched in a
-**single** batched query rather than one query per row. The output
-context provider can receive the resolved data and run that one query.
-
-An **output** context provider (the directional
-`get_output_serializer_context` hook, the per-action
-`get_<action>_output_serializer_context` hook, or the spec-level
-`output_serializer_context`) may declare an extra keyword parameter
-naming the data about to be serialized:
-
-| Action | Keyword | Value |
-|---|---|---|
-| mutation output | `result` | the final (post-`output_selector_spec`) instance |
-| retrieve | `instance` | the resolved object |
-| list | `page` | the paginated object list (the full queryset when pagination is off) |
-
-Every provider is invoked through the framework's keyword pool, so it
-declares **only what it needs** — any subset of `view` / `request` plus the
-resolved-data extra above, or `**kwargs` for the whole pool. A
-`(view, request)` provider keeps working unchanged (both bind by keyword),
-and `lambda *, page: ...` or `lambda request: ...` are equally valid. The
-provider always runs *after* the data is resolved, so the value is real, not
-a placeholder.
-
-```python
-from django.db.models import Count
-
-
-class PostViewSet(SelectorViewSet):
-    queryset = Post.objects.all()
-    action_specs = {
-        "list": SelectorSpec(
-            kind=SelectorKind.LIST,
-            selector=list_posts,
-            output_serializer=PostOutputSerializer,
-            # One query for the whole page, keyed on the page's ids.
-            output_serializer_context=lambda view, request, *, page: {
-                "comment_counts": dict(
-                    Comment.objects.filter(post__in=page)
-                    .values_list("post")
-                    .annotate(n=Count("id"))
-                ),
-            },
-        ),
-    }
-```
-
-The serializer reads `self.context["comment_counts"][obj.id]` per row,
-with no extra query. The same shape works for a mutation
-(`*, result`) or a retrieve (`*, instance`), and on the view-method
-hooks too — e.g. `def get_list_output_serializer_context(self, *, page): ...`.
-
-For an unpaginated list the `page` value is the full queryset; reading
-ids off it (`[p.id for p in page]`) reuses the same evaluated queryset
-DRF serializes, so it still costs one batched query, not two.
-
-The **input** context provider has no such extra — there is no resolved
-output before the service runs.
-
-## On standalone views
-
-Standalone mutation views (`ServiceCreateView`, `ServiceUpdateView`,
-`ServiceDeleteView`) and `@service_action` honour the directional hooks
-(`get_input_serializer_context` / `get_output_serializer_context`) plus
-the spec layer (`ServiceSpec.input_serializer_context` and
-`ServiceSpec.output_selector_spec.output_serializer_context`). The
-per-action hooks only apply
-where there is an action — i.e. inside viewset mixins and
-`@service_action` / `@selector_action`.
-
-Standalone `SelectorListView` / `SelectorRetrieveView` honor
-`SelectorSpec.output_serializer_context` through their
-`get_serializer_context()` override. They do **not** honor the directional
-`get_output_serializer_context` hook there — that hook is reserved for the
-mutation flow's input/output split. If you want a shared "always add X to
-the context" on a selector view, override `get_serializer_context()`
-directly.
-
-## Off the HTTP path
-
-There is no view to call `get_serializer_context()` on when a spec is
-dispatched from an MCP tool, a Pydantic-AI toolset, or a management command —
-so `dispatch_spec` / `render_spec_output` synthesize DRF's baseline instead
-(`base_serializer_context`), and layer the spec's provider over it:
-
-| Layer | HTTP | Off HTTP |
-|---|---|---|
-| 1. DRF default | `view.get_serializer_context()` | `{"request", "format": None, "view"}` from the synthetic pair `build_offline_context` builds |
-| 2. Directional hook | `get_<direction>_serializer_context()` | — (no view to host it) |
-| 3. Per-action hook | `get_<action>_<direction>_serializer_context()` | — |
-| 4. Per-spec callable | `*_serializer_context` on the spec | same, and still has the final say |
-
-So a serializer that reads `self.context["request"]` unguarded — for
-`request.user`, an ownership check in a `SerializerMethodField`, a
-`PrimaryKeyRelatedField` queryset scoped to the caller — renders the same over
-both transports. `request.user` is the `user` you passed to
-`build_offline_context`.
-
-The two view-hosted layers have no off-HTTP equivalent by design: they are
-view configuration, and off HTTP there is no view to configure. Context that
-must reach *every* transport belongs on the spec (layer 4), which is the layer
-both paths share.
-
-### Absolute URLs off the HTTP path
-
-`build_absolute_uri()` — which DRF's `FileField`, `HyperlinkedIdentityField`, and
-`HyperlinkedRelatedField` call whenever a `request` is in the context — needs an
-origin, and a process with no ambient request has none. Two ways to give it one:
-
-```python
-# The transport has a real request (the MCP server): pass it through. The
-# request is never written to — a copy of it is what gets wrapped.
-build_offline_context(user, http_request=request)
-
-# It doesn't (a toolset, a management command, a worker): name the origin.
-build_offline_context(user, host="https://app.example.com")
-```
-
-`host` accepts `"example.com"`, `"example.com:8000"`, or a full origin whose
-scheme decides whether links are `https`. It is **ignored when `http_request` is
-supplied**, so a caller can pass both unconditionally — the ambient request when
-there is one, the configured host when there isn't. It is not validated against
-`ALLOWED_HOSTS`: that setting rejects spoofed `Host` headers from untrusted
-clients, and this value is your own, so a worker can render links for a site it
-doesn't itself serve.
-
-Left unset, `build_absolute_uri()` returns the **relative** URL rather than
-raising. There is deliberately no default: only your project knows its public
-origin, and inferring one — the first `ALLOWED_HOSTS` entry, say, which is an
-authorization list and is routinely a wildcard or an internal load-balancer name
-— would emit confidently-wrong links that look valid. A relative URL is what
-those DRF fields already fall back to when there's no request in the context at
-all.
-
-## Through the kernel
-
-A drfs spec compiles to a [django-service-specs](https://github.com/Artui/django-service-specs)
-spec (see [Service specs on the kernel](../reference/service-specs.md)): its input
-serializer becomes a `SerializerValidator` and its output serializer a
-`SerializerPresenter`, and the two context callables ride on them.
-`dispatch_spec` validates through the first, and the kernel's `present` renders
-through the second. Each builds the context in the same four layers:
-
-| Layer | Through `dispatch_spec` | The compiled spec, dispatched by the kernel |
-|---|---|---|
-| 1. DRF default | the `view`'s `get_serializer_context()` | the same for a registered `view` seed or the call context's `view`, else DRF's three keys, from the registered `request`, the call context's `request` (a Django `HttpRequest` wrapped as a DRF `Request`), or an offline pair built for the principal |
-| 2. and 3. View hooks | what the view resolved into `view_hooks=`, carried beside the call rather than in its pool, so no callable's `**kwargs` receives them | none |
-| 4. Per-spec callable | `*_serializer_context` on the spec | the same, with the final say |
-
-The callable declares what it reads, as every spec callable does:
-
-- `request`, `view` and `user` (the principal), the call's own, which no
-  argument a client sends can stand in for;
-- `call_context`, the one dict the call carries from the transport to every
-  stage, holding `request`, `view`, `format` and `action`
-  (see [Dispatch](../reference/dispatch.md));
-- any pool seed the call registered;
-- on input, an argument by name, beneath everything above;
-- on output, the value being rendered: `result` for a service's output,
-  `instance` for a retrieve (but see below for a set).
-
-A key it answers with `UNSET` is declined and keeps the layer beneath. The
-input serializer is built once per call, a `many` call included, for the body
-the call validates and the row it acts on, and the input callable is asked
-once for it. Two kinds of call build it twice, once to read its fields and
-once to validate, and ask the callable for each where what it is handed
-differs:
-
-- one whose body the server puts a value into - a view hook's, the spec's
-  `kwargs` provider's or `input_data` - is described with the body sent and
-  validated with the server's values in it. A callable reading an argument
-  the server's value replaced is asked with each, and so, off HTTP with no
-  view, is one reading `request`, since the request built for the call
-  carries the body;
-- one whose row a target lookup resolves is described before the lookup
-  runs, with no row, for the names the lookup's own arguments need, and
-  validated with the row it found. A serializer that cannot be built
-  without its row, a `get_fields` reading `self.instance.pk` say, is taken
-  to declare no name until the row is found, and is then built with it, so
-  its fields are the row's, under every `UnknownArguments` policy.
-
-A callable taking `**kwargs` is left out of the description, which holds
-none of the call's seeds, unless the input serializer cannot be built
-without its keys; then it is asked over what the description holds, and
-again over the whole pool to validate.
-
-**A set is presented row by row.** The kernel's `present` renders a list, and
-a `many` service's output, one row at a time, so the output callable is asked
-once per row there, and no keyword names the row: the whole set a callable may
-declare, a list's `page` or a `many` output's `result`, is never in hand. The
-view's output hook is handed no value there either. A callable that reads the
-whole set belongs on the paths that render it at once, `render_spec_output`
-and DRF's own views.
+Dispatched with no request, a seat builds its serializer over an offline
+request and view for the principal, so a serializer reading
+`self.context["request"].user` while it validates reads the principal. Off
+HTTP the kernel also describes the serializer's fields before the call, with
+no request in its context: a `get_fields()` or `__init__` reading
+`self.context["request"]` raises there, so guard such a read.
+[`base_serializer_context`][django_spec_rest.service_specs.base_serializer_context.base_serializer_context]
+and
+[`build_offline_context`][django_spec_rest.service_specs.build_offline_context.build_offline_context]
+build that context for code of your own that renders a serializer outside a
+view.

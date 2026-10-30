@@ -1,181 +1,60 @@
-# OpenAPI / Swagger schemas
+# OpenAPI
 
-`django-spec-rest` ships an opt-in
-[`drf-spectacular`](https://drf-spectacular.readthedocs.io/) integration that
-makes the generated OpenAPI document line up with what your `ServiceSpec`
-actually does — without scattering `@extend_schema` annotations across
-every view.
-
-## Install
+The opt-in [`drf-spectacular`](https://drf-spectacular.readthedocs.io/)
+integration documents each route from its spec.
 
 ```bash
 pip install "django-spec-rest[spectacular]"
-# or, with uv:
-uv add "django-spec-rest[spectacular]"
-```
-
-## Wire it up
-
-Two settings, one call:
-
-```python
-# settings.py
-REST_FRAMEWORK = {
-    # Required for spectacular to inspect every view, including plain
-    # ``GenericViewSet`` classes that use ``@service_action``.
-    "DEFAULT_SCHEMA_CLASS": ("django_spec_rest.openapi.service_auto_schema.ServiceAutoSchema"),
-    # ... your usual REST_FRAMEWORK config
-}
 ```
 
 ```python
-# myapp/apps.py
 from django.apps import AppConfig
 
 
-class MyAppConfig(AppConfig):
-    name = "myapp"
+class ApiConfig(AppConfig):
+    name = "api"
 
-    def ready(self) -> None:
+    def ready(self):
         from django_spec_rest.openapi import enable_openapi
 
         enable_openapi()
 ```
 
-`enable_openapi()` attaches `ServiceAutoSchema` to every library view class
-(`ServiceCreateView`, `ServiceUpdateView`, `ServiceDeleteView`,
-`SelectorListView`, `SelectorRetrieveView`, `ServiceViewSet`,
-`SelectorViewSet`). The `DEFAULT_SCHEMA_CLASS` setting covers anything
-else.
+`enable_openapi()` sets `ServiceAutoSchema` as the schema of `ServiceCreateView`,
+`ServiceUpdateView`, `ServiceDeleteView`, `SelectorListView`,
+`SelectorRetrieveView`, `ServiceViewSet` and `SelectorViewSet`, so every
+subclass inherits it; a class setting `schema` itself keeps its own.
+Importing `django_spec_rest.openapi` does not import `drf-spectacular`; only
+this call does.
 
-## What you get for free
+## What a route documents
 
-For mutation surfaces, the response shape is read from
-`spec.output_selector_spec.output_serializer` (the nested
-`SelectorSpec`). For read surfaces it's read from
-`spec.output_serializer` directly.
+- **The request body** is a `SerializerValidator`'s serializer, under
+  drf-spectacular's component name for the class, built partial where the
+  route validates partially (a `PATCH`, or a spec declaring `partial`). A
+  `many` spec takes a list of its rows. Any other validator is the kernel's
+  JSON Schema of the parameters the body carries.
+- **The response body** is a `SerializerPresenter`'s serializer, or another
+  presenter's output schema, a list where the spec presents rows. A spec with
+  no presenter documents no content; a selector spec with none keeps the
+  view's `serializer_class`, which renders it.
+- **The status** is the view's `success_status` where it is an `int`, over the
+  action's default. A body documented under 204 is documented as the 200 it is
+  served as, with a 204 beside it where the spec can present nothing.
+- **A 422** is documented wherever the spec declares a validator.
+- **A `filter_set`'s query parameters**, on a list operation, are the kernel's
+  `filter_set_parameters`.
 
-| Surface                              | Request body              | Success response                                       | 422 contract |
-| ------------------------------------ | ------------------------- | ------------------------------------------------------ | ------------ |
-| `ServiceCreateView`                  | `spec.input_serializer` ✓ | `spec.output_selector_spec.output_serializer` ✓        | ✓            |
-| `ServiceUpdateView`                  | `spec.input_serializer` ✓ | `spec.output_selector_spec.output_serializer` ✓        | ✓            |
-| `ServiceDeleteView`                  | `spec.input_serializer` ✓ | `spec.output_selector_spec.output_serializer` ✓        | ✓            |
-| `ServiceViewSet["create"]`           | `spec.input_serializer` ✓ | `spec.output_selector_spec.output_serializer` ✓        | ✓            |
-| `ServiceViewSet["update"]`           | `spec.input_serializer` ✓ | `spec.output_selector_spec.output_serializer` ✓        | ✓            |
-| `ServiceViewSet["partial_update"]`   | `spec.input_serializer` (partial) ✓ | `spec.output_selector_spec.output_serializer` ✓ | ✓     |
-| `ServiceViewSet["destroy"]`          | `spec.input_serializer` ✓ | `spec.output_selector_spec.output_serializer` ✓        | ✓            |
-| `@service_action`                    | `spec.input_serializer` ✓ | `spec.output_selector_spec.output_serializer` ✓        | ✓            |
-| `SelectorListView` / `["list"]`      | n/a                       | `spec.output_serializer` ✓                             | n/a          |
-| `SelectorRetrieveView` / `["retrieve"]` | n/a                    | `spec.output_serializer` ✓                             | n/a          |
+`ServiceErrorSerializer`, a single `detail` field, is the body of that 422,
+under the `ServiceError` component.
 
-The request-body and `422` cells apply when the spec validates input
-(`input_serializer` is set); a no-input operation (e.g. a plain delete)
-carries neither, unless `document_service_error=True` forces the `422` —
-see *422 ServiceError responses* below.
+User-supplied `@extend_schema` annotations always win, and
+`@extend_schema(parameters=...)` merges over the filter parameters as it does
+for a view-level `FilterSet`.
 
-### Bare dataclass `input_serializer`
+## Not documented
 
-The runtime auto-wraps a bare `@dataclass` type in a `DataclassSerializer`.
-The schema generator does the same — your dataclass shows up as a typed
-component, not a plain `object`.
-
-### Success status codes
-
-Default to the action's HTTP code (201 / 200 / 204) unless an `int`
-`spec.success_status` overrides it. A callable `success_status` is resolved
-per request, so the schema documents the action's default for it.
-
-Where the spec declares an `output_serializer`, the schema documents it under
-the status the runtime serves a body under, by asking the same function the
-renderers ask. That is the status itself, except that a `204` carries no body:
-a destroy presenting a value, single-row or bulk, at its default `204` or one
-set explicitly, is served and documented as `200`.
-
-A declared body is not always sent. Where dispatch may present `None`, as
-[`can_present_nothing`][django_spec_rest.can_present_nothing.can_present_nothing]
-answers (a single-row re-read that finds no row, or a service declaring
-`allow_none=True`), the renderers answer with an empty body rather than a row
-of blank fields, so the schema documents an empty `204`, with no content,
-beside the body's status. A list result, a `many=True` spec, and a single-row
-spec that declares no `None` document only the body.
-
-The schema reads that from the spec, and the renderers decide the empty answer
-from more than the spec, so in three cases the `204` documented is not one the
-operation is ever answered with:
-
-- **An explicit `success_status` with nothing to re-read.** A service declaring
-  `allow_none=True` whose `None` is presented as it is answers empty at the
-  status it sets: a create at `success_status=201` answers an empty `201`, not a
-  `204`. A re-read that finds no row still answers `204`, whatever the status.
-- **An update that renders its target in place.** An update view, or a detail
-  `@service_action`, whose service returns `None` renders the row it updated, as
-  DRF's `UpdateAPIView` does, so with nothing to re-read it never answers empty.
-- **A `collection_selector_spec` target**, which the bulk path answers. Its
-  empty answer goes out under the action's status, a `200` for an update or a
-  non-detail `@service_action`, so only a bulk destroy's `204` is served. (A
-  `many=True` spec presents a list, so no `204` is documented for it.)
-
-The `204` is documented in each of them anyway. Where the empty answer shares
-the body's status, an operation documents one response per status, so the two
-could not be told apart there; a client reading the schema should accept an
-empty body at the documented body status as well.
-
-Where the spec declares no `output_serializer`, the schema documents an empty
-response at the status, which for a destroy is the `204` its service answers
-with by returning `None`. Whether there is a body is then decided by what the
-service returns, which the schema cannot read, so a raw value it returns
-instead, a bulk destroy's `{"deleted": n}` say, is served as a `200` body that
-the schema does not show. Declare an `output_serializer` for it and the schema
-documents it.
-
-### 422 ServiceError responses
-
-`ServiceAutoSchema` attaches a `422` response with a single `detail`
-field documenting the contract that `ServiceError` produces at runtime.
-The component is exposed as
-`django_spec_rest.openapi.ServiceErrorSerializer` if you want to
-re-use it elsewhere.
-
-By default the 422 is attached only to operations that **validate input**
-(`spec.input_serializer is not None`), so a no-input mutation — a plain
-delete, a no-body action — doesn't carry a spurious 422 you have to suppress
-by hand. Override the heuristic per spec with `document_service_error`:
-
-```python
-# A no-input service that *does* raise ServiceError — document the 422:
-ServiceSpec(service=approve, document_service_error=True)
-
-# An input-bearing service that never raises one — drop the 422:
-ServiceSpec(service=create, input_serializer=CreateInput, document_service_error=False)
-```
-
-`None` (the default) uses the input-validation heuristic; `True` / `False`
-force it. The flag is schema-only — it never affects runtime behaviour.
-
-## Override per view
-
-`@extend_schema` annotations always win. Use them for the rare case
-where the spec doesn't capture the full contract:
-
-```python
-from drf_spectacular.utils import extend_schema, OpenApiResponse
-
-
-class _MyViewSet(ServiceViewSet):
-    action_specs = {"create": ServiceSpec(...)}
-
-    @extend_schema(responses={201: MyCustomSerializer, 409: OpenApiResponse(...)})
-    def create(self, request, *args, **kwargs):
-        return super().create(request, *args, **kwargs)
-```
-
-## What's not covered
-
-- Field-level shapes for 400 `ValidationError` bodies (DRF doesn't have a
-  great way to express this, and spectacular's defaults are passable).
-- Auto-generated named components for `ChangeResult` and similar internal
-  value types — they render inline.
-- A dedicated `OpenApiSerializerExtension` for `DataclassSerializer`
-  giving named components in `#/components/schemas/...` instead of
-  inline anonymous schemas. Deferred; spectacular's default rendering is
-  usable.
+A selector spec's declared reads are not documented as query parameters, nor
+the affordance envelope a spec declaring affordances renders, nor the `null`
+body of an `allow_none` retrieve. Add them with `@extend_schema` where a
+client needs them.

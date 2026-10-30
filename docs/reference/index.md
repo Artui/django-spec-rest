@@ -1,107 +1,39 @@
 # Reference
 
-Autodocumented public API. Every page reads the docstrings and
-signatures from the source — when in doubt, follow the source link
-("Edit this page" in the top right) and read the leaf module.
+Autodocumented public API. Every page reads the docstrings and signatures
+from the source.
 
-- **[Views](views.md)** — `ServiceCreateView`, `ServiceUpdateView`,
+A spec itself, and everything the kernel owns (`ServiceSpec`, `SelectorSpec`,
+`Parameter`, `Parameters`, `SelectorKind`, the refusals, `dispatch`), is
+imported from [`django_service_specs`](https://artui.github.io/django-service-specs/)
+and documented there. This package documents what it adds over DRF.
+
+- **[Views](views.md)**: `ServiceCreateView`, `ServiceUpdateView`,
   `ServiceDeleteView`, `SelectorListView`, `SelectorRetrieveView`,
-  `MutationFlowMixin`, `ServiceView` Protocol, kwarg-resolution helpers,
-  spec validation.
-- **[Viewsets](viewsets.md)** — `ServiceViewSet`, `SelectorViewSet`,
+  `MutationFlowMixin`, `resolve_mutation_instance`.
+- **[Viewsets](viewsets.md)**: `ServiceViewSet`, `SelectorViewSet`, the
   per-action mixins, `ActionSerializerResolver`, `@service_action`,
   `@selector_action`.
-- **[Mutations](mutations.md)** — `apply_input`, `create_from_input`,
-  `update_from_input` and async siblings.
-- **[Services](services.md)** — service Protocols, the `implements`
-  decorator, and the `call_service` / `acall_service` HTTP-scope helpers.
-- **[Selectors](selectors.md)** — selector Protocols and the
-  `call_selector` / `acall_selector` HTTP-scope helpers.
-- **[Types](types.md)** — `ServiceSpec`, `SelectorSpec`,
-  `PolymorphicServiceSpec`, `ChangeResult`, `FieldChange`, `UNSET`,
-  `UnsetType`, `NoInput`, `HttpExtras`.
-- **[Audience projection](audience.md)** — `build_audience_projection`,
-  `project_payload`, `annotate_output_schema`: keep one serializer for your
-  API and your agent tools, and declare per field which are content, which
-  are opaque handles, and which a model should never read out.
-- **[Spec registry](registry.md)** — `SpecRegistry`, `RegisteredSpec`:
-  one declaration site for a spec set that several transports read.
-- **[Exceptions](exceptions.md)** — `ServiceError`,
-  `ServiceValidationError`.
-- **[OpenAPI](openapi.md)** — `enable_openapi`, `ServiceAutoSchema`,
-  `ServiceErrorSerializer` (opt-in `drf-spectacular` adapter).
+- **[DRF seats](service-specs.md)**: `SerializerValidator`,
+  `SerializerPresenter`, `DRFPermissionCheck`, the DRF refusal classes and the
+  translators between the kernel's refusals and DRF's, and the offline context.
+- **[Types](types.md)**: `ServiceView`, `ViewHooks`, `HttpExtras`, the offline
+  request and view, `MARKING` and the JSON Schema registry.
+- **[OpenAPI](openapi.md)**: `enable_openapi`, `ServiceAutoSchema`,
+  `ServiceErrorSerializer` (the opt-in `drf-spectacular` adapter).
 
 ## Public surface
 
-The top-level `django_spec_rest` package re-exports the user-
-facing API. Everything below is supported, but deeper imports
-(`django_spec_rest.viewsets`, `django_spec_rest.views`,
-`django_spec_rest.mutations`, `django_spec_rest.types`,
-`django_spec_rest.exceptions`, `django_spec_rest.selectors`,
-`django_spec_rest.services`) are stable too.
+The top-level `django_spec_rest` package exports the 29 names below. The
+subpackages `django_spec_rest.views`, `django_spec_rest.viewsets`,
+`django_spec_rest.types` and `django_spec_rest.openapi` export theirs from
+their `__init__`, and the seat adapters are imported from their leaf modules
+under `django_spec_rest.service_specs`, as the [DRF seats](service-specs.md)
+page shows.
 
-```python
-from django_spec_rest import (
-    # views
-    ServiceCreateView,
-    ServiceUpdateView,
-    ServiceDeleteView,
-    SelectorListView,
-    SelectorRetrieveView,
-    MutationFlowMixin,
-    # viewsets
-    ServiceViewSet,
-    SelectorViewSet,
-    ServiceCreateMixin,
-    ServiceUpdateMixin,
-    ServiceDestroyMixin,
-    SelectorListMixin,
-    SelectorRetrieveMixin,
-    ActionSerializerResolver,
-    service_action,
-    selector_action,
-    # mutations
-    apply_input,
-    create_from_input,
-    update_from_input,
-    acreate_from_input,
-    aupdate_from_input,
-    # services
-    CreateService,
-    UpdateService,
-    DeleteService,
-    create_model,
-    update_model,
-    delete_model,
-    acreate_model,
-    aupdate_model,
-    adelete_model,
-    call_service,
-    acall_service,
-    implements,
-    # selectors
-    Selector,
-    AsyncSelector,
-    ListSelector,
-    RetrieveSelector,
-    call_selector,
-    acall_selector,
-    # types
-    ServiceSpec,
-    SelectorSpec,
-    SelectorKind,
-    ServiceView,
-    ChangeResult,
-    FieldChange,
-    UNSET,
-    UnsetType,
-    NoInput,
-    HttpExtras,
-    # registry
-    SpecRegistry,
-    RegisteredSpec,
-    # exceptions
-    ServiceError,
-    ServiceValidationError,
-)
-```
+| Group | Names |
+| --- | --- |
+| Views | `ServiceCreateView`, `ServiceUpdateView`, `ServiceDeleteView`, `SelectorListView`, `SelectorRetrieveView`, `MutationFlowMixin`, `resolve_mutation_instance` |
+| Viewsets | `ServiceViewSet`, `SelectorViewSet`, `ServiceCreateMixin`, `ServiceUpdateMixin`, `ServiceDestroyMixin`, `SelectorListMixin`, `SelectorRetrieveMixin`, `ActionSerializerResolver`, `service_action`, `selector_action` |
+| Types | `ServiceView`, `ViewHooks`, `HttpExtras`, `OfflineContext`, `OfflineHttpRequest`, `OfflineServiceView`, `MARKING`, `JsonSchemaRegistry`, `DEFAULT_JSON_SCHEMA_REGISTRY` |
+| Serializer helpers | `base_serializer_context`, `build_offline_context`, `renderable_serializer_class` |
