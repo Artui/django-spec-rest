@@ -62,12 +62,6 @@ lists each with what a project rewrites.
   `filter_set_parameters`.**
 - **`DRFPermissionCheck` takes `route_reads=` alone**; `url_kwargs=` and
   `query_params=` are gone, and the offline request's query string is empty.
-- **A target selector's filter and reads come from the route and the query
-  string, never the body**, so a body value cannot choose an update's or a
-  delete's row or set its lookup's `filter_set` scope.
-- **A `kwargs` provider key naming a validator field is refused**, pointing at
-  `input_data=`, which validates the value: a typed provider's when the view
-  is built, an untyped one's on the request.
 - **`as_view()` refuses `permissions` on a nested selector**, which the kernel
   never asks: the spec being served is what authorizes.
 - **The DRF refusal classes are `DRFInvalidArguments`, `DRFNotPermitted` and
@@ -79,6 +73,17 @@ lists each with what a project rewrites.
   described under the offline request for that principal, no longer under the
   view's request and view of the call being served. Another principal means
   another principal object: the same user fetched again counts as another.
+  One exception, listed under the moving page's known limits: a service
+  dispatching the view's own spec for another principal still gets the
+  parameter set described under the view's request.
+- **A target selector's filter and reads come from the route and the query
+  string, never the body**, so a body value cannot choose an update's or a
+  delete's row or set its lookup's `filter_set` scope.
+- **A `kwargs` provider key naming a validator field is refused**, on a
+  single-object spec and on a `many` spec's row fields alike, pointing at
+  `input_data=`, which validates the value: a typed provider's when the view
+  is built, an untyped one's on the request. Such a value reached the service
+  unvalidated.
 
 ### Removed
 
