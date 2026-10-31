@@ -15,7 +15,7 @@ class DRFNotAuthenticated(KernelNotPermitted, NotAuthenticated):
     A transport reading the kernel's classes ends the attempt on it as a
     denial, and DRF's exception handler still answers it 401, with the
     authenticator's challenge, rather than the 403 the dual
-    [`NotPermitted`][django_spec_rest.service_specs.not_permitted.NotPermitted]
+    [`DRFNotPermitted`][django_spec_rest.service_specs.drf_not_permitted.DRFNotPermitted]
     would be.
 
     ``message`` is the kernel's, and ``detail`` is the same words as DRF's

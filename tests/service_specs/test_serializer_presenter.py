@@ -28,7 +28,6 @@ from django_service_specs.types.field_audience import FieldAudience
 from django_service_specs.types.selector_kind import SelectorKind
 from rest_framework import serializers
 
-from django_spec_rest.audience.build_audience_projection import build_audience_projection
 from django_spec_rest.service_specs.build_offline_context import build_offline_context
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from django_spec_rest.service_specs.utils import EDGE_CALL, EdgeCallState
@@ -90,6 +89,7 @@ class _Flat(serializers.Serializer):
     at = serializers.DateTimeField()
     on = serializers.DateField()
     when = serializers.TimeField()
+    lasts = serializers.DurationField()
     uid = serializers.UUIDField()
     email = serializers.EmailField()
     active = serializers.BooleanField(default=True)
@@ -111,6 +111,7 @@ def test_output_reads_order_types_formats_labels_and_presence() -> None:
         "at",
         "on",
         "when",
+        "lasts",
         "uid",
         "email",
         "active",
@@ -132,6 +133,7 @@ def test_output_reads_order_types_formats_labels_and_presence() -> None:
         "on": ("string", "date", False, None, True),
         # Formats the kernel does not name are left off rather than refused.
         "when": ("string", None, False, None, True),
+        "lasts": ("string", None, False, None, True),
         "uid": ("string", None, False, None, True),
         "email": ("string", None, False, None, True),
         # A default is substituted, so the key is always there.
@@ -224,8 +226,8 @@ def test_nested_serializers_and_lists_nest_their_output() -> None:
     assert by_name["grid"] == OutputField("grid", "array", items="array")
     # An element with no JSON type is left undeclared, which an array allows.
     assert by_name["anything"] == OutputField("anything", "array")
-    # drfs' own walk reads no choices off a list's element, so neither does this:
-    # declaring them here would have the kernel substitute displays drfs never did.
+    # No choices are read off a list's element: declaring them here would have the
+    # kernel substitute displays for the element's values.
     assert by_name["picks"] == OutputField("picks", "array", items="string")
     assert by_name["related"] == OutputField("related", "array", always_present=False)
 
@@ -245,7 +247,7 @@ def test_a_serializer_that_nests_itself_is_truncated_rather_than_recursing() -> 
         field = field.fields.get("child")
         depth += 1
 
-    # Four appearances on the path are described, as drfs' schema walk allows;
+    # Four appearances on the path are described;
     # the next is a bare object, which is the one thing still known to be true.
     assert depth == 4
     assert field == OutputField("child", "object", always_present=False)
@@ -375,15 +377,13 @@ def test_a_second_label_from_field_audiences_is_refused_where_it_is_projected() 
 
 
 # ---------------------------------------------------------------------------
-# The projection: one declaration, read by the kernel as drfs reads it today
+# The projection: one declaration, read by the kernel
 # ---------------------------------------------------------------------------
 
 
-def test_the_projection_equals_drfs_for_a_marked_serializer() -> None:
+def test_the_projection_of_a_marked_serializer() -> None:
     projection = audience_projection_for_spec(_spec(SerializerPresenter(_Invoice)))
 
-    assert projection == build_audience_projection(_Invoice)
-    # Equal, and not because both are empty.
     assert projection.label == "number"
     assert projection.audience("id") is FieldAudience.HANDLE
     assert projection.choice_labels["status"] == dict(STATUSES)
@@ -402,18 +402,17 @@ _OVERRIDES = {
 }
 
 
-def test_the_projection_equals_drfs_for_spec_level_overrides() -> None:
+def test_the_projection_of_spec_level_overrides() -> None:
     projection = audience_projection_for_spec(
         _spec(SerializerPresenter(_Invoice, field_audiences=_OVERRIDES))
     )
 
-    assert projection == build_audience_projection(_Invoice, overrides=_OVERRIDES)
     assert projection.label == "plain"
     assert projection.audience("note") is FieldAudience.HIDDEN
     assert projection.audience("etag") is FieldAudience.CONTENT
 
 
-def test_the_projection_equals_drfs_for_a_nested_serializer() -> None:
+def test_the_projection_of_a_nested_serializer() -> None:
     class _Leaf(serializers.Serializer):
         key = serializers.CharField(style={MARKING: FieldMarking.handle()})
         kind = serializers.ChoiceField(choices=[("x", "Ex")])
@@ -430,7 +429,6 @@ def test_the_projection_equals_drfs_for_a_nested_serializer() -> None:
 
     projection = audience_projection_for_spec(_spec(SerializerPresenter(_Tree)))
 
-    assert projection == build_audience_projection(_Tree)
     # Nothing marked at the top, everything two levels down.
     assert projection.fields == {}
     assert projection.nested["branch"].nested["leaves"].audience("key") is FieldAudience.HANDLE
@@ -446,7 +444,6 @@ def test_feeding_field_audiences_back_as_overrides_changes_nothing() -> None:
     declared = audience_projection_for_spec(spec)
 
     assert audience_projection_for_spec(spec, overrides=_OVERRIDES) == declared
-    assert build_audience_projection(_Invoice, overrides=_OVERRIDES) == declared
 
 
 # ---------------------------------------------------------------------------

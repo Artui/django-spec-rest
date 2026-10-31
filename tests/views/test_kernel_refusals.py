@@ -4,12 +4,12 @@ Every row has a test asserting its own answer and asserting that it is not the
 answer of the row the refusal falls to with that row deleted, so mutating a
 row out fails a named test even where the map stays total:
 
-- ``APIException`` (falls to the ``InvalidArguments`` row, which would rebuild
+- ``APIException`` (falls to the ``DRFInvalidArguments`` row, which would rebuild
   the dual-base refusal as a new one):
   ``test_a_refusal_that_is_drf_s_already_leaves_as_raised``, and the author's
   own exception where the refusal was translated from one
   (``tests/views/test_drf_refusals_restored_on_the_edge.py``);
-- ``InvalidArguments`` (falls to ``DispatchError``, a ``detail`` sentence):
+- ``DRFInvalidArguments`` (falls to ``DispatchError``, a ``detail`` sentence):
   ``test_a_missing_argument_is_drf_s_400_by_field``;
 - ``NotPermitted`` / ``PrincipalUnavailable`` (fall to ``DispatchError``, a
   ``400``): ``test_a_denied_principal_is_403``,
@@ -17,7 +17,7 @@ row out fails a named test even where the map stays total:
 - ``DispatchError`` (unanswered without it, with the totality test):
   ``test_a_bare_dispatch_error_is_400_with_its_sentence``;
 - ``ServiceError`` (unanswered without it, with the totality test):
-  ``test_a_service_s_refusal_is_answered_as_on_the_drfs_path``, one case per
+  ``test_a_service_s_refusal_is_answered_by_map_service_error``, one case per
   subclass. The subclasses are one row on purpose: ``map_service_error`` is
   the answer for all of them and a row each pointing at it could not be told
   from the base row it falls to, so each subclass's answer is held by its
@@ -51,7 +51,7 @@ from rest_framework.response import Response
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from django_spec_rest.dispatch.kernel_refusals import KERNEL_REFUSALS, answer_refusal
-from django_spec_rest.service_specs.invalid_arguments import InvalidArguments
+from django_spec_rest.service_specs.drf_invalid_arguments import DRFInvalidArguments
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from tests.views.test_kernel_views import _CreateView
 
@@ -91,7 +91,7 @@ def test_the_map_answers_every_refusal_the_kernel_raises() -> None:
 
 
 def test_a_refusal_that_is_drf_s_already_leaves_as_raised() -> None:
-    raised = InvalidArguments({"title": ["Too long."]})
+    raised = DRFInvalidArguments({"title": ["Too long."]})
     assert answer_refusal(raised) is raised
 
 
@@ -111,7 +111,7 @@ def test_a_subclass_of_the_kernel_s_invalid_arguments_keeps_its_message() -> Non
         default_message = "Worded otherwise."
 
     answer = answer_refusal(_Worded({"title": ["x"]}))
-    assert isinstance(answer, InvalidArguments)
+    assert isinstance(answer, DRFInvalidArguments)
     assert answer.message == "Worded otherwise."
 
 
@@ -164,11 +164,11 @@ def test_a_bare_dispatch_error_is_400_with_its_sentence() -> None:
     ],
     ids=["validation", "not-found", "unavailable", "conflict", "input-required", "service"],
 )
-def test_a_service_s_refusal_is_answered_as_on_the_drfs_path(
+def test_a_service_s_refusal_is_answered_by_map_service_error(
     raised: BaseException, status: int, body: dict[str, Any]
 ) -> None:
     """``map_service_error``'s answers, the schema served as raised, ``False``
-    and all, as the drfs path's views serve it."""
+    and all."""
     response = _call(ServiceSpec(service=_raising(raised), permissions=(Unrestricted(),)))
     assert response.status_code == status
     assert response.data == body

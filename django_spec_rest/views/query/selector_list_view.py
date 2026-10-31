@@ -1,108 +1,45 @@
-"""``GET`` list endpoint backed by a selector spec or DRF queryset."""
+"""``GET`` list endpoint backed by a kernel selector spec or DRF queryset."""
 
 from __future__ import annotations
 
-import builtins
-import dataclasses
 from typing import Any, ClassVar
 
-from django_service_specs.dispatch.present import present
-from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelectorSpec
+from django_service_specs.specs.selector_spec import SelectorSpec
+from django_service_specs.types.selector_kind import SelectorKind
 from rest_framework.generics import GenericAPIView
 from rest_framework.mixins import ListModelMixin
 from rest_framework.request import Request
 from rest_framework.response import Response
-from rest_framework.serializers import BaseSerializer
 
-from django_spec_rest.dispatch.renderable_serializer_class import renderable_serializer_class
-from django_spec_rest.selectors.utils import dispatch_kernel_selector, dispatch_selector_for_spec
-from django_spec_rest.types.selector_kind import SelectorKind
-from django_spec_rest.types.selector_spec import SelectorSpec
+from django_spec_rest.selectors.utils import dispatch_selector_for_spec, present_kernel_list
 from django_spec_rest.views.spec_validation import validate_selector_view_spec
-from django_spec_rest.views.utils import (
-    get_class_attr,
-    layer_serializer_context,
-    list_with_affordances,
-)
+from django_spec_rest.views.utils import get_class_attr
 
 
 class SelectorListView(ListModelMixin, GenericAPIView):
-    """``GET`` endpoint that delegates to a selector or to ``get_queryset()``.
-
-    Set ``spec`` to a
-    [`SelectorSpec`][django_spec_rest.types.selector_spec.SelectorSpec] to
-    configure the selector and/or the output serializer. Both fields are optional:
-
-    - ``spec.selector`` overrides ``get_queryset()``; ``None`` falls back to
-      the inherited ``queryset`` attribute.
-    - ``spec.output_serializer`` overrides ``get_serializer_class()``; ``None``
-      falls back to DRF's standard ``serializer_class`` attribute.
-
-    ``spec = None`` (the default) keeps both as vanilla DRF.
+    """``GET`` endpoint that delegates to a selector spec or to ``get_queryset()``.
 
     A kernel ``SelectorSpec`` on ``spec`` runs through the kernel's own
     ``dispatch`` and is presented by its own ``presenter``, the page's rows
     alone when the view paginates, with the affordance answers it declares;
-    a kernel spec declaring neither presenter nor affordances is rendered by
-    the view's ``serializer_class``, as DRF renders a queryset.
+    a spec declaring neither presenter nor affordances is rendered by the
+    view's ``serializer_class``, as DRF renders a queryset.
 
-    The rest of the list flow — filter backends, pagination, response
-    rendering — is the standard DRF ``ListModelMixin``.
+    ``spec = None`` (the default) keeps ``get_queryset()`` and the rest of the
+    flow as vanilla DRF. The rest of the list flow (filter backends,
+    pagination, response rendering) is the standard DRF ``ListModelMixin``.
     """
 
     spec: ClassVar[SelectorSpec | None] = None
 
     @classmethod
     def as_view(cls, **initkwargs: Any) -> Any:
-        validate_selector_view_spec(
-            cls, expected_kind=SelectorKind.LIST, hooks_base=SelectorListView
-        )
+        validate_selector_view_spec(cls, expected_kind=SelectorKind.LIST)
         return super().as_view(**initkwargs)
-
-    def get_selector_kwargs(self) -> dict[str, Any]:
-        """Hook for additional kwargs available to the selector signature."""
-        return {}
-
-    # ``builtins.list`` because the class defines a ``list`` method, which a type
-    # checker resolves an annotation in this scope against.
-    def get_permissions(self) -> builtins.list[Any]:
-        s: SelectorSpec | None = get_class_attr(self, "spec")
-        if isinstance(s, SelectorSpec) and s.permission_classes is not None:
-            return [permission() for permission in s.permission_classes]
-        return list(super().get_permissions())
-
-    def get_serializer_class(self) -> type[BaseSerializer[Any]]:
-        s: SelectorSpec | None = get_class_attr(self, "spec")
-        if isinstance(s, SelectorSpec) and s.output_serializer is not None:
-            return renderable_serializer_class(s.output_serializer)
-        return super().get_serializer_class()
-
-    def paginate_queryset(self, queryset: Any) -> Any:
-        # Stash the materialized page (or the full queryset when pagination
-        # is off) so the output context provider can read it via the ``page``
-        # extra. DRF resolves the page here, before ``get_serializer_context``.
-        page = super().paginate_queryset(queryset)
-        self._resolved_page = page if page is not None else queryset
-        return page
-
-    def get_serializer_context(self) -> dict[str, Any]:
-        base: dict[str, Any] = dict(super().get_serializer_context())
-        s: SelectorSpec | None = get_class_attr(self, "spec")
-        if not isinstance(s, SelectorSpec) or s.output_serializer_context is None:
-            return base
-        return layer_serializer_context(
-            base,
-            self,
-            self.request,
-            direction_hook=None,
-            action_hook=None,
-            spec_provider=s.output_serializer_context,
-            extras={"page": getattr(self, "_resolved_page", None)},
-        )
 
     def get_queryset(self) -> Any:
         s: SelectorSpec | None = get_class_attr(self, "spec")
-        if s is None or s.selector is None:
+        if s is None:
             return super().get_queryset()
         return dispatch_selector_for_spec(self, s)
 
@@ -110,34 +47,13 @@ class SelectorListView(ListModelMixin, GenericAPIView):
         # The answers are added here rather than in ``get`` so a subclass that
         # extends ``list`` keeps running once its spec declares affordances --
         # the same seam ``SelectorListMixin`` uses.
-        s: SelectorSpec | KernelSelectorSpec | None = get_class_attr(self, "spec")
-        if isinstance(s, KernelSelectorSpec):
-            return self._list_kernel_spec(s)
-        if s is None or s.affordances is None:
+        s: SelectorSpec | None = get_class_attr(self, "spec")
+        if s is None:
             return super().list(request, *args, **kwargs)
-        return list_with_affordances(self, s)
-
-    def _list_kernel_spec(self, spec: KernelSelectorSpec) -> Response:
-        """DRF's ``list`` over a kernel spec's result, presented by the spec.
-
-        The same filter and paginate steps in the same order, on the set the
-        dispatch read, and the spec's presenter handed the page's rows inside
-        the result dispatch built, so it renders the rows served with the
-        call's context; the answers are added before a paginator wraps them,
-        as ``list_with_affordances`` adds them on the drfs path.
-        """
-        result = dispatch_kernel_selector(self, spec)
-        queryset = self.filter_queryset(result.value)
-        page = self.paginate_queryset(queryset)
-        rows = queryset if page is None else page
-        # One arc to coverage, so each disjunct is named: a presenter by
-        # test_the_spec_s_presenter_renders_the_rows, affordances with none by
-        # test_affordances_with_no_presenter_are_refused_rather_than_dropped.
-        if spec.presenter is not None or spec.affordances is not None:
-            data = present(spec, dataclasses.replace(result, value=rows))
-        else:
-            data = self.get_serializer(rows, many=True).data
-        return Response(data) if page is None else self.get_paginated_response(data)
+        # DRF's ``list`` steps over the set the dispatch read, presented
+        # by the spec, shared with the viewset's ``list``.
+        data, paginated = present_kernel_list(self, s, filtered=True)
+        return self.get_paginated_response(data) if paginated else Response(data)
 
     def get(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         return self.list(request, *args, **kwargs)

@@ -5,8 +5,8 @@ edge may still ask of it are two: a ``PATCH``'s, the spec with ``partial``
 set and relaxed by the kernel's ``relax_partial`` when it is dispatched, and a
 lenient one, its ``SerializerValidator`` declared ``lenient`` so DRF's own
 coercion answers. Both are built through the kernel's own ``derive``. Every
-other variant the drfs path compiles is a seat a kernel spec declares itself,
-and asking for one is refused. Each test reads the function through its
+other variant is a seat a kernel spec declares itself, and asking for one is
+refused. Each test reads the function through its
 public signature.
 """
 
@@ -186,8 +186,7 @@ def test_a_variant_with_nothing_to_change_is_the_spec_itself(
     """Returned as it is and held by nothing, so no source is kept alive by its own variant.
 
     A spec with no Validator has nothing a partial call may leave out, and the
-    kernel refuses ``partial=True`` on one, so a ``PATCH`` runs it whole, as
-    drfs compiles a spec with no ``input_serializer``. A Validator other than
+    kernel refuses ``partial=True`` on one, so a ``PATCH`` runs it whole. A Validator other than
     a ``SerializerValidator`` declares what it takes as it validates it, so
     ``lenient`` has nothing to relax. A selector spec has neither.
     """
@@ -203,7 +202,7 @@ def test_a_variant_with_nothing_to_change_is_the_spec_itself(
 def test_a_partial_variant_over_a_validator_that_cannot_be_partial_is_the_spec_itself(
     validator: Any,
 ) -> None:
-    """Validated whole, as drfs answered: a ``PATCH`` to a dataclass is not partial.
+    """Validated whole: a ``PATCH`` to a dataclass is not partial.
 
     Such a Validator builds every field, so the kernel refuses ``partial=True``
     at ``derive``; the variant is the spec instead, and held by nothing.
@@ -212,29 +211,6 @@ def test_a_partial_variant_over_a_validator_that_cannot_be_partial_is_the_spec_i
 
     assert kernel_spec_variant(spec, partial=True) is spec
     assert id(spec) not in module._VARIANTS
-
-
-@pytest.mark.parametrize(
-    "keyword",
-    [
-        {"unguarded": True},
-        {"target": True},
-        {"server_input": False},
-        {"spread": True},
-        {"excluded": frozenset({"user"})},
-    ],
-    ids=["unguarded", "target", "server-input", "spread", "excluded"],
-)
-def test_a_drfs_only_variant_of_a_kernel_spec_is_refused(keyword: dict[str, Any]) -> None:
-    """Each is a seat a kernel spec declares itself: its ``permissions``, its
-    ``instance_selector_spec``, its providers, its Validator's ``excluded``.
-    Refused with or without a kernel variant beside it, rather than ignored."""
-    spec = _spec()
-
-    with pytest.raises(TypeError, match="declares the rest on itself"):
-        kernel_spec_variant(spec, **keyword)
-    with pytest.raises(TypeError, match="declares the rest on itself"):
-        kernel_spec_variant(spec, partial=True, lenient=True, **keyword)
 
 
 class _Flag(serializers.Serializer):
@@ -316,32 +292,12 @@ def test_partial_and_lenient_derive_one_variant_together() -> None:
     assert kernel_spec_variant(spec, partial=True, lenient=True) is both
 
 
-# drfs chose ``lenient`` per request: ``over_http(view)`` (dispatch/utils.py) was true for any
-# call a live view dispatched, so every request through a DRF view validated by its serializer
-# alone, whatever the spec's own Validator declared. Only a call with no view, or an agent
-# transport's offline one, kept the kernel's typed check.
-_DRFS_LENIENT = pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "dispatch/kernel_edge.py does not dispatch kernel_spec_variant(lenient=True), "
-        "which drfs' edge did per request"
-    ),
-)
+# A live view validates a form body by its serializer alone, whatever the spec's own Validator
+# declares, because a form's values are strings DRF's fields parse; a JSON body keeps the
+# kernel's typed check, because its client typed its values.
 
 
-@pytest.mark.django_db
-@pytest.mark.parametrize(
-    "lenient",
-    [pytest.param(False, marks=_DRFS_LENIENT, id="undeclared"), pytest.param(True, id="declared")],
-)
-def test_a_live_view_dispatches_the_spec_s_own_validator(lenient: bool) -> None:
-    """A JSON ``"true"`` for a boolean is a 204 with ``published=True``, as drfs answered.
-
-    The ``declared`` case holds the spec's own ``lenient=True`` Validator; the
-    ``undeclared`` case is the regression a drfs client meets: the kernel edge
-    dispatches the spec's Validator as declared, so the typed check refuses it.
-    """
+def _flag_view(lenient: bool) -> tuple[Any, dict[str, Any]]:
     seen: dict[str, Any] = {}
 
     def service(*, data: Any) -> None:
@@ -353,9 +309,37 @@ def test_a_live_view_dispatches_the_spec_s_own_validator(lenient: bool) -> None:
         validator=SerializerValidator(_Flag, lenient=lenient),
         atomic=False,
     )
-    view = type("_View", (_CreateView,), {"spec": spec}).as_view()
+    return type("_View", (_CreateView,), {"spec": spec}).as_view(), seen
 
-    response = view(APIRequestFactory().post("/", {"published": "true"}, format="json"))
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("fmt", ["multipart", None], ids=["multipart", "urlencoded"])
+def test_a_live_view_validates_a_form_body_by_its_serializer_alone(fmt: str | None) -> None:
+    """A checkbox's ``"on"`` is a 204 with ``published=True``, though the spec's Validator is not declared lenient."""
+    view, seen = _flag_view(lenient=False)
+    factory = APIRequestFactory()
+    request = (
+        factory.post("/", {"published": "on"}, format=fmt)
+        if fmt
+        else factory.post("/", "published=on", content_type="application/x-www-form-urlencoded")
+    )
+
+    response = view(request)
 
     assert response.status_code == 204, response.data
     assert seen == {"published": True}
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("lenient", "status"), [(False, 400), (True, 204)], ids=["undeclared", "declared"]
+)
+def test_a_json_body_meets_the_spec_s_own_validator(lenient: bool, status: int) -> None:
+    """A JSON ``"true"`` for a boolean is the typed check's to refuse, unless the
+    spec's own Validator is declared lenient, which takes it as DRF does."""
+    view, seen = _flag_view(lenient=lenient)
+
+    response = view(APIRequestFactory().post("/", {"published": "true"}, format="json"))
+
+    assert response.status_code == status, response.data
+    assert seen == ({"published": True} if lenient else {})

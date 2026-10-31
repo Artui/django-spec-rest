@@ -4,26 +4,26 @@ The kernel refuses the list under the argument that carries it (``items``, or
 the spec's ``many_argument``) and each invalid row under its ``int`` index, a
 valid row having no entry. DRF below 3.18 reports a list with an empty entry
 per valid row and 3.18 a mapping of the invalid rows' indexes; both reach a
-client as the latter. The tree is the dual-base ``InvalidArguments``, so it is
+client as the latter. The tree is the dual-base ``DRFInvalidArguments``, so it is
 DRF's ``ValidationError`` too, and renders as JSON with the indexes as string
 keys.
 
 A refusal of a read beside the rows keeps its own key beside the argument's
 rather than being unwrapped into a bare list.
 
-**Client-visible changes.** A drfs ``many`` view answered three things differently, and
-the tests assert the kernel's answer for each:
+**What a client sees.** A ``many`` view answers three things in the kernel's
+shape rather than DRF's list serializer's, and the tests assert each:
 
-* A refusal of the rows was the bare tree, ``{"1": {...}, "3": {...}}``; the kernel
-  answers it under the argument, ``{"items": {"1": {...}}}``.
-* A body that was no list was ``{"non_field_errors": ["Expected a list of items but
-  got type \"dict\"."]}``; the kernel answers ``{"items": ["Expected an array."]}``.
-* A body that is a list holding a row that is no object was
+* A refusal of the rows is answered under the argument, ``{"items": {"1": {...}}}``,
+  rather than as the bare tree, ``{"1": {...}, "3": {...}}``.
+* A body that is no list is ``{"items": ["Expected an array."]}``, rather than
+  ``{"non_field_errors": ["Expected a list of items but got type \"dict\"."]}``.
+* For a body that is a list holding a row that is no object, rather than
   ``{"1": {"non_field_errors": ["Invalid data. Expected a dictionary, but got
-  str."]}}``; the kernel answers ``{"items": {"1": {"non_field_errors": ["Expected an
+  str."]}}``, the kernel answers ``{"items": {"1": {"non_field_errors": ["Expected an
   object."]}}}``.
 
-Unwrapping the first two to the drfs shape would need the spec inside
+Unwrapping the first two to DRF's shape would need the spec inside
 ``answering_refusals``. The third is the kernel's own wording for a row that is no
 object, against DRF's; the bulk body as a whole is awaiting an owner decision
 (the kernel's wording and nesting, or DRF's), and until it is made the tests pin the
@@ -32,7 +32,6 @@ kernel's answer.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import Any
 
 import pytest
@@ -46,9 +45,10 @@ from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 from rest_framework.test import APIRequestFactory
 
-from django_spec_rest.service_specs.invalid_arguments import InvalidArguments
+from django_spec_rest.dispatch.kernel_edge import dispatch_kernel_spec
+from django_spec_rest.service_specs.drf_invalid_arguments import DRFInvalidArguments
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
-from tests.views.test_kernel_edge import CORES, _parts
+from tests.views.test_kernel_edge import _parts
 from tests.views.test_kernel_views import _CreateView
 
 pytestmark = pytest.mark.django_db
@@ -112,9 +112,9 @@ def _spec(
     )
 
 
-def _refusal(core: Callable[..., Any], spec: ServiceSpec, rows: Any) -> InvalidArguments:
-    with pytest.raises(InvalidArguments) as caught:
-        core(spec, **_parts(rows))
+def _refusal(spec: ServiceSpec, rows: Any) -> DRFInvalidArguments:
+    with pytest.raises(DRFInvalidArguments) as caught:
+        dispatch_kernel_spec(spec, **_parts(rows))
     return caught.value
 
 
@@ -125,67 +125,59 @@ def _served(spec: ServiceSpec, rows: Any) -> Any:
     return response
 
 
-@CORES
-def test_item_errors_are_keyed_by_the_invalid_items_index(core: Callable[..., Any]) -> None:
-    refusal = _refusal(core, _spec(), [_GOOD, _BAD, _GOOD, _BAD])
+def test_item_errors_are_keyed_by_the_invalid_items_index() -> None:
+    refusal = _refusal(_spec(), [_GOOD, _BAD, _GOOD, _BAD])
 
     assert refusal.detail == {"items": {1: _BAD_DETAIL, 3: _BAD_DETAIL}}
     detail: Any = refusal.detail
     assert all(isinstance(index, int) for index in detail["items"])
 
 
-@CORES
-def test_item_errors_reported_as_a_list_are_keyed_by_index_too(core: Callable[..., Any]) -> None:
-    refusal = _refusal(core, _spec(_LineReportedAsAList), [_GOOD, _BAD, _GOOD, _BAD])
+def test_item_errors_reported_as_a_list_are_keyed_by_index_too() -> None:
+    refusal = _refusal(_spec(_LineReportedAsAList), [_GOOD, _BAD, _GOOD, _BAD])
 
     assert refusal.detail == {"items": {1: _BAD_DETAIL, 3: _BAD_DETAIL}}
     assert refusal.get_codes() == {"items": {1: {"sku": ["blank"]}, 3: {"sku": ["blank"]}}}
 
 
-@CORES
-def test_every_item_invalid_is_keyed_from_zero(core: Callable[..., Any]) -> None:
-    refusal = _refusal(core, _spec(), [_BAD, _BAD])
+def test_every_item_invalid_is_keyed_from_zero() -> None:
+    refusal = _refusal(_spec(), [_BAD, _BAD])
 
     assert refusal.detail == {"items": {0: _BAD_DETAIL, 1: _BAD_DETAIL}}
 
 
-@CORES
-def test_item_errors_keep_their_codes(core: Callable[..., Any]) -> None:
-    refusal = _refusal(core, _spec(), [_GOOD, _BAD])
+def test_item_errors_keep_their_codes() -> None:
+    refusal = _refusal(_spec(), [_GOOD, _BAD])
 
     assert refusal.get_codes() == {"items": {1: {"sku": ["blank"]}}}
 
 
-@CORES
-def test_a_mistyped_item_is_refused_at_its_index(core: Callable[..., Any]) -> None:
-    refusal = _refusal(core, _spec(), [_GOOD, {"sku": "a", "quantity": "many"}])
+def test_a_mistyped_item_is_refused_at_its_index() -> None:
+    refusal = _refusal(_spec(), [_GOOD, {"sku": "a", "quantity": "many"}])
 
     assert refusal.detail == {"items": {1: {"quantity": ["Expected an integer."]}}}
 
 
-@CORES
-def test_the_declared_argument_names_the_refusal(core: Callable[..., Any]) -> None:
-    refusal = _refusal(core, _spec(many_argument="lines"), [_GOOD, _BAD])
+def test_the_declared_argument_names_the_refusal() -> None:
+    refusal = _refusal(_spec(many_argument="lines"), [_GOOD, _BAD])
 
     assert refusal.detail == {"lines": {1: _BAD_DETAIL}}
 
 
-@CORES
-def test_a_refusal_beside_the_rows_keeps_its_key(core: Callable[..., Any]) -> None:
+def test_a_refusal_beside_the_rows_keeps_its_key() -> None:
     """Only a refusal of the rows alone has the rows' key, and a read beside them has its own."""
     spec = _spec(_Line, _rows_of_an_author, reads=Parameters.of(Parameter("author_pk", "integer")))
 
-    refusal = _refusal(core, spec, [_GOOD])
+    refusal = _refusal(spec, [_GOOD])
 
     assert isinstance(refusal.detail, dict)
     assert list(refusal.detail) == ["author_pk"]
 
 
-@CORES
-def test_item_errors_answer_before_a_read_beside_the_list(core: Callable[..., Any]) -> None:
+def test_item_errors_answer_before_a_read_beside_the_list() -> None:
     spec = _spec(_Line, _rows_of_an_author, reads=Parameters.of(Parameter("author_pk", "integer")))
 
-    refusal = _refusal(core, spec, [_BAD])
+    refusal = _refusal(spec, [_BAD])
 
     assert refusal.detail == {"items": {0: _BAD_DETAIL}}
 

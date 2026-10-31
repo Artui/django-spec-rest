@@ -1,16 +1,14 @@
-"""Convert ``ServiceSpec`` serializer fields into ``Serializer`` classes.
+"""Convert a seat's serializer declaration into a ``Serializer`` class.
 
-The runtime accepts three shapes for ``input_serializer``:
+A ``SerializerValidator`` or ``SerializerPresenter`` reads one of three shapes:
 
-- ``None`` — no input.
+- ``None`` — no seat.
 - a ``Serializer`` subclass.
 - a bare ``@dataclass`` type, auto-wrapped in a ``DataclassSerializer``.
 
 Schema generators only know how to read ``Serializer`` subclasses, so this helper
-mirrors
-[`validate_input`][django_spec_rest.views.mutation.utils.validate_input]'s
-branching to produce a class the generator can introspect — keeping the schema and the
-runtime in lockstep."""
+mirrors the runtime's validation branching to produce a class the generator can
+introspect — keeping the schema and the runtime in lockstep."""
 
 from __future__ import annotations
 
@@ -19,11 +17,11 @@ from typing import cast
 
 from rest_framework.serializers import Serializer
 
-from django_spec_rest.dispatch.renderable_serializer_class import renderable_serializer_class
+from django_spec_rest.service_specs.renderable_serializer_class import renderable_serializer_class
 
 
 def to_serializer_class(value: type | None) -> type[Serializer] | None:
-    """Coerce a spec serializer field to a ``Serializer`` subclass.
+    """Coerce a seat's serializer declaration to a ``Serializer`` subclass.
 
     Returns ``None`` when ``value`` is ``None`` or an unrecognised shape.
     Bare dataclass types are wrapped in a ``DataclassSerializer`` subclass so

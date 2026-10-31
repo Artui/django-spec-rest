@@ -3,15 +3,13 @@
 The rows of the client-visible differences the flat reader decision records:
 a ``FilterSet`` over ``User`` beside a declared ``limit`` read, three users,
 each query string asserting the status, the rows served and, for a
-refusal, its wire shape. Against drfs these differ on purpose:
+refusal, its wire shape. Three rules are the kernel's:
 
 - **a blank value is absent** where the parameter cannot take ``""``, so
   ``?id=``, ``?staff=``, ``?joined=``, ``?kind=``, ``?st=`` and ``?limit=``
-  answer every row, as django-filter itself answers them, where drfs from
-  0.58 answered each 400;
-- **a comma splits a typed array**, so ``?st=ann,bob`` is two choices, where
-  drfs refused it;
-- **drfs' CSV post-pass drops**, so ``?ids=1,,3`` is refused at its empty
+  answer every row, as django-filter itself answers them;
+- **a comma splits a typed array**, so ``?st=ann,bob`` is two choices;
+- **an empty element is refused**, so ``?ids=1,,3`` is refused at its empty
   element rather than read as ``[1, 3]``.
 """
 
@@ -105,7 +103,7 @@ _ALL = ["ann", "bob", "cy"]
         # A comma splits a string array whose choices hold none.
         ("st=ann,bob", ["ann", "bob"]),
         ("st=ann&st=bob", ["ann", "bob"]),
-        # Agreeing with drfs and django-filter.
+        # Agreeing with django-filter.
         ("", _ALL),
         ("staff=true", ["bob"]),
         ("name=", _ALL),
@@ -136,9 +134,8 @@ def test_a_number_filter_reads_its_values(pks: list[int], query: str, rows: list
 
 
 def test_an_empty_csv_element_is_refused_at_its_index(pks: list[int]) -> None:
-    """drfs' post-pass read ``?ids=1,,3`` as ``[1, 3]``; the kernel refuses
-    the empty part, keyed by the filter's name and then the element's index,
-    where drfs refused a bad element as a flat list under the filter's name.
+    """The kernel refuses the empty part of ``?ids=1,,3`` rather than reading
+    ``[1, 3]``, keyed by the filter's name and then the element's index.
     Read off the rendered body, the payload a client is served."""
     response = _View.as_view()(APIRequestFactory().get(f"/?ids={pks[0]},,{pks[2]}"))
     response.render()
@@ -172,8 +169,34 @@ def test_a_refused_choice_is_keyed_at_its_index(
 ) -> None:
     """The answer served today, and a change the flat reader decision does
     not list: an ordering or multiple-choice filter is an array to the
-    kernel, so a refused value is keyed by its index under the filter's name,
-    where drfs served a flat list under the name
-    (``{"ordering": ["Select a valid choice. ..."]}``)."""
+    kernel, so a refused value is keyed by its index under the filter's name
+    rather than served as a flat list under the name."""
     message = f"Select a valid choice. {value} is not one of the available choices."
     assert _served(query) == (400, {name: {"0": [message]}})
+
+
+def _scoped_to_ann() -> dict[str, Any]:
+    return {"name": "ann"}
+
+
+class _ScopedView(SelectorListView):
+    spec = SelectorSpec(
+        kind=SelectorKind.LIST,
+        selector=_users,
+        filter_set=_Users,
+        kwargs=_scoped_to_ann,
+        permissions=(Unrestricted(),),
+        presenter=SerializerPresenter(_Out),
+    )
+
+
+@pytest.mark.parametrize("query", ["name=bob", ""])
+def test_a_kwargs_providers_value_for_a_filter_outranks_the_query_strings(
+    pks: list[int], query: str
+) -> None:
+    """A value the spec's ``kwargs`` provider names like a filter is the filter's,
+    whatever the client puts in the query string."""
+    response = _ScopedView.as_view()(APIRequestFactory().get("/?" + query))
+
+    assert response.status_code == 200
+    assert [row["username"] for row in response.data] == ["ann"]

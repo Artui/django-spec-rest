@@ -33,7 +33,6 @@ _AUTHOR = SelectorSpec(
     kind=SelectorKind.RETRIEVE,
     selector=lambda *, pk: Author.objects.filter(pk=pk).first(),
     reads=Parameters.of(Parameter("pk", "integer", required=True)),
-    permissions=_OPEN,
 )
 
 
@@ -96,7 +95,6 @@ class TestServiceDeleteView:
             output_selector_spec=SelectorSpec(
                 kind=SelectorKind.RETRIEVE,
                 selector=lambda *, result: Author.objects.get(pk=result),
-                permissions=_OPEN,
                 presenter=_PRESENTER,
             ),
         )
@@ -139,3 +137,10 @@ class TestServiceDeleteView:
         author = Author.objects.create(name="Gone")
         view = _view(lambda *, instance: {"ok": True}, success_status=202)
         assert view(factory.delete("/"), pk=author.pk).status_code == 202
+
+
+def test_a_view_with_no_spec_names_the_missing_spec() -> None:
+    view = type("_Unconfigured", (ServiceDeleteView,), {})
+
+    with pytest.raises(NotImplementedError, match="_Unconfigured requires a `spec`"):
+        view.as_view()(factory.delete("/"), pk=1)

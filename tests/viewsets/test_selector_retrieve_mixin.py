@@ -1,162 +1,103 @@
-"""Tests for SelectorRetrieveMixin in isolation (without SelectorListMixin)."""
+"""``SelectorRetrieveMixin`` alone over ``GenericViewSet``, with a kernel ``SelectorSpec``."""
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 import pytest
-from rest_framework.routers import SimpleRouter
-from rest_framework.test import APIClient, APIRequestFactory
+from django_service_specs import (
+    Parameter,
+    Parameters,
+    SelectorKind,
+    SelectorSpec,
+    Unrestricted,
+)
+from rest_framework.decorators import action
+from rest_framework.filters import BaseFilterBackend
+from rest_framework.permissions import BasePermission
+from rest_framework.response import Response
+from rest_framework.test import APIRequestFactory
 from rest_framework.viewsets import GenericViewSet
 
-from django_spec_rest import (
-    SelectorKind,
-    SelectorRetrieveMixin,
-    SelectorRetrieveView,
-    SelectorSpec,
-    resolve_mutation_instance,
-)
+from django_spec_rest import SelectorRetrieveMixin
+from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from tests.testapp.models import Author
 from tests.testapp.serializers import AuthorSerializer
 
-
-def _retrieve(*, pk: int, tenant: str) -> Author | None:
-    if tenant != "acme":
-        return None
-    return Author.objects.filter(pk=pk).first()
-
-
-class _RetrieveOnly(SelectorRetrieveMixin, GenericViewSet):
-    action_specs = {"retrieve": SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_retrieve)}
-    serializer_class = AuthorSerializer
-
-    def get_selector_kwargs(self) -> dict[str, Any]:
-        return {"tenant": "acme"}
-
+pytestmark = pytest.mark.django_db
 
 factory = APIRequestFactory()
 
 
-@pytest.mark.django_db
-def test_get_selector_kwargs_used_when_mixin_is_alone() -> None:
-    author = Author.objects.create(name="Ada")
-    view = _RetrieveOnly.as_view({"get": "retrieve"})
-    response = view(factory.get("/"), pk=author.pk)
-    assert response.status_code == 200
-    assert response.data["name"] == "Ada"
-
-
-@pytest.mark.django_db
-def test_default_get_selector_kwargs_returns_empty_dict() -> None:
-    instance = SelectorRetrieveMixin()
-    assert instance.get_selector_kwargs() == {}
-
-
-@pytest.mark.django_db
-def test_none_resolution_renders_404_by_default() -> None:
-    view = _RetrieveOnly.as_view({"get": "retrieve"})
-    response = view(factory.get("/"), pk=99999)
-    assert response.status_code == 404
-
-
-def _nullable_retrieve(*, pk: int) -> Author | None:
-    return Author.objects.filter(pk=pk).first()
-
-
-class _NullableRetrieve(SelectorRetrieveMixin, GenericViewSet):
-    action_specs = {
-        "retrieve": SelectorSpec(
-            kind=SelectorKind.RETRIEVE, selector=_nullable_retrieve, allow_none=True
-        ),
+def _retrieve(**fields: Any) -> SelectorSpec:
+    defaults: dict[str, Any] = {
+        "selector": lambda *, pk: Author.objects.filter(pk=pk).first(),
+        "reads": Parameters.of(Parameter("pk", "integer", required=True)),
+        "permissions": (Unrestricted(),),
+        "presenter": SerializerPresenter(AuthorSerializer),
     }
-    serializer_class = AuthorSerializer
+    return SelectorSpec(kind=SelectorKind.RETRIEVE, **{**defaults, **fields})
 
 
-@pytest.mark.django_db
-def test_allow_none_renders_200_null() -> None:
-    view = _NullableRetrieve.as_view({"get": "retrieve"})
-    response = view(factory.get("/"), pk=99999)
-    assert response.status_code == 200
-    assert response.data is None
-
-
-@pytest.mark.django_db
-def test_allow_none_still_serializes_resolved_instance() -> None:
-    author = Author.objects.create(name="Ada")
-    view = _NullableRetrieve.as_view({"get": "retrieve"})
-    response = view(factory.get("/"), pk=author.pk)
-    assert response.status_code == 200
-    assert response.data == {"id": author.pk, "name": "Ada"}
-
-
-class _ExcludeEverything:
-    """A filter backend that would leave no row at all."""
-
+class _ExcludeEverything(BaseFilterBackend):
     def filter_queryset(self, request: Any, queryset: Any, view: Any) -> Any:
         return queryset.none()
 
 
-class _BackendRetrieve(SelectorRetrieveMixin, GenericViewSet):
-    filter_backends = [_ExcludeEverything]
-    action_specs = {
-        "retrieve": SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_nullable_retrieve)
-    }
-    serializer_class = AuthorSerializer
-    queryset = Author.objects.all()
+def _viewset(**attrs: Any) -> Any:
+    base = (SelectorRetrieveMixin, GenericViewSet)
+    return type("_ViewSet", base, {"queryset": Author.objects.all(), **attrs})
 
 
-@pytest.mark.django_db
-def test_filter_backends_do_not_narrow_the_selector_retrieve_lookup() -> None:
-    """Characterises the bypass rather than fixing it.
+def _get(viewset: Any, action_name: str = "retrieve", **kwargs: Any) -> Response:
+    return viewset.as_view({"get": action_name})(factory.get("/"), **kwargs)
 
-    DRF applies ``filter_queryset()`` from inside its own ``get_object()``, so
-    a mixin that overrides that method drops the backends exactly as a
-    hand-written override would. Pinned so a change here is a deliberate one.
-    """
-    author = Author.objects.create(name="Ada")
-    view = _BackendRetrieve.as_view({"get": "retrieve"})
-    response = view(factory.get("/"), pk=author.pk)
+
+def test_the_row_is_presented_by_the_spec() -> None:
+    author = Author.objects.create(name="a")
+    response = _get(_viewset(action_specs={"retrieve": _retrieve()}), pk=author.pk)
+    assert response.data == {"id": author.pk, "name": "a"}
+
+
+def test_an_allow_none_miss_serves_a_json_null_body() -> None:
+    response = _get(_viewset(action_specs={"retrieve": _retrieve(allow_none=True)}), pk=999)
+    response.render()
     assert response.status_code == 200
+    assert response.content == b"null"
+    assert response["Content-Type"] == "application/json"
 
 
-def test_the_three_bypass_sites_disclose_the_dropped_filter_backends() -> None:
-    """The disclosure has to live where the bypass does.
-
-    It used to live only in two prose pages, so a reader of ``get_object()``
-    learned nothing. This asserts each site still says it, because a
-    disclosure nobody is checking is a disclosure that quietly disappears.
-    """
-    for site in (
-        SelectorRetrieveMixin.get_object,
-        SelectorRetrieveView.get_object,
-        resolve_mutation_instance,
-    ):
-        doc = site.__doc__ or ""
-        assert "filter_backends" in doc, f"{site.__qualname__} does not disclose the bypass"
-        assert "filter_queryset" in doc, f"{site.__qualname__} does not name what is skipped"
+def test_filter_backends_do_not_narrow_the_lookup() -> None:
+    """The selector is the lookup, and DRF's
+    ``filter_queryset()`` runs only inside its own ``get_object()``."""
+    author = Author.objects.create(name="a")
+    viewset = _viewset(action_specs={"retrieve": _retrieve()}, filter_backends=[_ExcludeEverything])
+    assert _get(viewset, pk=author.pk).status_code == 200
 
 
-_router = SimpleRouter()
-_router.register("authors", _NullableRetrieve, basename="nullable-author")
-urlpatterns = _router.urls
+def test_the_view_s_object_permission_is_asked_of_the_row() -> None:
+    author = Author.objects.create(name="a")
+
+    class _NoRows(BasePermission):
+        def has_object_permission(self, request: Any, view: Any, obj: Any) -> bool:
+            return False
+
+    viewset = _viewset(action_specs={"retrieve": _retrieve()}, permission_classes=[_NoRows])
+    assert _get(viewset, pk=author.pk).status_code == 403
 
 
-@pytest.mark.urls(__name__)
-@pytest.mark.django_db
-class TestAllowNoneOnTheWire:
-    """What a client receives, read from the rendered bytes, not ``response.data``."""
+def test_get_object_answers_the_kernel_spec_s_row() -> None:
+    """A detail handler of the view's own reading ``get_object()`` gets the
+    row the retrieve spec finds."""
+    author = Author.objects.create(name="a")
+    Author.objects.create(name="b")
 
-    def test_a_miss_serves_a_json_null_body(self) -> None:
-        response = APIClient().get("/authors/99999/")
-        assert response.status_code == 200
-        assert response.content == b"null"
-        assert json.loads(response.content) is None
-        assert response["Content-Type"] == "application/json"
+    class _ViewSet(SelectorRetrieveMixin, GenericViewSet):
+        queryset = Author.objects.none()
+        action_specs = {"retrieve": _retrieve()}
 
-    def test_a_found_row_renders_exactly_as_before(self) -> None:
-        author = Author.objects.create(name="Ada")
-        response = APIClient().get(f"/authors/{author.pk}/")
-        assert response.status_code == 200
-        assert response["Content-Type"] == "application/json"
-        assert response.content == f'{{"id":{author.pk},"name":"Ada"}}'.encode()
+        @action(detail=True)
+        def label(self, request: Any, pk: Any = None) -> Response:
+            return Response(self.get_object().name)
+
+    assert _get(_ViewSet, "label", pk=author.pk).data == "a"

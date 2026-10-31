@@ -70,7 +70,6 @@ class _UpsertView(ServiceCreateView):
         output_selector_spec=SelectorSpec(
             kind=SelectorKind.RETRIEVE,
             selector=_refetch,
-            permissions=_OPEN,
             presenter=SerializerPresenter(AuthorSerializer),
         ),
     )
@@ -95,7 +94,6 @@ _AUTHOR = SelectorSpec(
     kind=SelectorKind.RETRIEVE,
     selector=_author,
     reads=Parameters.of(Parameter("pk", "integer", required=True)),
-    permissions=_OPEN,
 )
 
 
@@ -135,10 +133,24 @@ class TestCallableSuccessStatus:
         assert response.status_code == 200
         assert response.data["name"] == "Ada"
 
+    def test_a_callable_taking_kwargs_is_accepted_and_handed_the_pool(self) -> None:
+        """A callable taking ``**kwargs`` names no key the pool could lack, so the
+        view is built, and the call hands it the pool's keys."""
+        seen: set[str] = set()
+
+        def status(**kwargs: Any) -> int:
+            seen.update(kwargs)
+            return 202
+
+        view = type("_View", (_UpsertView,), {"success_status": staticmethod(status)}).as_view()
+        response = view(factory.post("/", {"name": "Ada"}, format="json"))
+
+        assert response.status_code == 202
+        assert "result" in seen
+
 
 class TestASuccessStatusTheViewCannotResolve:
-    """Refused when the view is built, as a drfs spec's ``success_status`` is,
-    rather than raising ``TypeError`` once the service has committed."""
+    """Refused when the view is built, rather than raising ``TypeError`` once the service has committed."""
 
     def test_a_callable_requiring_a_key_the_pool_lacks_is_refused_at_as_view(self) -> None:
         def status(*, call_context: Any) -> int:
@@ -147,6 +159,40 @@ class TestASuccessStatusTheViewCannotResolve:
         view = type("_View", (_UpsertView,), {"success_status": staticmethod(status)})
         with pytest.raises(ImproperlyConfigured, match=r"\['call_context'\] the framework can't"):
             view.as_view()
+
+    def test_a_callable_taking_kwargs_beside_a_key_the_pool_lacks_is_refused_at_as_view(
+        self,
+    ) -> None:
+        """``**kwargs`` takes the pool, never a name the pool lacks: called, it
+        would still raise ``TypeError`` for ``call_context``."""
+
+        def status(*, call_context: Any, **kwargs: Any) -> int:
+            return 202
+
+        view = type("_View", (_UpsertView,), {"success_status": staticmethod(status)})
+        with pytest.raises(ImproperlyConfigured, match=r"\['call_context'\] the framework can't"):
+            view.as_view()
+
+    def test_a_callable_taking_a_positional_only_parameter_is_refused_at_as_view(self) -> None:
+        """The pool is handed by keyword, so a positional-only parameter with no
+        default is never supplied, a key of the pool's name included: called, it
+        would raise ``TypeError``."""
+
+        def status(result: Any, /) -> int:
+            return 202
+
+        view = type("_View", (_UpsertView,), {"success_status": staticmethod(status)})
+        with pytest.raises(ImproperlyConfigured, match=r"\['result'\] by position only"):
+            view.as_view()
+
+    def test_a_positional_only_parameter_with_a_default_is_left_to_it(self) -> None:
+        """Nothing is handed to it, so it takes its default."""
+
+        def status(code: int = 202, /) -> int:
+            return code
+
+        view = type("_View", (_UpsertView,), {"success_status": staticmethod(status)})
+        assert view.as_view()(factory.post("/", {"name": "Ada"}, format="json")).status_code == 202
 
     def test_a_value_that_is_no_int_nor_callable_is_refused_at_as_view(self) -> None:
         view = type("_View", (_UpsertView,), {"success_status": "201"})

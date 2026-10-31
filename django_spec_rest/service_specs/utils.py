@@ -14,12 +14,7 @@ throughout is therefore that a declaration may be incomplete and never
 stricter than the field: a field with no single JSON type of its own - a
 ``JSONField``, a related field, which DRF reads from a string as readily as
 from a number, or a field this walk does not know - declares ``any``, which
-the shape check passes on as it came. It is the same policy drfs' own input
-schema follows, which writes ``{}`` for each of them.
-
-What a field means is read as drfs' ``serializer_to_json_schema`` reads it, so
-the two describe one serializer alike; the parity test names each place the
-two dialects differ and why.
+the shape check passes on as it came.
 """
 
 from __future__ import annotations
@@ -28,22 +23,15 @@ import dataclasses
 import inspect
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from contextvars import ContextVar
-from typing import Any, Final, cast
+from typing import Any, Final
 
-from django.core.exceptions import ImproperlyConfigured, ObjectDoesNotExist
-from django.db import DatabaseError
+from django.core.exceptions import ImproperlyConfigured
 from django.db.models import QuerySet
 from django.http import HttpRequest, QueryDict
-from django.utils.translation import gettext
 from django_service_specs.output.output import OutputField
-from django_service_specs.parameters.coded_message import CodedMessage
-from django_service_specs.parameters.invalid_arguments import (
-    InvalidArguments as KernelInvalidArguments,
-)
 from django_service_specs.parameters.parameters import Parameter, Parameters
 from django_service_specs.pool.resolve_callable_kwargs import resolve_callable_kwargs
-from django_service_specs.types.is_async import is_async
-from django_service_specs.types.unset import UNSET as KERNEL_UNSET
+from django_service_specs.types.unset import UNSET
 from rest_framework import ISO_8601, relations, serializers
 from rest_framework.settings import api_settings
 from rest_framework_dataclasses.serializers import DataclassSerializer
@@ -51,34 +39,19 @@ from rest_framework_dataclasses.serializers import DataclassSerializer
 from django_spec_rest.service_specs.base_serializer_context import base_serializer_context
 from django_spec_rest.service_specs.build_offline_context import build_offline_context
 from django_spec_rest.types.json_schema_registry import JsonSchemaRegistry
-from django_spec_rest.types.unset import UNSET
 from django_spec_rest.types.view_hooks import ViewHooks
-
-# What building or reading an input serializer with no call may raise and
-# still be a serializer a call can describe: a request or view read unguarded
-# from a context that has none (``AttributeError``, ``KeyError``,
-# ``TypeError``), a table ``migrate`` has not made yet, and a row not loaded
-# yet. A spec compiles as it is declared, at import, so registering it never
-# needs either. A call's own refusal of a body that is no list binds the
-# list serializer with no context too (``_drf_body_refusal`` in dispatch).
-UNREADABLE_WITHOUT_A_CALL: tuple[type[Exception], ...] = (
-    AttributeError,
-    KeyError,
-    TypeError,
-    DatabaseError,
-    ObjectDoesNotExist,
-)
 
 MAX_SERIALIZER_APPEARANCES = 4
 """How many times one serializer class may appear on the walk's current path
 before the next appearance is truncated to an open object.
 
-drfs' own input schema's allowance, and for the same reason: a
-self-referential serializer is an ordinary shape and must not raise
+A self-referential serializer is an ordinary shape and must not raise
 ``RecursionError`` while a transport describes it, and a serializer bounding
 its own depth with a countdown is usually written three levels below its root,
-so four appearances describe it as written. Kept equal to drfs' so the two
-truncate one declaration at the same node."""
+so four appearances describe it as written. A serializer instantiates its
+fields lazily, so an unbounded self-nesting declaration is legal to build and
+renders a finite value; only a walk of its declaration would never end. The
+input walk and ``SerializerPresenter``'s output walk both stop here."""
 
 _SCALARS: tuple[tuple[type[serializers.Field], str, str | None], ...] = (
     (serializers.BooleanField, "boolean", None),
@@ -104,228 +77,69 @@ fields do not subclass one another across rows, so the order matters only
 within the CharField family, which ends the string rows."""
 
 
-def describe_serializer(declaration: Any) -> serializers.Serializer:
+def describe_serializer(declaration: Any, validator: Any = None) -> serializers.Serializer:
     """The serializer ``declaration`` describes its fields with: the call's own, inside one.
 
-    ``declaration`` is what a drfs spec's ``input_serializer`` takes: a
-    ``Serializer`` subclass, or a dataclass, which is read through a
-    ``DataclassSerializer`` exactly as dispatch validates it. Anything else is
-    refused with ``ImproperlyConfigured``.
+    ``declaration`` is what a ``SerializerValidator`` takes: a ``Serializer``
+    subclass, or a dataclass, which is read through a ``DataclassSerializer``
+    exactly as the Validator validates it. Anything else is
+    refused with ``ImproperlyConfigured``. ``validator`` is the Validator
+    asking, whose ``serializer`` it is, or ``None`` for a reader that is no
+    Validator's.
 
-    Inside an edge call it is built once for the call (``EdgeCallState.described``)
-    and every description of the call reads that one. The call's own input
-    serializer is built as DRF's view built the one serializer of a request:
-    with the call's body as its ``data``, the row it acts on as its
-    ``instance``, its ``partial`` flag (``describe_with``), and its context -
-    the call's request and view, its view's input layers and the spec's
-    ``input_serializer_context`` - so a ``get_fields`` or an ``__init__``
-    reading ``initial_data``, ``instance``, ``partial`` or
+    Inside an edge call, the declaration of the edge's own spec, read by one
+    of the edge's own Validators (``EdgeCallState.describing``), is built once
+    for the call (``EdgeCallState.described``) and every such description of
+    the call reads that one. It is built with the call's context - the call's
+    request and view, its view's input layers and the Validator's
+    ``serializer_context`` - so a ``get_fields`` reading
     ``self.context["request"]`` describes the fields the call validates with
-    (test_the_input_serializer_is_built_once_per_call,
-    test_a_live_view_scopes_the_field_to_the_caller,
-    test_an_offline_view_builds_the_fields_from_its_query_string_and_route,
-    test_with_no_view_and_no_request_the_caller_is_the_principal). The
-    Validator validates with that same serializer where it binds it exactly so
-    (``bound_description``). Outside a call, as a schema or a registration
-    describes it, it is built unbound, with the context DRF builds on HTTP with
-    no view and no request: a ``get_fields`` reading
-    ``self.context["request"]`` finds the key and reads ``None``, rather than
-    raising ``KeyError`` from a schema while dispatch would have rendered it.
-    What the serializer raises while it is described is raised as it is
-    (test_a_serializer_that_fails_is_not_hidden_at_dispatch, which fails if a
-    serializer is rebuilt where the call has no callable taking ``**kwargs``
-    to ask).
+    (test_a_live_view_scopes_the_field_to_the_caller), and with no body and no
+    row, so one reading ``initial_data``, ``instance`` or ``partial`` reads
+    none of the call's (the strict xfails of
+    test_the_input_serializer_is_built_once_per_call). Any other Validator's,
+    the same declaration's included, and every one outside a call, as a schema or a registration describes it,
+    is built unbound, with the context DRF builds on HTTP with no view and no
+    request: a ``get_fields`` reading ``self.context["request"]`` finds the
+    key and reads ``None``, rather than raising ``KeyError`` from a schema
+    while dispatch would have rendered it. What the serializer raises while it
+    is described is raised as it is
+    (test_a_serializer_its_description_cannot_build_raises_as_it_is).
 
-    A spec's context callable taking ``**kwargs`` is left out of a description,
-    which holds none of the call's seeds, unless the serializer cannot be built
-    without it: then it is asked over what the description holds, and the
-    serializer built once more with its answer
-    (test_a_live_view_describes_a_serializer_needing_a_whole_pool_callable,
-    test_off_http_a_serializer_needing_a_whole_pool_callable_is_described).
-    What the serializer raises built with that answer is raised as it is
-    (test_a_serializer_failing_with_a_whole_pool_callable_too_is_not_hidden).
+    A spec's context callable taking ``**kwargs`` is left out of a
+    description, which holds none of the call's seeds.
     """
     state = EDGE_CALL.get()
-    describe = state.describe_context if state is not None else None
-    if state is None or describe is None:
+    # Only the edge's own Validators read the edge's request and view: one a
+    # kernel call inside the service describes, for whichever principal, is
+    # described as outside a call, another spec's
+    # (test_a_kernel_call_for_another_principal_is_never_described_under_the_view_s_request)
+    # and another spec's declaring the very serializer class, which the
+    # edge's description, scoped to the edge's request, would otherwise answer
+    # (test_a_kernel_call_of_another_spec_declaring_the_serializer_is_not_described_as_the_edge_s).
+    # The edge sets ``describing`` and ``describe_context`` together, so the
+    # middle condition holds no case of its own: it narrows the type. A kernel
+    # call of the edge's own spec reaches the edge's own Validator, and is
+    # described as the edge's: ``parameters()`` is asked with no principal
+    # and no call, so nothing here tells the two apart.
+    if (
+        state is None
+        or state.describe_context is None
+        or not any(validator is own for own in state.describing)
+    ):
         return bind_serializer(
             declaration, context=base_serializer_context(view=None, request=None)
         )
     described = state.described.get(declaration)
     if described is None:
-        try:
-            described = _described(declaration, state.describe_binding, describe)
-        except (AttributeError, KeyError, TypeError):
-            # Read before the target lookup has found the row the serializer
-            # is built with, for the names the lookup's own arguments need, a
-            # serializer that cannot be built without its row is taken to
-            # declare no name, as a registration takes it
-            # (test_a_serializer_reading_its_row_validates_off_http). Once the
-            # row is found it is built with it, and what it raises then is
-            # raised as it is
-            # (test_a_serializer_failing_with_its_row_too_is_not_hidden).
-            if not state.row_pending:
-                raise
-            described = serializers.Serializer()
+        described = bind_serializer(declaration, context=state.describe_context())
         state.described[declaration] = described
-    return _row_serializer(described)
-
-
-def _row_serializer(serializer: serializers.Serializer) -> serializers.Serializer:
-    """``serializer``, or the child a ``many`` call's list serializer validates each row with."""
-    if isinstance(serializer, serializers.ListSerializer):
-        return cast(serializers.Serializer, serializer.child)
-    return serializer
-
-
-def _described(
-    declaration: Any,
-    binding: DescribeBinding | None,
-    describe: Callable[..., dict[str, Any] | None],
-) -> serializers.Serializer:
-    """``declaration`` built for the call: as the call binds it, where it is the call's own."""
-    # Another declaration a description reads in the call - a kernel call's
-    # inside the service - is no body's, and is described unbound
-    # (test_another_declaration_is_described_for_no_body).
-    bound: dict[str, Any] = {}
-    asked: tuple[Any, ...] = ()
-    if binding is not None and binding.declaration is declaration:
-        bound, asked = binding.serializer_kwargs(), (binding.data,)
-    try:
-        described = bind_serializer(declaration, context=describe(*asked), **bound)
-        # DRF builds the fields when they are first read; they are read here, so
-        # a ``get_fields`` the description cannot answer fails where it can
-        # still be asked again (the ``_FieldsFromTheSpec`` half of each test).
-        _fields = _row_serializer(described).fields
-        return described
-    except (AttributeError, KeyError, TypeError):
-        # How a read of a key the description lacks fails, each held by its case
-        # of test_a_serializer_failing_any_way_without_a_whole_pool_callable_is_described.
-        whole = describe(*asked, whole_pool=True)
-        if whole is None:
-            raise
-        return bind_serializer(declaration, context=whole, **bound)
-
-
-@dataclasses.dataclass(frozen=True, eq=False)
-class DescribeBinding:
-    """What an edge call binds its own input serializer to: its body, its row and its flags.
-
-    ``data`` is the body the serializer validates, ``instance`` the row the
-    call acts on (``None`` for a create, and for a collection, which is no
-    row), ``partial`` the compiled spec's flag, and ``many`` whether the body
-    is a list of rows.
-    """
-
-    declaration: Any
-    data: Any
-    instance: Any = None
-    partial: bool = False
-    many: bool = False
-
-    def serializer_kwargs(self) -> dict[str, Any]:
-        """The keywords the serializer is built with, as the Validator binds it."""
-        if self.many:
-            return {"data": self.data, "many": True, "partial": self.partial}
-        return {"data": self.data, "instance": self.instance, "partial": self.partial}
-
-
-def describe_with(state: EdgeCallState, binding: DescribeBinding) -> None:
-    """Describe ``binding.declaration`` as ``binding`` binds it from here on in the call.
-
-    The edge binds its input serializer to the caller's body as soon as the
-    call starts, and again once it knows the body the serializer validates and
-    the row it acts on, where either is another (``prepare_edge_call``): the
-    description built for the first is dropped, and the next description of the
-    call is built for the second.
-    """
-    state.describe_binding = binding
-    state.described.pop(binding.declaration, None)
-
-
-def bound_description(
-    declaration: Any, context: Mapping[str, Any], **kwargs: Any
-) -> serializers.Serializer | None:
-    """The call's description of ``declaration``, where it is bound exactly as ``kwargs`` binds.
-
-    The Validator binds the serializer that validates, and where the call's
-    description was built with the same ``data`` object, the same row, the
-    same ``partial`` and ``many`` and a context holding the same objects under
-    the same keys, the description is that serializer, so the call builds its
-    input serializer once, as DRF's view did
-    (test_the_input_serializer_is_built_once_per_call). Anything else is built
-    afresh: a body the server put a value into, a row a lookup resolved after
-    the description, or a context callable the description could not ask
-    (``TestAContextCallableTheDescriptionCannotAsk``). A description that has
-    validated once is never validated again
-    (test_a_kernel_call_inside_the_service_binds_its_own_arguments).
-    """
-    state = EDGE_CALL.get()
-    described = state.described.get(declaration) if state is not None else None
-    # One arc to coverage: test_never_described_it_is_none holds the first
-    # condition and test_once_it_has_validated_it_is_none the second.
-    if described is None or hasattr(described, "_errors"):
-        return None
-    if not _bound_as(described, kwargs) or not _same_objects(described._context, context):
-        return None
     return described
 
 
 def bound_instance(target: Any) -> Any:
     """The row a serializer binds for ``target``: none for a collection, which is no row to update."""
     return None if isinstance(target, QuerySet) else target
-
-
-def _bound_as(serializer: serializers.Serializer, kwargs: Mapping[str, Any]) -> bool:
-    """Whether ``serializer`` was built with ``kwargs``' body, row and flags.
-
-    One arc to coverage, so each condition is named by its case of
-    test_bound_another_way_it_is_none: ``many``, ``another-data``,
-    ``another-row`` and ``partial``, in order.
-    """
-    return (
-        isinstance(serializer, serializers.ListSerializer) is kwargs.get("many", False)
-        and getattr(serializer, "initial_data", UNSET) is kwargs["data"]
-        and serializer.instance is kwargs.get("instance")
-        and serializer.partial == kwargs["partial"]
-    )
-
-
-def _same_objects(held: Mapping[str, Any], context: Mapping[str, Any]) -> bool:
-    """Whether ``held`` holds the very objects ``context`` does, under the same keys.
-
-    Each half is named by its case of test_bound_another_way_it_is_none:
-    ``another-key`` and ``another-object``.
-    """
-    return held.keys() == context.keys() and all(held[key] is context[key] for key in context)
-
-
-def unexpected_arguments(names: Iterable[str]) -> serializers.ValidationError:
-    """DRF's refusal of ``names`` as arguments the call has nowhere to put, in this package's words."""
-    listed = ", ".join(repr(name) for name in sorted(names))
-    return serializers.ValidationError(
-        {
-            api_settings.NON_FIELD_ERRORS_KEY: [
-                serializers.ErrorDetail(f"Unexpected argument(s): {listed}.", code="invalid")
-            ]
-        }
-    )
-
-
-def writable_input_names(spec: Any) -> frozenset[str]:
-    """The names a service spec's input serializer takes from the body at the top level.
-
-    Each writable field's name, as the client sends it, read through
-    ``describe_serializer``. A ``many`` spec's fields are each row's and a spec
-    with no input serializer has none, so either answers no name; a read-only
-    field and a ``HiddenField`` take nothing from the body (``is_input``), so
-    neither is a name the body writes (the ``read-only-field`` and
-    ``hidden-field`` cases of test_a_read_no_field_takes_from_the_body_is_accepted).
-    """
-    if spec.input_serializer is None or spec.many:
-        return frozenset()
-    fields = describe_serializer(spec.input_serializer).fields
-    return frozenset(name for name, field in fields.items() if is_input(field))
 
 
 def bind_serializer(declaration: Any, **kwargs: Any) -> serializers.Serializer:
@@ -336,174 +150,11 @@ def bind_serializer(declaration: Any, **kwargs: Any) -> serializers.Serializer:
         return DataclassSerializer(dataclass=declaration, **kwargs)
     raise ImproperlyConfigured(
         f"{declaration!r} cannot be read as a serializer: declare a Serializer subclass or a "
-        "dataclass, as an input_serializer takes."
+        "dataclass, as SerializerValidator and SerializerPresenter take."
     )
 
 
 SERIALIZER_CONTEXT_SEED = "_serializer_context_layers"
-
-# The prefix of the name a server's value for a parameter is carried under
-# where a filter of the same name takes the client's (``server_channel``).
-SERVER_CHANNEL = "_server_owned_"
-
-
-def server_channel(name: str) -> str:
-    """The name the server's value for ``name`` travels under beside a filter's ``name``.
-
-    No read declares it, so the kernel takes no client's value for it.
-    """
-    return SERVER_CHANNEL + name
-
-
-def fills_its_own(fn: Callable[..., Any]) -> bool:
-    """Whether ``fn`` is a wrapper taking ``**kwargs`` that may fill its own parameters.
-
-    ``inspect.signature`` follows ``__wrapped__``, so a ``functools.wraps``
-    decorator reports the wrapped function's parameters, while the wrapper is
-    what runs and may fill any of them itself, as a decorator injecting a scope
-    does. Which ones cannot be read, so none of them is one the call may refuse
-    as missing (``left_to_the_callable``), as 0.57.0 asked none. Read off the
-    author's own callable, never a compiled one: the compiler's own forwarding
-    callables carry ``__wrapped__`` and a ``__signature__`` too. The two
-    conjuncts, one branch arc, each held in
-    ``tests/dispatch/test_a_wrapper_fills_its_own_parameter.py``:
-
-    - the signature that runs differs from the one read, so ``fn`` is a wrapper:
-      a plain ``**kwargs`` beside a required parameter fills nothing, and the
-      parameter is still missing (test_a_parameter_beside_var_keyword_is_still_missing).
-    - that signature takes ``**kwargs``: a wrapper naming its own parameters
-      receives only what dispatch passes, so it cannot fill one either
-      (test_a_wrapper_naming_its_own_parameters_is_still_refused).
-    """
-    read = inspect.signature(fn)
-    try:
-        runs = inspect.signature(fn, follow_wrapped=False)
-    except (TypeError, ValueError):
-        # A ``staticmethod`` or ``classmethod`` object: it has ``__wrapped__`` but
-        # no signature of its own, and calling it calls what it wraps, so the
-        # signature read is the one that runs
-        # (test_a_staticmethod_is_read_through_not_skipped).
-        runs = read
-    return runs != read and any(
-        parameter.kind is inspect.Parameter.VAR_KEYWORD for parameter in runs.parameters.values()
-    )
-
-
-class _LeftToTheCallable:
-    """The default ``left_to_the_callable`` reports: the callable fills the parameter or fails."""
-
-    def __repr__(self) -> str:
-        return "<left to the callable>"
-
-
-LEFT_TO_THE_CALLABLE = _LeftToTheCallable()
-
-
-def left_to_the_callable(fn: Callable[..., Any], names: frozenset[str] | None = None) -> Any:
-    """``fn``, reporting a default for each of ``names`` it requires (every one, for ``None``).
-
-    The kernel refuses a parameter the call left out as missing, by
-    ``fn``'s signature, where a caller could have filled it. A parameter
-    reported with a default is never refused: the call hands ``fn`` what the
-    pool holds of it, and nothing where the pool holds nothing, so the callable
-    fills it itself or fails as its own ``TypeError``, as on 0.57.0. Only the
-    signature changes: ``fn`` is called as it was, and an ``async def`` stays
-    one, since the kernel awaits it by its kind. ``fn`` itself is never
-    stamped, as it may be the author's own function.
-    """
-    signature = inspect.signature(fn)
-    # One arc to coverage, so each conjunct and the reordering are held by
-    # test_only_a_named_required_parameter_is_left_to_the_callable: a default
-    # stays the parameter's own, a positional-only parameter is never passed by
-    # name, and a name not asked for keeps its requirement.
-    relaxed = [
-        parameter.replace(default=LEFT_TO_THE_CALLABLE)
-        if parameter.default is inspect.Parameter.empty
-        and parameter.kind
-        in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
-        and (names is None or parameter.name in names)
-        else parameter
-        for parameter in signature.parameters.values()
-    ]
-    return _forwarding(fn, signature.replace(parameters=_by_name(relaxed)))
-
-
-def asked_of_the_caller(fn: Callable[..., Any], names: frozenset[str]) -> Any:
-    """``fn``, refusing a call that hands it none of ``names`` as the caller's to fill.
-
-    For a target lookup's read a spread service, or one of its preconditions,
-    names with no default: the caller sends it, so a call leaving it out is the
-    caller's ``400``, spelled and coded as the kernel refuses a missing
-    argument, rather than ``fn``'s own ``TypeError``. The kernel never asks for
-    a target read on the service's behalf, since the lookup consumed it, so the
-    refusal is made as ``fn`` is called, which is where 0.57.0 made it: after
-    the row is found, and after each precondition called before ``fn``. The
-    signature is ``fn``'s own, so the kernel binds the call as it would.
-    """
-
-    def refuse_a_missing_name(kwargs: Mapping[str, Any]) -> None:
-        missing = sorted(names - kwargs.keys())
-        if missing:
-            raise KernelInvalidArguments(
-                {
-                    name: [CodedMessage(gettext("This field is required."), "required")]
-                    for name in missing
-                }
-            )
-
-    return _forwarding(fn, inspect.signature(fn), before=refuse_a_missing_name)
-
-
-def _forwarding(
-    fn: Callable[..., Any],
-    signature: inspect.Signature,
-    *,
-    before: Callable[[Mapping[str, Any]], None] | None = None,
-) -> Any:
-    """A callable reporting ``signature`` that calls ``fn`` as it was called, once ``before`` passes.
-
-    An ``async def`` stays one, since the kernel awaits it by its kind, and
-    ``fn`` itself is never stamped, as it may be the author's own function.
-    """
-    if is_async(fn):
-
-        async def forward(*args: Any, **kwargs: Any) -> Any:
-            if before is not None:
-                before(kwargs)
-            return await fn(*args, **kwargs)
-    else:
-
-        def forward(*args: Any, **kwargs: Any) -> Any:
-            if before is not None:
-                before(kwargs)
-            return fn(*args, **kwargs)
-
-    forward.__name__ = getattr(fn, "__name__", "callable")
-    forward.__qualname__ = getattr(fn, "__qualname__", forward.__name__)
-    forward.__module__ = getattr(fn, "__module__", None) or __name__
-    # Read for an annotated ``**rest`` in ``fn``'s module, as the compiler's other
-    # forwarding callables are; ``inspect.signature`` stops at ``__signature__``.
-    forward.__annotations__ = dict(getattr(fn, "__annotations__", {}))
-    cast(Any, forward).__wrapped__ = fn
-    cast(Any, forward).__signature__ = signature
-    return forward
-
-
-def _by_name(parameters: list[inspect.Parameter]) -> list[inspect.Parameter]:
-    """``parameters`` with every one dispatch passes by name reported keyword-only.
-
-    Dispatch passes every argument by name, so the call is reported as it is
-    made, and a parameter reported with a default before one reported with
-    none is still a valid signature.
-    """
-    kinds = (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
-    return [
-        *(p for p in parameters if p.kind is inspect.Parameter.POSITIONAL_ONLY),
-        *(p for p in parameters if p.kind is inspect.Parameter.VAR_POSITIONAL),
-        *(p.replace(kind=inspect.Parameter.KEYWORD_ONLY) for p in parameters if p.kind in kinds),
-        *(p for p in parameters if p.kind is inspect.Parameter.VAR_KEYWORD),
-    ]
-
 
 """The key a DRF edge adds to a result's presentation context for the view's output layers.
 
@@ -522,38 +173,39 @@ class EdgeCallState:
 
     Everything here is the edge's, never an argument or a seed of the call, so
     it does not travel through the pool the kernel hands a callable taking a
-    bare ``**kwargs``, which on main held ``progress``, ``request``,
+    bare ``**kwargs``, which holds ``progress``, ``request``,
     ``serializer``, ``user`` and the call's extras and nothing of the edge's
     (test_a_bare_kwargs_service_sees_no_edge_machinery). The edge sets it in
     ``EDGE_CALL`` around the whole call, and the compiled pieces that need it
     read it from there:
 
-    - ``target_guard``: a selector spec's guard, run by the precondition the
-      edge prepends (``guarded_selector``).
-    - ``author_values``: a view hook's and the spec's ``kwargs`` provider's
-      values naming no argument, which the compiled spec's ``kwargs`` seat
-      (``author_values``) hands back over the Validator's values.
+    - ``author_values``: the view's ``get_service_kwargs`` values, which the
+      recording twin's ``kwargs`` seat lays beneath the spec's provider
+      (``recording_spec``).
     - ``view_hooks``: the view's serializer context layers, whose input half
       the Validator reads (``input_view_layers``).
+    - ``validator``: the Validator of the spec the edge dispatches, the
+      recording twin's, the one the view's input layers and request are for.
+    - ``principal``: the principal the edge dispatches for, the request's
+      user: the Validator above validating for any other is a kernel call the
+      service makes, which reads none of the edge's (``_own_principal``).
     - ``validator_input``: the Validator the edge dispatches, and the body it
       binds rather than the kernel's checked arguments (``validator_input``):
       the caller's own, a ``QueryDict`` kept one, with what the edge put over
       it, as DRF's serializer has always been handed the request's data.
-    - ``input_beneath``: whether that body is bound together with the
-      kernel's checked arguments rather than in their place, so their values -
-      the caller's, the route's and ``input_data``'s - are the ones bound. The
-      kernel route's edge sets it and holds only fields named like a seed,
-      and so no parameter - the client's values it took off the arguments and
-      ``input_data``'s answer for them over those - so the two never share a
-      key; drfs' edge holds the whole body and does not (``validator_input``).
     - ``server_values``: the server's value for each field of that
       Validator's body the edge put one into - a view hook's or the spec's
       ``kwargs`` provider's value naming the field, and ``input_data``, a field
       named like a seed of the call included - by the name the body carries,
       as the edge put it. The Validator validates these, never what a field
-      reads back from the body, and a key a callable of the call marks
-      ``NotClientInput`` is handed on by name only from one of them
-      (``server_values``).
+      reads back from the body, and a key the Validator's ``server_owned``
+      names is handed on by name only from one of them
+      (test_a_server_owned_name's
+      test_the_clients_value_for_an_owned_name_is_data_and_never_the_parameter
+      and test_the_servers_value_for_an_owned_name_reaches_its_source). On a form body as on any other, each is validated
+      as the author returned it, since the kernel's shape check read the value
+      as returned (test_server_value_the_edge_put's
+      test_input_data_on_a_form_body_is_taken_as_the_author_returned_it).
     - ``author_keys``: for each of those a view hook or the spec's ``kwargs``
       provider gave, the key the author gave it under, the field's wire name or
       its ``source``: the parameter the author named, which the Validator also
@@ -562,23 +214,15 @@ class EdgeCallState:
       annotated to fill, which no client's value becomes, declined or not:
       the Validator hands the client's value for one on in ``data`` alone
       (``provider_owned``).
-    - ``body_rows``: whether that body is a live view's list body, which the
-      Validator binds whole, every row as sent, as DRF's view bound it
-      (``SerializerValidator.validated_many``).
-    - ``beside_rows``: the keys a ``many`` call sent beside its rows under
-      ``many_argument`` that it declares no argument for, which the Validator
-      refuses once the rows are valid, whatever the ``UnknownArguments``
-      policy (``SerializerValidator.validated_many``).
-    - ``row_errors``: what the list serializer bound to that whole body
-      refused, as the installed DRF reports it, or its refusal by a length
-      bound of a list sent that the kernel refused a row of, which the edge
-      answers with in place of the kernel's rows (``edge_errors``).
+    - ``describing``: the edge's own ``SerializerValidator``s, the spec's and
+      the recording twin's, a lenient copy for a form body, the ones
+      ``describe_context`` is for: another Validator a kernel call inside the
+      service describes is described as outside any call, one declaring the
+      same serializer included (``describe_serializer``).
     - ``describe_context``: builds the serializer context the call's input
       serializer is described with, its request, its view, the view's input
       layers and the spec's own context callable where the description can ask
-      it, as the Validator binds it (``describe_serializer``). Asked with
-      ``whole_pool=True``, it asks a callable taking ``**kwargs`` over what the
-      description holds, or answers ``None`` where there is none. Built when a
+      it, with no body and no row (``describe_serializer``). Built when a
       description asks, so a call describing nothing builds none.
     - ``base_context``: the request and view a serializer of the call was last
       built for, and the baseline context the view answered for them, so the
@@ -592,52 +236,31 @@ class EdgeCallState:
       a principal, the arguments they carry, the shapes on the request's
       query string, the view's action and the Django request it copies, so the descriptions of one call with neither share one
       pair (``offline_pair``).
-    - ``describe_binding``: the body, row and flags the call binds its own
-      input serializer to (``describe_with``).
-    - ``described``: the serializer each declaration is described with in
-      the call, built once (``describe_serializer``).
-    - ``row_pending``: whether the row the call's input serializer is built
-      with is one the target lookup has still to find, so a description that
-      cannot be built without it declares no name until it is found
-      (``describe_serializer``).
-    - ``beside_filter``: the drfs selector spec - the call's own, or the
-      service's target lookup - whose ``filter_set`` reads names its callables
-      also take, and the value each callable is handed under each such name:
-      what the caller sent as an argument, a route capture, an author's value,
-      never ``filter_data`` and never what the filter reads
-      (``values_beside_filter``).
-    - ``filter_data``: the call's ``filter_data``, which a service spec's
-      output ``filter_set`` is bound to when it runs, after the service, unless
-      the spec sets ``output_filter_from_call=False`` (``as_kernel_spec``'s
-      ``_filtering_from_the_call``).
+    - ``described``: the serializer the edge's own declaration is described
+      with in the call for the Validators in ``describing``, built once and
+      keyed by the declaration they share (``describe_serializer``).
 
     Mutable, so the edge can set it before the sync step it hops to a thread
     for and fill it there, and the Validator can fill it during the kernel's
     call: the thread runs in a copy of the context that holds this same object.
     """
 
-    target_guard: Callable[[Any], None] | None = None
     author_values: Mapping[str, Any] = dataclasses.field(default_factory=dict)
     view_hooks: ViewHooks = dataclasses.field(default_factory=ViewHooks)
+    validator: Any = None
+    principal: Any = None
     validator_input: tuple[Any, Any] | None = None
-    input_beneath: bool = False
     server_values: Mapping[str, Any] = dataclasses.field(default_factory=dict)
     author_keys: Mapping[str, str] = dataclasses.field(default_factory=dict)
     provider_owned: frozenset[str] = frozenset()
-    body_rows: bool = False
-    beside_rows: tuple[str, ...] = ()
-    row_errors: Any = None
-    describe_context: Callable[..., dict[str, Any] | None] | None = None
+    describing: tuple[Any, ...] = ()
+    describe_context: Callable[[], dict[str, Any]] | None = None
     base_context: tuple[Any, Any, dict[str, Any]] | None = None
     context_answers: dict[tuple[Any, ...], tuple[Any, Mapping[str, Any]]] = dataclasses.field(
         default_factory=dict
     )
     offline_pairs: dict[tuple[Any, ...], tuple[Any, ...]] = dataclasses.field(default_factory=dict)
-    describe_binding: DescribeBinding | None = None
     described: dict[Any, serializers.Serializer] = dataclasses.field(default_factory=dict)
-    row_pending: bool = False
-    beside_filter: tuple[Any, dict[str, Any]] | None = None
-    filter_data: Mapping[str, Any] | None = None
 
 
 EDGE_CALL: ContextVar[EdgeCallState | None] = ContextVar("django_spec_rest_edge_call", default=None)
@@ -660,26 +283,26 @@ def call_base_context(*, view: Any, request: Any) -> dict[str, Any]:
     The call's input serializer is described, and bound by its Validator, each
     with this baseline, and the view's ``get_serializer_context`` is asked for
     it once in the call, as DRF's view asks it once for the one serializer it
-    builds (test_each_layer_is_asked_once_per_call). Each caller is handed its
-    own copy: on drfs' edge that copy is the serializer's context, so one
-    writing to its context leaves the next as the view answered it
-    (test_each_serializer_of_the_call_has_its_own_context), while a serializer
-    sharing the call's dict has the copy laid beneath that dict
-    (``serializer_context``).
+    builds. Each caller is handed its own copy, and a serializer sharing the
+    call's dict has the copy laid beneath that dict (``serializer_context``).
 
     Held for the request and view it was asked for, and reused only for both:
     a kernel call made inside the service with another request, or another
-    view, is answered for its own (test_a_kernel_call_inside_the_service_has_its_own_context,
-    whose ``another-request`` case fails without the request check and whose
-    ``another-view`` case fails without the view check).
+    view, is answered for its own.
     """
     state = EDGE_CALL.get()
     held = state.base_context if state is not None else None
+    # One arc to coverage, so each identity is named: the request by
+    # test_call_base_context's test_a_call_carrying_another_request_is_answered_for_it,
+    # the view by test_a_call_carrying_another_view_is_answered_for_it.
     if held is not None and held[0] is request and held[1] is view:
         return dict(held[2])
     context = base_serializer_context(view=view, request=request)
     if state is not None:
         state.base_context = (request, view, context)
+    # Both copies, since a caller lays its layers on the dict it is handed:
+    # test_a_layer_one_call_lays_on_its_copy_never_reaches_the_next fails
+    # without either.
     return dict(context)
 
 
@@ -691,10 +314,8 @@ def _context_for(call_context: dict[str, Any] | None, *, view: Any, request: Any
     call's context already holds, so a key the view adds is there while the
     call's own entries, and whatever a stage of the call wrote, keep one value
     for every stage (test_a_key_the_view_s_get_serializer_context_adds_is_in_the_one_dict).
-    A view's input hook, whose default answers ``get_serializer_context()`` whole,
-    is laid over this dict afterwards, so for ``format`` the view's answer wins
-    today; the route's suffix winning is a strict xfail,
-    test_the_route_s_suffix_outranks_an_overriding_get_serializer_context_for_format.
+    The view's hook layers are laid over this dict afterwards, all but ``format``
+    (``serializer_context``).
     """
     base = call_base_context(view=view, request=request)
     if call_context is None:
@@ -704,30 +325,25 @@ def _context_for(call_context: dict[str, Any] | None, *, view: Any, request: Any
     return call_context
 
 
-def validator_input(validator: Any, arguments: Any) -> Any:
+def validator_input(validator: Any, arguments: Any, principal: Any) -> Any:
     """What ``validator`` binds for the call: the edge's body for it, else ``arguments``.
 
-    Where the edge set ``input_beneath``, the body goes beneath ``arguments``
-    rather than in their place.
-
-    Only the Validator the edge call names reads the edge's body, so a kernel
-    call made inside the service, of another spec or of this one, binds its
-    own arguments (test_a_kernel_call_inside_the_service_binds_its_own_arguments).
+    Only the edge's own call reads the edge's body (``_names``), so a kernel
+    call made inside the service binds its own arguments: of another spec
+    (test_a_kernel_call_inside_the_service_binds_its_own_arguments), and of
+    this one for another principal
+    (test_a_kernel_call_of_the_view_s_own_spec_for_another_principal_binds_its_own_arguments).
+    Never set for a ``many`` call, and ``validated_many`` never asks: it binds
+    the rows the kernel hands it.
     """
     state = edge_call_state()
     held = state.validator_input
-    if held is None or held[0] is not validator:
-        return arguments
-    # With the arguments the kernel hands this Validator, where the edge holds
-    # only what it took off them
-    # (test_input_data_outranks_the_body_beside_a_seed_named_field). The keys
-    # are disjoint, so the order only keeps the checked values should they
-    # ever meet. Never set for a ``many`` call, whose ``validated_many`` asks
-    # with no arguments.
-    return {**held[1], **arguments} if state.input_beneath else held[1]
+    # ``_names`` answers no where nothing is held, so the first condition holds
+    # no case of its own: it narrows the type.
+    return held[1] if held is not None and _names(state, validator, principal) else arguments
 
 
-def server_values(validator: Any) -> Mapping[str, Any]:
+def server_values(validator: Any, principal: Any) -> Mapping[str, Any]:
     """The server's value for each field of the body ``validator`` binds the edge put one into.
 
     Read as ``validator_input`` reads the body: only the Validator the edge call
@@ -735,11 +351,10 @@ def server_values(validator: Any) -> Mapping[str, Any]:
     same field, takes none of the outer call's
     (test_a_kernel_call_inside_the_service_takes_none_of_the_outer_calls_server_values,
     which fails without the identity check). Outside an edge call nothing is
-    held (test_a_kernel_dispatch_of_the_spec_keeps_the_client_value_in_data,
-    which fails without the ``None`` check).
+    held.
     """
     state = edge_call_state()
-    return state.server_values if _names(state, validator) else {}
+    return state.server_values if _names(state, validator, principal) else {}
 
 
 def write_form_value(body: QueryDict, name: str, value: Any) -> None:
@@ -756,13 +371,42 @@ def write_form_value(body: QueryDict, name: str, value: Any) -> None:
         body[name] = value
 
 
-def author_keys(validator: Any) -> Mapping[str, str]:
+def read_form_spellings(validator: Any, body: Any, flat: Mapping[str, Any]) -> dict[str, Any]:
+    """``flat`` with each field DRF reads off a form's prefixed keys read as the field reads it.
+
+    A form body carries a nested serializer, a dict or a list field as DRF's
+    prefixed spellings of it (``v.tenant``, ``v[0]tenant``, ``tags[0]``), which
+    the kernel's flat reader takes as keys no parameter declares. So each
+    field the body spells that way is read by its own ``get_value``, DRF's
+    ``parse_html_dict`` and ``parse_html_list``, and its spellings give way to
+    that value, which the closed argument set then reads as the field's. The
+    kernel route reads a form body through this
+    (test_server_value_the_edge_put's
+    test_input_data_is_the_value_put_over_a_prefixed_form_key_under_reject).
+    Spellings the field reads nothing from are left as sent, keys no parameter
+    declares (test_a_spelling_its_field_does_not_read_is_an_unknown_argument).
+    """
+    read = dict(flat)
+    for name, field in describe_serializer(validator.serializer, validator).fields.items():
+        prefixes = (f"{name}.", f"{name}[")
+        spellings = [key for key in flat if key.startswith(prefixes)]
+        if not spellings:
+            continue
+        value = field.get_value(body)
+        if value is not serializers.empty:
+            for key in spellings:
+                del read[key]
+            read[name] = value
+    return read
+
+
+def author_keys(validator: Any, principal: Any) -> Mapping[str, str]:
     """The key an author gave each of ``server_values`` under, read as ``server_values`` is."""
     state = edge_call_state()
-    return state.author_keys if _names(state, validator) else {}
+    return state.author_keys if _names(state, validator, principal) else {}
 
 
-def provider_owned(validator: Any) -> frozenset[str]:
+def provider_owned(validator: Any, principal: Any) -> frozenset[str]:
     """The keys the spec's typed ``kwargs`` provider fills, read as ``server_values`` is.
 
     Only for the Validator the edge call names, so a spec the service dispatches
@@ -771,42 +415,59 @@ def provider_owned(validator: Any) -> frozenset[str]:
     without the identity check).
     """
     state = edge_call_state()
-    return state.provider_owned if _names(state, validator) else frozenset()
+    return state.provider_owned if _names(state, validator, principal) else frozenset()
 
 
-def _names(state: EdgeCallState, validator: Any) -> bool:
+def _names(state: EdgeCallState, validator: Any, principal: Any) -> bool:
+    """Whether ``validator``, validating for ``principal``, is the edge's own call, which holds a body.
+
+    One arc to coverage, so each condition is named: no body held, outside
+    an edge call, by test_a_provider_naming_a_field_twice's
+    test_each_key_reaches_its_own_parameter_off_http; another spec's
+    Validator handed the edge's very principal by
+    test_a_kernel_call_of_another_spec_for_the_edge_s_own_principal_reads_none_of_the_edge_s;
+    and the edge's very Validator dispatched by the service for another
+    principal by
+    test_a_kernel_call_of_the_view_s_own_spec_for_another_principal_binds_its_own_arguments.
+    """
     held = state.validator_input
-    return held is not None and held[0] is validator
+    return held is not None and held[0] is validator and _own_principal(state, principal)
 
 
-def values_beside_filter(spec: Any) -> dict[str, Any] | None:
-    """What the edge call in progress hands ``spec``'s callables under its filter's names.
+def _own_principal(state: EdgeCallState, principal: Any) -> bool:
+    """Whether ``principal`` is the edge call's, the very object it dispatched for.
 
-    ``None`` outside an edge call that prepared them for ``spec`` - a
-    dispatch of the compiled spec through the kernel's own ``dispatch``, or
-    another spec's call - where a callable is handed what the kernel's pool
-    holds (test_through_the_kernel_a_selector_still_reads_the_filter_s_value,
-    whose ``held`` check it is; the spec check is held by
-    test_a_kernel_call_inside_the_selector_is_handed_its_own_pool).
+    By identity: ``AnonymousUser`` instances are all equal, and two model
+    instances of one row compare equal, so equality would take another
+    caller's anonymous call, or a row fetched afresh, for the edge's. A kernel
+    call the service makes for the edge's own principal, handed the very
+    object, reads what the edge's call reads: nothing at the Validator tells
+    the two apart. Held by
+    test_a_kernel_call_of_the_view_s_own_spec_for_an_equal_principal_is_not_the_edge_s.
     """
-    held = edge_call_state().beside_filter
-    return held[1] if held is not None and held[0] is spec else None
+    return principal is state.principal
 
 
-def author_values() -> dict[str, Any]:
-    """The author values a DRF edge carries for the call, as a ``kwargs`` provider answers.
+def input_view_layers(validator: Any, principal: Any) -> Mapping[str, Any] | None:
+    """The input half of the view hooks the edge call carries, for its own Validator alone.
 
-    The compiled form of a service spec the edge dispatches carries this as its
-    ``kwargs`` provider (``kernel_spec_variant(server_input=False)``), since the
-    edge calls the spec's own provider itself. Empty outside an edge call, and
-    for a call that carries none.
+    The layers answer the view's ``get_serializer_context``, so they carry the
+    view's request and view. Only the Validator of the spec the edge
+    dispatches reads them: a kernel call the service makes, for another
+    principal or none, validates under what it would outside the view, the
+    offline pair for its own principal: of another spec
+    (test_a_kernel_call_for_another_principal_never_validates_under_the_view_s_request)
+    and of the edge's very spec, whose Validator is the one the edge
+    dispatched
+    (test_a_kernel_call_of_the_view_s_own_spec_for_another_principal_validates_offline,
+    which fails without the principal's check). Another spec's Validator
+    handed the edge's very principal reads none either
+    (test_a_kernel_call_of_another_spec_for_the_edge_s_own_principal_reads_none_of_the_edge_s,
+    which fails without the Validator's).
     """
-    return dict(edge_call_state().author_values)
-
-
-def input_view_layers() -> Mapping[str, Any] | None:
-    """The input half of the view hooks the edge call carries, or ``None``."""
-    return edge_call_state().view_hooks.input_serializer_context
+    state = edge_call_state()
+    own = state.validator is validator and _own_principal(state, principal)
+    return state.view_hooks.input_serializer_context if own else None
 
 
 def output_view_layers(ambient: Mapping[str, Any], value: Any) -> Mapping[str, Any] | None:
@@ -816,9 +477,7 @@ def output_view_layers(ambient: Mapping[str, Any], value: Any) -> Mapping[str, A
     ``result`` it renders, which exists only once the call has run. One branch
     to coverage, so each condition is named by the test that fails without it:
     test_the_output_callable_reaches_the_output_serializer (no hooks
-    registered, a call that reached no edge) and
-    test_an_input_half_alone_reaches_the_input_serializer (hooks registered
-    with no output half).
+    registered, a call that reached no edge).
     """
     hooks: ViewHooks | None = ambient.get(SERIALIZER_CONTEXT_SEED)
     if hooks is None or hooks.output_serializer_context is None:
@@ -858,8 +517,7 @@ def serializer_context(
        One alone is kept as it is, beside a ``None`` for the other: pairing a
        carried request with a view built around another one would describe a
        call that never happened. A carried DRF ``Request`` is never given the
-       shapes: over HTTP it carries its own query string, and off HTTP the edge
-       writes a declared ``QueryParam`` onto it. **A carried Django request
+       shapes: it carries its own query string. **A carried Django request
        DRF has not wrapped**, the request a run arrived on as the kernel's
        call context holds it, is wrapped: the pair is built around a copy of
        it whose query string is the shapes, replacing its own
@@ -871,7 +529,9 @@ def serializer_context(
        per-action hooks the view resolved, one direction's half of what the
        edge carries: the input half from the call's ``EdgeCallState``, the
        output half from the result's presentation context, under
-       ``SERIALIZER_CONTEXT_SEED``.
+       ``SERIALIZER_CONTEXT_SEED``. Written into the call's one dict, they
+       leave its ``format`` alone: that is the route's suffix, which an
+       override of the view's ``get_serializer_context()`` does not displace.
     4. **The spec's own callable**, ``provider``, which has the final say. It
        is called through the kernel's declared-kwargs resolver, as every other
        spec callable is, from a pool of the call's ``arguments`` (a mapping's
@@ -883,7 +543,7 @@ def serializer_context(
        A client's argument never stands in for one of the call's own objects
        (test_an_argument_never_stands_in_for_the_request_the_callable_declares).
        A key it answers with ``UNSET`` is declined, leaving the layer beneath,
-       as on every transport drfs has (test_an_unset_value_declines_the_key_and_keeps_the_layer_beneath).
+       on every transport (test_an_unset_value_declines_the_key_and_keeps_the_layer_beneath).
        ``call_context`` is the call's own dict, so a callable reads what an
        earlier stage left there (test_the_output_callable_may_name_the_call_s_context)
        and writes to the one object the call shares. It is offered only when
@@ -901,8 +561,8 @@ def serializer_context(
     test_every_serializer_s_context_is_the_request_s_one_dict). The view's
     ``get_serializer_context`` answer goes beneath the entries the dict
     already holds (``_context_for``). Anywhere else each serializer is built
-    with a dict of its own: on drfs' edge, which registers the request and
-    view as seeds, and off a request, where the offline pair is the
+    with a dict of its own: for a caller that registers the request and view
+    as seeds, and off a request, where the offline pair is the
     serializer's and never the transport's (``TestOffARequest``).
 
     One branch to coverage for the offline pair: a request alone is held
@@ -920,10 +580,10 @@ def serializer_context(
     view = carried("view", ambient, call_context)
     plain = request if isinstance(request, HttpRequest) else None
     # Three conjuncts, one branch to coverage. The request must come from the
-    # call's context rather than a seed: drfs' edge registers both as seeds and
+    # call's context rather than a seed: a caller registering it as a seed
     # hands each serializer its own copy
-    # (test_the_input_hooks_do_not_reach_the_output_and_the_output_hooks_not_the_input,
-    # which fails without the ambient check). And it must be one DRF built, kept as it is
+    # (test_presented_prefers_a_registered_seed_to_the_call_context, which
+    # fails without the ambient check). And it must be one DRF built, kept as it is
     # rather than replaced by the offline pair, which is never written into a
     # transport's dict: none at all is held by
     # test_no_request_stays_none_and_each_serializer_has_its_own_context, and
@@ -947,7 +607,14 @@ def serializer_context(
         request = offline.request
         view = offline.view if view is None else view
     context = _context_for(call_context if shared else None, view=view, request=request)
-    context.update(view_layers or {})
+    # ``format`` is the layer beneath's: in the call's one dict the route's
+    # suffix, which the view answered when the call began. A view's hook layer
+    # defaults to its ``get_serializer_context()`` answered whole, so an
+    # override of that answering another ``format`` would replace the suffix
+    # for every stage of the call
+    # (test_the_route_s_suffix_outranks_an_overriding_get_serializer_context_for_format).
+    # A dict of a serializer's own already took ``format`` from that very answer.
+    context.update({key: value for key, value in (view_layers or {}).items() if key != "format"})
     if provider is not None:
         pool: dict[str, Any] = {
             **(arguments if isinstance(arguments, Mapping) else {}),
@@ -968,7 +635,7 @@ def serializer_context(
         # A description is made before the call's seeds are resolved and its
         # arguments routed, so a callable needing one of them is asked only by
         # the serializer that validates
-        # (test_a_context_callable_needing_a_seed_is_asked_once_the_seed_exists).
+        # (test_a_description_with_no_call_context_does_not_ask_a_callable_naming_it).
         if not describing or _answerable(provider, pool):
             resolved = context_answer(provider, resolve_callable_kwargs(provider, pool))
             context.update({key: value for key, value in resolved.items() if value is not UNSET})
@@ -980,9 +647,8 @@ def carried(name: str, seeds: Mapping[str, Any], call_context: Mapping[str, Any]
 
     The seed of that name first, then the call's context's entry, so a
     transport's own registered object is never overridden by what a caller
-    put in the context (test_a_seed_outranks_the_call_context and
-    test_presented_prefers_a_registered_seed_to_the_call_context, which fail
-    with the two read the other way round). ``None`` in either place is no
+    put in the context (test_presented_prefers_a_registered_seed_to_the_call_context,
+    which fails with the two read the other way round). ``None`` in either place is no
     value: a DRF edge registers its ``request`` and ``view`` seeds on every
     call, ``None`` where it was handed none, and writes ``None`` into the
     context where it has nothing, and a ``None`` in one place never hides an
@@ -1026,12 +692,11 @@ def offline_pair(
     A call handed no request and no view is described several times, each
     with the offline pair its serializer is built with, so its context
     callable, handed the same pair, is asked once for them all
-    (test_with_no_view_and_no_request_the_context_callable_is_asked_once_per_body).
-    Reused only for the same principal and the same arguments, which the
-    request carries as its data: the serializer that validates a body the edge
-    put a server's value into binds another, and its request carries that one
-    (test_an_offline_pair_is_built_for_its_own_principal_and_arguments, whose
-    cases fail without either half of the key).
+    (test_a_kernel_call_inside_the_service_presents_every_row_under_one_offline_request,
+    which fails if no pair is reused). Reused only for the same principal
+    (test_a_kernel_call_for_another_principal_is_presented_under_its_own_offline_request,
+    which fails without it) and the same arguments, which the request carries
+    as its data.
 
     ``shapes`` are the request's query string, stringified as
     ``build_offline_context(query_params=)`` stringifies a value, and so a
@@ -1097,13 +762,13 @@ def _answerable(fn: Callable[..., Any], pool: Mapping[str, Any]) -> bool:
     A callable taking ``**kwargs`` is handed the whole pool, and a
     description's pool lacks the call's seeds, so it is asked by the
     serializer that validates alone, once, as it was handed the whole pool
-    once (test_a_context_callable_taking_the_whole_pool_is_asked_once, which
-    fails without the check), unless the serializer cannot be described
-    without it (``describe_serializer``). A parameter named with no default must be in
-    ``pool``: without the default check the ``a-default`` case of
-    test_a_context_callable_the_description_can_answer_describes fails, and
-    without the kind check, which a ``*args`` with no default fails, its
-    ``positional-rest`` case.
+    once (test_a_live_view_describes_a_serializer_needing_a_whole_pool_callable,
+    a strict xfail that passes without the check). A parameter
+    named with no default must be in ``pool``; a ``*args`` with no default is
+    not looked for there. Each condition is held by its own test of
+    ``test_utils``: the default by
+    test_a_parameter_with_a_default_is_not_looked_for_in_the_pool, the kind by
+    test_a_var_positional_parameter_is_not_looked_for_in_the_pool.
     """
     if takes_the_whole_pool(fn):
         return False
@@ -1133,12 +798,11 @@ def context_answer(
     The call's input serializer is described before it validates, each with
     the spec's context callable's layer, and the callable is asked once for
     both, as DRF's view asks its context once for the one serializer it builds
-    (test_off_http_the_spec_s_context_describes_too). An answer is reused only
+    (test_a_create_view_validates_under_one_context). An answer is reused only
     for the same callable handed the same objects under the same names: a
     callable reading an argument the edge put a server's value over is asked
-    again for it (test_a_context_callable_reading_an_argument_validates_with_the_server_s_value),
-    and another spec's callable handed the same objects is asked itself
-    (test_a_kernel_call_inside_the_service_asks_its_own_context_callable), and
+    again for it, and another spec's callable handed the same objects is asked
+    itself (test_another_callable_handed_the_same_objects_is_asked_itself), and
     so is one handed the same object under another name
     (test_a_context_answer_is_held_for_the_names_its_objects_came_under). The
     objects are held with the answer, so none is freed and its identity reused while
@@ -1210,12 +874,11 @@ def input_parameter(
     is reported only when it is a literal (see ``literal_default``).
 
     A field a ``registry`` rule matches is declared by the rule's fragment
-    before any built-in reading, a nested serializer's included, as drfs'
-    ``serializer_to_json_schema`` describes it
+    before any built-in reading, a nested serializer's included
     (test_a_rule_wins_over_the_walk_of_a_nested_serializer). The fragment is
     split by ``fragment_keywords``; the field's own ``required`` and
     ``default`` stand, and its ``allow_null`` and ``help_text`` stand beside
-    the fragment's, as drfs' walk writes them over it
+    the fragment's, written over it
     (test_the_field_s_own_help_label_and_null_stand_beside_the_fragment).
     """
     common: dict[str, Any] = {
@@ -1281,7 +944,7 @@ def registered_fragment(
 ) -> Mapping[str, Any] | None:
     """The fragment of the first ``registry.fields`` rule ``field`` is an instance of, or ``None``.
 
-    First match wins, as in drfs' own serializer walk. Held by
+    First match wins. Held by
     test_a_rule_wins_over_the_walk_of_a_nested_serializer.
     """
     if registry is None:
@@ -1299,9 +962,8 @@ def fragment_keywords(fragment: Mapping[str, Any], *, output: bool) -> dict[str,
     """A registry fragment as keyword arguments for a ``Parameter``, or an ``OutputField`` when ``output``.
 
     The compiled spec takes what the kernel can state of the fragment and drops
-    the rest, so a registry drfs' own builders describe never stops a spec
-    compiling, and those builders keep describing the whole fragment. Split in
-    two, each class held by its tests in ``test_registered_fragments``:
+    the rest, so a rule carrying a keyword the kernel has no seat for never
+    stops a spec compiling. Split in two, each class held by its tests in ``test_registered_fragments``:
 
     - **The keywords a field spells set it**
       (test_a_keyword_a_parameter_field_spells_sets_that_field,
@@ -1350,7 +1012,7 @@ def fragment_keywords(fragment: Mapping[str, Any], *, output: bool) -> dict[str,
     # A declared type stands over the values' (the ``enum-under-its-type`` case
     # of test_a_keyword_a_parameter_field_spells_sets_that_field).
     if kind is None and isinstance(enum, list):
-        kind = _enum_type(enum)
+        kind = shared_json_type(enum)
     declared["type"] = kind if _named(kind, _JSON_TYPES) else "any"
     stated: list[tuple[str, Any]] = []
     items = fragment.get("items")
@@ -1423,20 +1085,9 @@ def _named(value: Any, names: frozenset[str]) -> bool:
     return isinstance(value, str) and value in names
 
 
-def _enum_type(values: list[Any]) -> str | None:
-    """The one JSON type ``values`` share, or ``None``; ``bool`` before ``int``, which it subclasses."""
-    kinds = {
-        "boolean"
-        if isinstance(value, bool)
-        else "integer"
-        if isinstance(value, int)
-        else "number"
-        if isinstance(value, float)
-        else "string"
-        if isinstance(value, str)
-        else None
-        for value in values
-    }
+def shared_json_type(values: Iterable[Any]) -> str | None:
+    """The one JSON type ``values`` share, or ``None`` when they share none (``_json_type``)."""
+    kinds = {_json_type(value) for value in values}
     return kinds.pop() if len(kinds) == 1 else None
 
 
@@ -1527,8 +1178,7 @@ def field_choices(field: serializers.Field) -> FieldChoices | None:
     parameter's ``nullable``, not a choice.
 
     DRF matches a value by its ``str``, so it also takes ``"1"`` for the choice
-    ``1``; the declaration states the type the values are written in, as drfs'
-    own schema does.
+    ``1``; the declaration states the type the values are written in.
     """
     if not isinstance(field, serializers.ChoiceField):
         return None
@@ -1556,7 +1206,7 @@ def literal_default(field: serializers.Field) -> Any:
 
     A callable default - a function, ``CurrentUserDefault``,
     ``CreateOnlyDefault`` - is computed per call, so no one value is its
-    default. DRF's ``empty`` and drfs' ``UNSET`` both mean no default; ``empty``
+    default. DRF's ``empty`` and the kernel's ``UNSET`` both mean no default; ``empty``
     is a class, so it is callable, and the one test answers for it too
     (test_a_required_field_is_required_and_takes_no_null). One branch to
     coverage, so each condition is held by its own test:
@@ -1566,7 +1216,7 @@ def literal_default(field: serializers.Field) -> Any:
     """
     default: Any = field.default
     if default is UNSET or callable(default):
-        return KERNEL_UNSET
+        return UNSET
     return default
 
 
@@ -1660,7 +1310,7 @@ def _lengths(field: Any) -> dict[str, Any]:
 
     Declared so the shape check holds a list to what DRF holds it to; a list
     declaring no maximum is held to the kernel's own default by the shape
-    check, which drfs' schema never stated.
+    check.
     """
     minimum: int | None = getattr(field, "min_length", None)
     if not field.allow_empty:

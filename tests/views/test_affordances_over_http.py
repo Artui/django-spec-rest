@@ -69,23 +69,15 @@ def _view(permissions: Any = _OPEN, permission_classes: Any = None) -> Any:
             kind=SelectorKind.RETRIEVE,
             selector=lambda *, pk: Post.objects.filter(pk=pk).first(),
             reads=Parameters.of(Parameter("pk", "integer", required=True)),
-            permissions=_OPEN,
         ),
         presenter=SerializerPresenter(PostSerializer),
         affordances=[UNPUBLISHED],
     )
 
-    class _Publish(ServiceUpdateView):
-        """``get_permissions`` stands in for ``MutationFlowMixin``'s, which
-        reads a drfs spec's ``permission_classes``, as the spine's views do."""
-
-        def get_permissions(self) -> list[Any]:
-            return [permission() for permission in self.permission_classes]
-
     attrs: dict[str, Any] = {"spec": spec}
     if permission_classes is not None:
         attrs["permission_classes"] = permission_classes
-    return type("_View", (_Publish,), attrs).as_view()
+    return type("_View", (ServiceUpdateView,), attrs).as_view()
 
 
 def _patch(view: Any, pk: int) -> Any:
@@ -132,9 +124,18 @@ def test_a_row_condition_on_a_create_view_is_refused_at_as_view() -> None:
         type("_View", (ServiceCreateView,), {"spec": spec}).as_view()
 
 
+def test_a_row_condition_on_a_create_view_is_refused_at_dispatch() -> None:
+    """Accepted at ``as_view()`` (the strict xfail above), the condition is
+    refused on the first request, before the service runs."""
+    spec = ServiceSpec(service=lambda: None, permissions=_OPEN, affordances=[UNPUBLISHED])
+    view = type("_View", (ServiceCreateView,), {"spec": spec}).as_view()
+    with pytest.raises(ImproperlyConfigured, match="needs a resolved model instance"):
+        view(factory.post("/", {}, format="json"))
+
+
 @pytest.mark.parametrize("published", [True, False], ids=["unavailable", "available"])
 def test_a_caller_the_view_denies_the_row_learns_nothing_about_its_state(published: bool) -> None:
-    """The drfs subject: the view's own DRF ``has_object_permission``.
+    """The subject: the view's own DRF ``has_object_permission``.
 
     Both rows are answered 403 and leave the row as it was: the unavailable one
     must not hear its affordance's 409, and the available one must not be

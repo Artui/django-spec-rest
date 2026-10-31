@@ -13,6 +13,7 @@ from django_spec_rest.views.mutation.mutation_flow_mixin import MutationFlowMixi
 from django_spec_rest.views.mutation.utils import resolve_mutation_instance
 from django_spec_rest.viewsets.utils import (
     _ActionSpecsMixin,
+    dispatches_action_specs,
     resolve_action_service_spec,
 )
 
@@ -20,8 +21,7 @@ from django_spec_rest.viewsets.utils import (
 class ServiceDestroyMixin(MutationFlowMixin, _ActionSpecsMixin):
     """Provides the ``destroy`` action.
 
-    Looks up the instance via ``spec.instance_selector_spec`` when set,
-    falling back to DRF's ``get_object()``. Reads its config from
+    The row is the spec's own target selector's, never ``get_object()``'s. Reads its config from
     ``action_specs["destroy"]``; when that key is absent the action raises
     ``MethodNotAllowed``. A non-``ServiceSpec``
     entry raises ``ImproperlyConfigured``.
@@ -30,8 +30,9 @@ class ServiceDestroyMixin(MutationFlowMixin, _ActionSpecsMixin):
     # Provided at runtime by ``GenericAPIView`` / ``GenericViewSet``.
     get_object: Callable[..., Any]
 
+    @dispatches_action_specs
     def destroy(self, request: Request, *args: Any, **kwargs: Any) -> Response:
-        spec = resolve_action_service_spec(self.action_specs, "destroy", "DELETE", view=self)
+        spec = resolve_action_service_spec(self.action_specs, "destroy", "DELETE")
         return self._run_mutation(
             request,
             spec,

@@ -72,7 +72,6 @@ _AUTHOR = SelectorSpec(
     kind=SelectorKind.RETRIEVE,
     selector=_author,
     reads=Parameters.of(Parameter("pk", "integer", required=True)),
-    permissions=_OPEN,
 )
 _PRESENTER = SerializerPresenter(AuthorSerializer)
 
@@ -173,8 +172,7 @@ class TestServiceUpdateView:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Every ``PATCH`` hands the kernel the spec's partial variant as
-        ``kernel_spec_variant`` holds it, the one object a drfs spec's ``PATCH``
-        compiles to as well, so there is one partial twin per spec, not two."""
+        ``kernel_spec_variant`` holds it, so there is one partial twin per spec."""
         handed: list[Any] = []
         dispatched = utils.dispatch_kernel_spec
 
@@ -282,8 +280,7 @@ class TestTheTarget:
     def test_a_detail_view_s_kernel_spec_with_no_target_selector_is_refused_at_as_view(
         self, base: type
     ) -> None:
-        """Changed by design: a drfs update or delete scoped its call with the
-        view's ``get_object()``, which a kernel spec never asks, so a spec
+        """A kernel spec never asks the view's ``get_object()``, so a spec
         naming no target would run on no row. It is refused when the view is
         built, before ``check_seeds`` answers anything of it."""
 
@@ -358,7 +355,6 @@ class TestWhatAnUpdatePresents:
             output_selector_spec=SelectorSpec(
                 kind=SelectorKind.RETRIEVE,
                 selector=lambda *, result: None,
-                permissions=_OPEN,
                 allow_none=True,
                 presenter=_PRESENTER,
             ),
@@ -380,7 +376,6 @@ class TestWhatAnUpdatePresents:
             output_selector_spec=SelectorSpec(
                 kind=SelectorKind.RETRIEVE,
                 selector=lambda *, result: None,
-                permissions=_OPEN,
                 allow_none=True,
             ),
         )
@@ -398,7 +393,6 @@ class TestWhatAnUpdatePresents:
             output_selector_spec=SelectorSpec(
                 kind=SelectorKind.RETRIEVE,
                 selector=lambda *, result: Author.objects.get(pk=result.pk),
-                permissions=_OPEN,
                 presenter=_PRESENTER,
             ),
         )
@@ -430,7 +424,6 @@ class TestWhatAnUpdatePresents:
                 selector=lambda *, pk: Author.objects.filter(pk=pk),
                 reads=Parameters.of(Parameter("pk", "integer", required=True)),
                 prefetch_related=("posts",),
-                permissions=_OPEN,
             ),
             presenter=SerializerPresenter(_AuthorPosts),
             atomic=False,
@@ -461,3 +454,27 @@ def test_a_principal_reaches_the_lookup_s_permission_check() -> None:
     request = factory.put("/", {}, format="json")
     force_authenticate(request, user=user)
     assert _view(spec)(request, pk=author.pk).status_code == 403
+
+
+class TestWithNoSpec:
+    """A view with no ``spec`` describes its route as DRF does, and serves nothing."""
+
+    def test_options_is_drf_s_own_answer(self) -> None:
+        author = Author.objects.create(name="a")
+        view = type(
+            "_View",
+            (ServiceUpdateView,),
+            {"serializer_class": AuthorSerializer, "queryset": Author.objects.all()},
+        )
+
+        response = view.as_view()(factory.options("/"), pk=author.pk)
+
+        assert response.status_code == 200
+        assert "name" in response.data["actions"]["PUT"]
+
+    @pytest.mark.parametrize("method", ["put", "patch"])
+    def test_a_write_names_the_missing_spec(self, method: str) -> None:
+        view = type("_Unconfigured", (ServiceUpdateView,), {})
+
+        with pytest.raises(NotImplementedError, match="_Unconfigured requires a `spec`"):
+            view.as_view()(getattr(factory, method)("/", {}, format="json"), pk=1)

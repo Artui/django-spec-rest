@@ -1,192 +1,162 @@
 # Quickstart
 
-Build a `POST /authors/` endpoint that creates an `Author`. Input is
-validated by a dataclass, the service is a plain function, and the
-response is shaped by another dataclass — both halves rendered through
-`DataclassSerializer` from
-[`djangorestframework-dataclasses`](https://pypi.org/project/djangorestframework-dataclasses/),
-which the library already depends on.
+A resource served on a viewset: list, retrieve, create and update an invoice.
+The [example project](https://github.com/Artui/django-spec-rest/tree/main/examples)
+is this page, finished and tested.
 
-## 1. Install
+## 1. Services and selectors
 
-```bash
-pip install django-spec-rest
-# or, with uv:
-uv add django-spec-rest
-```
-
-Add nothing to `INSTALLED_APPS` — there are no models, migrations,
-templates or management commands.
-
-## 2. Write the input and output dataclasses
-
-Inputs are validated at the view boundary; the service receives a typed
-instance.
+Plain callables. A service names the values it needs by keyword: `data` is the
+validated input, `instance` the row a write targets. A refusal is one of the
+kernel's errors, which the view answers with its HTTP status.
 
 ```python
-from dataclasses import dataclass
+from django_service_specs import ServiceConflict
+
+from invoices.models import Invoice
 
 
-@dataclass
-class CreateAuthorInput:
-    name: str
-    bio: str = ""
+def create_invoice(*, data):
+    return Invoice.objects.create(**data)
 
 
-@dataclass
-class AuthorOutput:
-    id: int
-    name: str
-    bio: str
+def update_invoice(*, instance, data):
+    if instance.status != Invoice.STATUS_DRAFT:
+        raise ServiceConflict("Only a draft invoice can be changed.")  # 409
+    for name, value in data.items():
+        setattr(instance, name, value)
+    instance.save()
+    return instance
+
+
+def list_invoices():
+    return Invoice.objects.all()
+
+
+def get_invoice(*, pk):
+    return Invoice.objects.filter(pk=pk).first()  # None answers 404
 ```
 
-## 3. Wrap the output in a serializer
+## 2. Serializers
 
-`DataclassSerializer` reads attributes via `getattr`, so the service can
-return either an `AuthorOutput` instance or a model instance with the
-same attribute names.
-
-```python
-from rest_framework_dataclasses.serializers import DataclassSerializer
-
-
-class AuthorOutputSerializer(DataclassSerializer):
-    class Meta:
-        dataclass = AuthorOutput
-```
-
-## 4. Write the service
-
-A plain callable. No DRF imports required; raise framework-agnostic
-exceptions if you need to.
-
-```python
-from django_spec_rest import create_from_input
-
-from myapp.models import Author
-
-
-def create_author(*, data: CreateAuthorInput) -> Author:
-    result = create_from_input(Author, data)
-    return result.instance
-```
-
-For services whose entire body is this one-line `create_from_input` /
-`update_from_input` / `instance.delete()` glue, the library ships
-ready-made factory shortcuts — `create_model(Author)` produces an
-equivalent callable inline. See
-[Default model services](default-model-services.md) for when to reach
-for them vs. writing the service out by hand.
-
-## 5. Wire the view
-
-```python
-from django_spec_rest import (
-    SelectorKind,
-    SelectorSpec,
-    ServiceCreateView,
-    ServiceSpec,
-)
-
-
-class CreateAuthorView(ServiceCreateView):
-    spec = ServiceSpec(
-        service=create_author,
-        input_serializer=CreateAuthorInput,
-        output_selector_spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE,
-            output_serializer=AuthorOutputSerializer,
-        ),
-    )
-```
-
-```python
-# urls.py
-from django.urls import path
-
-from myapp.views import CreateAuthorView
-
-urlpatterns = [path("authors/", CreateAuthorView.as_view())]
-```
-
-## 6. Try it
-
-```bash
-curl -X POST http://localhost:8000/authors/ \
-  -H 'Content-Type: application/json' \
-  -d '{"name": "Ada"}'
-```
-
-```json
-{ "id": 1, "name": "Ada", "bio": "" }
-```
-
-Input validation errors come back as DRF's standard `400` response.
-Anything the service raises as `ServiceValidationError` is mapped to
-`400`; anything raised as `ServiceError` is mapped to `422`. See
-[Errors & atomic](errors-and-atomic.md).
-
-## What changed vs. plain DRF?
-
-- Validation is unchanged — DRF still validates the request before the
-  service runs.
-- `ModelSerializer.create()` is replaced by your own `create_author`
-  function. You write the side effect; the library doesn't hide it.
-- The response shape is decoupled from the model. Your service can
-  return an `AuthorOutput` directly when the API surface diverges from
-  the model.
-- The whole thing runs inside `transaction.atomic()` by default.
-
-## Returning the output dataclass directly
-
-When the API surface diverges from the model (computed fields, hidden
-columns, denormalised joins), have the service build and return the
-output dataclass:
-
-```python
-def create_author(*, data: CreateAuthorInput) -> AuthorOutput:
-    author = Author.objects.create(name=data.name, bio=data.bio)
-    return AuthorOutput(id=author.id, name=author.name, bio=author.bio)
-```
-
-`AuthorOutputSerializer` renders it the same way; the view doesn't care.
-
-## Alternative: `ModelSerializer` for output
-
-When the response mirrors the model exactly, DRF's `ModelSerializer` is
-the shorter path and gets the full DRF feature set (relations, nested
-serializers, etc.):
+Ordinary DRF serializers: one validates a body, one renders a row.
 
 ```python
 from rest_framework import serializers
 
 
-class AuthorSerializer(serializers.ModelSerializer):
+class InvoiceInput(serializers.Serializer):
+    customer = serializers.CharField(max_length=200)
+    amount_cents = serializers.IntegerField(min_value=0)
+    notes = serializers.CharField(required=False, allow_blank=True)
+
+
+class InvoiceSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Author
-        fields = ("id", "name", "bio")
-
-
-class CreateAuthorView(ServiceCreateView):
-    spec = ServiceSpec(
-        service=create_author,
-        input_serializer=CreateAuthorInput,
-        output_selector_spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE,
-            output_serializer=AuthorSerializer,
-        ),
-    )
+        model = Invoice
+        fields = ("id", "customer", "amount_cents", "notes", "status")
 ```
 
-Both patterns are first-class — the library doesn't care which kind of
-DRF serializer you use for output. Pick `DataclassSerializer` when you
-want the API contract to live alongside the service signature; pick
-`ModelSerializer` when the response mirrors the model and you want
-DRF's relational machinery.
+## 3. Specs
 
-## Where to next
+Each spec is the kernel's. The serializers fill its `validator` and
+`presenter` seats. The kernel refuses to dispatch a spec that declares no
+`permissions`; `Unrestricted()` says the operation is open to every caller.
 
-- **[Concepts](concepts.md)** — what services, selectors, and viewsets
-  are, and how dispatch works.
-- **[Recipes](recipes/index.md)** — composing your own viewset, custom
-  actions, passing extra kwargs.
+```python
+from django_service_specs import (
+    Parameter,
+    Parameters,
+    SelectorKind,
+    SelectorSpec,
+    ServiceSpec,
+    Unrestricted,
+)
+
+from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
+from django_spec_rest.service_specs.serializer_validator import SerializerValidator
+
+OPEN = (Unrestricted(),)
+PRESENTER = SerializerPresenter(InvoiceSerializer)
+BY_PK = Parameters.of(Parameter("pk", "integer", required=True))
+
+LIST_SPEC = SelectorSpec(
+    kind=SelectorKind.LIST, selector=list_invoices, permissions=OPEN, presenter=PRESENTER
+)
+RETRIEVE_SPEC = SelectorSpec(
+    kind=SelectorKind.RETRIEVE,
+    selector=get_invoice,
+    reads=BY_PK,
+    permissions=OPEN,
+    presenter=PRESENTER,
+)
+CREATE_SPEC = ServiceSpec(
+    service=create_invoice,
+    validator=SerializerValidator(InvoiceInput),
+    permissions=OPEN,
+    presenter=PRESENTER,
+)
+UPDATE_SPEC = ServiceSpec(
+    service=update_invoice,
+    validator=SerializerValidator(InvoiceInput),
+    # The row an update writes is found by its own selector, reading ``pk``
+    # from the route. A nested selector declares no permissions.
+    instance_selector_spec=SelectorSpec(
+        kind=SelectorKind.RETRIEVE, selector=get_invoice, reads=BY_PK
+    ),
+    permissions=OPEN,
+    presenter=PRESENTER,
+)
+```
+
+## 4. The viewset and its routes
+
+```python
+from rest_framework.routers import DefaultRouter
+
+from django_spec_rest import ServiceViewSet
+
+
+class InvoiceViewSet(ServiceViewSet):
+    action_specs = {
+        "list": LIST_SPEC,
+        "retrieve": RETRIEVE_SPEC,
+        "create": CREATE_SPEC,
+        "update": UPDATE_SPEC,  # PATCH falls back to it, validated partially
+    }
+
+
+router = DefaultRouter()
+router.register("invoices", InvoiceViewSet, basename="invoice")
+urlpatterns = router.urls
+```
+
+That serves:
+
+| Request | Answer |
+| --- | --- |
+| `GET /invoices/` | the rows, rendered by `InvoiceSerializer` |
+| `GET /invoices/1/` | one row, or 404 |
+| `POST /invoices/` | 201 with the created row, or 400 keyed by field |
+| `PUT /invoices/1/` | every required field validated |
+| `PATCH /invoices/1/` | only the fields sent validated; 409 for a sent invoice |
+| `DELETE /invoices/1/` | 405: no spec serves it, and `Allow` leaves it out |
+| `OPTIONS /invoices/1/` | the `PUT` body as a JSON Schema, with no stage of a spec run |
+
+## 5. The same spec off HTTP
+
+A spec is not tied to its route. The kernel's `dispatch` runs it for a
+principal and a dict of arguments:
+
+```python
+from django_service_specs import dispatch
+
+result = dispatch(
+    UPDATE_SPEC,
+    principal=user,
+    arguments={"pk": 1, "customer": "Acme Ltd", "amount_cents": 4200},
+)
+result.value  # the updated Invoice
+```
+
+See [Calling a spec off HTTP](recipes/off-http-inputs.md).

@@ -1,251 +1,171 @@
-"""Tests for spec-level permission_classes on viewsets and decorators."""
+"""Permissions on a viewset whose actions serve kernel specs.
+
+A kernel spec declares no ``permission_classes``: its checks are its
+``permissions``, which the kernel's ``dispatch`` asks after DRF has asked the
+view's own classes. So ``get_permissions`` answers the view's classes for a
+kernel entry, from ``action_specs`` or stamped on a decorated handler, and the
+spec's checks still refuse.
+"""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any
 
 import pytest
+from django_service_specs import (
+    Parameter,
+    Parameters,
+    PermissionCheck,
+    SelectorKind,
+    SelectorSpec,
+    ServiceSpec,
+    Unrestricted,
+)
+from rest_framework import serializers
 from rest_framework.permissions import AllowAny, BasePermission
 from rest_framework.response import Response
 from rest_framework.test import APIRequestFactory
-from rest_framework.viewsets import GenericViewSet
 
-from django_spec_rest import (
-    SelectorKind,
-    SelectorSpec,
-    SelectorViewSet,
-    ServiceSpec,
-    ServiceViewSet,
-    selector_action,
-    service_action,
-)
+from django_spec_rest import SelectorViewSet, ServiceViewSet, selector_action, service_action
+from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
+from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from tests.testapp.models import Author
 from tests.testapp.serializers import AuthorSerializer
 
+pytestmark = pytest.mark.django_db
 
-class _DenyAll(BasePermission):
-    def has_permission(self, request: Any, view: Any) -> bool:  # noqa: ARG002
+factory = APIRequestFactory()
+_OPEN = (Unrestricted(),)
+
+
+class _NameIn(serializers.Serializer):
+    name = serializers.CharField()
+
+
+class _Deny(BasePermission):
+    def has_permission(self, request: Any, view: Any) -> bool:
         return False
 
 
-@dataclass
-class _AuthorIn:
-    name: str
+class _DenyAll(PermissionCheck):
+    def has_permission(self, principal: Any, spec: Any) -> bool:
+        return False
 
 
-def _create_author(*, data: _AuthorIn) -> Author:
-    return Author.objects.create(name=data.name)
+def _rename(*, instance: Author, data: dict[str, Any]) -> Author:
+    instance.name = data["name"]
+    instance.save(update_fields=["name"])
+    return instance
 
 
-def _list_authors() -> Any:
-    return Author.objects.all().order_by("id")
+def _update(**fields: Any) -> ServiceSpec:
+    defaults: dict[str, Any] = {
+        "service": _rename,
+        "permissions": _OPEN,
+        "validator": SerializerValidator(_NameIn),
+        "presenter": SerializerPresenter(AuthorSerializer),
+        "instance_selector_spec": SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=lambda *, pk: Author.objects.filter(pk=pk).first(),
+            reads=Parameters.of(Parameter("pk", "integer", required=True)),
+        ),
+    }
+    return ServiceSpec(**{**defaults, **fields})
 
 
-factory = APIRequestFactory()
+def _rows(**fields: Any) -> SelectorSpec:
+    defaults: dict[str, Any] = {
+        "selector": lambda: Author.objects.order_by("id"),
+        "permissions": _OPEN,
+        "presenter": SerializerPresenter(AuthorSerializer),
+    }
+    return SelectorSpec(kind=SelectorKind.LIST, **{**defaults, **fields})
 
 
-@pytest.mark.django_db
-class TestActionSpecsMixinPermissions:
-    def test_spec_permission_denies_for_action(self) -> None:
-        class _View(ServiceViewSet):
+def _call(viewset: Any, method: str, action_name: str, body: Any = None, **kwargs: Any) -> Response:
+    request = getattr(factory, method)("/", body, format="json")
+    return viewset.as_view({method: action_name})(request, **kwargs)
+
+
+class TestActionSpecs:
+    def test_an_update_entry_s_checks_refuse_a_patch(self) -> None:
+        """PATCH falls back to the ``"update"`` entry, checks and all."""
+        author = Author.objects.create(name="a")
+
+        class _ViewSet(ServiceViewSet):
+            queryset = Author.objects.all()
+            action_specs = {"update": _update(permissions=(_DenyAll(),))}
+
+        response = _call(_ViewSet, "patch", "partial_update", {"name": "b"}, pk=author.pk)
+        assert response.status_code == 403
+        assert Author.objects.get().name == "a"
+
+    def test_a_partial_update_entry_s_checks_win_for_a_patch(self) -> None:
+        author = Author.objects.create(name="a")
+
+        class _ViewSet(ServiceViewSet):
             queryset = Author.objects.all()
             action_specs = {
-                "create": ServiceSpec(
-                    service=_create_author,
-                    input_serializer=_AuthorIn,
-                    output_selector_spec=SelectorSpec(
-                        kind=SelectorKind.RETRIEVE,
-                        output_serializer=AuthorSerializer,
-                    ),
-                    permission_classes=[_DenyAll],
-                ),
+                "update": _update(),
+                "partial_update": _update(permissions=(_DenyAll(),)),
             }
 
-        response = _View.as_view({"post": "create"})(
-            factory.post("/", {"name": "Ada"}, format="json"),
-        )
+        assert _call(_ViewSet, "put", "update", {"name": "b"}, pk=author.pk).status_code == 200
+        response = _call(_ViewSet, "patch", "partial_update", {"name": "c"}, pk=author.pk)
         assert response.status_code == 403
 
-    def test_spec_permission_per_action(self) -> None:
-        """list is open; create is denied — same viewset."""
-
-        class _View(ServiceViewSet):
+    def test_the_view_s_classes_answer_a_kernel_entry(self) -> None:
+        class _ViewSet(SelectorViewSet):
             queryset = Author.objects.all()
-            action_specs = {
-                "list": SelectorSpec(
-                    kind=SelectorKind.LIST,
-                    selector=_list_authors,
-                    output_serializer=AuthorSerializer,
-                    permission_classes=[AllowAny],
-                ),
-                "create": ServiceSpec(
-                    service=_create_author,
-                    input_serializer=_AuthorIn,
-                    output_selector_spec=SelectorSpec(
-                        kind=SelectorKind.RETRIEVE,
-                        output_serializer=AuthorSerializer,
-                    ),
-                    permission_classes=[_DenyAll],
-                ),
-            }
+            permission_classes = [_Deny]
+            action_specs = {"list": _rows()}
 
-        Author.objects.create(name="a")
-        list_resp = _View.as_view({"get": "list"})(factory.get("/"))
-        assert list_resp.status_code == 200
+        assert _call(_ViewSet, "get", "list").status_code == 403
 
-        create_resp = _View.as_view({"post": "create"})(
-            factory.post("/", {"name": "b"}, format="json"),
-        )
-        assert create_resp.status_code == 403
 
-    def test_spec_without_permission_classes_inherits_view_level(self) -> None:
-        class _View(ServiceViewSet):
-            permission_classes = [_DenyAll]
+class TestDecoratedActions:
+    def test_a_service_action_takes_the_view_s_classes(self) -> None:
+        class _ViewSet(ServiceViewSet):
             queryset = Author.objects.all()
-            action_specs = {
-                "create": ServiceSpec(
-                    service=_create_author,
-                    input_serializer=_AuthorIn,
-                    output_selector_spec=SelectorSpec(
-                        kind=SelectorKind.RETRIEVE,
-                        output_serializer=AuthorSerializer,
-                    ),
-                ),
-            }
+            permission_classes = [_Deny]
 
-        response = _View.as_view({"post": "create"})(
-            factory.post("/", {"name": "Ada"}, format="json"),
-        )
-        assert response.status_code == 403
+            @service_action(_update(), detail=True, methods=["post"])
+            def rename(self, request: Any, pk: Any = None) -> None:
+                """Stubbed."""
 
-    def test_no_spec_for_action_inherits_view_level(self) -> None:
-        """Custom @action that isn't in action_specs uses view-level permissions."""
+        author = Author.objects.create(name="a")
+        assert _call(_ViewSet, "post", "rename", {"name": "b"}, pk=author.pk).status_code == 403
 
-        class _View(ServiceViewSet):
-            permission_classes = [_DenyAll]
+    def test_a_service_action_s_own_checks_refuse_on_an_open_view(self) -> None:
+        class _ViewSet(ServiceViewSet):
             queryset = Author.objects.all()
-            action_specs = {}
+            permission_classes = [AllowAny]
 
-            @service_action(ServiceSpec(service=staticmethod(lambda: {"ok": True})))
-            def custom(self, request: Any, *args: Any, **kwargs: Any) -> Response: ...
+            @service_action(_update(permissions=(_DenyAll(),)), detail=True, methods=["post"])
+            def rename(self, request: Any, pk: Any = None) -> None:
+                """Stubbed."""
 
-        # custom action — no spec in action_specs, no permission on @service_action,
-        # so the view-level _DenyAll governs.
-        response = _View.as_view({"post": "custom"})(factory.post("/", {}, format="json"))
-        assert response.status_code == 403
+        author = Author.objects.create(name="a")
+        assert _call(_ViewSet, "post", "rename", {"name": "b"}, pk=author.pk).status_code == 403
 
-
-@pytest.mark.django_db
-class TestServiceActionDecoratorPermissions:
-    """The decorators forward ``spec.permission_classes`` to DRF's ``@action``,
-    which the router applies via ``as_view(..., permission_classes=...)``.
-    Viewsets that compose ``_ActionSpecsMixin`` (i.e. ``ServiceViewSet`` /
-    ``SelectorViewSet``) additionally honor the spec attached to the bound
-    handler so the decorator works without requiring the router.
-    """
-
-    def test_spec_permission_denies_with_service_viewset(self) -> None:
-        class _View(ServiceViewSet):
+    def test_a_selector_action_takes_the_view_s_classes(self) -> None:
+        class _ViewSet(SelectorViewSet):
             queryset = Author.objects.all()
+            permission_classes = [_Deny]
 
-            @service_action(
-                ServiceSpec(
-                    service=staticmethod(lambda: {"ok": True}),
-                    permission_classes=[_DenyAll],
-                )
-            )
-            def custom(self, request: Any, *args: Any, **kwargs: Any) -> Response: ...
+            @selector_action(_rows())
+            def recent(self, request: Any) -> None:
+                """Stubbed."""
 
-        response = _View.as_view({"post": "custom"})(factory.post("/", {}, format="json"))
-        assert response.status_code == 403
+        assert _call(_ViewSet, "get", "recent").status_code == 403
 
-    def test_spec_permission_allows_overrides_view_default(self) -> None:
-        class _View(ServiceViewSet):
-            permission_classes = [_DenyAll]
+    def test_a_selector_action_s_own_checks_refuse_on_an_open_view(self) -> None:
+        class _ViewSet(SelectorViewSet):
             queryset = Author.objects.all()
+            permission_classes = [AllowAny]
 
-            @service_action(
-                ServiceSpec(
-                    service=staticmethod(lambda: {"ok": True}),
-                    permission_classes=[AllowAny],
-                )
-            )
-            def custom(self, request: Any, *args: Any, **kwargs: Any) -> Response: ...
+            @selector_action(_rows(permissions=(_DenyAll(),)))
+            def recent(self, request: Any) -> None:
+                """Stubbed."""
 
-        response = _View.as_view({"post": "custom"})(factory.post("/", {}, format="json"))
-        assert response.status_code == 200
-
-    def test_decorator_forwards_to_drf_action_kwargs(self) -> None:
-        """The decorator stuffs permission_classes into DRF's action kwargs
-        so the router will pick them up at URL-resolution time."""
-
-        class _View(GenericViewSet):
-            queryset = Author.objects.all()
-
-            @service_action(
-                ServiceSpec(
-                    service=staticmethod(lambda: {"ok": True}),
-                    permission_classes=[_DenyAll],
-                )
-            )
-            def custom(self, request: Any, *args: Any, **kwargs: Any) -> Response: ...
-
-        # DRF's @action stamps the kwargs (including permission_classes) onto
-        # the wrapped function. The router copies them into initkwargs for
-        # as_view(...).
-        assert _View.custom.kwargs["permission_classes"] == [_DenyAll]  # type: ignore[attr-defined]
-
-
-@pytest.mark.django_db
-class TestSelectorActionDecoratorPermissions:
-    def test_spec_permission_denies_with_selector_viewset(self) -> None:
-        class _View(SelectorViewSet):
-            queryset = Author.objects.all()
-
-            @selector_action(
-                SelectorSpec(
-                    kind=SelectorKind.LIST,
-                    selector=_list_authors,
-                    output_serializer=AuthorSerializer,
-                    permission_classes=[_DenyAll],
-                )
-            )
-            def custom(self, request: Any, *args: Any, **kwargs: Any) -> Response: ...
-
-        response = _View.as_view({"get": "custom"})(factory.get("/"))
-        assert response.status_code == 403
-
-    def test_spec_permission_allows_overrides_view_default(self) -> None:
-        class _View(SelectorViewSet):
-            permission_classes = [_DenyAll]
-            queryset = Author.objects.all()
-
-            @selector_action(
-                SelectorSpec(
-                    kind=SelectorKind.LIST,
-                    selector=_list_authors,
-                    output_serializer=AuthorSerializer,
-                    permission_classes=[AllowAny],
-                )
-            )
-            def custom(self, request: Any, *args: Any, **kwargs: Any) -> Response: ...
-
-        response = _View.as_view({"get": "custom"})(factory.get("/"))
-        assert response.status_code == 200
-
-    def test_decorator_forwards_to_drf_action_kwargs(self) -> None:
-        class _View(GenericViewSet):
-            queryset = Author.objects.all()
-
-            @selector_action(
-                SelectorSpec(
-                    kind=SelectorKind.LIST,
-                    selector=_list_authors,
-                    output_serializer=AuthorSerializer,
-                    permission_classes=[_DenyAll],
-                )
-            )
-            def custom(self, request: Any, *args: Any, **kwargs: Any) -> Response: ...
-
-        assert _View.custom.kwargs["permission_classes"] == [_DenyAll]  # type: ignore[attr-defined]
+        assert _call(_ViewSet, "get", "recent").status_code == 403

@@ -381,3 +381,31 @@ class TestAMissOnTheWire:
         response = self._get([JSONRenderer, BrowsableAPIRenderer], HTTP_ACCEPT="text/html")
         assert response["Content-Type"] == "text/html; charset=utf-8"
         assert b"<html" in response.content
+
+
+class TestGetObject:
+    def test_with_a_spec_it_is_the_row_the_selector_finds(self, ada: Author) -> None:
+        """A method of the view's own asking ``get_object()`` is handed the row
+        the spec's selector finds, not one DRF's lookup would."""
+
+        def post(self: Any, request: Any, *args: Any, **kwargs: Any) -> Response:
+            return Response({"found": self.get_object().name})
+
+        view = type("_View", (SelectorRetrieveView,), {"spec": _detail(), "post": post})
+
+        response = view.as_view()(factory.post("/"), pk=str(ada.pk))
+
+        assert response.status_code == 200
+        assert response.data == {"found": "Ada"}
+
+    def test_with_no_spec_it_retrieves_as_drf_does(self, ada: Author) -> None:
+        view = type(
+            "_View",
+            (SelectorRetrieveView,),
+            {"queryset": Author.objects.all(), "serializer_class": AuthorSerializer},
+        )
+
+        response = view.as_view()(factory.get("/"), pk=ada.pk)
+
+        assert response.status_code == 200
+        assert response.data["name"] == "Ada"

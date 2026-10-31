@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.10"
 resolution-markers = [
     "python_full_version >= '3.12'",
@@ -357,15 +357,15 @@ wheels = [
 
 [[package]]
 name = "django-service-specs"
-version = "0.20.0"
+version = "0.21.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "django" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/33/c6/ef2aabba656bc6d5bd8a9a8d86b65e41158c8001ea4f170dd5332f310bc2/django_service_specs-0.20.0.tar.gz", hash = "sha256:1f3ab9207daf7c36a536cc6ed5efb11a9f3eb0f94d48a0f37391757f7992c5c6", size = 1067439, upload-time = "2026-10-29T12:54:04.51Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d8/55/48f24e1005b5855ff5410551083b8abb1edd9d2dd65f30731641863287cf/django_service_specs-0.21.1.tar.gz", hash = "sha256:d608c3d1b68af054070915cb2e842fae50a176c0bb5ed59f81be0641a35dc965", size = 1088189, upload-time = "2026-10-30T10:21:51.307Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/3d/3d/8b8ba888adb4db2e00fdda7d016931e716c0d88106c48910da85af6337eb/django_service_specs-0.20.0-py3-none-any.whl", hash = "sha256:96ca1c82f0e69f1784d948ec393a256b16fc191e8058b81443539e7be1be5e3f", size = 473448, upload-time = "2026-10-29T12:54:02.597Z" },
+    { url = "https://files.pythonhosted.org/packages/57/bb/b62d947e9068f750135b5f725c0b558c24a6b6409c2aa7b9ce0ae5ce850e/django_service_specs-0.21.1-py3-none-any.whl", hash = "sha256:6b5bf3757d9692eb0275d3f6ed2b1bab92f71276bbf1734d41250308cba47571", size = 480774, upload-time = "2026-10-30T10:21:49.52Z" },
 ]
 
 [[package]]
@@ -394,7 +394,6 @@ dev = [
     { name = "djangorestframework-stubs" },
     { name = "drf-spectacular" },
     { name = "flake8-tidy-imports" },
-    { name = "jsonschema" },
     { name = "pre-commit" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -413,7 +412,7 @@ docs = [
 requires-dist = [
     { name = "django", specifier = ">=4.2" },
     { name = "django-filter", marker = "extra == 'filter'", specifier = ">=23.1" },
-    { name = "django-service-specs", specifier = ">=0.20.0" },
+    { name = "django-service-specs", specifier = ">=0.21.1" },
     { name = "djangorestframework", specifier = ">=3.14" },
     { name = "djangorestframework-dataclasses", specifier = ">=1.3.1" },
     { name = "drf-spectacular", marker = "extra == 'spectacular'", specifier = ">=0.27,<1.0" },
@@ -428,7 +427,6 @@ dev = [
     { name = "djangorestframework-stubs", specifier = ">=3.17.0" },
     { name = "drf-spectacular", specifier = ">=0.27" },
     { name = "flake8-tidy-imports", specifier = ">=4.12.0" },
-    { name = "jsonschema", specifier = ">=4.20" },
     { name = "pre-commit", specifier = ">=4.6.0" },
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "pytest-asyncio", specifier = ">=1.3.0" },

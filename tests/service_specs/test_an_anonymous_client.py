@@ -2,10 +2,9 @@
 
 The view hands the kernel ``request.user``, which DRF sets to the project's
 ``UNAUTHENTICATED_USER`` for a client no authenticator recognised, read when
-the request is served. drfs' edge acted as Django's ``AnonymousUser`` for a
-project setting ``UNAUTHENTICATED_USER = None``; the kernel route hands the
-kernel that ``None``, which it takes, so that case is a strict xfail naming
-the edge's line until the edge decides.
+the request is served. For a project setting ``UNAUTHENTICATED_USER = None``
+the kernel route hands the kernel that ``None``, which it takes, rather than
+acting as Django's ``AnonymousUser``.
 """
 
 from __future__ import annotations
@@ -35,9 +34,6 @@ class _CreateView(ServiceCreateView):
 
     permission_classes: Any = []
 
-    def get_permissions(self) -> list[Any]:
-        return [permission() for permission in self.permission_classes]
-
 
 def _served(**settings: Any) -> tuple[Response, list[Any]]:
     seen: list[Any] = []
@@ -64,16 +60,14 @@ def test_the_unauthenticated_user_is_the_project_s() -> None:
     assert type(user) is Guest
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "dispatch_kernel_spec hands the kernel request.user as it is, None under "
-        "UNAUTHENTICATED_USER = None, where drfs' edge acted as AnonymousUser"
-    ),
-)
-def test_a_project_with_no_unauthenticated_user_still_acts_as_anonymous() -> None:
+def test_a_project_with_no_unauthenticated_user_hands_the_kernel_none() -> None:
+    """The decided answer: the edge passes ``request.user`` on as DRF set it.
+
+    A project that sets ``UNAUTHENTICATED_USER = None`` has chosen that an
+    unrecognised client has no user, and the kernel takes ``None`` as a principal,
+    so the edge does not stand ``AnonymousUser`` in for it.
+    """
     response, seen = _served(UNAUTHENTICATED_USER=None)
 
     assert response.status_code == 204, response.data
-    (user,) = seen
-    assert isinstance(user, AnonymousUser)
+    assert seen == [None]

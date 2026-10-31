@@ -3,8 +3,8 @@
 The kernel has one argument namespace, so a lookup's ``filter_set`` filter and
 a ``SerializerValidator`` field of one name would be one argument read two
 ways. The kernel refuses the spec as declaring it twice when its parameters
-are first read, which is the first request; drfs refused it at ``as_view()``,
-and that refusal is not built for a kernel spec yet. A name the body does not
+are first read, which is the first request; ``as_view()`` does not refuse it
+for a kernel spec yet. A name the body does not
 write is accepted.
 """
 
@@ -64,7 +64,6 @@ def _spec(filter_set: type) -> ServiceSpec:
             kind=SelectorKind.RETRIEVE,
             selector=_author_by_pk,
             reads=Parameters.of(Parameter("pk", "integer", required=True)),
-            permissions=_OPEN,
             filter_set=filter_set,
         ),
     )

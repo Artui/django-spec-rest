@@ -16,16 +16,16 @@ from rest_framework.exceptions import (
 )
 
 from django_spec_rest.service_specs.drf_not_authenticated import DRFNotAuthenticated
+from django_spec_rest.service_specs.drf_not_permitted import DRFNotPermitted
 from django_spec_rest.service_specs.drf_service_validation_error import (
     DRFServiceValidationError,
 )
-from django_spec_rest.service_specs.not_permitted import NotPermitted
 
 TRANSLATED_FROM: Final = "_translated_from"
 """The attribute a translated refusal carries the exception it was translated from under.
 
-The DRF edge reads it to restore what the author raised. A refusal drfs
-raised itself, such as a permission class answering ``False``, carries none,
+The DRF edge reads it to restore what the author raised. A refusal this
+package raises itself, such as a permission class answering ``False``, carries none,
 so it is never mistaken for one translated here.
 """
 
@@ -47,7 +47,7 @@ def translate_drf_refusals() -> Generator[None]:
       [`DRFServiceValidationError`][django_spec_rest.service_specs.drf_service_validation_error.DRFServiceValidationError],
       with the same detail and codes;
     - ``PermissionDenied`` as
-      [`NotPermitted`][django_spec_rest.service_specs.not_permitted.NotPermitted],
+      [`DRFNotPermitted`][django_spec_rest.service_specs.drf_not_permitted.DRFNotPermitted],
       with its message and code;
     - ``NotAuthenticated`` as
       [`DRFNotAuthenticated`][django_spec_rest.service_specs.drf_not_authenticated.DRFNotAuthenticated],
@@ -63,7 +63,7 @@ def translate_drf_refusals() -> Generator[None]:
 
     Left exactly as raised:
 
-    - a refusal that is already the kernel's, drfs' dual-base classes and a
+    - a refusal that is already the kernel's, the dual-base ``DRF`` classes and a
       twin translated by an inner block among them, which a kernel route
       already reads;
     - any other exception, DRF's ``NotFound``, ``AuthenticationFailed`` and
@@ -100,7 +100,7 @@ def _kernel_twin(exc: APIException) -> APIException | None:
 def _built(exc: APIException) -> APIException | None:
     """The twin of ``exc``'s class, built from its message and code or its detail.
 
-    The kernel's classes first, since drfs' dual classes and a twin are DRF's
+    The kernel's classes first, since the dual ``DRF`` classes and a twin are DRF's
     too and would be rebuilt as themselves. One arc to coverage, so each is
     named: test_a_kernel_refusal_leaves_exactly_as_raised fails without the
     first (its ``dual-not-permitted`` case) and without the second (its
@@ -111,7 +111,7 @@ def _built(exc: APIException) -> APIException | None:
     if isinstance(exc, NotAuthenticated):
         return DRFNotAuthenticated(_message(exc))
     if isinstance(exc, PermissionDenied):
-        return NotPermitted(_message(exc))
+        return DRFNotPermitted(_message(exc))
     if isinstance(exc, ValidationError):
         return DRFServiceValidationError(exc.detail)
     return None

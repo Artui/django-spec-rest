@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from django.test import RequestFactory
 
 from django_spec_rest import OfflineHttpRequest, build_offline_context
 
@@ -39,31 +40,44 @@ class TestWithAHost:
         assert request.build_absolute_uri("/x/") == "https://example.com/x/"
         assert request.scheme == "https"
 
-    def test_explicit_port_is_preserved(self) -> None:
-        request = build_offline_context(user=None, host="example.com:8000").request
-        assert request.build_absolute_uri("/x/") == "http://example.com:8000/x/"
-
-    def test_full_origin_with_port(self) -> None:
-        request = build_offline_context(user=None, host="https://example.com:8443").request
-        assert request.build_absolute_uri("/x/") == "https://example.com:8443/x/"
-
-    def test_trailing_slash_on_a_bare_host_is_tolerated(self) -> None:
-        request = build_offline_context(user=None, host="example.com/").request
-        assert request.build_absolute_uri("/x/") == "http://example.com/x/"
-
-    def test_an_absolute_location_passes_through(self) -> None:
-        request = build_offline_context(user=None, host="example.com").request
-        assert (
-            request.build_absolute_uri("https://cdn.example.net/f") == "https://cdn.example.net/f"
-        )
+    @pytest.mark.parametrize(
+        ("host", "location", "expected"),
+        [
+            pytest.param(
+                "example.com:8000",
+                "/x/",
+                "http://example.com:8000/x/",
+                id="explicit_port_is_preserved",
+            ),
+            pytest.param(
+                "https://example.com:8443",
+                "/x/",
+                "https://example.com:8443/x/",
+                id="full_origin_with_port",
+            ),
+            pytest.param(
+                "example.com/",
+                "/x/",
+                "http://example.com/x/",
+                id="trailing_slash_on_a_bare_host_is_tolerated",
+            ),
+            pytest.param(
+                "example.com",
+                "https://cdn.example.net/f",
+                "https://cdn.example.net/f",
+                id="an_absolute_location_passes_through",
+            ),
+        ],
+    )
+    def test_build_absolute_uri(self, host: str, location: str, expected: str) -> None:
+        request = build_offline_context(user=None, host=host).request
+        assert request.build_absolute_uri(location) == expected
 
 
 class TestHostAndAmbientRequest:
     def test_a_real_request_keeps_its_own_host(self) -> None:
         # ``host`` configures the *synthesized* request only, so a caller can
         # pass both unconditionally: the ambient request when there is one.
-        from django.test import RequestFactory
-
         http_request = RequestFactory().post("/hook/")
         request = build_offline_context(
             user=None, http_request=http_request, host="ignored.example.com"

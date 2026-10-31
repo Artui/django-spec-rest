@@ -174,9 +174,7 @@ class TestTheArguments:
         assert received == {"tenant_id": 12}
 
     def test_get_selector_kwargs_beside_a_kernel_spec_is_refused_at_as_view(self) -> None:
-        """Changed by design (the carry-over list rewrites ``resolve_extra_kwargs``
-        onto the spec's providers): drfs handed the selector the hook's keys. A
-        kernel spec is handed its own providers' values and never a selector
+        """A kernel spec is handed its own providers' values and never a selector
         view's hook, so a hook beside one would be silently unasked; it is
         refused when the view is built, pointing at the spec's ``kwargs``."""
 
@@ -316,3 +314,19 @@ class TestAffordances:
         spec = _listing(_posts, affordances={"publish": PUBLISH})
         with pytest.raises(ImproperlyConfigured, match="Declare a presenter"):
             _get(spec, attrs={"serializer_class": _PostOut})
+
+
+def test_a_view_with_no_spec_lists_as_drf_does() -> None:
+    """No ``spec``: the view's ``queryset`` and ``serializer_class`` answer, as
+    DRF's ``ListAPIView`` would."""
+    Author.objects.create(name="Ada")
+    view = type(
+        "_View",
+        (SelectorListView,),
+        {"queryset": Author.objects.all(), "serializer_class": AuthorSerializer},
+    )
+
+    response = view.as_view()(factory.get("/"))
+
+    assert response.status_code == 200
+    assert [row["name"] for row in response.data] == ["Ada"]

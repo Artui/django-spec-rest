@@ -2,7 +2,7 @@
 
 ``as_view()`` asks a kernel spec what only the view can know (the ``filter_set``
 guard here, the kind and the seeds in ``test_spec_validation_e2e``). Every other
-check drfs made of its own spec's fields is the kernel's when the spec is built:
+check of a spec's fields is the kernel's when the spec is built:
 those are asserted below in the kernel's words, so a spec refused there never
 reaches a view.
 """
@@ -172,8 +172,7 @@ def _nested(kind: SelectorKind = SelectorKind.RETRIEVE, **fields: Any) -> Select
 
 
 class TestTheKernelRefusesWhenTheSpecIsBuilt:
-    """drfs refused each of these at ``as_view()``; a kernel spec is refused
-    when it is built, so no view is ever handed one."""
+    """A kernel spec is refused when it is built, so no view is ever handed one."""
 
     @pytest.mark.parametrize("role", ["instance", "output"])
     def test_a_nested_selector_s_preconditions(self, role: str) -> None:
@@ -211,8 +210,7 @@ class TestTheKernelRefusesWhenTheSpecIsBuilt:
             )
 
     def test_a_selector_spec_with_no_selector(self) -> None:
-        """drfs read a spec with no selector as plain DRF; a kernel spec is an
-        operation, and an operation has a callable."""
+        """A kernel spec is an operation, and an operation has a callable."""
         with pytest.raises(
             ImproperlyConfigured, match=r"SelectorSpec\.selector must be callable; got NoneType"
         ):
@@ -233,8 +231,7 @@ class TestTheKernelRefusesWhenTheSpecIsBuilt:
             ServiceSpec(service=_rows, permissions=_OPEN, preconditions=preconditions)
 
     def test_a_serializer_class_where_a_validator_goes(self) -> None:
-        """drfs took an ``input_serializer`` class; the kernel takes a
-        Validator instance, and a DRF serializer is wrapped in
+        """The kernel takes a Validator instance, and a DRF serializer is wrapped in
         ``SerializerValidator``."""
         with pytest.raises(
             ImproperlyConfigured,

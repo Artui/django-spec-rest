@@ -5,11 +5,10 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from typing import Any, ClassVar
 
+from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from django_spec_rest.dispatch.kernel_edge import runs_on_kernel
-from django_spec_rest.types.service_spec import ServiceSpec
 from django_spec_rest.views.mutation.utils import (
     _ServesRaisedSchema,
     dispatch_mutation_for_spec,
@@ -30,28 +29,26 @@ class MutationFlowMixin(_ServesRaisedSchema):
     overlapping keys:
 
     - extra service kwargs: ``get_service_kwargs`` →
-      ``get_<action>_service_kwargs`` → ``ServiceSpec.kwargs``.
+      ``get_<action>_service_kwargs`` → the spec's ``kwargs`` provider.
     - the *serializer's* input dict, merged on top of ``request.data`` before
-      validation: ``get_input_data`` → ``get_<action>_input_data`` →
-      ``ServiceSpec.input_data``.
+      validation: ``get_input_data`` → ``get_<action>_input_data`` → the
+      spec's ``input_data`` provider.
     - the input serializer's ``context=``: ``get_serializer_context`` (DRF's
       own) → ``get_input_serializer_context`` →
-      ``get_<action>_input_serializer_context`` →
-      ``ServiceSpec.input_serializer_context``.
+      ``get_<action>_input_serializer_context`` → the ``SerializerValidator``'s
+      ``serializer_context``.
     - the output serializer's ``context=``: the same chain with ``output`` in
       place of ``input``, applied during response rendering.
 
     The per-action layer reads ``self.action``, so it applies to viewsets only.
 
-    For a kernel spec, which declares neither, the response's two HTTP hooks
+    A kernel spec declares neither HTTP answer, so the response's two HTTP hooks
     are the view's: ``success_status`` and ``response_finalizer`` below, read
-    off the class unbound, as a drfs spec's fields of those names are read off
-    the spec. A drfs spec's own fields are what its view reads, and these are
-    not.
+    off the class unbound.
     """
 
     success_status: ClassVar[int | Callable[..., int] | None] = None
-    """A kernel spec's success status: an ``int``, or a callable declaring any of
+    """The success status: an ``int``, or a callable declaring any of
     ``result`` / ``instance`` / ``request`` / ``view``, or ``None`` for the
     action's default (``201`` create, ``200`` update, ``204`` delete). A body
     never goes out under ``204``, so a status resolving to it answers ``200``
@@ -59,7 +56,7 @@ class MutationFlowMixin(_ServesRaisedSchema):
     (test_callable_success_status)."""
 
     response_finalizer: ClassVar[Callable[..., Response | None] | None] = None
-    """A kernel spec's post-presentation hook on a ``2xx``: declares any of
+    """The post-presentation hook on a ``2xx``: declares any of
     ``response`` / ``result`` / ``request`` / ``view`` / ``instance`` / ``data``
     and returns a ``Response`` to replace the one built, or ``None`` to keep it
     (test_response_finalizer)."""
@@ -90,30 +87,10 @@ class MutationFlowMixin(_ServesRaisedSchema):
         """
         return self.get_serializer_context()  # ty: ignore[unresolved-attribute]
 
-    def get_permissions(self) -> list[Any]:
-        """Honor ``spec.permission_classes`` on standalone mutation views.
-
-        Standalone ``Service*View`` subclasses carry ``spec`` as a class
-        attribute; when it sets ``permission_classes`` those win over the view's
-        class-level ones, and ``None`` falls through.
-
-        A kernel spec has no ``permission_classes``: it declares its checks as
-        ``permissions``, which the kernel's ``dispatch`` asks itself, so its
-        view answers its own classes, which DRF asks before the view runs, as
-        for a drfs spec setting none. Both apply, the view's first
-        (test_kernel_views' test_the_view_s_own_classes_refuse_before_the_spec_runs).
-        """
-        spec: ServiceSpec[Any, Any, Any] | None = getattr(self, "spec", None)
-        if runs_on_kernel(spec):
-            return super().get_permissions()  # ty: ignore[unresolved-attribute]
-        if spec is not None and spec.permission_classes is not None:
-            return [permission() for permission in spec.permission_classes]
-        return super().get_permissions()  # ty: ignore[unresolved-attribute]
-
     def _run_mutation(
         self,
         request: Request,
-        spec: ServiceSpec[Any, Any, Any],
+        spec: KernelServiceSpec,
         *,
         instance: Any,
         default_status: int,

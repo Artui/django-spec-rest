@@ -140,7 +140,6 @@ class TestServiceCreateView:
                 kind=SelectorKind.RETRIEVE,
                 selector=lambda *, result: None,
                 allow_none=True,
-                permissions=_OPEN,
                 presenter=_PRESENTER,
             )
         )
@@ -154,7 +153,6 @@ class TestServiceCreateView:
             output_selector_spec=SelectorSpec(
                 kind=SelectorKind.RETRIEVE,
                 selector=lambda *, result: other,
-                permissions=_OPEN,
                 presenter=_PRESENTER,
             )
         )
@@ -203,8 +201,8 @@ class TestTheViewsHookChains:
         assert _post(view, {}).data == {"tenant": "spec"}
 
     def test_a_get_service_kwargs_value_named_like_a_field_pins_it(self) -> None:
-        """The serializer validates the server's value, never the client's, as
-        it did on drfs, and the service is handed the validated one."""
+        """The serializer validates the server's value, never the client's, and
+        the service is handed the validated one."""
 
         def fn(*, data: dict[str, Any], name: str) -> dict[str, Any]:
             return {"data": dict(data), "name": name}
@@ -393,3 +391,15 @@ class TestTheDescription:
 
         with pytest.raises(KeyError, match="tenant"):
             _post(_view(_spec(validator=SerializerValidator(_Tenanted))), {})
+
+
+class TestWithNoSpec:
+    """A view with no ``spec`` describes its route as DRF does."""
+
+    def test_options_is_drf_s_own_answer(self) -> None:
+        view = type("_View", (ServiceCreateView,), {"serializer_class": AuthorSerializer})
+
+        response = view.as_view()(factory.options("/"))
+
+        assert response.status_code == 200
+        assert "name" in response.data["actions"]["POST"]

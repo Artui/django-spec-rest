@@ -17,11 +17,11 @@ from django_spec_rest.service_specs.drf_not_authenticated import DRFNotAuthentic
 
 
 class TestItIsBothClasses:
-    def test_it_is_the_kernels_denial_and_drfs_not_authenticated(self) -> None:
+    def test_it_is_the_kernels_denial_and_drf_s_not_authenticated(self) -> None:
         assert issubclass(DRFNotAuthenticated, KernelNotPermitted)
         assert issubclass(DRFNotAuthenticated, NotAuthenticated)
 
-    def test_it_is_neither_a_service_error_nor_drfs_permission_denied(self) -> None:
+    def test_it_is_neither_a_service_error_nor_drf_s_permission_denied(self) -> None:
         # A permission denied is answered 403, where nobody signed in is 401.
         assert not issubclass(DRFNotAuthenticated, KernelServiceError)
         assert not issubclass(DRFNotAuthenticated, PermissionDenied)

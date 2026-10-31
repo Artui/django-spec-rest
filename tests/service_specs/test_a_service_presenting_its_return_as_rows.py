@@ -79,12 +79,7 @@ def test_the_kernel_s_output_schema_is_an_array_of_the_row() -> None:
 
 
 class _CreateView(ServiceCreateView):
-    """``get_permissions`` answers the view's own classes, as the spine's views do."""
-
     permission_classes: Any = []
-
-    def get_permissions(self) -> list[Any]:
-        return [permission() for permission in self.permission_classes]
 
 
 def test_a_live_view_answers_the_presented_rows() -> None:

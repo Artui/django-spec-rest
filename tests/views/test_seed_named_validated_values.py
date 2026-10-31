@@ -29,11 +29,9 @@ from typing import Any
 
 import pytest
 from django.contrib.auth.models import User
-from django_service_specs import ServiceSpec
 from rest_framework import serializers
 
-from django_spec_rest.service_specs.serializer_validator import SerializerValidator
-from tests.views.server_value_calls import CORES, FORMATS, OPEN, Core, post
+from tests.views.server_value_calls import FORMATS, dispatch_live, open_spec, post
 
 pytestmark = pytest.mark.django_db
 
@@ -60,46 +58,34 @@ def _record(seen: dict[str, Any]) -> Callable[..., None]:
     return service
 
 
-def _spec(service: Callable[..., Any], serializer: Any, **fields: Any) -> ServiceSpec:
-    return ServiceSpec(
-        service=service,
-        permissions=OPEN,
-        validator=SerializerValidator(serializer),
-        atomic=False,
-        **fields,
-    )
-
-
 @FORMATS
 def test_a_current_user_hidden_field_named_user_validates_over_http(fmt: str) -> None:
     seen: dict[str, Any] = {}
     alice = User.objects.create(username="alice")
 
-    response = post(_spec(_record(seen), _CurrentUserIn), {"title": "t"}, fmt=fmt, user=alice)
+    response = post(open_spec(_record(seen), _CurrentUserIn), {"title": "t"}, fmt=fmt, user=alice)
 
     assert response.status_code == 204, response.data
     assert seen == {"data": {"title": "t", "user": alice}, "user": alice}
 
 
-@CORES
-def test_a_current_user_hidden_field_named_user_validates_on_either_core(core: Core) -> None:
+def test_a_current_user_hidden_field_named_user_validates_through_the_edge() -> None:
     seen: dict[str, Any] = {}
     alice = User.objects.create(username="alice")
 
-    core(_spec(_record(seen), _CurrentUserIn), {"title": "t"}, user=alice)
+    dispatch_live(open_spec(_record(seen), _CurrentUserIn), {"title": "t"}, user=alice)
 
     assert seen["data"] == {"title": "t", "user": alice}
     assert seen["user"] == alice
 
 
-@CORES
-def test_keys_a_validate_adds_named_like_seeds_stay_in_data(core: Core) -> None:
+def test_keys_a_validate_adds_named_like_seeds_stay_in_data() -> None:
     seen: dict[str, Any] = {}
 
     def service(*, data: Any, serializer: Any, progress: Any) -> None:
         seen.update(data=dict(data), serializer=serializer, progress=progress)
 
-    core(_spec(service, _AddsSeedsIn), {"title": "t"})
+    dispatch_live(open_spec(service, _AddsSeedsIn), {"title": "t"})
 
     assert seen["data"] == {
         "title": "t",
@@ -112,8 +98,7 @@ def test_keys_a_validate_adds_named_like_seeds_stay_in_data(core: Core) -> None:
     assert isinstance(seen["serializer"], _AddsSeedsIn)
 
 
-@CORES
-def test_each_rows_seed_named_key_stays_in_its_row(core: Core) -> None:
+def test_each_rows_seed_named_key_stays_in_its_row() -> None:
     seen: dict[str, Any] = {}
     alice = User.objects.create(username="alice")
 
@@ -121,8 +106,8 @@ def test_each_rows_seed_named_key_stays_in_its_row(core: Core) -> None:
         seen["data"] = [dict(row) for row in data]
         seen["user"] = user
 
-    core(
-        _spec(bulk, _CurrentUserIn, many=True),
+    dispatch_live(
+        open_spec(bulk, _CurrentUserIn, many=True),
         [{"title": "a"}, {"title": "b"}],
         user=alice,
     )
@@ -138,7 +123,7 @@ class _PickedUserIn(serializers.Serializer):
 
 def test_a_writable_field_named_user_is_still_required() -> None:
     """The field is the serializer's to demand, so leaving it out is refused as DRF refuses it."""
-    response = post(_spec(lambda *, data: None, _PickedUserIn), {"title": "t"})
+    response = post(open_spec(lambda *, data: None, _PickedUserIn), {"title": "t"})
 
     assert response.status_code == 400
     assert response.data["user"][0].code == "required"
@@ -162,7 +147,7 @@ def test_a_writable_field_named_user_validates_in_each_row() -> None:
         seen["user"] = user
 
     response = post(
-        _spec(service, _PickedUserIn, many=True), [{"title": "t", "user": bob.pk}], user=alice
+        open_spec(service, _PickedUserIn, many=True), [{"title": "t", "user": bob.pk}], user=alice
     )
 
     assert response.status_code == 204, response.data

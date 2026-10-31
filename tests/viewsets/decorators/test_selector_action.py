@@ -1,365 +1,187 @@
-"""Tests for the @selector_action decorator."""
+"""``@selector_action`` serving a kernel ``SelectorSpec``.
+
+The decorated action dispatches through the standalone selector views' own
+edge (``dispatch_kernel_selector``), and the spec is asked at decoration what
+``validate_selector_view_spec`` asks of a standalone view's.
+"""
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 import pytest
-from rest_framework.exceptions import NotFound
+from django.core.exceptions import ImproperlyConfigured
+from django_service_specs import (
+    Parameter,
+    Parameters,
+    PermissionCheck,
+    SelectorKind,
+    SelectorSpec,
+    Unrestricted,
+)
+from rest_framework.filters import BaseFilterBackend
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.permissions import BasePermission
+from rest_framework.response import Response
 from rest_framework.routers import SimpleRouter
-from rest_framework.test import APIClient, APIRequestFactory
-from rest_framework.viewsets import GenericViewSet
+from rest_framework.test import APIRequestFactory
+from rest_framework.viewsets import GenericViewSet, ViewSet
 
-from django_spec_rest import SelectorKind, SelectorSpec, selector_action
+from django_spec_rest import selector_action
+from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from tests.testapp.models import Author
 from tests.testapp.serializers import AuthorSerializer
 
+pytestmark = pytest.mark.django_db
+
 factory = APIRequestFactory()
+_OPEN = (Unrestricted(),)
+_PRESENTER = SerializerPresenter(AuthorSerializer)
 
 
-class _AuthorListPagination(PageNumberPagination):
-    page_size = 1
+class _DenyAll(PermissionCheck):
+    def has_permission(self, principal: Any, spec: Any) -> bool:
+        return False
 
 
-class _SelectorViewSet(GenericViewSet):
-    serializer_class = AuthorSerializer
-    queryset = Author.objects.all()
-
-    @selector_action(
-        SelectorSpec(kind=SelectorKind.LIST, selector=lambda **_: list(Author.objects.all())),
-    )
-    def active(self, request):  # type: ignore[no-untyped-def]
-        """Stubbed body — replaced by selector_action."""
-
-    @selector_action(
-        SelectorSpec(
-            kind=SelectorKind.RETRIEVE,
-            # ``pk`` is declared: a route capture reaches only a parameter the
-            # selector names, never one it would only find through ``**kwargs``.
-            selector=lambda *, pk: Author.objects.filter(pk=pk).first(),
-        ),
-    )
-    def card(self, request, pk=None):  # type: ignore[no-untyped-def]
-        """Stubbed."""
+class _NoRows(BasePermission):
+    def has_object_permission(self, request: Any, view: Any, obj: Any) -> bool:
+        return False
 
 
-@pytest.mark.django_db
-class TestSelectorAction:
-    def test_collection_action_serializes_with_view_serializer(self) -> None:
-        Author.objects.create(name="Alice")
-        Author.objects.create(name="Bob")
-        request = factory.get("/")
-        view = _SelectorViewSet.as_view({"get": "active"})
-        response = view(request)
+class _Pages(PageNumberPagination):
+    page_size = 2
+
+
+class _DropsEverything(BaseFilterBackend):
+    def filter_queryset(self, request: Any, queryset: Any, view: Any) -> Any:
+        return queryset.none()
+
+
+def _rows(**fields: Any) -> SelectorSpec:
+    defaults: dict[str, Any] = {
+        "selector": lambda: Author.objects.order_by("id"),
+        "permissions": _OPEN,
+        "presenter": _PRESENTER,
+    }
+    return SelectorSpec(kind=SelectorKind.LIST, **{**defaults, **fields})
+
+
+def _row(**fields: Any) -> SelectorSpec:
+    defaults: dict[str, Any] = {
+        "selector": lambda *, pk: Author.objects.filter(pk=pk).first(),
+        "reads": Parameters.of(Parameter("pk", "integer", required=True)),
+        "permissions": _OPEN,
+        "presenter": _PRESENTER,
+    }
+    return SelectorSpec(kind=SelectorKind.RETRIEVE, **{**defaults, **fields})
+
+
+def _viewset(spec: SelectorSpec, *, base: type = GenericViewSet, **attrs: Any) -> Any:
+    @selector_action(spec)
+    def act(self: Any, request: Any, pk: Any = None) -> None:
+        """Stubbed: the decorator serves the spec."""
+
+    return type("_ViewSet", (base,), {"queryset": Author.objects.all(), "act": act, **attrs})
+
+
+def _get(viewset: Any, **kwargs: Any) -> Response:
+    return viewset.as_view({"get": "act"})(factory.get("/"), **kwargs)
+
+
+@pytest.fixture
+def authors() -> list[Author]:
+    return [Author.objects.create(name=name) for name in "abc"]
+
+
+class TestACollectionAction:
+    @pytest.mark.parametrize("base", [GenericViewSet, ViewSet])
+    def test_presents_its_rows_on_any_viewset(self, base: type, authors: list[Author]) -> None:
+        response = _get(_viewset(_rows(), base=base))
         assert response.status_code == 200
-        names = sorted(item["name"] for item in response.data)
-        assert names == ["Alice", "Bob"]
+        assert [row["name"] for row in response.data] == ["a", "b", "c"]
 
-    def test_detail_action_serializes_single(self) -> None:
-        author = Author.objects.create(name="Carol")
-        request = factory.get("/")
-        view = _SelectorViewSet.as_view({"get": "card"})
-        response = view(request, pk=author.pk)
-        assert response.status_code == 200
-        assert response.data == {"id": author.pk, "name": "Carol"}
-
-    def test_detail_action_returning_none_yields_404(self) -> None:
-        request = factory.get("/")
-        view = _SelectorViewSet.as_view({"get": "card"})
-        response = view(request, pk=99999)
-        assert response.status_code == 404
-
-    def test_detail_action_object_does_not_exist_yields_404(self) -> None:
-        from django.core.exceptions import ObjectDoesNotExist
-
-        def selector(**_: Any) -> Any:
-            raise ObjectDoesNotExist()
-
-        class _View(GenericViewSet):
-            serializer_class = AuthorSerializer
-            queryset = Author.objects.all()
-
-            @selector_action(SelectorSpec(kind=SelectorKind.RETRIEVE, selector=selector))
-            def card(self, request, pk=None):  # type: ignore[no-untyped-def]
-                ...
-
-        view = _View.as_view({"get": "card"})
-        response = view(factory.get("/"), pk=1)
-        assert response.status_code == 404
-
-    def test_action_metadata_attached(self) -> None:
-        active = _SelectorViewSet.active  # type: ignore[attr-defined]
-        assert active.detail is False
-        # DRF's @action defaults methods to GET when none are passed.
-        assert "get" in active.mapping
-
-    def test_methods_forwarded_to_drf_action(self) -> None:
-        class _View(GenericViewSet):
-            queryset = Author.objects.none()
-            serializer_class = AuthorSerializer
-
-            @selector_action(
-                SelectorSpec(kind=SelectorKind.LIST, selector=lambda **_: []),
-                methods=["get", "head"],
-            )
-            def listing(self, request):  # type: ignore[no-untyped-def]
-                ...
-
-        listing = _View.listing  # type: ignore[attr-defined]
-        assert "get" in listing.mapping
-        assert "head" in listing.mapping
-
-    def test_url_path_and_url_name_forwarded(self) -> None:
-        class _View(GenericViewSet):
-            queryset = Author.objects.all()
-            serializer_class = AuthorSerializer
-
-            @selector_action(
-                SelectorSpec(kind=SelectorKind.LIST, selector=lambda **_: []),
-                url_path="recent",
-                url_name="recent-authors",
-            )
-            def listing(self, request):  # type: ignore[no-untyped-def]
-                ...
-
-        listing = _View.listing  # type: ignore[attr-defined]
-        assert listing.url_path == "recent"
-        assert listing.url_name == "recent-authors"
-
-    def test_spec_output_serializer_overrides_view_serializer(self) -> None:
-        class _AltSerializer(AuthorSerializer):
-            class Meta(AuthorSerializer.Meta):
-                fields = ("name",)
-
-        class _View(GenericViewSet):
-            serializer_class = AuthorSerializer  # would yield {id, name}
-            queryset = Author.objects.all()
-
-            @selector_action(
-                SelectorSpec(
-                    kind=SelectorKind.LIST,
-                    selector=lambda **_: list(Author.objects.all()),
-                    output_serializer=_AltSerializer,
-                ),
-            )
-            def names_only(self, request):  # type: ignore[no-untyped-def]
-                ...
-
-        Author.objects.create(name="Dave")
-        view = _View.as_view({"get": "names_only"})
-        response = view(factory.get("/"))
-        assert response.status_code == 200
-        assert response.data == [{"name": "Dave"}]
-
-    def test_pagination_applied_when_configured(self) -> None:
-        class _Paginated(GenericViewSet):
-            serializer_class = AuthorSerializer
-            queryset = Author.objects.all()
-            pagination_class = _AuthorListPagination
-
-            @selector_action(
-                SelectorSpec(
-                    kind=SelectorKind.LIST,
-                    selector=lambda **_: list(Author.objects.all().order_by("name")),
-                ),
-            )
-            def listing(self, request):  # type: ignore[no-untyped-def]
-                ...
-
-        Author.objects.create(name="A")
-        Author.objects.create(name="B")
-        Author.objects.create(name="C")
-        view = _Paginated.as_view({"get": "listing"})
-        response = view(factory.get("/"))
-        assert response.status_code == 200
-        # Page size = 1, so the count is 3 and results carries one entry.
+    def test_a_paginated_viewset_presents_the_page(self, authors: list[Author]) -> None:
+        response = _get(_viewset(_rows(), pagination_class=_Pages))
         assert response.data["count"] == 3
-        assert len(response.data["results"]) == 1
+        assert [row["name"] for row in response.data["results"]] == ["a", "b"]
 
-    def test_spec_kwargs_provider_passes_extras(self) -> None:
-        captured: dict[str, Any] = {}
+    def test_no_filter_backend_applies(self, authors: list[Author]) -> None:
+        response = _get(_viewset(_rows(), filter_backends=[_DropsEverything]))
+        assert len(response.data) == 3
 
-        def selector(*, tenant_id: int) -> list[Any]:
-            captured["tenant_id"] = tenant_id
-            return []
+    def test_with_no_presenter_the_viewset_s_serializer_renders(
+        self, authors: list[Author]
+    ) -> None:
+        response = _get(_viewset(_rows(presenter=None), serializer_class=AuthorSerializer))
+        assert [row["name"] for row in response.data] == ["a", "b", "c"]
 
-        def provider(view: Any, request: Any) -> dict[str, Any]:
-            return {"tenant_id": 99}
-
-        class _View(GenericViewSet):
-            serializer_class = AuthorSerializer
-            queryset = Author.objects.none()
-
-            @selector_action(
-                SelectorSpec(kind=SelectorKind.LIST, selector=selector, kwargs=provider),
-            )
-            def listing(self, request):  # type: ignore[no-untyped-def]
-                ...
-
-        view = _View.as_view({"get": "listing"})
-        view(factory.get("/"))
-        assert captured == {"tenant_id": 99}
-
-    def test_get_selector_kwargs_catch_all_passes_extras(self) -> None:
-        captured: dict[str, Any] = {}
-
-        def selector(*, tag: str) -> list[Any]:
-            captured["tag"] = tag
-            return []
-
-        class _View(GenericViewSet):
-            serializer_class = AuthorSerializer
-            queryset = Author.objects.none()
-
-            def get_selector_kwargs(self) -> dict[str, Any]:
-                return {"tag": "default"}
-
-            @selector_action(
-                SelectorSpec(kind=SelectorKind.LIST, selector=selector),
-            )
-            def listing(self, request):  # type: ignore[no-untyped-def]
-                ...
-
-        view = _View.as_view({"get": "listing"})
-        view(factory.get("/"))
-        assert captured == {"tag": "default"}
-
-    def test_per_action_kwargs_hook_overrides_catch_all(self) -> None:
-        captured: dict[str, Any] = {}
-
-        def selector(*, tag: str) -> list[Any]:
-            captured["tag"] = tag
-            return []
-
-        class _View(GenericViewSet):
-            serializer_class = AuthorSerializer
-            queryset = Author.objects.none()
-
-            def get_selector_kwargs(self) -> dict[str, Any]:
-                return {"tag": "catchall"}
-
-            def get_listing_selector_kwargs(self) -> dict[str, Any]:
-                return {"tag": "per-action"}
-
-            @selector_action(
-                SelectorSpec(kind=SelectorKind.LIST, selector=selector),
-            )
-            def listing(self, request):  # type: ignore[no-untyped-def]
-                ...
-
-        view = _View.as_view({"get": "listing"})
-        view(factory.get("/"))
-        assert captured == {"tag": "per-action"}
-
-    def test_handler_carries_selector_spec_attribute(self) -> None:
-        """Schema generators / introspection rely on this stamp."""
-
-        spec = SelectorSpec(kind=SelectorKind.LIST, selector=lambda **_: [])
-
-        class _View(GenericViewSet):
-            queryset = Author.objects.none()
-            serializer_class = AuthorSerializer
-
-            @selector_action(spec)
-            def listing(self, request):  # type: ignore[no-untyped-def]
-                ...
-
-        assert _View.listing._selector_spec is spec  # type: ignore[attr-defined]
-
-    def test_not_found_propagates_for_detail(self) -> None:
-        """``dispatch_selector_for_spec`` raises ``NotFound`` on None — DRF maps to 404."""
-
-        def selector(**_: Any) -> Any:
-            return None
-
-        class _View(GenericViewSet):
-            serializer_class = AuthorSerializer
-            queryset = Author.objects.none()
-
-            @selector_action(SelectorSpec(kind=SelectorKind.RETRIEVE, selector=selector))
-            def card(self, request, pk=None):  # type: ignore[no-untyped-def]
-                ...
-
-        view = _View.as_view({"get": "card"})
-        response = view(factory.get("/"), pk=1)
-        assert response.status_code == 404
-        # Smoke check: NotFound is the one DRF raised.
-        assert isinstance(response.exception, bool) or NotFound  # noqa: PT017
-
-    def test_detail_derived_from_spec_kind(self) -> None:
-        """`detail` is pinned from `spec.kind` (LIST→False, RETRIEVE→True)."""
-
-        class _View(GenericViewSet):
-            queryset = Author.objects.none()
-            serializer_class = AuthorSerializer
-
-            @selector_action(SelectorSpec(kind=SelectorKind.LIST, selector=lambda **_: []))
-            def listing(self, request):  # type: ignore[no-untyped-def]
-                ...
-
-            @selector_action(SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda **_: None))
-            def card(self, request, pk=None):  # type: ignore[no-untyped-def]
-                ...
-
-        assert _View.listing.detail is False  # type: ignore[attr-defined]
-        assert _View.card.detail is True  # type: ignore[attr-defined]
+    def test_is_a_collection_route(self) -> None:
+        assert _viewset(_rows()).act.detail is False
 
 
-def _nullable_author(*, pk: int) -> Author | None:
-    return Author.objects.filter(pk=pk).first()
-
-
-class _NullableCardViewSet(GenericViewSet):
-    serializer_class = AuthorSerializer
-    queryset = Author.objects.all()
-
-    @selector_action(
-        SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_nullable_author, allow_none=True),
-    )
-    def card(self, request, pk=None):  # type: ignore[no-untyped-def]
-        """Stubbed."""
-
-    @selector_action(
-        SelectorSpec(
-            kind=SelectorKind.RETRIEVE,
-            selector=_nullable_author,
-            output_serializer=AuthorSerializer,
-            allow_none=True,
-        ),
-        url_path="declared-card",
-    )
-    def declared_card(self, request, pk=None):  # type: ignore[no-untyped-def]
-        """Stubbed."""
-
-
-_router = SimpleRouter()
-_router.register("authors", _NullableCardViewSet, basename="nullable-card")
-urlpatterns = _router.urls
-
-
-@pytest.mark.urls(__name__)
-@pytest.mark.django_db
-class TestAllowNoneOnTheWire:
-    """An ``allow_none`` RETRIEVE action's miss is a ``null``, never a serialized nothing.
-
-    Both serializer routes are covered, because the action builds its serializer
-    one of two ways and each turned ``None`` into a row of empty fields.
-    """
-
-    @pytest.mark.parametrize("action", ["card", "declared-card"])
-    def test_a_miss_serves_a_json_null_body(self, action: str) -> None:
-        response = APIClient().get(f"/authors/99999/{action}/")
+class TestADetailAction:
+    def test_presents_its_row(self, authors: list[Author]) -> None:
+        response = _get(_viewset(_row()), pk=authors[0].pk)
         assert response.status_code == 200
-        assert response.content == b"null"
-        assert json.loads(response.content) is None
-        assert response["Content-Type"] == "application/json"
+        assert response.data == {"id": authors[0].pk, "name": "a"}
 
-    @pytest.mark.parametrize("action", ["card", "declared-card"])
-    def test_a_found_row_renders_exactly_as_before(self, action: str) -> None:
-        author = Author.objects.create(name="Ada")
-        response = APIClient().get(f"/authors/{author.pk}/{action}/")
+    def test_a_miss_is_404(self) -> None:
+        assert _get(_viewset(_row()), pk=999).status_code == 404
+
+    def test_an_allow_none_miss_is_json_null(self) -> None:
+        response = _get(_viewset(_row(allow_none=True)), pk=999)
         assert response.status_code == 200
-        assert response["Content-Type"] == "application/json"
-        assert response.content == f'{{"id":{author.pk},"name":"Ada"}}'.encode()
+        assert response.render().content == b"null"
+
+    def test_with_no_presenter_the_viewset_s_serializer_renders(
+        self, authors: list[Author]
+    ) -> None:
+        viewset = _viewset(_row(presenter=None), serializer_class=AuthorSerializer)
+        assert _get(viewset, pk=authors[1].pk).data == {"id": authors[1].pk, "name": "b"}
+
+    def test_the_view_s_object_permission_is_asked_of_the_row(self, authors: list[Author]) -> None:
+        viewset = _viewset(_row(), permission_classes=[_NoRows])
+        assert _get(viewset, pk=authors[0].pk).status_code == 403
+
+    def test_is_a_detail_route(self) -> None:
+        assert _viewset(_row()).act.detail is True
+
+
+class TestPermissions:
+    def test_the_spec_s_own_checks_refuse(self, authors: list[Author]) -> None:
+        assert _get(_viewset(_rows(permissions=(_DenyAll(),)))).status_code == 403
+
+    def test_no_permission_classes_are_forwarded_to_drf(self) -> None:
+        assert "permission_classes" not in _viewset(_rows()).act.kwargs
+
+
+class TestAtDecoration:
+    def test_a_keyword_nothing_fills_is_refused(self) -> None:
+        """The edge hands a kernel selector no view hook, so a keyword the
+        spec's own declarations leave unfilled can be filled by nothing."""
+        with pytest.raises(ImproperlyConfigured, match="owner"):
+            _viewset(_rows(selector=lambda *, owner: None))
+
+    def test_a_well_declared_spec_is_accepted(self) -> None:
+        assert callable(_viewset(_rows()).as_view({"get": "act"}))
+
+
+def test_methods_url_path_and_url_name_reach_the_route() -> None:
+    """What the decorator forwards to DRF's ``@action`` is what the router
+    routes: a ``POST`` read under its own path and name."""
+    Author.objects.create(name="Ada")
+
+    @selector_action(_rows(), methods=["post"], url_path="by-name", url_name="named")
+    def recent(self: Any, request: Any) -> None:
+        """Stubbed: the decorator serves the spec."""
+
+    viewset = type("_ViewSet", (GenericViewSet,), {"recent": recent})
+    router = SimpleRouter()
+    router.register("authors", viewset, basename="authors")
+
+    (route,) = [url for url in router.urls if url.name == "authors-named"]
+    assert route.pattern.regex.pattern == "^authors/by-name/$"
+    response = route.callback(factory.post("/"))
+    assert response.status_code == 200
+    assert [row["name"] for row in response.data] == ["Ada"]

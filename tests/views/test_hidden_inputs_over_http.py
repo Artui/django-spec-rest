@@ -1,7 +1,6 @@
 """Over HTTP, a key the server fills is the route's and never the body's, on a kernel spec.
 
-drfs marked such a key ``NotClientInput`` on the callable's signature. A kernel
-spec declares no parameter for it and fills it through a ``kwargs`` provider,
+A kernel spec declares no parameter for it and fills it through a ``kwargs`` provider,
 which may read the route through the seeded ``view``: the URLconf is the
 author's, so a route capture fills it, and a body naming it is a key the spec
 declares no argument for, answered by the edge's unknown-argument policy.
@@ -67,19 +66,14 @@ _LOOKUP = SelectorSpec(
     selector=_post_for_team,
     reads=Parameters.of(Parameter("pk", "integer", required=True)),
     kwargs=_team_from_the_route,
-    permissions=_OPEN,
 )
 
 
 class _Open:
-    """No permission classes, answered as the spine's views answer them:
-    ``MutationFlowMixin.get_permissions`` reads a drfs-only spec field."""
+    """No permission or authentication classes of the view's own."""
 
     permission_classes: Any = []
     authentication_classes: Any = []
-
-    def get_permissions(self) -> list[Any]:
-        return []
 
 
 class _View(_Open, ServiceUpdateView):
@@ -116,19 +110,7 @@ def test_without_a_route_capture_the_key_keeps_its_default(seen: list[Any]) -> N
 @pytest.mark.parametrize(
     "policy",
     [
-        pytest.param(
-            UnknownArguments.REJECT,
-            id="reject",
-            marks=pytest.mark.xfail(
-                strict=True,
-                reason=(
-                    "author code runs on a call the shape check refuses: the target lookup "
-                    "comes before the shape check, so the lookup selector (and its kwargs "
-                    "provider) is called for a body naming an undeclared key, which drfs "
-                    "answered without ever calling it. Owner question, not a fix here."
-                ),
-            ),
-        ),
+        pytest.param(UnknownArguments.REJECT, id="reject"),
         pytest.param(UnknownArguments.IGNORE, id="ignore"),
     ],
 )
@@ -137,9 +119,10 @@ def test_the_body_s_value_for_the_key_never_fills_it(
 ) -> None:
     """The spec declares no ``team`` argument, so the edge's policy answers the body's:
     a ``400`` "Unknown argument." under ``REJECT``, dropped unseen under ``IGNORE``.
-    Under neither does the lookup see it, and under ``REJECT`` the refused call
-    runs no author code at all, which is what drfs answered: the ``seen == []``
-    line is the one the held gap fails at."""
+    Under neither does the lookup see it. Under ``REJECT`` the target lookup runs
+    before the shape check refuses the body, with the route's value, so the lookup
+    selector (and its kwargs provider) is called for a call that is then refused:
+    this is the decided answer."""
     monkeypatch.setattr(kernel_edge, "UNKNOWN_ARGUMENTS", policy)
     post = Post.objects.create(title="p")
 
@@ -148,7 +131,7 @@ def test_the_body_s_value_for_the_key_never_fills_it(
     if policy is UnknownArguments.REJECT:
         assert response.status_code == 400
         assert [str(message) for message in response.data["team"]] == ["Unknown argument."]
-        assert seen == []
+        assert seen == ["route-team"]
     else:
         assert response.status_code == 200, response.data
         assert seen == ["route-team"]
@@ -166,7 +149,6 @@ class _ViewLookupView(_Open, ServiceUpdateView):
             kind=SelectorKind.RETRIEVE,
             selector=_post_seen_by_its_view,
             reads=Parameters.of(Parameter("pk", "integer", required=True)),
-            permissions=_OPEN,
         ),
         permissions=_OPEN,
         presenter=SerializerPresenter(PostSerializer),
@@ -288,7 +270,6 @@ class _CollectionView(_Open, ServiceUpdateView):
             kind=SelectorKind.LIST,
             selector=_posts_for_team,
             kwargs=_team_from_the_route,
-            permissions=_OPEN,
         ),
         permissions=_OPEN,
     )
@@ -310,14 +291,14 @@ def test_a_route_capture_fills_a_collection_lookup_s_server_owned_key(
 
 
 class _HookHandingTheViewOver(_SeedView):
-    """Hands itself to the selector through a kwargs hook, as drfs allowed and dropped for the seed."""
+    """Hands itself to the selector through a kwargs hook."""
 
     def get_selector_kwargs(self) -> dict[str, Any]:
         return {"view": self}
 
 
 class _HookFillingTheKey(_TeamRetrieveView):
-    """Fills the server-owned key through a kwargs hook, which outranked the route's capture on drfs."""
+    """Fills the server-owned key through a kwargs hook, over the route's capture."""
 
     def get_selector_kwargs(self) -> dict[str, Any]:
         return {"team": "hook-team"}
@@ -329,8 +310,7 @@ class _HookFillingTheKey(_TeamRetrieveView):
 def test_a_selector_view_s_kwargs_hook_is_refused_when_the_view_is_built(
     seen: list[Any], view: type
 ) -> None:
-    """Changed by design: drfs asked ``get_selector_kwargs`` and layered its answer over
-    the route's capture; a kernel selector spec is handed its own ``kwargs`` provider's
+    """A kernel selector spec is handed its own ``kwargs`` provider's
     values and no view hook's, so an override would be silently unasked. It is refused
     at ``as_view()``, naming the hook and the provider to move it to, before any
     request runs the selector."""

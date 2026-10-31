@@ -1,16 +1,15 @@
 """Where the package reaches into DRF and into its own HTTP views, held as ratchets.
 
-``dispatch_spec`` describes itself as the single transport-neutral execution path,
-and a non-HTTP caller (an MCP handler, an agent toolset, a management command, a
-worker) runs it with no request and no view. That claim is only as true as the
-imports behind it: every module outside the HTTP transport that imports
-``rest_framework`` or ``django_spec_rest.views`` is a place the neutral core
-still depends on the transport it is meant to be independent of.
+The kernel's ``dispatch`` is the one transport-neutral execution path, and this
+package is its HTTP edge: the views read a request into the kernel's arguments and
+answer its result as DRF. Every module outside the HTTP transport that imports
+``rest_framework`` or ``django_spec_rest.views`` is a place the edge's helpers
+depend on the transport they sit beneath, so each is listed.
 
-These are not bans. Most entries below are legitimate today — the spec
-dataclasses type ``permission_classes`` as DRF's ``BasePermission``, and the
-keyword-pool resolver lives in ``views/utils.py`` for historical reasons. What the
-tests forbid is **growth without a decision**: an import that is not listed fails,
+These are not bans. Most entries below are legitimate today — the offline request
+types are DRF's ``Request``, and the call-context resolver lives in
+``views/utils.py`` beside the view helpers that share it. What the tests forbid is
+**growth without a decision**: an import that is not listed fails,
 and so does a listed import that no longer exists, so the lists can only shrink
 and every shrink is recorded here rather than lost.
 
@@ -40,50 +39,32 @@ PACKAGE_ROOT = Path(django_spec_rest.__file__).parent
 # ``openapi`` is the drf-spectacular integration, which exists only over HTTP.
 TRANSPORT_PACKAGES = frozenset({"views", "viewsets", "openapi"})
 
-# The adapter over django-service-specs: it compiles the specs here to the kernel's
-# and translates the kernel's answers back into DRF's. Importing DRF is what it is
+# The adapter over django-service-specs: it gives a kernel spec its DRF seats (a
+# serializer as Validator and Presenter, DRF's permission classes as a check) and
+# translates the kernel's answers back into DRF's. Importing DRF is what it is
 # for (the serializer is its Validator and its Presenter, DRF's permission classes
 # are its guard), so it is walled by a ratchet of its own below rather than held to
 # the neutral core's. It must never reach the HTTP views.
 EDGE_PACKAGES = frozenset({"service_specs"})
 
-# The package root re-exports the whole public surface, the HTTP views included,
-# so its imports say nothing about which layer depends on which.
+# The package root re-exports the public surface, the HTTP views included, so its
+# imports say nothing about which layer depends on which.
 EXEMPT_MODULES = frozenset({"__init__.py"})
 
 VIEWS_PREFIXES = ("django_spec_rest.views", "django_spec_rest.viewsets")
 DRF_PREFIXES = ("rest_framework",)
 
 # Modules outside the transport that import the HTTP views, and what they import.
-# The standing reason for most of them is ``resolve_callable_kwargs`` — the
-# keyword-pool resolver, the most transport-neutral code in the package, filed in
-# ``views/utils.py`` beside the view helpers that share its module.
 ALLOWED_VIEWS_IMPORTS: dict[str, frozenset[str]] = {
     # The kernel route's refusal map answers every ``ServiceError`` with
-    # ``map_service_error``, as the drfs path does, so the ``AdditionalInputRequired``
-    # schema ``restore_raised_schema`` recognises by class is restored on both.
+    # ``map_service_error``, so the ``AdditionalInputRequired`` schema
+    # ``restore_raised_schema`` recognises by class is restored.
     "dispatch/kernel_refusals.py": frozenset({"django_spec_rest.views.mutation.map_service_error"}),
-    "selectors/acall_selector.py": frozenset({"django_spec_rest.views.utils"}),
-    "selectors/call_selector.py": frozenset({"django_spec_rest.views.utils"}),
     "selectors/utils.py": frozenset({"django_spec_rest.views.utils"}),
-    "services/acall_service.py": frozenset(
-        {
-            "django_spec_rest.views.mutation.map_service_error",
-            "django_spec_rest.views.utils",
-        }
-    ),
-    "services/call_service.py": frozenset(
-        {
-            "django_spec_rest.views.mutation.map_service_error",
-            "django_spec_rest.views.utils",
-        }
-    ),
 }
 
 # Modules outside the transport that import DRF, and which of its modules.
 ALLOWED_DRF_IMPORTS: dict[str, frozenset[str]] = {
-    "audience/build_audience_projection.py": frozenset({"rest_framework.serializers"}),
-    "dispatch/enforce_permissions.py": frozenset({"rest_framework.exceptions"}),
     # The DRF edge over the kernel's own ``dispatch``. ``request`` is for
     # annotations alone: the ``Request`` whose body and query string it reads is
     # handed in.
@@ -97,22 +78,6 @@ ALLOWED_DRF_IMPORTS: dict[str, frozenset[str]] = {
             "rest_framework.status",
         }
     ),
-    "dispatch/utils.py": frozenset(
-        {
-            "rest_framework.exceptions",
-            "rest_framework.settings",
-        }
-    ),
-    "jsonschema/output_to_json_schema.py": frozenset({"rest_framework.serializers"}),
-    "jsonschema/serializer_to_json_schema.py": frozenset({"rest_framework.serializers"}),
-    "jsonschema/utils.py": frozenset(
-        {
-            "rest_framework.fields",
-            "rest_framework.serializers",
-        }
-    ),
-    "selectors/acall_selector.py": frozenset({"rest_framework.request"}),
-    "selectors/call_selector.py": frozenset({"rest_framework.request"}),
     "selectors/utils.py": frozenset(
         {
             "rest_framework.exceptions",
@@ -125,23 +90,9 @@ ALLOWED_DRF_IMPORTS: dict[str, frozenset[str]] = {
             "rest_framework.versioning",
         }
     ),
-    "services/acall_service.py": frozenset({"rest_framework.request"}),
-    "services/call_service.py": frozenset({"rest_framework.request"}),
     "types/http_extras.py": frozenset({"rest_framework.request"}),
     "types/offline_context.py": frozenset({"rest_framework.request"}),
     "types/offline_service_view.py": frozenset({"rest_framework.request"}),
-    "types/selector_spec.py": frozenset(
-        {
-            "rest_framework.permissions",
-            "rest_framework.request",
-        }
-    ),
-    "types/service_spec.py": frozenset(
-        {
-            "rest_framework.permissions",
-            "rest_framework.response",
-        }
-    ),
     "types/service_view.py": frozenset({"rest_framework.request"}),
 }
 
@@ -244,13 +195,6 @@ def test_every_allowed_drf_import_still_exists() -> None:
 # decision: the adapter is the one place the neutral core's DRF dependencies are
 # supposed to concentrate.
 ALLOWED_EDGE_DRF_IMPORTS: dict[str, frozenset[str]] = {
-    # The compiler reads a serializer class to build the kernel's Validator.
-    # ``rest_framework.exceptions`` for an output ``filter_set`` the call narrows,
-    # whose refusal is DRF's ``ValidationError`` built from the FilterSet's errors,
-    # as the HTTP path has always answered it.
-    "service_specs/as_kernel_spec.py": frozenset(
-        {"rest_framework.exceptions", "rest_framework.serializers"}
-    ),
     "service_specs/build_offline_context.py": frozenset({"rest_framework.request"}),
     # A DRF permission class is the guard the kernel's PermissionCheck wraps.
     "service_specs/drf_permission_check.py": frozenset({"rest_framework.permissions"}),
@@ -258,9 +202,9 @@ ALLOWED_EDGE_DRF_IMPORTS: dict[str, frozenset[str]] = {
     # that catches DRF's still catches it.
     "service_specs/drf_not_authenticated.py": frozenset({"rest_framework.exceptions"}),
     "service_specs/drf_service_validation_error.py": frozenset({"rest_framework.exceptions"}),
-    "service_specs/invalid_arguments.py": frozenset({"rest_framework.exceptions"}),
-    "service_specs/not_permitted.py": frozenset({"rest_framework.exceptions"}),
-    "service_specs/principal_unavailable.py": frozenset({"rest_framework.exceptions"}),
+    "service_specs/drf_invalid_arguments.py": frozenset({"rest_framework.exceptions"}),
+    "service_specs/drf_not_permitted.py": frozenset({"rest_framework.exceptions"}),
+    "service_specs/drf_principal_unavailable.py": frozenset({"rest_framework.exceptions"}),
     "service_specs/register_drf_row_errors.py": frozenset({"rest_framework.exceptions"}),
     "service_specs/renderable_serializer_class.py": frozenset({"rest_framework.serializers"}),
     # The serializer is the spec's Presenter and Validator.
@@ -269,11 +213,9 @@ ALLOWED_EDGE_DRF_IMPORTS: dict[str, frozenset[str]] = {
     ),
     # ``rest_framework.fields`` for ``get_error_detail``: a server value's field
     # is validated apart from the serializer's pass, and a Django refusal of it is
-    # answered in the shape DRF's own field loop gives one. ``rest_framework.settings``
-    # for ``NON_FIELD_ERRORS_KEY``: a list's length bound is refused where DRF's
-    # list serializer puts it, keyed by the project's setting.
+    # answered in the shape DRF's own field loop gives one.
     "service_specs/serializer_validator.py": frozenset(
-        {"rest_framework.fields", "rest_framework.serializers", "rest_framework.settings"}
+        {"rest_framework.fields", "rest_framework.serializers"}
     ),
     "service_specs/translate_dispatch_errors.py": frozenset({"rest_framework.exceptions"}),
     # The reverse direction: an author's DRF refusals, raised as the kernel's classes.
@@ -317,29 +259,21 @@ def test_every_allowed_adapter_drf_import_still_exists() -> None:
     )
 
 
-# Who may import the adapter. The spec classes compile through it, and dispatch is the
-# DRF edge over the kernel's; nothing else in the neutral core has a reason to.
+# Who may import the adapter. Only the DRF edge over the kernel's ``dispatch`` and its
+# refusal map; nothing else outside the transport has a reason to.
 ADAPTER_PREFIX = ("django_spec_rest.service_specs",)
 ALLOWED_ADAPTER_IMPORTERS = frozenset(
     {
-        "dispatch/adispatch_spec.py",
-        "dispatch/base_serializer_context.py",
-        "dispatch/build_offline_context.py",
-        "dispatch/dispatch_spec.py",
         # The kernel route: the seed-named fields it hands the body, the recording
-        # twin it dispatches, and the edge's call state that carries that body.
+        # twin it dispatches, and the edge's per-call state.
         "dispatch/kernel_edge.py",
         # The kernel route's refusal map: the dual-base twins it answers with.
         "dispatch/kernel_refusals.py",
-        "dispatch/renderable_serializer_class.py",
-        "dispatch/utils.py",
-        "types/selector_spec.py",
-        "types/service_spec.py",
     }
 )
 
 
-def test_only_the_edge_and_the_spec_classes_import_the_adapter() -> None:
+def test_only_the_edge_imports_the_adapter() -> None:
     found = set(_imports_matching(ADAPTER_PREFIX))
     assert found == ALLOWED_ADAPTER_IMPORTERS, (
         f"New importers of the adapter: {sorted(found - ALLOWED_ADAPTER_IMPORTERS)}; "

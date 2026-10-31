@@ -19,26 +19,25 @@ def renderable_serializer_class(declared: type) -> type[BaseSerializer[Any]]: ..
 
 
 def renderable_serializer_class(declared: type | None) -> type[BaseSerializer[Any]] | None:
-    """The class an ``output_serializer`` declaration renders through.
+    """The class a serializer or dataclass declaration renders through.
 
     A bare dataclass type is wrapped in a ``DataclassSerializer`` — the payload
-    [`output_to_json_schema`][django_spec_rest.jsonschema.output_to_json_schema.output_to_json_schema]
-    already describes for it, field by field — and anything else comes back
+    the kernel's schema already describes for it, field by field — and anything else comes back
     exactly as declared, ``None`` included. Instantiating the declaration directly
     works for a serializer and fails for a dataclass, whose own ``__init__`` is
     handed ``many=`` / ``context=``; resolving it here first is what lets both
     shapes render.
 
-    Every render site in this package resolves through it: ``render_spec_output``,
-    the selector views' and viewsets' ``get_serializer_class()``,
-    ``@selector_action``, a mutation's response, and
-    [`build_audience_projection`][django_spec_rest.audience.build_audience_projection.build_audience_projection],
-    so an agent is shaped by the markings of the class it is actually rendered
-    with. A transport that instantiates an output declaration itself — to render a
-    resource outside ``render_spec_output``, say — calls this and instantiates what
-    it returns:
+    Every render site in this package resolves through it: a spec's
+    ``SerializerPresenter``, which a view, viewset or action presents through and
+    whose ``output()``
+    [`audience_projection_for_spec`][django_service_specs.dispatch.audience_projection_for_spec.audience_projection_for_spec]
+    reads, so an agent is shaped by the markings of the class it is actually
+    rendered with; the OpenAPI schema; and the browsable API's form serializer.
+    A transport that instantiates a declaration itself calls this and
+    instantiates what it returns:
 
-        serializer_class = renderable_serializer_class(spec.output_serializer)
+        serializer_class = renderable_serializer_class(declared)
         payload = serializer_class(
             value, many=many, context=base_serializer_context(view=view, request=request)
         ).data

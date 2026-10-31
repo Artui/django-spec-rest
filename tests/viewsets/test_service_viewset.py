@@ -1,773 +1,518 @@
-"""Tests for ServiceViewSet."""
+"""``ServiceViewSet`` serving kernel specs from ``action_specs``.
+
+Every entry here is the kernel's own ``ServiceSpec`` or ``SelectorSpec``, with
+the DRF seats ``SerializerValidator`` and ``SerializerPresenter``, and every
+test drives the viewset through ``as_view()``, so each fails against a tree
+whose ``as_view()`` refuses a kernel spec in ``action_specs``.
+
+The actions dispatch through the standalone views' own edge
+(``dispatch_mutation_for_spec`` and ``dispatch_kernel_selector``), and
+``as_view()`` asks each entry the standalone views' own kernel checks
+(``validate_mutation_view_spec`` / ``validate_selector_view_spec``), keyed by
+the action the entry serves.
+"""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any
 
 import pytest
 from django.core.exceptions import ImproperlyConfigured
-from rest_framework.test import APIRequestFactory
-
-from django_spec_rest import (
-    PolymorphicServiceSpec,
+from django_service_specs import (
+    Parameter,
+    Parameters,
+    PermissionCheck,
     SelectorKind,
     SelectorSpec,
     ServiceSpec,
-    ServiceViewSet,
+    Unrestricted,
 )
+from rest_framework import serializers
+from rest_framework.pagination import PageNumberPagination
+from rest_framework.permissions import BasePermission
+from rest_framework.response import Response
+from rest_framework.test import APIRequestFactory
+
+from django_spec_rest import ServiceViewSet
+from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
+from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from tests.testapp.models import Author
 from tests.testapp.serializers import AuthorSerializer
 
+pytestmark = pytest.mark.django_db
 
-@dataclass
-class _AuthorIn:
-    name: str
+factory = APIRequestFactory()
+_OPEN = (Unrestricted(),)
+
+
+class _NameIn(serializers.Serializer):
+    name = serializers.CharField(max_length=20)
+
+
+class _Deny(BasePermission):
+    def has_permission(self, request: Any, view: Any) -> bool:
+        return False
+
+
+class _DenyAll(PermissionCheck):
+    """A kernel check refusing every principal."""
+
+    def has_permission(self, principal: Any, spec: Any) -> bool:
+        return False
+
+    def has_object_permission(self, principal: Any, spec: Any, target: Any) -> bool:
+        return False
 
 
 def _list_authors() -> Any:
-    return Author.objects.all().order_by("id")
+    return Author.objects.order_by("id")
 
 
 def _get_author(*, pk: int) -> Author | None:
     return Author.objects.filter(pk=pk).first()
 
 
-def _create_author(*, data: _AuthorIn) -> Author:
-    return Author.objects.create(name=data.name)
+def _create_author(*, data: dict[str, Any]) -> Author:
+    return Author.objects.create(name=data["name"])
 
 
-def _update_author(*, instance: Author, data: _AuthorIn) -> Author:
-    instance.name = data.name
+def _rename(*, instance: Author, data: dict[str, Any]) -> Author:
+    instance.name = data["name"]
     instance.save(update_fields=["name"])
     return instance
 
 
-def _delete_author(*, instance: Author) -> None:
+def _delete(*, instance: Author) -> None:
     instance.delete()
+
+
+_BY_PK = Parameters.of(Parameter("pk", "integer", required=True))
+_PRESENTER = SerializerPresenter(AuthorSerializer)
+
+
+def _list(**fields: Any) -> SelectorSpec:
+    defaults: dict[str, Any] = {
+        "selector": _list_authors,
+        "permissions": _OPEN,
+        "presenter": _PRESENTER,
+    }
+    return SelectorSpec(kind=SelectorKind.LIST, **{**defaults, **fields})
+
+
+def _retrieve(**fields: Any) -> SelectorSpec:
+    defaults: dict[str, Any] = {
+        "selector": _get_author,
+        "reads": _BY_PK,
+        "permissions": _OPEN,
+        "presenter": _PRESENTER,
+    }
+    return SelectorSpec(kind=SelectorKind.RETRIEVE, **{**defaults, **fields})
+
+
+def _target() -> SelectorSpec:
+    """A write's target lookup: a nested selector, which declares no ``permissions``."""
+    return SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_get_author, reads=_BY_PK)
+
+
+def _write(**fields: Any) -> ServiceSpec:
+    return ServiceSpec(**{"permissions": _OPEN, **fields})
+
+
+def _create(**fields: Any) -> ServiceSpec:
+    defaults: dict[str, Any] = {
+        "service": _create_author,
+        "validator": SerializerValidator(_NameIn),
+        "presenter": _PRESENTER,
+    }
+    return _write(**{**defaults, **fields})
+
+
+def _update(**fields: Any) -> ServiceSpec:
+    defaults: dict[str, Any] = {
+        "service": _rename,
+        "validator": SerializerValidator(_NameIn),
+        "presenter": _PRESENTER,
+        "instance_selector_spec": _target(),
+    }
+    return _write(**{**defaults, **fields})
+
+
+def _destroy(**fields: Any) -> ServiceSpec:
+    return _write(**{"service": _delete, "instance_selector_spec": _target(), **fields})
 
 
 class _AuthorViewSet(ServiceViewSet):
     queryset = Author.objects.all()
     action_specs = {
-        "list": SelectorSpec(
-            kind=SelectorKind.LIST, selector=_list_authors, output_serializer=AuthorSerializer
-        ),
-        "retrieve": SelectorSpec(
-            kind=SelectorKind.RETRIEVE, selector=_get_author, output_serializer=AuthorSerializer
-        ),
-        "create": ServiceSpec(
-            service=_create_author,
-            input_serializer=_AuthorIn,
-            output_selector_spec=SelectorSpec(
-                kind=SelectorKind.RETRIEVE, output_serializer=AuthorSerializer
-            ),
-        ),
-        "update": ServiceSpec(
-            service=_update_author,
-            input_serializer=_AuthorIn,
-            output_selector_spec=SelectorSpec(
-                kind=SelectorKind.RETRIEVE, output_serializer=AuthorSerializer
-            ),
-        ),
-        "destroy": ServiceSpec(service=_delete_author),
+        "list": _list(),
+        "retrieve": _retrieve(),
+        "create": _create(),
+        "update": _update(),
+        "destroy": _destroy(),
     }
 
 
-factory = APIRequestFactory()
+def _viewset(base: type = ServiceViewSet, **attrs: Any) -> type:
+    return type("_ViewSet", (base,), {"queryset": Author.objects.all(), **attrs})
 
 
-@pytest.mark.django_db
-class TestServiceViewSetActions:
-    def test_list(self) -> None:
+def _call(viewset: type, method: str, action: str, body: Any = None, **kwargs: Any) -> Response:
+    view = viewset.as_view({method: action})
+    request = getattr(factory, method)("/", body, format="json")
+    return view(request, **kwargs)
+
+
+class TestTheActions:
+    def test_list_is_presented_by_the_spec(self) -> None:
         Author.objects.create(name="a")
         Author.objects.create(name="b")
-        request = factory.get("/")
-        view = _AuthorViewSet.as_view({"get": "list"})
-        response = view(request)
+        response = _call(_AuthorViewSet, "get", "list")
         assert response.status_code == 200
-        assert [item["name"] for item in response.data] == ["a", "b"]
+        assert [row["name"] for row in response.data] == ["a", "b"]
 
-    def test_retrieve(self) -> None:
-        author = Author.objects.create(name="Ada")
-        request = factory.get("/")
-        view = _AuthorViewSet.as_view({"get": "retrieve"})
-        response = view(request, pk=author.pk)
+    def test_retrieve_is_presented_by_the_spec(self) -> None:
+        author = Author.objects.create(name="a")
+        response = _call(_AuthorViewSet, "get", "retrieve", pk=author.pk)
         assert response.status_code == 200
-        assert response.data["name"] == "Ada"
+        assert response.data == {"id": author.pk, "name": "a"}
 
-    def test_create(self) -> None:
-        request = factory.post("/", {"name": "Alan"}, format="json")
-        view = _AuthorViewSet.as_view({"post": "create"})
-        response = view(request)
+    def test_retrieve_of_no_row_is_404(self) -> None:
+        assert _call(_AuthorViewSet, "get", "retrieve", pk=999).status_code == 404
+
+    def test_create_validates_runs_and_presents(self) -> None:
+        response = _call(_AuthorViewSet, "post", "create", {"name": "Ada"})
         assert response.status_code == 201
-        assert Author.objects.filter(name="Alan").exists()
+        assert response.data == {"id": Author.objects.get().pk, "name": "Ada"}
 
-    def test_update_put(self) -> None:
-        author = Author.objects.create(name="orig")
-        request = factory.put("/", {"name": "new"}, format="json")
-        view = _AuthorViewSet.as_view({"put": "update"})
-        response = view(request, pk=author.pk)
+    def test_create_refuses_an_invalid_body(self) -> None:
+        response = _call(_AuthorViewSet, "post", "create", {"name": "x" * 30})
+        assert response.status_code == 400
+        assert "name" in response.data
+        assert not Author.objects.exists()
+
+    def test_update_acts_on_the_spec_s_own_target(self) -> None:
+        author = Author.objects.create(name="a")
+        response = _call(_AuthorViewSet, "put", "update", {"name": "b"}, pk=author.pk)
         assert response.status_code == 200
-        author.refresh_from_db()
-        assert author.name == "new"
+        assert response.data == {"id": author.pk, "name": "b"}
 
-    def test_partial_update_patch(self) -> None:
-        author = Author.objects.create(name="orig")
-        request = factory.patch("/", {"name": "patched"}, format="json")
-        view = _AuthorViewSet.as_view({"patch": "partial_update"})
-        response = view(request, pk=author.pk)
-        assert response.status_code == 200
-        author.refresh_from_db()
-        assert author.name == "patched"
+    def test_update_of_no_row_is_404(self) -> None:
+        assert _call(_AuthorViewSet, "put", "update", {"name": "b"}, pk=999).status_code == 404
 
-    def test_destroy(self) -> None:
-        author = Author.objects.create(name="x")
-        request = factory.delete("/")
-        view = _AuthorViewSet.as_view({"delete": "destroy"})
-        response = view(request, pk=author.pk)
+    def test_patch_falls_back_to_the_update_entry(self) -> None:
+        author = Author.objects.create(name="a")
+        response = _call(_AuthorViewSet, "patch", "partial_update", {"name": "b"}, pk=author.pk)
+        assert response.status_code == 200, response.data
+        assert response.data == {"id": author.pk, "name": "b"}
+
+    def test_destroy_answers_204(self) -> None:
+        author = Author.objects.create(name="a")
+        response = _call(_AuthorViewSet, "delete", "destroy", pk=author.pk)
         assert response.status_code == 204
         assert not Author.objects.exists()
 
-    def test_destroy_with_input_serializer(self) -> None:
-        @dataclass
-        class _Reason:
-            reason: str
 
-        captured: dict[str, Any] = {}
+class TestPresentation:
+    def test_a_list_spec_with_no_presenter_renders_the_view_s_serializer(self) -> None:
+        Author.objects.create(name="a")
+        viewset = _viewset(
+            serializer_class=AuthorSerializer, action_specs={"list": _list(presenter=None)}
+        )
+        response = _call(viewset, "get", "list")
+        assert response.status_code == 200
+        assert [row["name"] for row in response.data] == ["a"]
 
-        def fn(*, instance: Author, data: _Reason) -> None:
-            captured["reason"] = data.reason
-            instance.delete()
+    def test_a_retrieve_spec_with_no_presenter_renders_the_view_s_serializer(self) -> None:
+        author = Author.objects.create(name="a")
+        viewset = _viewset(
+            serializer_class=AuthorSerializer, action_specs={"retrieve": _retrieve(presenter=None)}
+        )
+        response = _call(viewset, "get", "retrieve", pk=author.pk)
+        assert response.data == {"id": author.pk, "name": "a"}
 
-        class _View(ServiceViewSet):
-            queryset = Author.objects.all()
-            action_specs = {
-                "destroy": ServiceSpec(service=fn, input_serializer=_Reason),
-            }
+    def test_a_paginated_list_presents_the_page_s_rows(self) -> None:
+        for name in "abc":
+            Author.objects.create(name=name)
 
-        author = Author.objects.create(name="x")
-        request = factory.delete("/", {"reason": "spam"}, format="json")
-        view = _View.as_view({"delete": "destroy"})
-        response = view(request, pk=author.pk)
-        assert response.status_code == 204
-        assert captured["reason"] == "spam"
-        assert not Author.objects.filter(pk=author.pk).exists()
+        class _Pages(PageNumberPagination):
+            page_size = 2
 
-    def test_kwargs_hooks_pass_extras(self) -> None:
-        captured: dict[str, Any] = {}
+        viewset = _viewset(pagination_class=_Pages, action_specs={"list": _list()})
+        response = _call(viewset, "get", "list")
+        assert response.data["count"] == 3
+        assert [row["name"] for row in response.data["results"]] == ["a", "b"]
 
-        def listed(*, tenant: str) -> Any:
-            captured["selector_tenant"] = tenant
-            return []
+    def test_a_list_is_dispatched_once(self) -> None:
+        calls: list[int] = []
 
-        def created(*, tenant: str, data: _AuthorIn) -> dict[str, Any]:
-            captured["service_tenant"] = tenant
-            return {"name": data.name}
+        def counted() -> Any:
+            calls.append(1)
+            return _list_authors()
 
-        class _View(ServiceViewSet):
-            action_specs = {
-                "list": SelectorSpec(
-                    kind=SelectorKind.LIST,
-                    selector=listed,
-                    output_serializer=AuthorSerializer,
-                ),
-                "create": ServiceSpec(service=created, input_serializer=_AuthorIn),
-            }
+        viewset = _viewset(action_specs={"list": _list(selector=counted)})
+        assert _call(viewset, "get", "list").status_code == 200
+        assert calls == [1]
 
-            def get_selector_kwargs(self) -> dict[str, Any]:
-                return {"tenant": "S"}
+    def test_an_allow_none_retrieve_of_no_row_is_json_null(self) -> None:
+        viewset = _viewset(action_specs={"retrieve": _retrieve(allow_none=True)})
+        response = _call(viewset, "get", "retrieve", pk=999)
+        assert response.status_code == 200
+        assert response.render().content == b"null"
 
-            def get_service_kwargs(self) -> dict[str, Any]:
-                return {"tenant": "C"}
+    def test_an_update_whose_service_returns_nothing_presents_its_target(self) -> None:
+        author = Author.objects.create(name="a")
 
-        view_list = _View.as_view({"get": "list"})
-        view_list(factory.get("/"))
-        assert captured["selector_tenant"] == "S"
-
-        view_create = _View.as_view({"post": "create"})
-        view_create(factory.post("/", {"name": "x"}, format="json"))
-        assert captured["service_tenant"] == "C"
-
-    def test_spec_kwargs_provider_passes_extras(self) -> None:
-        captured: dict[str, Any] = {}
-
-        def created(*, data: _AuthorIn, tenant_id: int) -> dict[str, Any]:
-            captured["service_tenant_id"] = tenant_id
-            return {"name": data.name}
-
-        def listed(*, tenant_id: int) -> Any:
-            captured["selector_tenant_id"] = tenant_id
-            return []
-
-        def create_kwargs(view: Any, request: Any) -> dict[str, Any]:
-            return {"tenant_id": 42}
-
-        def list_kwargs(view: Any, request: Any) -> dict[str, Any]:
-            return {"tenant_id": 7}
-
-        class _View(ServiceViewSet):
-            action_specs = {
-                "list": SelectorSpec(
-                    kind=SelectorKind.LIST,
-                    selector=listed,
-                    output_serializer=AuthorSerializer,
-                    kwargs=list_kwargs,
-                ),
-                "create": ServiceSpec(
-                    service=created,
-                    input_serializer=_AuthorIn,
-                    kwargs=create_kwargs,
-                ),
-            }
-
-        _View.as_view({"get": "list"})(factory.get("/"))
-        assert captured["selector_tenant_id"] == 7
-
-        _View.as_view({"post": "create"})(factory.post("/", {"name": "x"}, format="json"))
-        assert captured["service_tenant_id"] == 42
-
-    def test_per_action_hook_overrides_catch_all(self) -> None:
-        captured: dict[str, Any] = {}
-
-        def created(*, data: _AuthorIn, tag: str) -> dict[str, Any]:
-            captured["create_tag"] = tag
-            return {"name": data.name}
-
-        def updated(*, instance: Author, data: _AuthorIn, tag: str) -> Author:
-            captured["update_tag"] = tag
-            instance.name = data.name
+        def touch(*, instance: Author, data: dict[str, Any]) -> None:
+            instance.name = data["name"]
             instance.save(update_fields=["name"])
-            return instance
 
-        class _View(ServiceViewSet):
-            queryset = Author.objects.all()
-            action_specs = {
-                "create": ServiceSpec(service=created, input_serializer=_AuthorIn),
-                "update": ServiceSpec(service=updated, input_serializer=_AuthorIn),
-            }
-
-            def get_service_kwargs(self) -> dict[str, Any]:
-                return {"tag": "default"}
-
-            def get_create_service_kwargs(self) -> dict[str, Any]:
-                return {"tag": "create-only"}
-
-        _View.as_view({"post": "create"})(factory.post("/", {"name": "x"}, format="json"))
-        assert captured["create_tag"] == "create-only"
-
-        author = Author.objects.create(name="orig")
-        _View.as_view({"put": "update"})(
-            factory.put("/", {"name": "new"}, format="json"), pk=author.pk
-        )
-        assert captured["update_tag"] == "default"
-
-    def test_spec_kwargs_overrides_per_action_hook_and_catch_all(self) -> None:
-        captured: dict[str, Any] = {}
-
-        def created(*, data: _AuthorIn, tag: str) -> dict[str, Any]:
-            captured["tag"] = tag
-            return {"name": data.name}
-
-        def create_kwargs(view: Any, request: Any) -> dict[str, Any]:
-            return {"tag": "spec"}
-
-        class _View(ServiceViewSet):
-            action_specs = {
-                "create": ServiceSpec(
-                    service=created,
-                    input_serializer=_AuthorIn,
-                    kwargs=create_kwargs,
-                ),
-            }
-
-            def get_service_kwargs(self) -> dict[str, Any]:
-                return {"tag": "catch-all"}
-
-            def get_create_service_kwargs(self) -> dict[str, Any]:
-                return {"tag": "action"}
-
-        _View.as_view({"post": "create"})(factory.post("/", {"name": "x"}, format="json"))
-        assert captured["tag"] == "spec"
-
-    def test_input_data_three_tier_chain(self) -> None:
-        @dataclass
-        class _NestedIn:
-            name: str
-            parent_id: int
-            tag: str
-
-        captured: dict[str, Any] = {}
-
-        def created(*, data: _NestedIn) -> dict[str, Any]:
-            captured["data"] = data
-            return {"name": data.name}
-
-        def spec_input(view: Any, request: Any) -> dict[str, Any]:
-            return {"parent_id": int(view.kwargs["parent_id"])}
-
-        class _View(ServiceViewSet):
-            action_specs = {
-                "create": ServiceSpec(
-                    service=created,
-                    input_serializer=_NestedIn,
-                    input_data=spec_input,
-                ),
-            }
-
-            def get_input_data(self, request: Any) -> dict[str, Any]:
-                return {"tag": "catch", "parent_id": -1}
-
-            def get_create_input_data(self, request: Any) -> dict[str, Any]:
-                return {"tag": "action", "parent_id": -2}
-
-        response = _View.as_view({"post": "create"})(
-            factory.post("/", {"name": "Ada"}, format="json"), parent_id=42
-        )
-        assert response.status_code == 201
-        assert captured["data"].name == "Ada"
-        # spec layer wins over per-action and catch-all on parent_id;
-        # action layer wins over catch-all on tag.
-        assert captured["data"].parent_id == 42
-        assert captured["data"].tag == "action"
-
-    def test_spec_kwargs_provider_receives_view_and_request(self) -> None:
-        captured: dict[str, Any] = {}
-
-        def created(*, data: _AuthorIn, action_seen: str) -> dict[str, Any]:
-            return {"name": data.name, "action": action_seen}
-
-        def create_kwargs(view: Any, request: Any) -> dict[str, Any]:
-            captured["action"] = view.action
-            captured["has_request"] = request is not None
-            return {"action_seen": view.action or ""}
-
-        class _View(ServiceViewSet):
-            action_specs = {
-                "create": ServiceSpec(
-                    service=created,
-                    input_serializer=_AuthorIn,
-                    kwargs=create_kwargs,
-                ),
-            }
-
-        response = _View.as_view({"post": "create"})(
-            factory.post("/", {"name": "x"}, format="json")
-        )
-        assert response.status_code == 201
-        assert captured["action"] == "create"
-        assert captured["has_request"] is True
-
-    def test_per_action_selector_kwargs_hook(self) -> None:
-        captured: dict[str, Any] = {}
-
-        def listed(*, marker: str) -> Any:
-            captured["marker"] = marker
-            return []
-
-        class _View(ServiceViewSet):
-            action_specs = {
-                "list": SelectorSpec(
-                    kind=SelectorKind.LIST,
-                    selector=listed,
-                    output_serializer=AuthorSerializer,
-                ),
-            }
-
-            def get_selector_kwargs(self) -> dict[str, Any]:
-                return {"marker": "default"}
-
-            def get_list_selector_kwargs(self) -> dict[str, Any]:
-                return {"marker": "list-only"}
-
-        _View.as_view({"get": "list"})(factory.get("/"))
-        assert captured["marker"] == "list-only"
-
-
-@pytest.mark.django_db
-class TestServiceViewSetFallbacks:
-    def test_list_falls_back_to_get_queryset_when_selector_missing(self) -> None:
-        Author.objects.create(name="alpha")
-
-        class _View(ServiceViewSet):
-            queryset = Author.objects.all().order_by("id")
-            action_specs = {
-                "list": SelectorSpec(kind=SelectorKind.LIST, output_serializer=AuthorSerializer),
-            }
-
-        view = _View.as_view({"get": "list"})
-        response = view(factory.get("/"))
+        viewset = _viewset(action_specs={"update": _update(service=touch)})
+        response = _call(viewset, "put", "update", {"name": "b"}, pk=author.pk)
         assert response.status_code == 200
-        assert response.data[0]["name"] == "alpha"
+        assert response.data == {"id": author.pk, "name": "b"}
 
-    def test_retrieve_falls_back_to_get_object_when_selector_missing(self) -> None:
-        author = Author.objects.create(name="Ada")
+    def test_the_view_s_success_status_answers_the_action(self) -> None:
+        viewset = _viewset(success_status=202, action_specs={"create": _create()})
+        assert _call(viewset, "post", "create", {"name": "Ada"}).status_code == 202
 
-        class _View(ServiceViewSet):
-            queryset = Author.objects.all()
-            action_specs = {
-                "retrieve": SelectorSpec(
-                    kind=SelectorKind.RETRIEVE, output_serializer=AuthorSerializer
-                ),
-            }
+    def test_the_view_s_response_finalizer_runs(self) -> None:
+        def finalize(*, response: Response) -> Response:
+            response["X-Done"] = "yes"
+            return response
 
-        view = _View.as_view({"get": "retrieve"})
-        response = view(factory.get("/"), pk=author.pk)
-        assert response.status_code == 200
-        assert response.data["name"] == "Ada"
+        viewset = _viewset(response_finalizer=finalize, action_specs={"create": _create()})
+        assert _call(viewset, "post", "create", {"name": "Ada"})["X-Done"] == "yes"
 
 
-@pytest.mark.django_db
-class TestServiceViewSetEdgeCases:
-    def test_retrieve_404_when_selector_returns_none(self) -> None:
-        view = _AuthorViewSet.as_view({"get": "retrieve"})
-        response = view(factory.get("/"), pk=999)
-        assert response.status_code == 404
+class TestPermissions:
+    def test_the_spec_s_own_checks_refuse(self) -> None:
+        viewset = _viewset(action_specs={"create": _create(permissions=(_DenyAll(),))})
+        assert _call(viewset, "post", "create", {"name": "Ada"}).status_code == 403
+        assert not Author.objects.exists()
 
-    def test_retrieve_404_when_does_not_exist_raised(self) -> None:
-        def strict(*, pk: int) -> Author:
-            return Author.objects.get(pk=pk)
+    def test_the_view_s_own_classes_refuse_before_the_spec_runs(self) -> None:
+        viewset = _viewset(permission_classes=[_Deny], action_specs={"create": _create()})
+        assert _call(viewset, "post", "create", {"name": "Ada"}).status_code == 403
+        assert not Author.objects.exists()
 
-        class _View(ServiceViewSet):
-            action_specs = {
-                "retrieve": SelectorSpec(
-                    kind=SelectorKind.RETRIEVE,
-                    selector=strict,
-                    output_serializer=AuthorSerializer,
-                ),
-            }
+    def test_a_kernel_entry_takes_the_view_s_own_classes(self) -> None:
+        viewset = _viewset(permission_classes=[_Deny], action_specs={"list": _list()})
+        assert _call(viewset, "get", "list").status_code == 403
 
-        view = _View.as_view({"get": "retrieve"})
-        response = view(factory.get("/"), pk=999)
-        assert response.status_code == 404
+    def test_a_retrieve_s_object_permission_is_the_view_s(self) -> None:
+        author = Author.objects.create(name="a")
 
-    def test_create_service_error_maps_to_422(self) -> None:
-        from django_spec_rest import ServiceError
+        class _NoRows(BasePermission):
+            def has_object_permission(self, request: Any, view: Any, obj: Any) -> bool:
+                return False
 
-        def boom(*, data: _AuthorIn) -> None:
-            raise ServiceError("nope")
+        viewset = _viewset(permission_classes=[_NoRows], action_specs={"retrieve": _retrieve()})
+        assert _call(viewset, "get", "retrieve", pk=author.pk).status_code == 403
 
-        class _View(ServiceViewSet):
-            action_specs = {
-                "create": ServiceSpec(service=boom, input_serializer=_AuthorIn, atomic=False),
-            }
+    def test_an_update_s_target_is_asked_the_view_s_object_permission(self) -> None:
+        author = Author.objects.create(name="a")
 
-        view = _View.as_view({"post": "create"})
-        response = view(factory.post("/", {"name": "x"}, format="json"))
-        assert response.status_code == 422
+        class _NoRows(BasePermission):
+            def has_object_permission(self, request: Any, view: Any, obj: Any) -> bool:
+                return False
 
+        viewset = _viewset(permission_classes=[_NoRows], action_specs={"update": _update()})
+        response = _call(viewset, "put", "update", {"name": "b"}, pk=author.pk)
+        assert response.status_code == 403
+        assert Author.objects.get().name == "a"
+
+
+class TestHooks:
+    def test_the_spec_s_kwargs_provider_reaches_the_service(self) -> None:
+        seen: list[str] = []
+
+        def create(*, data: dict[str, Any], tag: str) -> Author:
+            seen.append(tag)
+            return _create_author(data=data)
+
+        spec = _create(service=create, kwargs=lambda: {"tag": "spec"})
+        viewset = _viewset(action_specs={"create": spec})
+        assert _call(viewset, "post", "create", {"name": "Ada"}).status_code == 201
+        assert seen == ["spec"]
+
+    def test_a_catch_all_hook_fills_a_keyword_the_seeds_cannot_see(self) -> None:
+        seen: list[str] = []
+
+        def create(*, data: dict[str, Any], tag: str) -> Author:
+            seen.append(tag)
+            return _create_author(data=data)
+
+        viewset = _viewset(
+            action_specs={"create": _create(service=create)},
+            get_service_kwargs=lambda self: {"tag": "view"},
+        )
+        assert _call(viewset, "post", "create", {"name": "Ada"}).status_code == 201
+        assert seen == ["view"]
+
+    def test_a_per_action_hook_fills_a_keyword_the_seeds_cannot_see(self) -> None:
+        seen: list[str] = []
+
+        def create(*, data: dict[str, Any], tag: str) -> Author:
+            seen.append(tag)
+            return _create_author(data=data)
+
+        viewset = _viewset(
+            action_specs={"create": _create(service=create)},
+            get_create_service_kwargs=lambda self: {"tag": "action"},
+        )
+        assert _call(viewset, "post", "create", {"name": "Ada"}).status_code == 201
+        assert seen == ["action"]
+
+
+class TestUnconfigured:
     @pytest.mark.parametrize(
-        ("error", "expected", "detail"),
+        ("method", "action", "kwargs"),
         [
-            ("ServiceNotFound", 404, "No author 7."),
-            ("ServiceConflict", 409, "That name is taken."),
+            ("post", "create", {}),
+            ("put", "update", {"pk": 1}),
+            ("patch", "partial_update", {"pk": 1}),
+            ("delete", "destroy", {"pk": 1}),
         ],
     )
-    def test_a_typed_member_reaches_the_response_with_its_own_status(
-        self, error: str, expected: int, detail: str
+    def test_an_action_with_no_entry_is_405(
+        self, method: str, action: str, kwargs: dict[str, Any]
     ) -> None:
-        """Through the real view, because the status is what a client sees.
+        viewset = _viewset(action_specs={"list": _list()})
+        assert _call(viewset, method, action, {}, **kwargs).status_code == 405
 
-        The mapper is unit-tested next door; this is the half that proves nothing
-        between the service and the response flattens it back to 422.
-        """
-        import django_spec_rest
-
-        raised = getattr(django_spec_rest, error)
-
-        def boom(*, data: _AuthorIn) -> None:
-            raise raised(detail)
-
-        class _View(ServiceViewSet):
-            action_specs = {
-                "create": ServiceSpec(service=boom, input_serializer=_AuthorIn, atomic=False),
-            }
-
-        view = _View.as_view({"post": "create"})
-        response = view(factory.post("/", {"name": "x"}, format="json"))
-
-        assert response.status_code == expected
-        assert response.data["detail"] == detail
-
-    def test_create_with_output_selector(self) -> None:
-        def fn(*, data: _AuthorIn) -> str:
-            return data.name
-
-        def selector(*, result: str) -> str:
-            return result.upper()
-
-        class _View(ServiceViewSet):
-            action_specs = {
-                "create": ServiceSpec(
-                    service=fn,
-                    input_serializer=_AuthorIn,
-                    output_selector_spec=SelectorSpec(
-                        kind=SelectorKind.RETRIEVE, selector=selector
-                    ),
-                    atomic=False,
-                ),
-            }
-
-        view = _View.as_view({"post": "create"})
-        response = view(factory.post("/", {"name": "ada"}, format="json"))
-        assert response.status_code == 201
-        assert response.data == "ADA"
-
-    def test_create_returning_none_renders_204(self) -> None:
-        class _View(ServiceViewSet):
-            action_specs = {
-                "create": ServiceSpec(
-                    service=staticmethod(lambda *, data: None),
-                    input_serializer=_AuthorIn,
-                    atomic=False,
-                ),
-            }
-
-        view = _View.as_view({"post": "create"})
-        response = view(factory.post("/", {"name": "x"}, format="json"))
-        assert response.status_code == 204
-
-    def test_destroy_with_output_serializer(self) -> None:
-        def fn(*, instance: Author) -> Author:
-            return instance
-
-        class _View(ServiceViewSet):
-            queryset = Author.objects.all()
-            action_specs = {
-                "destroy": ServiceSpec(
-                    service=fn,
-                    output_selector_spec=SelectorSpec(
-                        kind=SelectorKind.RETRIEVE, output_serializer=AuthorSerializer
-                    ),
-                    atomic=False,
-                ),
-            }
-
-        author = Author.objects.create(name="Z")
-        view = _View.as_view({"delete": "destroy"})
-        response = view(factory.delete("/"), pk=author.pk)
-        # A row to present is a body, and a ``204`` carries none: the defaulted
-        # destroy status becomes ``200``, as it does on the bulk path.
+    def test_a_partial_update_only_entry_leaves_put_405(self) -> None:
+        author = Author.objects.create(name="a")
+        viewset = _viewset(action_specs={"partial_update": _update()})
+        assert _call(viewset, "put", "update", {"name": "b"}, pk=author.pk).status_code == 405
+        response = _call(viewset, "patch", "partial_update", {"name": "b"}, pk=author.pk)
         assert response.status_code == 200
-        assert response.data == {"id": author.pk, "name": "Z"}
-
-    def test_get_serializer_class_falls_back_for_other_actions(self) -> None:
-        class _View(ServiceViewSet):
-            queryset = Author.objects.all()
-            serializer_class = AuthorSerializer
-            action_specs = {
-                "list": SelectorSpec(kind=SelectorKind.LIST, output_serializer=AuthorSerializer),
-            }
-
-        instance = _View()
-        instance.action = "create"
-        assert instance.get_serializer_class() is AuthorSerializer
 
 
-@pytest.mark.django_db
-class TestServiceViewSetUnconfigured:
-    def test_create_without_service_returns_405(self) -> None:
-        class _View(ServiceViewSet): ...
+class TestWithNoEntry:
+    """A read action no ``action_specs`` entry configures is DRF's own, over the
+    viewset's ``queryset`` and ``serializer_class``."""
 
-        view = _View.as_view({"post": "create"})
-        response = view(factory.post("/"))
-        assert response.status_code == 405
+    def test_list_lists_as_drf_does(self) -> None:
+        Author.objects.create(name="a")
+        viewset = _viewset(action_specs={}, serializer_class=AuthorSerializer)
 
-    def test_update_without_service_returns_405(self) -> None:
-        class _View(ServiceViewSet):
-            queryset = Author.objects.all()
+        response = _call(viewset, "get", "list")
 
-        view = _View.as_view({"put": "update"})
-        author = Author.objects.create(name="x")
-        response = view(factory.put("/"), pk=author.pk)
-        assert response.status_code == 405
-
-    def test_partial_update_without_service_returns_405(self) -> None:
-        class _View(ServiceViewSet):
-            queryset = Author.objects.all()
-
-        view = _View.as_view({"patch": "partial_update"})
-        author = Author.objects.create(name="x")
-        response = view(factory.patch("/"), pk=author.pk)
-        assert response.status_code == 405
-
-    def test_destroy_without_service_returns_405(self) -> None:
-        class _View(ServiceViewSet):
-            queryset = Author.objects.all()
-
-        view = _View.as_view({"delete": "destroy"})
-        author = Author.objects.create(name="x")
-        response = view(factory.delete("/"), pk=author.pk)
-        assert response.status_code == 405
-
-    def test_create_with_selector_spec_raises_at_setup(self) -> None:
-        class _View(ServiceViewSet):
-            action_specs = {
-                "create": SelectorSpec(kind=SelectorKind.LIST, selector=lambda: None),
-            }
-
-        # A write action keyed to a read spec is a mis-wiring the URL wiring can
-        # see; it used to wait for the first POST to say so.
-        with pytest.raises(ImproperlyConfigured, match="must be a ServiceSpec"):
-            _View.as_view({"post": "create"})
-
-    def test_update_with_selector_spec_raises_at_setup(self) -> None:
-        class _View(ServiceViewSet):
-            queryset = Author.objects.all()
-            action_specs = {
-                "update": SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda: None),
-            }
-
-        with pytest.raises(ImproperlyConfigured, match="must be a ServiceSpec"):
-            _View.as_view({"put": "update"})
-
-    def test_destroy_with_selector_spec_raises_at_setup(self) -> None:
-        class _View(ServiceViewSet):
-            queryset = Author.objects.all()
-            action_specs = {
-                "destroy": SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda: None),
-            }
-
-        with pytest.raises(ImproperlyConfigured, match="must be a ServiceSpec"):
-            _View.as_view({"delete": "destroy"})
-
-    def test_list_with_service_spec_raises_at_setup(self) -> None:
-        def _noop() -> None: ...
-
-        class _View(ServiceViewSet):
-            action_specs = {
-                "list": ServiceSpec(service=_noop),
-            }
-
-        with pytest.raises(ImproperlyConfigured, match="must be a SelectorSpec"):
-            _View.as_view({"get": "list"})
-
-    def test_retrieve_with_service_spec_raises_at_setup(self) -> None:
-        def _noop() -> None: ...
-
-        class _View(ServiceViewSet):
-            action_specs = {
-                "retrieve": ServiceSpec(service=_noop),
-            }
-
-        with pytest.raises(ImproperlyConfigured, match="must be a SelectorSpec"):
-            _View.as_view({"get": "retrieve"})
-
-
-@pytest.mark.django_db
-class TestServiceViewSetSpecOverrides:
-    def test_create_spec_success_status_override(self) -> None:
-        class _View(ServiceViewSet):
-            action_specs = {
-                "create": ServiceSpec(
-                    service=staticmethod(lambda *, data: {"x": data.name}),
-                    input_serializer=_AuthorIn,
-                    atomic=False,
-                    success_status=202,
-                ),
-            }
-
-        view = _View.as_view({"post": "create"})
-        response = view(factory.post("/", {"name": "x"}, format="json"))
-        assert response.status_code == 202
-
-    def test_update_spec_success_status_override(self) -> None:
-        author = Author.objects.create(name="x")
-
-        class _View(ServiceViewSet):
-            queryset = Author.objects.all()
-            action_specs = {
-                "update": ServiceSpec(
-                    service=_update_author,
-                    input_serializer=_AuthorIn,
-                    atomic=False,
-                    success_status=202,
-                ),
-            }
-
-        view = _View.as_view({"put": "update"})
-        response = view(factory.put("/", {"name": "y"}, format="json"), pk=author.pk)
-        assert response.status_code == 202
-
-    def test_destroy_spec_success_status_override(self) -> None:
-        author = Author.objects.create(name="x")
-
-        class _View(ServiceViewSet):
-            queryset = Author.objects.all()
-            action_specs = {
-                "destroy": ServiceSpec(service=_delete_author, atomic=False, success_status=200),
-            }
-
-        view = _View.as_view({"delete": "destroy"})
-        response = view(factory.delete("/"), pk=author.pk)
         assert response.status_code == 200
-        # ``_delete_author`` returns None: the body must be empty and render
-        # cleanly, not the stale (unserializable) post-delete instance.
-        assert response.data is None
-        assert response.render().content == b""
-        assert not Author.objects.filter(pk=author.pk).exists()
+        assert [row["name"] for row in response.data] == ["a"]
+
+    def test_retrieve_retrieves_as_drf_does(self) -> None:
+        author = Author.objects.create(name="a")
+        viewset = _viewset(action_specs={}, serializer_class=AuthorSerializer)
+
+        response = _call(viewset, "get", "retrieve", pk=author.pk)
+
+        assert response.status_code == 200
+        assert response.data["name"] == "a"
+
+    def test_options_of_a_route_serving_no_spec_is_drf_s_own_answer(self) -> None:
+        viewset = _viewset(action_specs={}, serializer_class=AuthorSerializer)
+
+        response = viewset.as_view({"get": "list", "post": "create"})(factory.options("/"))
+
+        assert response.status_code == 200
+        assert "name" in response.data["actions"]["POST"]
 
 
-class TestActionSpecsCustomKeys:
-    """Entries keyed on an action the mixins don't dispatch are still validated.
+class TestAsView:
+    @pytest.mark.parametrize("action", ["create", "update", "partial_update", "destroy"])
+    def test_a_selector_spec_under_a_write_action_is_refused(self, action: str) -> None:
+        viewset = _viewset(action_specs={action: _list()})
+        with pytest.raises(ImproperlyConfigured, match="serves a ServiceSpec"):
+            viewset.as_view({"get": "list"})
 
-    A custom key is live configuration — ``get_permissions`` and the serializer
-    resolver both read it — but it used to be the one entry whose signature
-    nothing checked, so a service demanding a key nothing seeds waited for the
-    first request to say so.
-    """
+    @pytest.mark.parametrize("action", ["list", "retrieve"])
+    def test_a_service_spec_under_a_read_action_is_refused(self, action: str) -> None:
+        viewset = _viewset(action_specs={action: _create()})
+        with pytest.raises(ImproperlyConfigured, match="serves a SelectorSpec"):
+            viewset.as_view({"get": "list"})
 
-    def test_a_custom_key_service_spec_is_signature_checked(self) -> None:
-        def _publish(*, unseeded: int) -> None: ...
+    def test_a_list_spec_under_retrieve_is_refused(self) -> None:
+        viewset = _viewset(action_specs={"retrieve": _list()})
+        with pytest.raises(ImproperlyConfigured, match="expects"):
+            viewset.as_view({"get": "list"})
 
-        class _View(ServiceViewSet):
-            action_specs = {"publish": ServiceSpec(service=_publish)}
+    def test_the_refusal_names_the_action(self) -> None:
+        viewset = _viewset(action_specs={"create": _list()})
+        with pytest.raises(ImproperlyConfigured, match=r"action_specs\['create'\]"):
+            viewset.as_view({"get": "list"})
 
-        with pytest.raises(ImproperlyConfigured, match=r"action_specs\['publish'\]"):
-            _View.as_view({"post": "create"})
+    @pytest.mark.parametrize("action", ["update", "partial_update", "destroy"])
+    def test_a_detail_action_with_no_target_is_refused(self, action: str) -> None:
+        viewset = _viewset(action_specs={action: _write(service=_delete)})
+        with pytest.raises(ImproperlyConfigured, match="declares no target selector"):
+            viewset.as_view({"get": "list"})
 
-    def test_a_valid_custom_key_entry_is_accepted(self) -> None:
-        def _publish(*, instance: object, request: object) -> None: ...
+    @pytest.mark.parametrize("action", ["update", "partial_update", "destroy"])
+    def test_a_nested_selector_s_permissions_are_refused(self, action: str) -> None:
+        nested = _retrieve(presenter=None)
+        viewset = _viewset(action_specs={action: _update(instance_selector_spec=nested)})
+        with pytest.raises(
+            ImproperlyConfigured,
+            match=rf"action_specs\['{action}'\]\.spec\.instance_selector_spec declares permissions",
+        ):
+            viewset.as_view({"get": "list"})
 
-        class _View(ServiceViewSet):
-            action_specs = {"publish": ServiceSpec(service=_publish)}
+    def test_a_create_with_no_target_passes(self) -> None:
+        assert callable(_viewset(action_specs={"create": _create()}).as_view({"post": "create"}))
 
-        assert _View.as_view({"post": "create"}) is not None
+    def test_a_keyword_nothing_fills_is_refused(self) -> None:
+        def create(*, tag: str) -> None: ...
 
-    def test_a_custom_key_selector_spec_is_signature_checked(self) -> None:
-        class _View(ServiceViewSet):
-            action_specs = {
-                "recent": SelectorSpec(
-                    kind=SelectorKind.LIST, select_related=("author",), selector=None
-                )
-            }
+        viewset = _viewset(action_specs={"create": _write(service=create)})
+        with pytest.raises(ImproperlyConfigured, match="tag"):
+            viewset.as_view({"post": "create"})
 
-        with pytest.raises(ImproperlyConfigured, match=r"action_specs\['recent'\]"):
-            _View.as_view({"get": "list"})
+    def test_a_per_action_hook_for_another_action_fills_nothing(self) -> None:
+        def create(*, tag: str) -> None: ...
 
-    def test_a_custom_key_polymorphic_spec_is_validated(self) -> None:
-        class _View(ServiceViewSet):
-            action_specs = {"publish": PolymorphicServiceSpec(discriminator=lambda: "x", specs={})}
+        viewset = _viewset(
+            action_specs={"create": _write(service=create)},
+            get_update_service_kwargs=lambda self: {"tag": "x"},
+        )
+        with pytest.raises(ImproperlyConfigured, match="tag"):
+            viewset.as_view({"post": "create"})
 
-        with pytest.raises(ImproperlyConfigured, match="must not be empty"):
-            _View.as_view({"post": "create"})
+    def test_a_list_selector_requiring_a_keyword_nothing_fills_is_refused(self) -> None:
+        viewset = _viewset(action_specs={"list": _list(selector=lambda *, owner: None)})
+        with pytest.raises(ImproperlyConfigured, match="owner"):
+            viewset.as_view({"get": "list"})
 
-    def test_a_non_spec_entry_is_rejected(self) -> None:
-        class _View(ServiceViewSet):
-            action_specs = {"publish": "not a spec"}  # type: ignore[dict-item]
+    @pytest.mark.parametrize("action", ["list", "retrieve"])
+    def test_get_selector_kwargs_beside_a_kernel_selector_is_refused(self, action: str) -> None:
+        entry = _list() if action == "list" else _retrieve()
+        viewset = _viewset(action_specs={action: entry}, get_selector_kwargs=lambda self: {"x": 1})
+        with pytest.raises(ImproperlyConfigured, match="get_selector_kwargs"):
+            viewset.as_view({"get": action})
 
-        with pytest.raises(ImproperlyConfigured, match="must be a ServiceSpec"):
-            _View.as_view({"post": "create"})
+    def test_a_per_action_selector_hook_beside_a_kernel_selector_is_refused(self) -> None:
+        viewset = _viewset(
+            action_specs={"retrieve": _retrieve()},
+            get_retrieve_selector_kwargs=lambda self: {"x": 1},
+        )
+        with pytest.raises(ImproperlyConfigured, match="get_retrieve_selector_kwargs"):
+            viewset.as_view({"get": "retrieve"})
 
-    def test_a_kwargs_hook_for_the_custom_action_relaxes_the_check(self) -> None:
-        # The same permissiveness rule as a built-in action: a hook the
-        # validator cannot read into may be feeding the missing key.
-        def _publish(*, unseeded: int) -> None: ...
+    def test_the_view_s_success_status_is_checked(self) -> None:
+        viewset = _viewset(success_status="201", action_specs={"create": _create()})
+        with pytest.raises(ImproperlyConfigured):
+            viewset.as_view({"post": "create"})
 
-        class _View(ServiceViewSet):
-            action_specs = {"publish": ServiceSpec(service=_publish)}
+    def test_a_kernel_spec_under_a_custom_key_is_refused(self) -> None:
+        """A custom key feeds ``get_permissions`` and the serializer resolver
+        only, and a kernel spec's checks are asked by ``dispatch`` alone, so
+        such an entry would guard nothing: ``@service_action`` /
+        ``@selector_action`` are the way to serve one."""
+        viewset = _viewset(action_specs={"publish": _create()})
+        with pytest.raises(ImproperlyConfigured, match="service_action"):
+            viewset.as_view({"post": "create"})
 
-            def get_publish_service_kwargs(self) -> dict[str, Any]:
-                return {"unseeded": 1}
-
-        assert _View.as_view({"post": "create"}) is not None
+    def test_an_entry_that_is_no_spec_is_refused(self) -> None:
+        viewset = _viewset(action_specs={"list": _list_authors})
+        with pytest.raises(ImproperlyConfigured, match="must be a ServiceSpec or SelectorSpec"):
+            viewset.as_view({"get": "list"})

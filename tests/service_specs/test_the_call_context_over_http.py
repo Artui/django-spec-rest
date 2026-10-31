@@ -40,16 +40,9 @@ factory = APIRequestFactory()
 _OPEN = (Unrestricted(),)
 
 
-class _CreateView(ServiceCreateView):
-    """A create view over a kernel spec, its own permission classes answering for it."""
-
-    def get_permissions(self) -> list[Any]:
-        return [permission() for permission in self.permission_classes]
-
-
-def _post(spec: ServiceSpec, body: Any, **attrs: Any) -> Response:
-    view = type("_View", (_CreateView,), {"spec": spec, **attrs}).as_view()
-    return view(factory.post("/", body, format="json"))
+def _post(spec: ServiceSpec, body: Any, url: str = "/", **attrs: Any) -> Response:
+    view = type("_View", (ServiceCreateView,), {"spec": spec, **attrs}).as_view()
+    return view(factory.post(url, body, format="json"))
 
 
 def _seen_by(seen: dict[str, Any], stage: str, answer: Any = None) -> Any:
@@ -124,11 +117,11 @@ def test_a_target_lookup_and_the_service_share_the_dict() -> None:
             kind=SelectorKind.RETRIEVE,
             selector=lookup,
             reads=Parameters.of(Parameter("pk", "integer", required=True)),
-            permissions=_OPEN,
         ),
     )
 
-    assert _post(spec, {"pk": author.pk}).status_code == 204
+    # A target lookup's read comes from the route or the query string, never the body.
+    assert _post(spec, {}, url=f"/?pk={author.pk}").status_code == 204
 
     assert seen["lookup"] is seen["service"]
     assert seen["service"]["view"]._call_context is seen["service"]
@@ -179,7 +172,7 @@ def test_a_many_service_s_stages_share_the_dict() -> None:
 def test_each_request_is_a_dict_of_its_own() -> None:
     seen: list[dict[str, Any]] = []
     spec = ServiceSpec(service=lambda *, call_context: seen.append(call_context), permissions=_OPEN)
-    view = type("_View", (_CreateView,), {"spec": spec}).as_view()
+    view = type("_View", (ServiceCreateView,), {"spec": spec}).as_view()
 
     view(factory.post("/", {}, format="json"))
     view(factory.post("/", {}, format="json"))

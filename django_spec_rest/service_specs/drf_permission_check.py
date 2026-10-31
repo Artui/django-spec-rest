@@ -11,13 +11,10 @@ from django_service_specs.authorization.permission_check import PermissionCheck
 from rest_framework.permissions import BasePermission
 
 from django_spec_rest.service_specs.build_offline_context import build_offline_context
-from django_spec_rest.service_specs.not_permitted import NotPermitted
+from django_spec_rest.service_specs.drf_not_permitted import DRFNotPermitted
 from django_spec_rest.service_specs.translate_drf_refusals import translate_drf_refusals
 from django_spec_rest.service_specs.utils import carried, offline_action
 from django_spec_rest.types.offline_context import OfflineContext
-from django_spec_rest.types.query_param import QueryParam
-from django_spec_rest.types.unset import UNSET
-from django_spec_rest.types.url_kwarg import UrlKwarg
 
 
 class DRFPermissionCheck(PermissionCheck):
@@ -30,13 +27,13 @@ class DRFPermissionCheck(PermissionCheck):
     [`build_offline_context`][django_spec_rest.service_specs.build_offline_context.build_offline_context]
     builds for the principal. The first refusal
     raises the dual-base
-    [`NotPermitted`][django_spec_rest.service_specs.not_permitted.NotPermitted]
+    [`DRFNotPermitted`][django_spec_rest.service_specs.drf_not_permitted.DRFNotPermitted]
     with that class's own ``message`` and ``code``, so a client is told what
     a DRF view would have told it; returning ``False`` instead would leave the
     kernel to raise its own class with the generic wording. A class that
     raises its own refusal is asked inside
     [`translate_drf_refusals`][django_spec_rest.service_specs.translate_drf_refusals.translate_drf_refusals],
-    so DRF's ``PermissionDenied`` leaves as that ``NotPermitted`` with the
+    so DRF's ``PermissionDenied`` leaves as that ``DRFNotPermitted`` with the
     class's message and code, and ``NotAuthenticated`` as
     [`DRFNotAuthenticated`][django_spec_rest.service_specs.drf_not_authenticated.DRFNotAuthenticated],
     which DRF still answers 401
@@ -48,17 +45,11 @@ class DRFPermissionCheck(PermissionCheck):
     no URLconf to put it there; asked against an empty mapping it would refuse
     every caller it means to admit. Each method opts in to the kernel's
     ``arguments`` channel by declaring the keyword, and the names that go onto
-    ``view.kwargs`` are the ones a route would have captured: every declared
-    ``UrlKwarg``, and ``route_reads``, the arguments the spec's row lookup
-    reads (``pk`` of an update's instance lookup, or of a retrieve), which
-    [`as_kernel_spec`][django_spec_rest.service_specs.as_kernel_spec.as_kernel_spec]
-    passes in. Each declared ``QueryParam`` goes onto ``request.query_params``
-    instead, where a query string would have put it. A ``UrlKwarg`` or
-    ``QueryParam`` the call left out, or sent as ``null``, takes its declared
-    ``default``, as its docstring says a transport seeds it, and is otherwise
-    absent. Where a transport asks with no arguments at all (``None``), nothing
-    is filled, and the classes decide what an empty route means, as they would
-    for a URL that captured nothing.
+    ``view.kwargs`` are the ones a route would have captured: ``route_reads``,
+    the arguments the spec's row lookup reads (``pk`` of an update's instance
+    lookup, or of a retrieve). Where a transport asks with no arguments at all
+    (``None``), nothing is filled, and the classes decide what an empty route
+    means, as they would for a URL that captured nothing.
 
     **The request and view the call carries come first.** The class-level
     and object-level methods declare ``request`` and ``view``, so a call
@@ -77,16 +68,13 @@ class DRFPermissionCheck(PermissionCheck):
     request that DRF has not wrapped, the request a run arrived on as the
     kernel's call context holds it, is asked as a DRF ``Request`` around a
     copy of it, built as the offline pair is: its ``user`` the principal and
-    its query string the declared ``QueryParam`` values the call sent,
-    replacing its own, which is the endpoint's the run arrived on. Asked with
-    no arguments at all, nothing is routed and its own query string stays. On
-    drfs' own edge the kernel asks no check, since ``dispatch_spec`` runs
-    under the ``Grant`` its view's permission classes produced.
+    its query string empty, replacing its own, which is the endpoint's the run
+    arrived on. Asked with no arguments at all, nothing is routed and its own
+    query string stays.
 
-    **``has_object_permission`` asks only about a model instance**, as
-    [`enforce_permissions`][django_spec_rest.dispatch.enforce_permissions.enforce_permissions]
-    always has off HTTP; any other target is allowed here, because a DRF class
-    written for a row reads attributes off it.
+    **``has_object_permission`` asks only about a model instance**; any other
+    target is allowed here, because a DRF class written for a row reads
+    attributes off it.
 
     **``has_scope_permission`` allows.** The kernel asks it of a bulk call's set,
     a collection's rows and a create's ``None``, and DRF has no such question:
@@ -105,13 +93,9 @@ class DRFPermissionCheck(PermissionCheck):
         self,
         permission_classes: Sequence[type[BasePermission]],
         *,
-        url_kwargs: Sequence[UrlKwarg] = (),
-        query_params: Sequence[QueryParam] = (),
         route_reads: Sequence[str] = (),
     ) -> None:
         self.permission_classes: tuple[type[BasePermission], ...] = tuple(permission_classes)
-        self.url_kwargs: tuple[UrlKwarg, ...] = tuple(url_kwargs)
-        self.query_params: tuple[QueryParam, ...] = tuple(query_params)
         self.route_reads: tuple[str, ...] = tuple(route_reads)
 
     def has_permission(
@@ -197,7 +181,7 @@ class DRFPermissionCheck(PermissionCheck):
         # Three conjuncts, one branch to coverage. The plain-request one is held
         # by test_a_carried_django_request_is_wrapped_beside_a_carried_view, where
         # a carried view would otherwise skip the block; the request choice inside
-        # it by test_a_carried_django_request_is_wrapped_with_the_routed_query_string.
+        # it by test_a_carried_django_request_is_wrapped_with_an_empty_query_string.
         if plain is not None or request is None or view is None:
             offline = self._context(
                 principal, arguments, offline_action(call_context), http_request=plain
@@ -217,31 +201,10 @@ class DRFPermissionCheck(PermissionCheck):
         if arguments is None:
             return build_offline_context(principal, action=action, http_request=http_request)
         kwargs = {name: arguments[name] for name in self.route_reads if name in arguments}
-        # A declared ``UrlKwarg`` outranks a lookup read of the same name, as the
-        # declaration a transport routes onto ``view.kwargs``.
-        kwargs.update(_routed(self.url_kwargs, arguments))
         return build_offline_context(
-            principal,
-            action=action,
-            http_request=http_request,
-            kwargs=kwargs,
-            query_params=_routed(self.query_params, arguments),
+            principal, action=action, http_request=http_request, kwargs=kwargs, query_params={}
         )
 
 
-def _routed(
-    declared: Sequence[UrlKwarg | QueryParam], arguments: Mapping[str, Any]
-) -> dict[str, Any]:
-    """Each declared name's argument, its ``default`` where none (or ``null``) was sent."""
-    routed: dict[str, Any] = {}
-    for declaration in declared:
-        value = arguments.get(declaration.name)
-        if value is None:
-            value = declaration.default
-        if value is not UNSET:
-            routed[declaration.name] = value
-    return routed
-
-
 def _deny(permission: BasePermission) -> None:
-    raise NotPermitted(getattr(permission, "message", None), getattr(permission, "code", None))
+    raise DRFNotPermitted(getattr(permission, "message", None), getattr(permission, "code", None))

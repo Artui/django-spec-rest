@@ -2,8 +2,7 @@
 
 Kept in its own leaf module (rather than inside ``views.mutation.utils``) so it
 can be imported without pulling in the heavy mutation-flow machinery. That
-matters for [`call_service`][django_spec_rest.services.call_service.call_service],
-which is part of the package's eagerly-imported public API: importing the whole
+matters for the package's eagerly-imported public API: importing the whole
 ``utils`` module at package-import time (during ``apps.populate()``) triggers a
 circular import, whereas this leaf depends only on DRF exceptions and the
 framework-agnostic error types.
@@ -14,24 +13,19 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from django_service_specs.services.action_unavailable import ActionUnavailable
+from django_service_specs.services.additional_input_required import AdditionalInputRequired
+from django_service_specs.services.service_conflict import ServiceConflict
+from django_service_specs.services.service_error import ServiceError
+from django_service_specs.services.service_not_found import ServiceNotFound
+from django_service_specs.services.service_validation_error import ServiceValidationError
 from rest_framework import exceptions as drf_exceptions
 from rest_framework import status as drf_status
-
-from django_spec_rest.exceptions.action_unavailable import ActionUnavailable
-from django_spec_rest.exceptions.additional_input_required import (
-    AdditionalInputRequired,
-)
-from django_spec_rest.exceptions.service_conflict import ServiceConflict
-from django_spec_rest.exceptions.service_error import ServiceError
-from django_spec_rest.exceptions.service_not_found import ServiceNotFound
-from django_spec_rest.exceptions.service_validation_error import (
-    ServiceValidationError,
-)
 
 
 class _ServiceAPIException(drf_exceptions.APIException):
     """Default DRF mapping for non-validation
-    [`ServiceError`][django_spec_rest.exceptions.service_error.ServiceError]."""
+    [`ServiceError`][django_service_specs.services.service_error.ServiceError]."""
 
     status_code = drf_status.HTTP_422_UNPROCESSABLE_ENTITY
     default_detail = "Service error."
@@ -40,7 +34,7 @@ class _ServiceAPIException(drf_exceptions.APIException):
 
 class _AdditionalInputAPIException(_ServiceAPIException):
     """The ``422`` an
-    [`AdditionalInputRequired`][django_spec_rest.exceptions.additional_input_required.AdditionalInputRequired]
+    [`AdditionalInputRequired`][django_service_specs.services.additional_input_required.AdditionalInputRequired]
     carrying a schema answers with: ``{"detail": <message>, "schema": <schema>}``.
 
     ``detail`` is built the way DRF builds every other one, so each leaf of the
@@ -52,11 +46,10 @@ class _AdditionalInputAPIException(_ServiceAPIException):
 
     The schema as raised is kept on ``schema``, because a ``str`` leaf is no
     longer JSON Schema: ``"default": "False"`` is a non-empty string to a client
-    rendering a form. drfs' views and viewsets, and a ``@service_action`` on any
+    rendering a form. The package's views and viewsets, and a ``@service_action`` on any
     viewset, put it back into the body after the handler has built the response
     (see ``views.mutation.utils.restore_raised_schema``); anything else holding
-    this exception, a direct ``map_service_error`` or ``call_service`` caller
-    say, reads it here.
+    this exception, a direct ``map_service_error`` caller say, reads it here.
     """
 
     def __init__(self, message: str, schema: Mapping[str, Any]) -> None:
@@ -66,7 +59,7 @@ class _AdditionalInputAPIException(_ServiceAPIException):
 
 class _ConflictAPIException(drf_exceptions.APIException):
     """DRF mapping for
-    [`ServiceConflict`][django_spec_rest.exceptions.service_conflict.ServiceConflict].
+    [`ServiceConflict`][django_service_specs.services.service_conflict.ServiceConflict].
 
     Declared here rather than reached for from DRF, which ships no ``409``
     exception of its own."""

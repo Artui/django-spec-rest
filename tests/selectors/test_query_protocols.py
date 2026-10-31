@@ -1,7 +1,6 @@
 """The list and retrieve selector Protocols are the kernel's, and type a kernel spec's selector.
 
-The root still re-exports them at drfs' paths until the deletion; a kernel
-``SelectorSpec`` takes a callable each one accepts.
+The root re-exports them, and a kernel ``SelectorSpec`` takes a callable each one accepts.
 """
 
 from __future__ import annotations
@@ -11,10 +10,11 @@ from typing import Any
 
 from django_service_specs import SelectorKind, SelectorSpec, Unrestricted
 from django_service_specs.selectors.list_selector import ListSelector
+from django_service_specs.selectors.list_selector import ListSelector as RootListSelector
 from django_service_specs.selectors.retrieve_selector import RetrieveSelector
-
-from django_spec_rest import ListSelector as RootListSelector
-from django_spec_rest import RetrieveSelector as RootRetrieveSelector
+from django_service_specs.selectors.retrieve_selector import (
+    RetrieveSelector as RootRetrieveSelector,
+)
 
 
 @dataclass

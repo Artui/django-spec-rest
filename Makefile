@@ -1,4 +1,4 @@
-.PHONY: help init test examples lint lint-fix format format-check type-check type-check-strict-fixtures deps-bump docs-serve docs-build release-bump release-publish release-publish-prepare release-publish-finalize
+.PHONY: help init test examples lint lint-fix format format-check type-check deps-bump docs-serve docs-build release-bump release-publish release-publish-prepare release-publish-finalize
 
 help:
 	@echo "Available targets:"
@@ -10,7 +10,6 @@ help:
 	@echo "  format           Format with ruff"
 	@echo "  format-check     Verify formatting"
 	@echo "  type-check       Run ty over the package"
-	@echo "  type-check-strict-fixtures  Verify ty flags expected drift in tests/services/strict_drift_fixtures.py"
 	@echo "  deps-bump        Upgrade pinned dependencies"
 	@echo "  docs-serve       Live-reload docs at http://localhost:8000 (needs mkdocs.yml)"
 	@echo "  docs-build       Build docs into ./site (strict — fails on broken links)"
@@ -44,16 +43,6 @@ format-check:
 
 type-check:
 	uv run ty check django_spec_rest
-
-type-check-strict-fixtures:
-	@expected="$$(grep -c '^# expect-error' tests/services/strict_drift_fixtures.py)"; \
-	got="$$(uv run ty check tests/services/strict_drift_fixtures.py 2>&1 | grep -c '^error')"; \
-	if [ "$$expected" != "$$got" ]; then \
-		echo "Expected $$expected ty diagnostics in strict_drift_fixtures.py, got $$got."; \
-		echo "Run 'uv run ty check tests/services/strict_drift_fixtures.py' to see the current diagnostics."; \
-		exit 1; \
-	fi; \
-	echo "ty flagged $$got/$$expected expected drifts in tests/services/strict_drift_fixtures.py."
 
 deps-bump:
 	uvx uv-upx upgrade run --profile with_pinned

@@ -15,16 +15,17 @@ from django.utils.translation import gettext_lazy
 from django_service_specs.parameters.check_arguments import check_arguments
 from django_service_specs.parameters.invalid_arguments import InvalidArguments
 from django_service_specs.parameters.parameters import Parameter, Parameters
+from django_service_specs.types.unset import UNSET
 from django_service_specs.types.unset import UNSET as KERNEL_UNSET
 from rest_framework import ISO_8601, serializers
 from rest_framework_dataclasses.serializers import DataclassSerializer
 
 from django_spec_rest.service_specs.utils import (
+    _answerable,
     describe_serializer,
     input_parameters,
     serializer_context,
 )
-from django_spec_rest.types.unset import UNSET
 from tests.testapp.models import Post, Tag
 
 
@@ -81,7 +82,10 @@ def test_a_dataclass_is_described_through_a_dataclass_serializer() -> None:
     ],
 )
 def test_anything_but_a_serializer_class_or_a_dataclass_is_refused(declaration: Any) -> None:
-    with pytest.raises(ImproperlyConfigured, match="Serializer subclass or a dataclass"):
+    with pytest.raises(
+        ImproperlyConfigured,
+        match="Serializer subclass or a dataclass, as SerializerValidator and SerializerPresenter take",
+    ):
         describe_serializer(declaration)
 
 
@@ -493,7 +497,7 @@ def test_the_shape_check_refuses_what_drf_coerces_across_json_types(
     # renders would; a Python value no JSON body carries, which the kernel's
     # check, reading JSON values only, refuses where DRF reads it as parsed;
     # and the kernel's default bound on a list's length. Each is a difference
-    # from drfs' own dispatch that the CHANGELOG states; a case here that
+    # the CHANGELOG states; a case here that
     # starts passing is one to strike from it.
     assert _shape_check(field, value) == (True, False)
 
@@ -610,7 +614,7 @@ def _depth(param: Parameter | None, step: str) -> int:
 def test_a_recursive_serializer_is_truncated_to_an_open_object() -> None:
     params = _walk(_Tree)
     # The root is the first appearance, and three more nest below it before the
-    # next one is truncated: drfs' own schema allowance.
+    # next one is truncated.
     assert _depth(params.get("parent"), "parent") == 3
     assert _depth(params.get("children"), "children") == 3
     deepest = params.get("parent")
@@ -654,3 +658,27 @@ def test_a_call_context_is_offered_to_the_callable_as_the_call_s_own_dict() -> N
     )
 
     assert context["same"] is True
+
+
+# --- whether a description can ask a context callable -----------------------------
+
+
+def test_a_parameter_with_a_default_is_not_looked_for_in_the_pool() -> None:
+    """A defaulted parameter is answered by its default where the pool lacks it,
+    so the callable is still asked."""
+
+    def fn(request: Any, tenant: Any = None) -> dict[str, Any]:
+        return {}
+
+    assert _answerable(fn, {"request": object()})
+    assert not _answerable(fn, {})
+
+
+def test_a_var_positional_parameter_is_not_looked_for_in_the_pool() -> None:
+    """``*args`` has no default, yet the pool is keyed by name and never fills
+    it, so only the named parameters decide."""
+
+    def fn(request: Any, *args: Any) -> dict[str, Any]:
+        return {}
+
+    assert _answerable(fn, {"request": object()})

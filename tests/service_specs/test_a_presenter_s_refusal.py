@@ -3,7 +3,7 @@
 The kernel's ``present`` and ``present_for_audience`` call the presenter, and
 a kernel route reads the kernel's refusal of the arguments, never DRF's
 ``ValidationError``. So ``SerializerPresenter.presented`` answers a
-serializer's refusal as the dual ``InvalidArguments``, still DRF's class:
+serializer's refusal as the dual ``DRFInvalidArguments``, still DRF's class:
 
 - a mapping detail passes as it is;
 - a list detail, which is all DRF makes of a message, goes under the
@@ -34,7 +34,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.test import APIRequestFactory
 
 from django_spec_rest import SelectorRetrieveView, ServiceCreateView
-from django_spec_rest.service_specs.invalid_arguments import InvalidArguments
+from django_spec_rest.service_specs.drf_invalid_arguments import DRFInvalidArguments
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from tests.testapp.models import Post
 
@@ -127,7 +127,7 @@ async def test_the_kernel_s_apresent_refuses_as_the_kernel_s_invalid_arguments()
     )
     result = await adispatch(spec, principal=AnonymousUser(), arguments={})
 
-    with pytest.raises(InvalidArguments) as excinfo:
+    with pytest.raises(DRFInvalidArguments) as excinfo:
         await apresent(spec, result)
 
     assert excinfo.value.detail == {NON_FIELD_ERRORS: ["Cannot render."]}
@@ -135,9 +135,9 @@ async def test_the_kernel_s_apresent_refuses_as_the_kernel_s_invalid_arguments()
 
 def test_the_kernel_s_own_refusal_leaves_exactly_as_raised() -> None:
     """A serializer raising the kernel's class, the dual one here, is not rebuilt."""
-    error = InvalidArguments({"fields": ["kept"]})
+    error = DRFInvalidArguments({"fields": ["kept"]})
 
-    with pytest.raises(InvalidArguments) as excinfo:
+    with pytest.raises(DRFInvalidArguments) as excinfo:
         SerializerPresenter(_refusing(error)).present(object())
 
     assert excinfo.value is error
@@ -153,22 +153,15 @@ def test_any_other_exception_leaves_exactly_as_raised() -> None:
 
 
 class _CreateView(ServiceCreateView):
-    """A create view over a kernel spec, whose answer the spec's presenter renders.
-
-    ``get_permissions`` answers the view's own classes, as the spine's views do:
-    ``MutationFlowMixin``'s reads a drfs-only spec field."""
+    """A create view over a kernel spec, whose answer the spec's presenter renders."""
 
     permission_classes: Any = []
-
-    def get_permissions(self) -> list[Any]:
-        return [permission() for permission in self.permission_classes]
 
 
 @pytest.mark.parametrize(
     ("error", "body"),
     [
-        # Changed by design: drfs answered a message as DRF's bare list,
-        # ``["Cannot render."]``. A kernel spec presents through the kernel's
+        # Not DRF's bare list, ``["Cannot render."]``: a kernel spec presents through the kernel's
         # ``present``, where the refusal is the dual class with the message
         # under the kernel's non-field key, and that mapping is the body.
         (ValidationError("Cannot render."), b'{"non_field_errors":["Cannot render."]}'),

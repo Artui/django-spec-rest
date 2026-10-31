@@ -15,11 +15,11 @@ class OfflineContext:
     """The HTTP-surrogate a spec needs when dispatched off the HTTP path.
 
     Produced by
-    [`build_offline_context`][django_spec_rest.dispatch.build_offline_context.build_offline_context].
+    [`build_offline_context`][django_spec_rest.service_specs.build_offline_context.build_offline_context].
     Its ``request`` / ``view`` feed the optional ``request=`` / ``view=`` arguments of
-    [`dispatch_spec`][django_spec_rest.dispatch.dispatch_spec.dispatch_spec], and
+    [`dispatch`][django_service_specs.dispatch.dispatch.dispatch], and
     the whole value is consumed by
-    [`enforce_permissions`][django_spec_rest.dispatch.enforce_permissions.enforce_permissions].
+    the kernel's permission check.
 
     - ``user`` — the acting principal (``request.user`` is set to the same value);
       ``Any`` because the user model is project-defined.

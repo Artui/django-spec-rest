@@ -1,9 +1,6 @@
 """A key the spec's typed ``kwargs`` provider is annotated to fill is never the client's, on the kernel route.
 
-On a drfs spec the provider could own any field's key, and declining it left
-the service's parameter its default whatever field the client's value came in
-through. On a kernel spec the kernel decides most of that before a request
-arrives: a key that names a ``SerializerValidator`` parameter - a list, dict,
+The kernel decides most of that before a request arrives: a key that names a ``SerializerValidator`` parameter - a list, dict,
 nested or nested ``many`` field, or a plain required one - is refused when the
 spec's parameters are assembled, because the provider's values reach the
 service's pool and never the Validator, and ``input_data`` is the seat that
@@ -24,11 +21,11 @@ from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import ServiceSpec
 from django_service_specs.dispatch.dispatch import dispatch as kernel_dispatch
+from django_service_specs.types.unset import UNSET
 from rest_framework import serializers
 
-from django_spec_rest import UNSET
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
-from tests.views.server_value_calls import CORES, FORMATS, OPEN, Core, post
+from tests.views.server_value_calls import FORMATS, OPEN, dispatch_live, post
 
 pytestmark = pytest.mark.django_db
 
@@ -129,8 +126,35 @@ def test_input_data_for_the_field_of_a_declined_source_reaches_its_parameter(fmt
     assert seen == {"param": "srv", "data": {"org": "srv"}}
 
 
-@CORES
-def test_a_kernel_call_inside_the_service_keeps_its_own_values(core: Core) -> None:
+def test_a_kernel_call_inside_the_service_takes_none_of_the_outer_calls_server_values() -> None:
+    """The value the outer call's ``input_data`` put is that call's: a spec the
+    service dispatches through the kernel validates what its own caller sent."""
+    seen: dict[str, Any] = {}
+
+    def inner(*, data: Any, org: Any = "DEFAULT") -> None:
+        seen["inner"] = (org, dict(data))
+
+    inner_spec = ServiceSpec(
+        service=inner, permissions=OPEN, validator=SerializerValidator(_SourcedIn), atomic=False
+    )
+
+    def outer(*, data: Any) -> None:
+        kernel_dispatch(inner_spec, principal=AnonymousUser(), arguments={"tenant": "inner"})
+
+    spec = ServiceSpec(
+        service=outer,
+        permissions=OPEN,
+        validator=SerializerValidator(_SourcedIn),
+        input_data=lambda: {"tenant": "srv"},
+        atomic=False,
+    )
+
+    dispatch_live(spec, {"tenant": "outer"})
+
+    assert seen == {"inner": ("inner", {"org": "inner"})}
+
+
+def test_a_kernel_call_inside_the_service_keeps_its_own_values() -> None:
     """The keys the outer call's provider owns are that call's: a spec the
     service dispatches through the kernel hands its own parameter of that name
     the value its own caller sent."""
@@ -154,6 +178,6 @@ def test_a_kernel_call_inside_the_service_keeps_its_own_values(core: Core) -> No
         atomic=False,
     )
 
-    core(spec, {"tenant": "outer"})
+    dispatch_live(spec, {"tenant": "outer"})
 
     assert seen == {"inner": "inner"}

@@ -6,8 +6,9 @@ query, and a run per row is N of them. Each path is driven over HTTP with a
 counting callable. A list is presented with the whole set under one context,
 never row by row, so a list of two rows still counts one.
 
-A kernel spec's presenter asks its context once per row, and the viewsets refuse
-a kernel spec in their actions yet; each is a strict xfail naming what owes it.
+A kernel spec's presenter asks its context once per row: a selector list view
+pins that answer, and each other test that meets it is a strict xfail naming what
+owes it.
 """
 
 from __future__ import annotations
@@ -77,21 +78,8 @@ def _touch_all(*, collection: QuerySet[Author]) -> QuerySet[Author]:
     return collection
 
 
-class _OwnPermissions:
-    """``get_permissions`` answers the view's own classes, as for a spec setting none.
-
-    ``MutationFlowMixin.get_permissions`` reads ``spec.permission_classes``,
-    which a kernel spec has no attribute for.
-    """
-
-    permission_classes: Any
-
-    def get_permissions(self) -> list[Any]:
-        return [permission() for permission in self.permission_classes]
-
-
 def _view(base: type, spec: ServiceSpec) -> Any:
-    return type("_View", (_OwnPermissions, base), {"spec": spec}).as_view()
+    return type("_View", (base,), {"spec": spec}).as_view()
 
 
 @pytest.fixture
@@ -182,17 +170,16 @@ def test_a_collection_update_presents_its_set_under_one_context(
     assert len(calls) == 1
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "The view presents the page's rows through the spec's presenter, but "
-        "SerializerPresenter (service_specs/serializer_presenter.py) inherits the kernel's "
-        "Presenter.presented_rows, which asks presented() once per row, so its "
-        "serializer_context callable runs once per row (two rows, two runs) rather than once "
-        "for the list."
-    ),
-)
-def test_a_selector_list_view_presents_under_one_context(two_authors: list[Author]) -> None:
+def test_a_selector_list_view_presents_each_row_under_a_context_of_its_own(
+    two_authors: list[Author],
+) -> None:
+    """The decided answer: a list is presented row by row, one context for each.
+
+    The view presents the page's rows through the spec's presenter, and
+    ``SerializerPresenter`` inherits the kernel's ``Presenter.presented_rows``,
+    which asks ``presented()`` once per row, so the ``serializer_context`` callable
+    runs once per row (two rows, two runs) rather than once for the list.
+    """
     calls, context = _counter()
 
     class _View(SelectorListView):
@@ -206,16 +193,9 @@ def test_a_selector_list_view_presents_under_one_context(two_authors: list[Autho
 
     response = _View.as_view()(factory.get("/"))
     assert response.status_code == 200
-    assert len(calls) == 1
+    assert len(calls) == 2
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "viewsets/utils.py _validate_action_spec reads drfs fields, so a kernel spec "
-        "in action_specs is refused at as_view()."
-    ),
-)
 def test_an_update_viewset_action_presents_under_one_context(two_authors: list[Author]) -> None:
     calls, context = _counter()
 
@@ -235,7 +215,6 @@ def test_an_update_viewset_action_presents_under_one_context(two_authors: list[A
                     kind=SelectorKind.RETRIEVE,
                     selector=lambda *, pk: Author.objects.filter(pk=pk).first(),
                     reads=Parameters.of(Parameter("pk", "integer", required=True)),
-                    permissions=_OPEN,
                 ),
                 validator=SerializerValidator(_NameIn),
                 presenter=SerializerPresenter(AuthorSerializer, serializer_context=context),

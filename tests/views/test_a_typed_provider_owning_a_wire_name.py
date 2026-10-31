@@ -8,15 +8,15 @@ two names answer differently on a kernel spec:
   ``kwargs`` provider annotated to fill one, since its values reach the
   service's pool and never the Validator; ``input_data`` is the seat that
   fills a field. That refusal is the kernel's, raised when the spec's
-  parameters are assembled, so the drfs cases of a provider owning the wire
-  name have no kernel counterpart and the refusal is asserted instead.
+  parameters are assembled, so the refusal is what is asserted.
 - **The ``source`` is no parameter**, so a provider may own it, and what the
   service is handed for it is the question the rest of this module asks.
-  ``NotClientInput`` on the wire name has no reader on a kernel spec; a
-  provider owning the ``source`` is its spelling here.
+  A provider owning the ``source`` is how a key is kept from the client.
 
-A view hook naming either name is not asked on the kernel route at all; that
-gap is held by ``test_author_values_outrank_the_validator``'s strict xfail.
+A view's ``get_service_kwargs`` naming the wire name pins the field, as any
+value naming a Validator parameter does, and one naming the ``source`` goes
+beneath the spec's provider, which it outranks the Validator from
+(``test_author_values_outrank_the_validator``).
 """
 
 from __future__ import annotations
@@ -29,27 +29,14 @@ import pytest
 from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import ServiceSpec, UnsetType
 from django_service_specs.dispatch.check_seeds import check_seeds
+from django_service_specs.types.unset import UNSET
 from rest_framework import serializers
 
-from django_spec_rest import UNSET
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
-from tests.views.server_value_calls import CORES, FORMATS, OPEN, Core, post
+from tests.views.server_value_calls import FORMATS, OPEN, dispatch_live, post
 from tests.views.test_kernel_views import _view
 
 pytestmark = pytest.mark.django_db
-
-# The client's value for a key a provider owns reaches that key's service
-# parameter on the kernel route, because ``SerializerValidator`` hands the
-# service every validated value by its ``source`` and the kernel spreads it
-# into the pool before the provider answers.
-_OWNED_GAP = pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "the kernel route sets no provider_owned on the edge's state, so "
-        "SerializerValidator hands the client's value for a key the typed "
-        "provider owns to the service by its source"
-    ),
-)
 
 
 class _SourcedIn(serializers.Serializer):
@@ -103,10 +90,9 @@ def test_a_provider_owning_the_wire_name_is_refused_at_as_view() -> None:
 # A provider owning the ``source``: the client's value is the service's in
 # ``data`` alone, and the parameter is the provider's answer or its default.
 _DECLINED = {"org": "D-org", "tenant": "D-tenant", "data": {"org": "evil"}}
-_FILLED = {"org": "srv", "tenant": "D-tenant", "data": {"org": "srv"}}
+_FILLED = {"org": "srv", "tenant": "D-tenant", "data": {"org": "evil"}}
 
 
-@_OWNED_GAP
 @FORMATS
 def test_a_declined_owned_source_hands_its_parameter_none_of_the_clients_value(fmt: str) -> None:
     seen: dict[str, Any] = {}
@@ -117,30 +103,25 @@ def test_a_declined_owned_source_hands_its_parameter_none_of_the_clients_value(f
     assert seen == _DECLINED
 
 
-@_OWNED_GAP
-@CORES
-def test_a_declined_owned_source_hands_its_parameter_none_of_the_clients_value_on_either_core(
-    core: Core,
-) -> None:
+def test_a_declined_owned_source_hands_its_parameter_none_of_the_clients_value_through_the_edge() -> (
+    None
+):
     seen: dict[str, Any] = {}
 
-    core(_spec(seen, owns="org", value=UNSET), {"tenant": "evil"})
+    dispatch_live(_spec(seen, owns="org", value=UNSET), {"tenant": "evil"})
 
     assert seen == _DECLINED
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "open owner decision: kwargs feeds the callable only, so the provider's "
-        "value never reaches data, which keeps the client's"
-    ),
-)
 @FORMATS
-def test_a_filled_owned_source_is_the_providers_value_in_data_too(fmt: str) -> None:
-    """A typed provider owning a ``source`` no field is named for: a key named
-    like a field is ``test_a_kwargs_value_named_like_a_field_is_the_service_s_alone``'s
-    (``tests/service_specs/``), and this case waits on the same decision."""
+def test_a_filled_owned_source_feeds_the_callable_and_leaves_data_the_clients(fmt: str) -> None:
+    """The decided answer: ``kwargs`` feeds the callable only.
+
+    A typed provider owning a ``source`` no field is named for puts its value in the
+    service's pool, so the provider's value never reaches ``data``, which keeps the
+    client's. A key named like a field is
+    ``test_a_kwargs_value_named_like_a_field_is_refused``'s (``tests/service_specs/``).
+    """
     seen: dict[str, Any] = {}
 
     response = post(_spec(seen, owns="org", value="srv"), {"tenant": "evil"}, fmt=fmt)
@@ -195,7 +176,6 @@ def test_a_declinable_source_the_provider_declines_stays_the_clients(fmt: str) -
     assert seen == {"org": "evil", "tenant": "D-tenant", "data": {"org": "evil"}}
 
 
-@_OWNED_GAP
 @FORMATS
 def test_a_dotted_source_s_owned_key_is_the_one_it_nests_under(fmt: str) -> None:
     """``org.name`` is nested under ``org``: the provider owning ``org`` owns the value."""
@@ -218,7 +198,6 @@ def test_a_dotted_source_s_owned_key_is_the_one_it_nests_under(fmt: str) -> None
     assert seen == {"org": "D-org", "tenant": "D-tenant", "data": {"org": {"name": "evil"}}}
 
 
-@_OWNED_GAP
 @FORMATS
 def test_owning_the_key_a_dotted_source_nests_under_owns_no_deeper_one(fmt: str) -> None:
     """``loc.city`` is nested under ``loc``: a field of its own named ``city`` stays the client's."""

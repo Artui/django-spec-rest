@@ -1,7 +1,6 @@
 """A ``many`` kernel spec's rows over HTTP: what reaches the service and what is refused.
 
-Changed by design: drfs bound a live view's list body whole through the list
-serializer, in DRF's words; the kernel validates each row through the spec's
+The kernel validates each row through the spec's
 Validator and refuses every failing row in one ``InvalidArguments`` addressed
 by the row's index under ``many_argument``. That error tree's shape is the
 refusal map's; this module holds which rows are refused and that nothing runs.
@@ -9,15 +8,18 @@ refusal map's; this module holds which rows are refused and that nothing runs.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 import pytest
+from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import ServiceSpec, Unrestricted
 from rest_framework import serializers
 from rest_framework.test import APIRequestFactory
 
 from django_spec_rest import ServiceCreateView
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
+from tests.views.server_value_calls import dispatch_live, open_spec, post
 
 pytestmark = pytest.mark.django_db
 
@@ -36,6 +38,11 @@ class _OwnedRow(serializers.Serializer):
 class _UserRow(serializers.Serializer):
     title = serializers.CharField()
     user = serializers.IntegerField()
+
+
+class _OptionalUserRow(serializers.Serializer):
+    title = serializers.CharField()
+    user = serializers.IntegerField(required=False)
 
 
 ran: list[Any] = []
@@ -121,3 +128,84 @@ def test_a_bulk_row_s_writable_user_validates_from_the_body() -> None:
     response = _post(_view(_UserRow), [{"title": "a", "user": 3}])
     assert response.status_code == 201
     assert response.data == [{"title": "a", "user": 3}]
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason=(
+        "service_specs/serializer_validator.py: a bulk row's optional writable field named "
+        "like a dispatcher seed is an unknown argument, dropped under the edge's IGNORE, so "
+        "the row validates without the value the client sent"
+    ),
+)
+def test_a_bulk_row_s_optional_writable_user_keeps_its_value() -> None:
+    response = _post(_view(_OptionalUserRow), [{"title": "a", "user": 3}])
+    assert response.status_code == 201, response.data
+    assert response.data == [{"title": "a", "user": 3}]
+
+
+class _OwnerAsUserRow(serializers.Serializer):
+    title = serializers.CharField()
+    owner = serializers.IntegerField(source="user")
+
+
+def test_a_bulk_row_field_sourced_onto_user_keeps_its_value() -> None:
+    """The way through the two cases above: a wire name that is no seed, whose
+    ``source`` puts the value under ``user`` in the row the service is handed."""
+    response = _post(_view(_OwnerAsUserRow), [{"title": "a", "owner": 3}])
+    assert response.status_code == 201, response.data
+    assert ran == [[{"title": "a", "user": 3}]]
+
+
+class _DistinctTitles(serializers.ListSerializer):
+    """A list-level ``validate()``, which DRF runs once every row it binds is valid."""
+
+    def validate(self, attrs: Any) -> Any:
+        if len({row["title"] for row in attrs}) < len(attrs):
+            raise serializers.ValidationError("Each title once.")
+        return attrs
+
+
+class _DistinctRow(_Row):
+    class Meta:
+        list_serializer_class = _DistinctTitles
+
+
+def test_a_lists_own_checks_judge_the_rows_the_kernel_passed() -> None:
+    """The kernel refuses the row that is no object before the Validator binds a
+    row, and the Validator binds the rows left, so the list's own ``validate()``
+    runs over them and its refusal sits beside the row's, every row keyed by the
+    index it was sent at."""
+    response = _post(_view(_DistinctRow), [{"title": "a"}, 5, {"title": "a"}])
+    assert response.status_code == 400
+    rows = response.data["items"]
+    assert sorted(rows, key=str) == [1, "non_field_errors"]
+    assert rows["non_field_errors"] == ["Each title once."]
+    assert ran == []
+
+
+def _refused(call: Callable[..., Any]) -> None:
+    seen: dict[str, Any] = {}
+
+    def service(*, data: Any, title: Any = None) -> None:
+        seen.update(data=data, title=title)
+
+    spec = open_spec(service, _Row, kwargs=lambda: {"title": "from-provider"}, many=True)
+
+    with pytest.raises(ImproperlyConfigured, match=r"answered 'title'.*ServiceSpec\.input_data"):
+        call(spec, [{"title": "t"}])
+
+    assert seen == {}
+
+
+def test_a_kwargs_value_named_like_a_row_field_is_refused() -> None:
+    """A ``many`` spec's ``kwargs`` provider is held to what a single-object
+    spec's is: its answer naming a row field's wire name would reach the
+    service unvalidated, beside the rows the Validator checked, so the request
+    is refused and the service never runs."""
+    _refused(post)
+
+
+def test_a_live_view_s_dispatch_refuses_a_kwargs_value_named_like_a_row_field() -> None:
+    _refused(dispatch_live)

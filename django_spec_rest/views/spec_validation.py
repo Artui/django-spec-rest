@@ -1,56 +1,28 @@
-"""Fail-fast validation of service / selector signatures at view setup time.
+"""Fail-fast validation of a view's kernel spec at view setup time.
 
-``resolve_callable_kwargs`` forwards pool∩signature, so a required parameter
-the framework cannot supply is *omitted* rather than rejected and the call dies
-as a bare ``TypeError`` deep in dispatch, at the first request. These helpers
-surface the same misconfiguration at ``as_view()`` time with a precise message.
-
-Deliberately lenient on extras: a ``kwargs`` provider or an overridden
-``get_*_kwargs`` may be feeding the callable keys the validator cannot see.
-
-A kernel spec is checked differently, and more strictly. It checks its own
-fields when it is built, so ``as_view()`` asks only what the view knows: that
-the spec is of the kind of operation the view serves, the ``SelectorKind`` its
-mount point is shaped for, and no ``filter_set`` beside DRF's own filter
-backend on a list; then the kernel's ``check_seeds``, against the seeds the
-edge dispatches with, refuses whatever no call could fill. No view hook reaches
-a kernel spec, so nothing is lenient on extras there.
+A kernel spec checks its own fields when it is built, so ``as_view()`` asks
+only what the view knows: that the spec is of the kind of operation the view
+serves, the ``SelectorKind`` its mount point is shaped for, and no
+``filter_set`` beside DRF's own filter backend on a list; then the kernel's
+``check_seeds``, against the seeds the edge dispatches with, refuses whatever
+no call could fill. A required parameter nothing can fill is met at
+``as_view()`` rather than as a bare ``TypeError`` deep in dispatch at the first
+request. No view hook reaches a kernel spec, so nothing is lenient on extras.
 """
 
 from __future__ import annotations
 
 import inspect
-from collections.abc import Callable, Iterable, Iterator
-from dataclasses import is_dataclass
+from collections.abc import Callable
 from typing import Any
 
 from django.core.exceptions import ImproperlyConfigured
-from django_service_specs.adapters.filters.filter_set_parameters import filter_set_parameters
 from django_service_specs.dispatch.check_seeds import check_seeds
 from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelectorSpec
 from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
-from rest_framework.permissions import BasePermission
-from rest_framework.serializers import Serializer
+from django_service_specs.types.selector_kind import SelectorKind
 
-from django_spec_rest.dispatch.kernel_edge import runs_on_kernel
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
-from django_spec_rest.service_specs.utils import (
-    UNREADABLE_WITHOUT_A_CALL,
-    writable_input_names,
-)
-from django_spec_rest.types.affordance_declarer import AffordanceDeclarer
-from django_spec_rest.types.marked_input_keys import marked_input_keys
-from django_spec_rest.types.polymorphic_service_spec import PolymorphicServiceSpec
-from django_spec_rest.types.selector_kind import SelectorKind
-from django_spec_rest.types.selector_spec import SelectorSpec
-from django_spec_rest.types.service_spec import ServiceSpec
-from django_spec_rest.types.utils import is_row_condition
-
-# Keys the framework injects automatically into the pool.
-_FRAMEWORK_KEY_DATA = "data"
-_FRAMEWORK_KEY_INSTANCE = "instance"
-_FRAMEWORK_KEY_RESULT = "result"
-_FRAMEWORK_KEY_SERIALIZER = "serializer"
 
 
 def _required_kw_params(fn: Callable[..., Any]) -> dict[str, inspect.Parameter]:
@@ -67,135 +39,45 @@ def _required_kw_params(fn: Callable[..., Any]) -> dict[str, inspect.Parameter]:
     }
 
 
-def _accepts_var_keyword(fn: Callable[..., Any]) -> bool:
-    return any(
-        p.kind == inspect.Parameter.VAR_KEYWORD for p in inspect.signature(fn).parameters.values()
-    )
+def _positional_only(fn: Callable[..., Any]) -> list[str]:
+    """The parameters of ``fn`` taking a value by position alone and declaring no default, sorted.
 
-
-def validate_callable_signature(
-    fn: Callable[..., Any],
-    *,
-    spec_label: str,
-    has_data: bool,
-    has_instance: bool,
-    has_result: bool,
-    spec_kwargs: Callable[..., Any] | None,
-    permissive_extras: bool,
-    extra_known_keys: Iterable[str] = (),
-) -> None:
-    """Raise ``ImproperlyConfigured`` on a misconfigured service / selector.
-
-    ``has_data`` / ``has_instance`` / ``has_result`` say whether those
-    framework-injected keys exist at *this* call site; requiring one that does
-    not always fails, since no user override can supply it. Every other required
-    parameter is checked only when nothing could be feeding it
-    (``permissive_extras`` false and no ``spec_kwargs``). ``extra_known_keys``
-    extends the allowed set for call sites that seed additional names.
+    The framework hands every value by keyword (``resolve_callable_kwargs``),
+    so such a parameter is never supplied, whatever its name: called, ``fn``
+    raises ``TypeError``. One with a default is left to it. One branch to
+    coverage, so each condition is named: a keyword parameter by
+    test_create_returns_201_then_200_on_upsert, which every parameter would
+    otherwise refuse, and a default by
+    test_a_positional_only_parameter_with_a_default_is_left_to_it.
     """
-    if _accepts_var_keyword(fn):
-        return
-
-    fn_label = getattr(fn, "__qualname__", repr(fn))
-    required = _required_kw_params(fn)
-
-    # Always-fatal: framework-provided keys absent from this call site.
-    if _FRAMEWORK_KEY_DATA in required and not has_data:
-        raise ImproperlyConfigured(
-            f"{spec_label}: {fn_label} requires `data` but the spec has no "
-            "`input_serializer`. Either set `input_serializer=...` on the spec "
-            "or remove `data` from the signature."
-        )
-    if _FRAMEWORK_KEY_SERIALIZER in required and not has_data:
-        raise ImproperlyConfigured(
-            f"{spec_label}: {fn_label} requires `serializer` but the spec has "
-            "no `input_serializer` to bind one from. Either set "
-            "`input_serializer=...` on the spec or remove `serializer` from "
-            "the signature."
-        )
-    if _FRAMEWORK_KEY_INSTANCE in required and not has_instance:
-        raise ImproperlyConfigured(
-            f"{spec_label}: {fn_label} requires `instance` but this action "
-            "does not provide one (e.g. a create or list action). Remove `instance` "
-            "from the signature or attach the spec to an update / destroy / "
-            "retrieve / detail action instead."
-        )
-    if _FRAMEWORK_KEY_RESULT in required and not has_result:
-        raise ImproperlyConfigured(
-            f"{spec_label}: {fn_label} requires `result` but this callable "
-            "is not an output selector. Remove `result` from the signature or "
-            "attach the callable to `ServiceSpec.output_selector_spec.selector`."
-        )
-
-    if permissive_extras or spec_kwargs is not None:
-        # A user-supplied kwargs source is in play and its keys are not
-        # statically knowable, so anything below would be a guess.
-        return
-
-    known: set[str] = {"request", "user"}
-    if has_data:
-        known.add(_FRAMEWORK_KEY_DATA)
-        known.add(_FRAMEWORK_KEY_SERIALIZER)
-    if has_instance:
-        known.add(_FRAMEWORK_KEY_INSTANCE)
-    if has_result:
-        known.add(_FRAMEWORK_KEY_RESULT)
-    known.update(extra_known_keys)
-
-    unknown_required = sorted(name for name in required if name not in known)
-    if not unknown_required:
-        return
-
-    raise ImproperlyConfigured(
-        f"{spec_label}: {fn_label} has required parameter(s) "
-        f"{unknown_required!r} that the framework does not provide. "
-        "Provide them via `ServiceSpec.kwargs` / `SelectorSpec.kwargs`, via "
-        "`get_<action>_service_kwargs` / `get_service_kwargs`, or remove "
-        "them from the signature."
+    return sorted(
+        name
+        for name, p in inspect.signature(fn).parameters.items()
+        if p.kind is inspect.Parameter.POSITIONAL_ONLY and p.default is inspect.Parameter.empty
     )
+
+
+def _refuse_positional_only(fn: Callable[..., Any], *, label: str, seat: str) -> None:
+    """``ImproperlyConfigured`` where ``fn`` takes a parameter ``_positional_only`` names."""
+    positional = _positional_only(fn)
+    if positional:
+        raise ImproperlyConfigured(
+            f"{label}: `{seat}` takes parameter(s) {positional} by position only, which the "
+            "framework never supplies: it hands every value by keyword. Declare them as "
+            "keyword parameters, or give each a default."
+        )
 
 
 def is_overridden(view_cls: type, base_cls: type, method_name: str) -> bool:
     """Return ``True`` if ``view_cls`` overrides ``base_cls``'s ``method_name``.
 
-    Drives ``permissive_extras``: an overridden ``get_*_kwargs`` is assumed to
-    contribute keys the validator cannot see.
+    Drives the seed check: an overridden ``get_*_kwargs`` is assumed to
+    contribute keys ``check_seeds`` cannot see, so such a view is not asked it.
     """
     base = getattr(base_cls, method_name, None)
     if base is None:
         return hasattr(view_cls, method_name)
     return getattr(view_cls, method_name, None) is not base
-
-
-def _has_any_shaping(spec: SelectorSpec[Any, Any]) -> bool:
-    return (
-        spec.select_related is not None
-        or spec.prefetch_related is not None
-        or spec.annotations is not None
-        or spec.extend_queryset is not None
-        or spec.filter_set is not None
-        or spec.affordances is not None
-    )
-
-
-def _validate_selector_shaping(
-    spec: SelectorSpec[Any, Any],
-    *,
-    label: str,
-) -> None:
-    """Raise ``ImproperlyConfigured`` when shaping is set without a selector.
-
-    Shaping only runs inside ``dispatch_selector_for_spec``, which is skipped
-    when ``spec.selector is None`` — so without this the fields are a silent
-    no-op at request time.
-    """
-    if spec.selector is None and _has_any_shaping(spec):
-        raise ImproperlyConfigured(
-            f"{label}: select_related / prefetch_related / annotations / "
-            "extend_queryset / filter_set / affordances are set but `selector` is not. Set a "
-            "selector or drop the shaping fields — they only run when the "
-            "spec's selector dispatches."
-        )
 
 
 def _uses_django_filter_backend(view_cls: type) -> bool:
@@ -217,7 +99,7 @@ def _uses_django_filter_backend(view_cls: type) -> bool:
 
 def validate_filter_set_no_backend_conflict(
     view_cls: type,
-    spec: SelectorSpec[Any, Any] | KernelSelectorSpec,
+    spec: KernelSelectorSpec,
     *,
     label: str,
 ) -> None:
@@ -242,293 +124,6 @@ def validate_filter_set_no_backend_conflict(
     )
 
 
-def _validate_permission_classes(
-    permission_classes: Any,
-    *,
-    label: str,
-) -> None:
-    """Raise ``ImproperlyConfigured`` on a malformed ``permission_classes``.
-
-    ``None`` is the inherit-from-view default and skips validation. Catches the
-    common ``[MyPermission()]`` typo, which DRF would otherwise call as if it
-    were a class.
-    """
-    if permission_classes is None:
-        return
-    for entry in permission_classes:
-        if not isinstance(entry, type) or not issubclass(entry, BasePermission):
-            raise ImproperlyConfigured(
-                f"{label}: permission_classes entries must be `BasePermission` "
-                f"subclasses; got {entry!r}."
-            )
-
-
-def _validate_input_serializer(input_serializer: Any, *, label: str) -> None:
-    """Reject an ``input_serializer`` that is neither shape the runtime accepts.
-
-    ``dataclasses.is_dataclass`` answers ``True`` for an *instance* as well as a
-    class, so ``input_serializer=MyInput()`` — one stray pair of parentheses —
-    slips past every other check here and reaches
-    ``DataclassSerializer(dataclass=<instance>)`` on the first request, where it
-    fails somewhere that names neither the spec nor the field.
-    """
-    if input_serializer is None:
-        return
-    if isinstance(input_serializer, type) and (
-        issubclass(input_serializer, Serializer) or is_dataclass(input_serializer)
-    ):
-        return
-    raise ImproperlyConfigured(
-        f"{label}: `input_serializer` must be a Serializer subclass or a dataclass "
-        f"*type*, got {input_serializer!r}. An instance is the usual cause — pass "
-        "the class itself, without the parentheses."
-    )
-
-
-def _validate_preconditions(
-    preconditions: Any,
-    *,
-    label: str,
-    has_data: bool,
-    has_instance: bool,
-    spec_kwargs: Callable[..., Any] | None,
-    permissive_extras: bool,
-    extra_known_keys: tuple[str, ...] = (),
-) -> None:
-    """Fail fast on a mis-declared ``preconditions``.
-
-    Both failures it catches are otherwise a 500 at request time: a bare callable
-    or string passed instead of a sequence would be iterated element-wise inside
-    dispatch, and a predicate naming a parameter no seed provides gets a
-    missing-argument ``TypeError`` deep in the stack. Uses the same signature
-    check the service gets, so the pool a precondition may declare from is
-    exactly the pool it will be handed.
-    """
-    if preconditions is None:
-        return
-    if callable(preconditions) or isinstance(preconditions, str | bytes):
-        raise ImproperlyConfigured(
-            f"{label}: `preconditions` takes a sequence of callables, not a single "
-            f"{type(preconditions).__name__}. Wrap it in a list: preconditions=[…]."
-        )
-    if not isinstance(preconditions, Iterable):
-        raise ImproperlyConfigured(
-            f"{label}: `preconditions` must be a sequence of callables, got "
-            f"{type(preconditions).__name__}."
-        )
-    for index, precondition in enumerate(preconditions):
-        if not callable(precondition):
-            raise ImproperlyConfigured(
-                f"{label}: preconditions[{index}] is not callable ({type(precondition).__name__})."
-            )
-        validate_callable_signature(
-            precondition,
-            spec_label=f"{label}.preconditions[{index}]",
-            has_data=has_data,
-            has_instance=has_instance,
-            has_result=False,
-            spec_kwargs=spec_kwargs,
-            permissive_extras=permissive_extras,
-            extra_known_keys=extra_known_keys,
-        )
-
-
-def _validate_row_affordances(
-    spec: ServiceSpec[Any, Any, Any], *, label: str, has_instance: bool
-) -> None:
-    """Refuse a condition on the row on an action that resolves no row.
-
-    The spec cannot see this at construction -- whether an action targets a row
-    is the mount's fact, not the spec's -- and at request time it would be an
-    ``ImproperlyConfigured`` on the first call, which is a 500.
-    """
-    if has_instance:
-        return
-    for index, affordance in enumerate(spec.affordances or ()):
-        if is_row_condition(affordance.when):
-            raise ImproperlyConfigured(
-                f"{label}: affordances[{index}] ({affordance.code!r}) is a condition on "
-                "the row, but this action does not target one (e.g. a create or a "
-                "non-detail action). Move it to an update / destroy / detail action, or "
-                "make it a callable condition that needs no row."
-            )
-
-
-def _reject_ignored_nested_fields(nested: Any, *, label: str) -> None:
-    """Refuse the nested-spec fields nothing ever reads — don't ignore them.
-
-    Only the spec that owns the dispatch invokes ``preconditions``, and only its
-    ``permission_classes`` are checked: the view resolves permissions once, from
-    the spec being dispatched, before any nested spec resolves. Guarding an
-    inner selector with its own ``permission_classes`` therefore guards nothing,
-    which is worse than not declaring it — the reader sees a rule that is not
-    there. Both fail at ``as_view()`` instead.
-
-    A ``progress_reporter`` is the same: only the spec being dispatched runs, so
-    only its reporter reports, and dispatch refuses a nested one on every
-    request. It fails here, before the first request does
-    (test_a_nested_progress_reporter_is_refused_at_as_view).
-    """
-    if nested.preconditions is not None:
-        raise ImproperlyConfigured(
-            f"{label}: `preconditions` on a nested spec is never invoked — the "
-            "surrounding spec owns the dispatch. Move them to the spec being "
-            "dispatched."
-        )
-    if nested.progress_reporter is not None:
-        raise ImproperlyConfigured(
-            f"{label}: `progress_reporter` on a nested spec never reports — only "
-            "the spec being dispatched runs. Move it to the surrounding "
-            "ServiceSpec, whose service is the run."
-        )
-    if nested.permission_classes is not None:
-        raise ImproperlyConfigured(
-            f"{label}: `permission_classes` on a nested spec is never enforced — "
-            "the view checks the permissions of the spec being dispatched, before "
-            "any nested spec resolves. Move them to the surrounding spec's "
-            "`permission_classes`, or scope the nested selector's own queryset."
-        )
-
-
-def _reject_unrendered_affordances(nested: SelectorSpec[Any, Any], *, label: str) -> None:
-    """Refuse ``affordances`` on a nested spec that resolves a target.
-
-    ``instance_selector_spec`` and ``collection_selector_spec`` pick what a
-    mutation acts on; nothing they resolve is ever rendered, so the answers would
-    be computed into the lookup query and read by nobody. ``output_selector_spec``
-    is rendered, and is not refused.
-    """
-    if nested.affordances is not None:
-        raise ImproperlyConfigured(
-            f"{label}: `affordances` on a target lookup is never rendered -- the row "
-            "it resolves is acted on, not returned. Declare them on the "
-            "output_selector_spec, or on the selector that lists the rows."
-        )
-
-
-def _validate_output_selector_spec(
-    output_spec: SelectorSpec[Any, Any],
-    *,
-    label: str,
-    has_instance: bool,
-    has_collection: bool,
-    permissive_extras: bool,
-    spec_kwargs: Callable[..., Any] | None,
-    input_serializer: type | None,
-) -> None:
-    """Validate the nested
-    [`SelectorSpec`][django_spec_rest.types.selector_spec.SelectorSpec] on
-    ``ServiceSpec.output_selector_spec``.
-
-    ``kind=LIST`` is refused without ``collection_selector_spec``: a
-    single-instance mutation returns one representation. ``has_result=True``
-    because the service's return joins the selector's pool as ``result``. Extras
-    come from the *surrounding* mutation's kwargs chain, so the nested spec's own
-    ``kwargs`` is ignored at request time and deliberately not validated as a
-    selector spec's would be. ``permission_classes`` is ignored at request time
-    too, but is *refused* rather than skipped — an unenforced authorization field
-    reads as protection that is not there.
-    """
-    _reject_ignored_nested_fields(output_spec, label=label)
-    if output_spec.kind is SelectorKind.LIST and not has_collection:
-        raise ImproperlyConfigured(
-            f"{label}: output_selector_spec.kind=LIST renders a list and is only "
-            "valid alongside collection_selector_spec (bulk output pairs with a "
-            "bulk operation). A single-instance mutation returns one "
-            "representation — use kind=SelectorKind.RETRIEVE."
-        )
-    _validate_selector_shaping(output_spec, label=label)
-    if output_spec.selector is not None:
-        validate_callable_signature(
-            output_spec.selector,
-            spec_label=f"{label}.selector",
-            has_data=input_serializer is not None,
-            has_instance=has_instance,
-            has_result=True,
-            spec_kwargs=spec_kwargs,
-            permissive_extras=permissive_extras,
-        )
-
-
-def _validate_instance_selector_spec(
-    instance_spec: SelectorSpec[Any, Any],
-    *,
-    label: str,
-    has_instance: bool,
-) -> None:
-    """Validate the nested
-    [`SelectorSpec`][django_spec_rest.types.selector_spec.SelectorSpec] on
-    ``ServiceSpec.instance_selector_spec``.
-
-    On an action with no instance the spec would silently never run, so that
-    fails fast too. The selector runs *before* input validation, against
-    ``{request, user}`` plus URL kwargs — hence ``has_data`` / ``has_instance`` /
-    ``has_result`` all ``False`` below, while other extras stay permissive
-    because URL kwargs and the selector kwargs chain are dynamic.
-    """
-    _reject_ignored_nested_fields(instance_spec, label=label)
-    _reject_unrendered_affordances(instance_spec, label=label)
-    if not has_instance:
-        raise ImproperlyConfigured(
-            f"{label}: instance_selector_spec is set but this action does not "
-            "target an instance (e.g. a create or non-detail action). Remove "
-            "it or attach the spec to an update / destroy / detail action."
-        )
-    if instance_spec.kind is not SelectorKind.RETRIEVE:
-        raise ImproperlyConfigured(
-            f"{label}: instance_selector_spec.kind must be SelectorKind.RETRIEVE; "
-            f"got {instance_spec.kind!r}. Instance resolution materializes a "
-            "single instance."
-        )
-    _validate_selector_shaping(instance_spec, label=label)
-    if instance_spec.selector is not None:
-        validate_callable_signature(
-            instance_spec.selector,
-            spec_label=f"{label}.selector",
-            has_data=False,
-            has_instance=False,
-            has_result=False,
-            spec_kwargs=instance_spec.kwargs,
-            permissive_extras=True,
-        )
-
-
-def _validate_collection_selector_spec(
-    collection_spec: SelectorSpec[Any, Any],
-    *,
-    label: str,
-) -> None:
-    """Validate the nested
-    [`SelectorSpec`][django_spec_rest.types.selector_spec.SelectorSpec] on
-    ``ServiceSpec.collection_selector_spec``.
-
-    Unlike ``instance_selector_spec``, a ``selector`` is mandatory — there is no
-    view fallback for a collection target. Runs against ``{request, user}`` plus
-    the dispatch params, so extras stay permissive.
-    """
-    _reject_ignored_nested_fields(collection_spec, label=label)
-    _reject_unrendered_affordances(collection_spec, label=label)
-    if collection_spec.kind is not SelectorKind.LIST:
-        raise ImproperlyConfigured(
-            f"{label}: collection_selector_spec.kind must be SelectorKind.LIST; "
-            f"got {collection_spec.kind!r}. It resolves a collection, not a single instance."
-        )
-    if collection_spec.selector is None:
-        raise ImproperlyConfigured(
-            f"{label}: collection_selector_spec requires a `selector` resolving the target set."
-        )
-    _validate_selector_shaping(collection_spec, label=label)
-    validate_callable_signature(
-        collection_spec.selector,
-        spec_label=f"{label}.selector",
-        has_data=False,
-        has_instance=False,
-        has_result=False,
-        spec_kwargs=collection_spec.kwargs,
-        permissive_extras=True,
-    )
-
-
 # Keys the status pool offers a ``success_status`` callable.
 _SUCCESS_STATUS_KEYS = frozenset({"result", "instance", "request", "view"})
 
@@ -542,7 +137,12 @@ def _validate_success_status(
     """Reject a ``success_status`` that is neither int/None nor a well-formed callable.
 
     A required parameter outside ``_SUCCESS_STATUS_KEYS`` can never be
-    supplied, so it fails here rather than as a ``TypeError`` deep in dispatch.
+    supplied, so it fails here rather than as a ``TypeError`` deep in dispatch,
+    ``**kwargs`` beside it or not: ``**kwargs`` is handed the pool, never a
+    name the pool lacks
+    (test_a_callable_taking_kwargs_beside_a_key_the_pool_lacks_is_refused_at_as_view).
+    Nor can a required positional-only parameter, a key's name included
+    (test_a_callable_taking_a_positional_only_parameter_is_refused_at_as_view).
     """
     if success_status is None or isinstance(success_status, int):
         return
@@ -551,14 +151,13 @@ def _validate_success_status(
             f"{label}: `success_status` must be an int, a callable returning an int, "
             f"or None — got {type(success_status).__name__}."
         )
-    if _accepts_var_keyword(success_status):
-        return
+    _refuse_positional_only(success_status, label=label, seat="success_status")
     unknown = set(_required_kw_params(success_status)) - _SUCCESS_STATUS_KEYS
     if unknown:
         raise ImproperlyConfigured(
             f"{label}: `success_status` callable requires parameter(s) "
             f"{sorted(unknown)} the framework can't supply — declare only a subset "
-            f"of {sorted(_SUCCESS_STATUS_KEYS)} (or `**kwargs`)."
+            f"of {sorted(_SUCCESS_STATUS_KEYS)}, and `**kwargs` for the rest."
         )
 
 
@@ -566,7 +165,9 @@ def _validate_response_finalizer(finalizer: Any, *, label: str) -> None:
     """Reject a ``response_finalizer`` that isn't a well-formed callable.
 
     Same rule as ``_validate_success_status``, against
-    ``_RESPONSE_FINALIZER_KEYS``.
+    ``_RESPONSE_FINALIZER_KEYS``
+    (test_a_finalizer_taking_kwargs_beside_a_key_the_framework_lacks_is_refused_at_as_view,
+    test_a_finalizer_taking_a_positional_only_parameter_is_refused_at_as_view).
     """
     if finalizer is None:
         return
@@ -575,315 +176,26 @@ def _validate_response_finalizer(finalizer: Any, *, label: str) -> None:
             f"{label}: `response_finalizer` must be a callable returning a Response "
             f"or None — got {type(finalizer).__name__}."
         )
-    if _accepts_var_keyword(finalizer):
-        return
+    _refuse_positional_only(finalizer, label=label, seat="response_finalizer")
     unknown = set(_required_kw_params(finalizer)) - _RESPONSE_FINALIZER_KEYS
     if unknown:
         raise ImproperlyConfigured(
             f"{label}: `response_finalizer` requires parameter(s) {sorted(unknown)} the "
             f"framework can't supply — declare only a subset of "
-            f"{sorted(_RESPONSE_FINALIZER_KEYS)} (or `**kwargs`)."
+            f"{sorted(_RESPONSE_FINALIZER_KEYS)}, and `**kwargs` for the rest."
         )
-
-
-# The nested specs a service's dispatch calls a ``selector`` of: its two target
-# lookups and its output re-read.
-_NESTED_SELECTOR_SPECS = (
-    "instance_selector_spec",
-    "collection_selector_spec",
-    "output_selector_spec",
-)
-
-
-def _refuse_misplaced_schema_markers(
-    spec: ServiceSpec[Any, Any, Any] | SelectorSpec[Any, Any], *, label: str
-) -> None:
-    """Refuse a schema marker that dispatch would refuse on every call.
-
-    Dispatch reads ``InputRequired`` / ``NotClientInput`` / ``InputDescription``
-    through ``marked_input_keys`` each time it binds a callable from the keyword
-    pool, and that read raises ``ImproperlyConfigured`` for a marker it cannot place
-    (``list[Annotated[int, NotClientInput]]``) or for ``InputRequired`` beside
-    ``NotClientInput``. Left to dispatch, the view mounts and every request to it
-    fails; read here, ``as_view()`` fails at URL-conf load and the app does not
-    start.
-
-    Not at construction, where ``many_argument`` and the target lookups are refused,
-    because the read resolves the callable's annotations and a spec is routinely
-    built before they resolve: under ``from __future__ import annotations`` a
-    ``TypedDict`` or class declared further down the module than the spec is a
-    ``NameError`` when the spec is built. ``marked_input_keys`` reads an
-    annotation it cannot resolve only as far as it evaluates, and a ``TypedDict``
-    that does not resolve yet as having no keys, so a marker it cannot reach there
-    is not placed. A check there would pass exactly those specs, so module order
-    would decide whether the declaration was refused at startup or on every call.
-    ``as_view()`` runs once every module is imported. An annotation that never
-    resolves, such as a name imported under ``if TYPE_CHECKING:``, costs only its
-    own name here as in dispatch, so the markers beside it are still checked
-    (``test_as_view_refuses_what_dispatch_would``). Off HTTP no view runs it, so a spec that is never mounted is refused
-    where its markers are first read: at schema generation, or on each dispatch.
-    """
-    for where, fn in _marker_reading_callables(spec, label=label):
-        try:
-            marked_input_keys(fn)
-        except ImproperlyConfigured as exc:
-            raise ImproperlyConfigured(f"{where}: {exc}") from exc
-
-
-def _marker_reading_callables(
-    spec: ServiceSpec[Any, Any, Any] | SelectorSpec[Any, Any], *, label: str
-) -> Iterator[tuple[str, Callable[..., Any]]]:
-    """``(label, callable)`` for every callable dispatch binds through the marker read.
-
-    The spec's ``service`` or ``selector``, its ``preconditions``, a callable
-    affordance condition, and the same again for each nested spec whose
-    ``selector`` dispatch calls. A ``SelectorSpec``'s ``affordances`` maps names to
-    service specs whose *conditions* it answers per dispatch, never their
-    services. Each position is held by a case of
-    test_every_callable_a_service_dispatch_reads_is_checked or
-    test_every_callable_a_selector_dispatch_reads_is_checked.
-
-    Nested ``preconditions`` and a target lookup's ``affordances`` are walked too,
-    though dispatch reads neither: both are refused earlier in the same
-    validation, so the walk never reaches one.
-    """
-    if isinstance(spec, ServiceSpec):
-        yield f"{label}.service", spec.service
-        yield from _callable_conditions(spec, label=label)
-        for field in _NESTED_SELECTOR_SPECS:
-            nested: SelectorSpec[Any, Any] | None = getattr(spec, field)
-            if nested is not None:
-                yield from _marker_reading_callables(nested, label=f"{label}.{field}")
-    else:
-        # A spec with no ``selector`` resolves through the view's queryset, so there
-        # is no callable to read. The marker read would pass ``None`` as
-        # unresolvable, so this narrows for the type checker, which holds it.
-        if spec.selector is not None:
-            yield f"{label}.selector", spec.selector
-        for name, affordance_spec in (spec.affordances or {}).items():
-            yield from _callable_conditions(affordance_spec, label=f"{label}.affordances[{name!r}]")
-    for index, precondition in enumerate(spec.preconditions or ()):
-        yield f"{label}.preconditions[{index}]", precondition
-
-
-def _callable_conditions(
-    spec: AffordanceDeclarer, *, label: str
-) -> Iterator[tuple[str, Callable[..., Any]]]:
-    # A condition on the row is an ORM expression, compiled into the query rather
-    # than called, so only a callable one is bound from the pool. Held by
-    # test_a_condition_on_the_row_is_not_read.
-    for index, affordance in enumerate(spec.affordances or ()):
-        if not is_row_condition(affordance.when):
-            yield f"{label}.affordances[{index}].when", affordance.when
-
-
-def _refuse_filters_named_like_fields(spec: ServiceSpec[Any, Any, Any], *, label: str) -> None:
-    """Refuse a target lookup's filter named like a field the input serializer takes from the body.
-
-    A filter's value comes off the query string and a field's off the body, and
-    one argument name cannot be both, so dispatch refuses the spec on every
-    request (``Parameters [...] are declared by two sources``). Refused here,
-    where the view is wired, by the names the compile reads: each writable
-    field as the client sends it, so a read-only field, a ``HiddenField`` and a
-    field's ``source`` are no clash, and a ``many`` spec, whose fields are each
-    row's, has none (test_a_name_the_body_does_not_write_is_accepted,
-    test_the_wire_name_is_the_one_refused). A serializer that cannot be built
-    without a request is left to that request's refusal
-    (test_a_serializer_unreadable_without_a_request_is_refused_by_the_request).
-    """
-    role = "collection" if spec.collection_selector_spec is not None else "instance"
-    target = spec.collection_selector_spec or spec.instance_selector_spec
-    # One arc to coverage, a condition each: without the first every spec with
-    # no target lookup raises ``AttributeError`` (an ``@service_action`` module
-    # such as tests/viewsets/decorators/test_service_action.py fails to import),
-    # and without the second a lookup with nothing to clash builds the
-    # serializer to find out
-    # (test_a_lookup_with_no_filter_set_leaves_the_serializer_unbuilt).
-    if target is None or target.filter_set is None:
-        return
-    try:
-        writable = writable_input_names(spec)
-    except UNREADABLE_WITHOUT_A_CALL:
-        return
-    shared = sorted(filter_set_parameters(target.filter_set).names() & writable)
-    if not shared:
-        return
-    names = ", ".join(repr(name) for name in shared)
-    # Declared, since a spec with none writes no name.
-    serializer: Any = spec.input_serializer
-    plural = "s" if len(shared) > 1 else ""
-    raise ImproperlyConfigured(
-        f"{label}.{role}_selector_spec.filter_set {target.filter_set.__qualname__} declares "
-        f"the filter{plural} {names}, which the input serializer "
-        f"{serializer.__qualname__} also takes as a writable field{plural}. "
-        "A filter's value comes off the query string and a field's off the body, and one "
-        "argument name cannot be both. Rename the filter (its field_name can stay the "
-        "column it filters) or the field."
-    )
-
-
-def validate_service_spec(
-    spec: ServiceSpec[Any, Any, Any],
-    *,
-    label: str,
-    has_instance: bool,
-    permissive_extras: bool,
-) -> None:
-    """Validate a
-    [`ServiceSpec`][django_spec_rest.types.service_spec.ServiceSpec]'s
-    ``service`` and nested selector specs.
-
-    Shared between standalone mutation views, viewset mixins, and
-    ``@service_action``. ``has_instance`` is fixed by the action context
-    (``False`` for create, ``True`` for update / destroy / detail actions).
-    """
-    _validate_success_status(spec.success_status, label=label)
-    _validate_response_finalizer(spec.response_finalizer, label=label)
-    _validate_input_serializer(spec.input_serializer, label=label)
-    _validate_permission_classes(spec.permission_classes, label=label)
-    validate_callable_signature(
-        spec.service,
-        spec_label=label,
-        has_data=spec.input_serializer is not None,
-        has_instance=has_instance,
-        has_result=False,
-        spec_kwargs=spec.kwargs,
-        permissive_extras=permissive_extras,
-        # A collection-target service receives the resolved set as ``collection``.
-        extra_known_keys=("collection",) if spec.collection_selector_spec is not None else (),
-    )
-    _validate_preconditions(
-        spec.preconditions,
-        label=label,
-        has_data=spec.input_serializer is not None,
-        has_instance=has_instance,
-        spec_kwargs=spec.kwargs,
-        permissive_extras=permissive_extras,
-        extra_known_keys=("collection",) if spec.collection_selector_spec is not None else (),
-    )
-    _validate_row_affordances(spec, label=label, has_instance=has_instance)
-    if spec.collection_selector_spec is not None:
-        _validate_collection_selector_spec(
-            spec.collection_selector_spec,
-            label=f"{label}.collection_selector_spec",
-        )
-    if spec.instance_selector_spec is not None:
-        _validate_instance_selector_spec(
-            spec.instance_selector_spec,
-            label=f"{label}.instance_selector_spec",
-            has_instance=has_instance,
-        )
-    if spec.output_selector_spec is not None:
-        _validate_output_selector_spec(
-            spec.output_selector_spec,
-            label=f"{label}.output_selector_spec",
-            has_instance=has_instance,
-            has_collection=spec.collection_selector_spec is not None,
-            permissive_extras=permissive_extras,
-            spec_kwargs=spec.kwargs,
-            input_serializer=spec.input_serializer,
-        )
-    _refuse_filters_named_like_fields(spec, label=label)
-    _refuse_misplaced_schema_markers(spec, label=label)
-
-
-def validate_polymorphic_service_spec(
-    poly: PolymorphicServiceSpec,
-    *,
-    label: str,
-    has_instance: bool,
-    permissive_extras: bool,
-) -> None:
-    """Validate every variant of a
-    [`PolymorphicServiceSpec`][django_spec_rest.types.polymorphic_service_spec.PolymorphicServiceSpec]
-    + its strategy.
-
-    Each variant is validated with the same ``has_instance`` /
-    ``permissive_extras`` as a plain entry would be.
-    """
-    if not poly.specs:
-        raise ImproperlyConfigured(f"{label}: PolymorphicServiceSpec.specs must not be empty.")
-    for key, variant in poly.specs.items():
-        if not isinstance(variant, ServiceSpec):
-            raise ImproperlyConfigured(
-                f"{label}: variant {key!r} must be a ServiceSpec, got {type(variant).__name__}."
-            )
-        validate_service_spec(
-            variant,
-            label=f"{label}[{key!r}]",
-            has_instance=has_instance,
-            permissive_extras=permissive_extras,
-        )
-    if poly.permission_strategy == "require_identical":
-        distinct = {
-            None if v.permission_classes is None else tuple(v.permission_classes)
-            for v in poly.specs.values()
-        }
-        if len(distinct) > 1:
-            raise ImproperlyConfigured(
-                f"{label}: permission_strategy='require_identical' but the variants declare "
-                "different `permission_classes`. Make them identical or use 'union'."
-            )
-
-
-def validate_selector_spec(
-    spec: SelectorSpec[Any, Any],
-    *,
-    label: str,
-    expected_kind: SelectorKind | None = None,
-) -> None:
-    """Validate a
-    [`SelectorSpec`][django_spec_rest.types.selector_spec.SelectorSpec]'s
-    ``selector``.
-
-    Selectors are always permissive on extras (URL kwargs and ``get_selector_kwargs``
-    are dynamic), so the only fatal misuses are framework-only keys absent from the
-    selector pool. ``expected_kind`` catches a spec mounted on the wrong view — a
-    ``LIST`` spec on
-    [`SelectorRetrieveView`][django_spec_rest.views.query.selector_retrieve_view.SelectorRetrieveView]
-    would otherwise misbehave only at runtime."""
-    _validate_permission_classes(spec.permission_classes, label=label)
-    _validate_selector_shaping(spec, label=label)
-    if expected_kind is not None:
-        _validate_selector_kind(spec, label=label, expected_kind=expected_kind)
-    # Must stay above the ``selector is None`` bail-out: a spec can carry
-    # preconditions without its own selector (the view's ``get_queryset``
-    # resolves the target), and those still run.
-    _validate_preconditions(
-        spec.preconditions,
-        label=label,
-        has_data=False,
-        # The target seeds one name or the other, never both — which is what
-        # stops an ``instance`` precondition being written against a LIST spec.
-        has_instance=spec.kind is SelectorKind.RETRIEVE,
-        spec_kwargs=spec.kwargs,
-        permissive_extras=True,
-        extra_known_keys=("collection",) if spec.kind is SelectorKind.LIST else (),
-    )
-    _refuse_misplaced_schema_markers(spec, label=label)
-    if spec.selector is None:
-        return
-    validate_callable_signature(
-        spec.selector,
-        spec_label=label,
-        has_data=False,
-        has_instance=False,
-        has_result=False,
-        spec_kwargs=spec.kwargs,
-        permissive_extras=True,
-    )
 
 
 def _validate_selector_kind(
-    spec: SelectorSpec[Any, Any] | KernelSelectorSpec,
+    spec: KernelSelectorSpec,
     *,
     label: str,
     expected_kind: SelectorKind,
 ) -> None:
     """Reject a spec whose ``kind`` is not the one its mount point is shaped for.
 
-    A drfs spec's and a kernel spec's alike: the kind is the view's question,
-    which no check made when the spec was built can answer.
+    The kind is the view's question, which no check made when the spec was built
+    can answer.
     """
     if spec.kind is not expected_kind:
         raise ImproperlyConfigured(
@@ -904,14 +216,12 @@ def _serves_the_other_kind(view_cls: type, spec: Any, served: type) -> str:
 def _check_kernel_seeds(spec: KernelServiceSpec | KernelSelectorSpec) -> None:
     """Refuse at ``as_view()`` what the kernel's ``check_seeds`` refuses of ``spec``.
 
-    Most of what ``validate_service_spec`` and ``validate_selector_spec`` check
-    of a drfs spec's signatures is a question this one answers for a kernel
-    spec: a keyword nothing fills, a positional-only parameter, an optional
-    read over a keyword that requires it, a parameter a seed occupies. Not
-    all of it: ``check_seeds`` reads no output selector, so a keyword an
-    ``output_selector_spec``'s selector requires and nothing fills, which drfs
-    refused here, is met only when the call reaches the re-read, after the
-    service has run. It is asked with the kernel's default seeds because
+    It answers the questions a spec's signatures raise: a keyword nothing
+    fills, a positional-only parameter, an optional read over a keyword that
+    requires it, a parameter a seed occupies. Not every one: ``check_seeds``
+    reads no output selector, so a keyword an ``output_selector_spec``'s
+    selector requires and nothing fills is met only when the call reaches the
+    re-read, after the service has run. It is asked with the kernel's default seeds because
     those are the seeds the edge dispatches with (``dispatch_kernel_spec``
     registers none), and only where nothing fills a keyword it cannot see:
     a mutation view overriding a service-kwargs hook hands the edge's
@@ -921,7 +231,7 @@ def _check_kernel_seeds(spec: KernelServiceSpec | KernelSelectorSpec) -> None:
     (``_refuse_selector_hooks``), so a selector view has no overlay to hide
     a keyword.
     The fields a kernel spec declares are checked when it is built, by its own
-    ``__post_init__``, so nothing of a drfs spec's field checks is owed here.
+    ``__post_init__``, so no field check is owed here.
     Held on a mutation view by test_a_keyword_nothing_fills_is_refused and on
     a selector view by test_a_list_selector_requiring_data_is_refused.
 
@@ -959,6 +269,34 @@ def _check_kernel_seeds(spec: KernelServiceSpec | KernelSelectorSpec) -> None:
     check_seeds(spec)
 
 
+def refuse_a_nested_selectors_permissions(spec: KernelServiceSpec, *, label: str) -> None:
+    """Refuse ``permissions`` declared on a kernel spec's nested selector, on any of its three seats.
+
+    A nested selector is a step of the spec's call, not a call of its own: the
+    kernel authorizes the spec being dispatched and never asks the nested
+    selector's ``permissions``, so one declared guards nothing and reads as if
+    it did. Any declaration is refused, ``Unrestricted()`` included: the
+    default is ``None``, which the kernel already refuses an empty sequence
+    beside, so a nested selector declaring nothing mounts.
+
+    One arc to coverage, so each conjunct is named: a seat the spec leaves
+    unset is skipped by every spec with no nested selector there
+    (test_service_create_view's test_creates_and_returns_201), and the
+    ``permissions`` test by every nested selector that declares none
+    (test_a_nested_selector_declaring_no_permissions_mounts). Each seat is held
+    by its own case of test_a_nested_selector_s_permissions_are_refused, since
+    coverage cannot see a role dropped from the tuple.
+    """
+    for role in ("instance", "collection", "output"):
+        nested: KernelSelectorSpec | None = getattr(spec, f"{role}_selector_spec")
+        if nested is not None and nested.permissions is not None:
+            raise ImproperlyConfigured(
+                f"{label}.{role}_selector_spec declares permissions, which a nested selector "
+                "never has asked: the spec being dispatched is what authorizes. Declare them "
+                "on the ServiceSpec, and drop them from the nested selector."
+            )
+
+
 def validate_mutation_view_spec(
     view_cls: type,
     *,
@@ -966,22 +304,17 @@ def validate_mutation_view_spec(
 ) -> None:
     """Validate ``view_cls.spec`` on a standalone mutation view.
 
-    No-op when ``spec`` is unset — the base classes inherit a ``None``
+    No-op when ``spec`` is unset: the base classes inherit a ``None``
     placeholder so ``as_view()`` itself doesn't trip.
     """
-    spec: ServiceSpec[Any, Any, Any] | KernelServiceSpec | KernelSelectorSpec | None = getattr(
-        view_cls, "spec", None
-    )
+    spec: KernelServiceSpec | KernelSelectorSpec | None = getattr(view_cls, "spec", None)
+    if spec is None:
+        return
     # A kernel selector spec is a kernel spec the kernel dispatches as gladly,
     # so without this a mutation view would run a read for a write
     # (test_kernel_views' test_a_kernel_selector_spec_on_a_mutation_view_is_refused_at_as_view).
-    # One arc to coverage, so each conjunct is named: without the first every
-    # drfs spec is refused (test_spec_validation_e2e_drfs), and without the second
-    # every kernel service spec (test_a_kernel_spec_passes_as_view).
-    if runs_on_kernel(spec) and not isinstance(spec, KernelServiceSpec):
+    if not isinstance(spec, KernelServiceSpec):
         raise ImproperlyConfigured(_serves_the_other_kind(view_cls, spec, KernelServiceSpec))
-    if spec is None:
-        return
     # Local import to avoid a module-level cycle:
     # ``views.spec_validation`` is imported by ``views.mutation.*``, but the
     # reverse coupling only matters here (to detect catch-all overrides).
@@ -990,35 +323,27 @@ def validate_mutation_view_spec(
     )
 
     hooked = is_overridden(view_cls, MutationFlowMixin, "get_service_kwargs")
-    if runs_on_kernel(spec):
-        # A kernel spec declares neither HTTP answer, so the view's own
-        # attributes are what ``_dispatch_kernel_mutation`` calls, after the
-        # service has run: refused here as a drfs spec's fields of these names
-        # are, rather than as a ``TypeError`` once the write has committed
-        # (test_callable_success_status' TestASuccessStatusTheViewCannotResolve,
-        # test_response_finalizer's TestAFinalizerTheViewCannotCall). Read off
-        # the class, which a function stored there is returned from unbound.
-        _validate_success_status(getattr(view_cls, "success_status", None), label=view_cls.__name__)
-        _validate_response_finalizer(
-            getattr(view_cls, "response_finalizer", None), label=view_cls.__name__
-        )
-        _refuse_a_detail_spec_with_no_target(view_cls, spec, has_instance=has_instance)
-        # A view hook's keys reach the service through the edge's overlay,
-        # which ``check_seeds`` cannot see and its own docstring says not to
-        # be asked beside, so a hooked view is not asked it, as drfs read an
-        # overridden hook as ``permissive_extras``. One arc to coverage, so
-        # each disjunct is named: the catch-all hook by test_spec_validation_e2e's
-        # test_a_view_hook_fills_a_keyword_check_seeds_cannot_see, the
-        # per-action one by test_a_per_action_hook_fills_a_keyword_check_seeds_cannot_see.
-        if not (hooked or _overrides_the_action_hook(view_cls, "service")):
-            _check_kernel_seeds(spec)
-        return
-    validate_service_spec(
-        spec,
-        label=f"{view_cls.__name__}.spec",
-        has_instance=has_instance,
-        permissive_extras=hooked,
+    # A kernel spec declares neither HTTP answer, so the view's own
+    # attributes are what ``dispatch_mutation_for_spec`` calls, after the
+    # service has run: refused here rather than as a ``TypeError`` once the
+    # write has committed
+    # (test_callable_success_status' TestASuccessStatusTheViewCannotResolve,
+    # test_response_finalizer's TestAFinalizerTheViewCannotCall). Read off
+    # the class, which a function stored there is returned from unbound.
+    _validate_success_status(getattr(view_cls, "success_status", None), label=view_cls.__name__)
+    _validate_response_finalizer(
+        getattr(view_cls, "response_finalizer", None), label=view_cls.__name__
     )
+    _refuse_a_detail_spec_with_no_target(view_cls, spec, has_instance=has_instance)
+    refuse_a_nested_selectors_permissions(spec, label=f"{view_cls.__name__}.spec")
+    # A view hook's keys reach the service through the edge's overlay,
+    # which ``check_seeds`` cannot see and its own docstring says not to
+    # be asked beside, so a hooked view is not asked it. One arc to coverage, so
+    # each disjunct is named: the catch-all hook by test_spec_validation_e2e's
+    # test_a_view_hook_fills_a_keyword_check_seeds_cannot_see, the
+    # per-action one by test_a_per_action_hook_fills_a_keyword_check_seeds_cannot_see.
+    if not (hooked or _overrides_the_action_hook(view_cls, "service")):
+        _check_kernel_seeds(spec)
 
 
 def _refuse_a_detail_spec_with_no_target(
@@ -1026,8 +351,8 @@ def _refuse_a_detail_spec_with_no_target(
 ) -> None:
     """Refuse an update or delete view's kernel spec that names nothing for it to act on.
 
-    A drfs spec naming no target lookup was scoped by the view's
-    ``get_object()``; a kernel spec never asks it, since the kernel refuses a
+    A kernel spec never asks the view's ``get_object()`` for its row, since
+    the kernel refuses a
     ``target=`` handed to a spec declaring no target selector, so such a spec
     would run on no row at all (test_service_update_view's
     test_a_detail_view_s_kernel_spec_with_no_target_selector_is_refused_at_as_view).
@@ -1050,7 +375,7 @@ def _refuse_a_detail_spec_with_no_target(
         )
 
 
-def _refuse_selector_hooks(view_cls: type, hooks_base: type) -> None:
+def _refuse_selector_hooks(view_cls: type) -> None:
     """Refuse a selector view's ``get_selector_kwargs`` hooks beside a kernel spec.
 
     A kernel selector spec is handed its own ``kwargs`` provider's values and
@@ -1066,7 +391,7 @@ def _refuse_selector_hooks(view_cls: type, hooks_base: type) -> None:
     """
     action = getattr(view_cls, "action", None)
     for hook, overridden in (
-        ("get_selector_kwargs", is_overridden(view_cls, hooks_base, "get_selector_kwargs")),
+        ("get_selector_kwargs", hasattr(view_cls, "get_selector_kwargs")),
         (f"get_{action}_selector_kwargs", _overrides_the_action_hook(view_cls, "selector")),
     ):
         if overridden:
@@ -1095,40 +420,32 @@ def validate_selector_view_spec(
     view_cls: type,
     *,
     expected_kind: SelectorKind,
-    hooks_base: type,
 ) -> None:
     """Validate ``view_cls.spec`` on a standalone selector view.
 
-    No-op when ``spec`` is unset — that means "use vanilla DRF". ``expected_kind`` is
+    No-op when ``spec`` is unset: that means "use vanilla DRF". ``expected_kind`` is
     the kind the view is shaped for (``LIST`` for
     [`SelectorListView`][django_spec_rest.views.query.selector_list_view.SelectorListView],
     ``RETRIEVE`` for
     [`SelectorRetrieveView`][django_spec_rest.views.query.selector_retrieve_view.SelectorRetrieveView]),
-    and ``hooks_base`` the view class declaring the default ``get_selector_kwargs``
-    that an override of is refused beside a kernel spec: each view passes its own,
-    since the two declare one each.
+    A ``get_selector_kwargs`` the view has is the author's, since no
+    selector view or mixin declares one, and is refused beside a kernel spec.
     """
-    spec: SelectorSpec[Any, Any] | KernelSelectorSpec | KernelServiceSpec | None = getattr(
-        view_cls, "spec", None
-    )
+    spec: KernelSelectorSpec | KernelServiceSpec | None = getattr(view_cls, "spec", None)
     if spec is None:
         return
     label = f"{view_cls.__name__}.spec"
-    if runs_on_kernel(spec):
-        if not isinstance(spec, KernelSelectorSpec):
-            # As ``validate_mutation_view_spec`` refuses a kernel selector spec
-            # (test_kernel_views' test_a_kernel_service_spec_on_a_selector_view_is_refused_at_as_view).
-            raise ImproperlyConfigured(_serves_the_other_kind(view_cls, spec, KernelSelectorSpec))
-        # ``validate_selector_spec``'s checks of a drfs spec's own fields are
-        # the kernel's ``__post_init__``'s for a kernel spec, but two are the
-        # view's: the kind its mount point is shaped for
-        # (test_kernel_views' test_a_list_spec_on_a_retrieve_view_is_refused_at_as_view)
-        # and, below, a ``filter_set`` beside DRF's own filter backend
-        # (test_a_filter_set_beside_django_filter_s_backend_is_refused_at_as_view).
-        _validate_selector_kind(spec, label=label, expected_kind=expected_kind)
-        _refuse_selector_hooks(view_cls, hooks_base)
-        _check_kernel_seeds(spec)
-    else:
-        validate_selector_spec(spec, label=label, expected_kind=expected_kind)
+    if not isinstance(spec, KernelSelectorSpec):
+        # As ``validate_mutation_view_spec`` refuses a kernel selector spec
+        # (test_kernel_views' test_a_kernel_service_spec_on_a_selector_view_is_refused_at_as_view).
+        raise ImproperlyConfigured(_serves_the_other_kind(view_cls, spec, KernelSelectorSpec))
+    # The spec's own fields are checked by its ``__post_init__``, but two checks
+    # are the view's: the kind its mount point is shaped for
+    # (test_kernel_views' test_a_list_spec_on_a_retrieve_view_is_refused_at_as_view)
+    # and, below, a ``filter_set`` beside DRF's own filter backend
+    # (test_a_filter_set_beside_django_filter_s_backend_is_refused_at_as_view).
+    _validate_selector_kind(spec, label=label, expected_kind=expected_kind)
+    _refuse_selector_hooks(view_cls)
+    _check_kernel_seeds(spec)
     if expected_kind is SelectorKind.LIST:
         validate_filter_set_no_backend_conflict(view_cls, spec, label=label)

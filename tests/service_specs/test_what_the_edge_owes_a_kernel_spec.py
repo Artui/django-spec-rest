@@ -1,15 +1,13 @@
-"""What a live view owes a kernel spec, three of them done and one still a strict xfail.
+"""What a live view owes a kernel spec.
 
 Each case is written against the public surface, a view over a kernel spec
-driven through ``as_view()``. The last, a nested selector's ``permissions``
-refused at ``as_view()``, is still a strict xfail naming the edge's gap.
+driven through ``as_view()``.
 
 - **A description of the input serializer is handed the call's request and
-  view.** drfs described the serializer the call validates with in the call's
-  own context, so a ``get_fields`` scoped by ``self.context["request"]``
-  declares the fields the call validates. The kernel route describes it in
-  the call's own context too, so a request-scoped serializer builds its fields
-  for the caller (``test_a_request_scoped_serializer_describes_the_fields_the_call_validates``).
+  view.** The kernel route describes the serializer the call validates with in
+  the call's own context, so a ``get_fields`` scoped by
+  ``self.context["request"]`` declares the fields the call validates, built for
+  the caller (``test_a_request_scoped_serializer_describes_the_fields_the_call_validates``).
 - **A view's ``get_*_kwargs`` hooks and its ``get_input_serializer_context``
   layer reach the call.** A hook value for a service keyword arrives at the
   service, and the view's input context layer at the input serializer
@@ -17,15 +15,18 @@ refused at ``as_view()``, is still a strict xfail naming the edge's gap.
   ``test_the_view_s_input_context_layer_reaches_the_input_serializer``).
 - **A nested selector's ``permissions`` are refused at ``as_view()``.** The
   kernel asks the spec being dispatched, never the selector resolving its
-  target, so checks declared there guard nothing. drfs refused a nested
-  spec's ``permission_classes`` at ``as_view()`` for that reason; a kernel
-  spec declaring them is accepted, and they silently refuse nothing
-  (``test_enforce_permissions``'s
-  ``test_a_collection_selector_s_own_classes_are_not_what_answers``).
+  target, so checks declared there would guard nothing: a denying declaration
+  is refused on each of the three seats, naming the seat
+  (``test_a_nested_selector_s_permissions_are_refused``), and so is
+  ``Unrestricted()``, which guards nothing either
+  (``test_an_unrestricted_nested_selector_is_refused_too``). The refusal is of
+  a declaration, so a nested selector declaring none mounts
+  (``test_a_nested_selector_declaring_no_permissions_mounts``).
 """
 
 from __future__ import annotations
 
+import dataclasses
 from typing import Any
 
 import pytest
@@ -59,17 +60,11 @@ class _CreateView(ServiceCreateView):
 
     permission_classes: Any = []
 
-    def get_permissions(self) -> list[Any]:
-        return [permission() for permission in self.permission_classes]
-
 
 class _UpdateView(ServiceUpdateView):
     """An update view over a kernel spec, its own permission classes answering for it."""
 
     permission_classes: Any = []
-
-    def get_permissions(self) -> list[Any]:
-        return [permission() for permission in self.permission_classes]
 
 
 def _post(spec: ServiceSpec, body: Any, *, user: Any = None, **attrs: Any) -> Response:
@@ -183,16 +178,8 @@ def _output_seat() -> type:
     return type("_View", (_CreateView,), {"spec": spec})
 
 
-# The spec is built inside ``pytest.raises`` so the refusal flips the xfail wherever it
-# lands: at ``ServiceSpec`` construction (the kernel) or at ``as_view()`` (this edge).
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "neither as_view() nor the kernel refuses permissions on a kernel spec's nested "
-        "selector, which the kernel never asks, so a declared Deny guards nothing, where "
-        "drfs refused a nested spec's permission_classes at as_view()"
-    ),
-)
+# A nested selector is a step of the call, so the kernel never asks its
+# ``permissions``: one declared guards nothing, so the mount refuses it on each seat.
 @pytest.mark.parametrize(
     ("seat", "build"),
     [
@@ -204,3 +191,30 @@ def _output_seat() -> type:
 def test_a_nested_selector_s_permissions_are_refused(seat: str, build: Any) -> None:
     with pytest.raises(ImproperlyConfigured, match=seat):
         build().as_view()
+
+
+@pytest.mark.parametrize(
+    ("seat", "build"),
+    [
+        ("instance_selector_spec", _instance_seat),
+        ("collection_selector_spec", _collection_seat),
+        ("output_selector_spec", _output_seat),
+    ],
+)
+def test_a_nested_selector_declaring_no_permissions_mounts(seat: str, build: Any) -> None:
+    """The refusal is of a declaration: the default, ``None``, mounts on every seat."""
+    view_cls = build()
+    nested = dataclasses.replace(getattr(view_cls.spec, seat), permissions=None)
+    spec = dataclasses.replace(view_cls.spec, **{seat: nested})
+
+    type("_View", (view_cls,), {"spec": spec}).as_view()
+
+
+def test_an_unrestricted_nested_selector_is_refused_too() -> None:
+    """``Unrestricted()`` is a declaration that guards nothing, as a denying one is."""
+    view_cls = _collection_seat()
+    nested = dataclasses.replace(view_cls.spec.collection_selector_spec, permissions=_OPEN)
+    spec = dataclasses.replace(view_cls.spec, collection_selector_spec=nested)
+
+    with pytest.raises(ImproperlyConfigured, match="collection_selector_spec"):
+        type("_View", (view_cls,), {"spec": spec}).as_view()

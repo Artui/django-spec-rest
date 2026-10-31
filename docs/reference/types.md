@@ -1,227 +1,30 @@
 # Types
 
-Most values here are django-service-specs' own, re-exported at the drfs path
-shown, so each drfs name is the kernel's object and the documentation rendered
-for it is the kernel's: `SelectorKind`, `Affordance`, `ChangeResult`,
-`FieldChange`, the relation declarations (`ChildSpec`, `ForwardRelationSpec`,
-`ReverseOneToOneSpec`, `GenericRelationSpec`, `ManyToManySpec`, `RelationSpec`)
-and their outcomes, `UNSET`, `ProgressReporter`, the pool seed registry
-(`PoolSeeds`, `DEFAULT_POOL_SEEDS`, `RESERVED_POOL_SEEDS`),
-`FieldAudience`, `FieldMarking`, `ValueFormatter` and `AudienceProjection`. The
-declarations that carry serializers and permission classes (`ServiceSpec`,
-`SelectorSpec`), the offline request and its channels, the input markers and
-`MARKING` are drfs' own.
+The shapes this package owns: the view protocol and its hook chain, the
+DRF-typed authoring helpers, the offline request and view a caller off HTTP
+hands a serializer, and the serializer-field marking and schema registry the
+seats read.
 
-Being the kernel's changes what a few of them refuse, each where it is built:
+## Views and hooks
 
-- An `Affordance` whose callable `when` is `async def`, or reads `result` or
-  `queryset`, is refused with `ImproperlyConfigured`, as one reading `data` or
-  `instance` already was.
-- A relation declaration takes only its model, and its foreign key where it has
-  one, by position; every other option is keyword-only. `relations=` is the one
-  spelling for nested relations: the `children=` alias is gone.
-- `PoolSeeds` checks a registration against the kernel's reserved set, `user`,
-  `data`, `instance`, `collection`, `result`, `queryset` and `progress`: a seed
-  named `result` or `queryset` is refused, one named `request` or `serializer`
-  can be registered, and an `async def` resolver is refused with
-  `ImproperlyConfigured`.
-- `ValueFormatter.timestamp()` reports a string shaped like a date-time that
-  names no real moment (`2026-02-30T12:00:00Z`) as it was stored, rather than
-  raising.
+::: django_spec_rest.types.service_view.ServiceView
 
-## `SelectorKind`
-
-::: django_spec_rest.types.selector_kind.SelectorKind
-
-## `SelectorSpec`
-
-::: django_spec_rest.types.selector_spec.SelectorSpec
-
-## `ServiceSpec`
-
-::: django_spec_rest.types.service_spec.ServiceSpec
-
-## `Affordance`
-
-::: django_spec_rest.types.affordance.Affordance
-
-## `AffordanceDeclarer`
-
-::: django_spec_rest.types.affordance_declarer.AffordanceDeclarer
-
-## `PolymorphicServiceSpec`
-
-::: django_spec_rest.types.polymorphic_service_spec.PolymorphicServiceSpec
-
-## `ChangeResult`
-
-::: django_spec_rest.types.change_result.ChangeResult
-
-## `FieldChange`
-
-::: django_spec_rest.types.field_change.FieldChange
-
-## `ChildSpec`
-
-::: django_spec_rest.types.child_spec.ChildSpec
-
-## `ChildCollectionChange`
-
-::: django_spec_rest.types.child_collection_change.ChildCollectionChange
-
-## `RelationSpec`
-
-::: django_spec_rest.types.relation_spec.RelationSpec
-
-## `RelationPhase`
-
-::: django_spec_rest.types.relation_phase.RelationPhase
-
-## `RelationOrphan`
-
-::: django_spec_rest.types.relation_orphan.RelationOrphan
-
-## `ForwardRelationSpec`
-
-::: django_spec_rest.types.forward_relation_spec.ForwardRelationSpec
-
-## `ReverseOneToOneSpec`
-
-::: django_spec_rest.types.reverse_one_to_one_spec.ReverseOneToOneSpec
-
-## `GenericRelationSpec`
-
-::: django_spec_rest.types.generic_relation_spec.GenericRelationSpec
-
-## `ManyToManySpec`
-
-::: django_spec_rest.types.many_to_many_spec.ManyToManySpec
-
-## `RelatedObjectChange`
-
-::: django_spec_rest.types.related_object_change.RelatedObjectChange
-
-## `UNSET`
-
-::: django_spec_rest.types.unset.UNSET
-
-::: django_spec_rest.types.unset.UnsetType
-
-## `NoInput`
-
-::: django_spec_rest.types.no_input.NoInput
-
-## `HttpExtras`
+::: django_spec_rest.types.view_hooks.ViewHooks
 
 ::: django_spec_rest.types.http_extras.HttpExtras
 
-## `OfflineContext`
+## Off HTTP
 
 ::: django_spec_rest.types.offline_context.OfflineContext
 
-## `InputRequired`
+::: django_spec_rest.types.offline_http_request.OfflineHttpRequest
 
-Dispatch refuses a missing marked key as the kernel's `InvalidArguments`,
-`{"code": ["This field is required."]}`, wherever the key is caller input: a
-target lookup's, a selector's under `AUTO` or `SPREAD_AUTHOR_WINS`, and a
-serializer-less service's own parameters under `SPREAD_AUTHOR_WINS`. Under
-`BUNDLE`, which a selector view dispatches, a selector's parameters are no
-caller input, and under `AUTO` or `BUNDLE` neither are such a service's, so a
-marker on one is not enforced: a parameter nothing fills is the callable's own
-`TypeError`. A declared `reads=` entry is caller input under every binding. See
-[what a caller could fill](../recipes/off-http-inputs.md#requiredness-inputrequired).
+::: django_spec_rest.types.offline_service_view.OfflineServiceView
 
-::: django_spec_rest.types.input_required
-
-## `NotClientInput`
-
-::: django_spec_rest.types.not_client_input
-
-## `InputDescription`
-
-::: django_spec_rest.types.input_description
-
-## `read_input_description`
-
-::: django_spec_rest.types.read_input_description.read_input_description
-
-## `UrlKwarg`
-
-::: django_spec_rest.types.url_kwarg.UrlKwarg
-
-## `QueryParam`
-
-A `QueryParam` is one of the spec's arguments, and it is either a **read** or a
-**shape** once the spec compiles. A **read** is handed by name to a callable of
-the call. A **shape** shapes what is rendered, as a serializer reading
-`?fields=` does, so the kernel hands it to the presenter alone, on
-`PresentationContext.shapes`, and to no callable. A top-level `QueryParam` that
-no callable of the call takes by name is a shape. The callables that count are:
-
-- the service or selector, by a named parameter or an `Unpack`-ed
-  `TypedDict` key;
-- a precondition of either;
-- a target lookup's selector, and its `kwargs` provider;
-- the spec's `kwargs` and `input_data` providers, by a named parameter, or by a
-  key a typed one is annotated to fill;
-- any of them taking a bare `**kwargs`, which takes every name, so one such
-  callable makes every `QueryParam` of the spec a read;
-- the fields of a selector spec's `filter_set`.
-
-A `QueryParam` declared on a nested spec (a target lookup's own `reads`) stays a
-read, and a `UrlKwarg` is never a shape.
-
-A shape is still one of the call's parameters, so `kernel_spec(spec).parameters()`
-lists it and the caller's value is checked as declared; it is left out of `kernel_spec(spec).reads` and listed in
-`kernel_spec(spec).shapes`. Code that walked `.reads` to find a spec's query
-arguments reads `.shapes` for these, or `.parameters()` for both. A permission
-class still reads a shape off `request.query_params`, as it reads any declared
-`QueryParam`.
-
-Because a shape may drop any key the serializer renders, the compiled output
-declares no field present under every value a caller may send: the
-`SerializerPresenter` a spec with shapes compiles is built with `shaped=True`,
-which marks no output field `always_present` at any depth. The flag is the
-presenter's own, with the default unchanged (see
-[`SerializerPresenter`][django_spec_rest.service_specs.serializer_presenter.SerializerPresenter]),
-and a presenter built by hand for a spec whose output a caller's argument
-shapes passes it itself. A `QueryParam` declares no choices, so no key can be
-named as present under all of them.
-
-::: django_spec_rest.types.query_param.QueryParam
-
-## `validate_channel_names`
-
-::: django_spec_rest.types.validate_channel_names.validate_channel_names
-
-## `ProgressReporter`
-
-::: django_spec_rest.types.progress_reporter.ProgressReporter
-
-## `RESERVED_POOL_SEEDS`
-
-::: django_spec_rest.types.reserved_pool_seeds
-
-## `PoolSeeds`
-
-::: django_spec_rest.types.pool_seeds
-
-## `FieldAudience`
-
-::: django_spec_rest.types.field_audience.FieldAudience
-
-## `MARKING`
+## Serializer fields
 
 ::: django_spec_rest.types.field_marking.MARKING
 
-## `FieldMarking`
+::: django_spec_rest.types.json_schema_registry.JsonSchemaRegistry
 
-::: django_spec_rest.types.field_marking.FieldMarking
-
-## `ValueFormatter`
-
-::: django_spec_rest.types.value_formatter.ValueFormatter
-
-## `AudienceProjection`
-
-::: django_spec_rest.types.audience_projection.AudienceProjection
+::: django_spec_rest.types.json_schema_registry.DEFAULT_JSON_SCHEMA_REGISTRY

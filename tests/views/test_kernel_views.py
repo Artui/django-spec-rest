@@ -1,17 +1,10 @@
 """A kernel spec set on a view's ``spec``, served by the kernel's own ``dispatch``.
 
-The views part from the drfs path at one predicate, inside
-``dispatch_mutation_for_spec`` and ``dispatch_selector_for_spec``. Every spec
+Every spec
 here is the kernel's own ``ServiceSpec`` or ``SelectorSpec``, with the DRF seats
 ``SerializerValidator`` and ``SerializerPresenter``, and every test drives a
 view through ``as_view()`` with nothing imported that the kernel route added,
 so each one fails against a tree without it.
-
-One of the views' own methods still reads a drfs-only field, and it is not
-this module's to change, so the views here stand in for it: the retrieve and
-list views render through ``get_serializer_class()``, which reads a drfs
-``output_serializer``, so the selector views here set ``serializer_class``,
-and what they render is DRF's, not the spec's presenter.
 """
 
 from __future__ import annotations
@@ -35,13 +28,14 @@ from django_service_specs import (
     Unrestricted,
     UnsetType,
 )
+from django_service_specs.types.unset import UNSET
 from rest_framework import serializers
 from rest_framework.permissions import BasePermission
 from rest_framework.response import Response
 from rest_framework.test import APIRequestFactory, force_authenticate
 from rest_framework.views import APIView
 
-from django_spec_rest import UNSET, SelectorListView, SelectorRetrieveView, ServiceCreateView
+from django_spec_rest import SelectorListView, SelectorRetrieveView, ServiceCreateView
 from django_spec_rest.dispatch import kernel_edge
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
@@ -104,8 +98,7 @@ class TestACreateView:
         assert not Author.objects.exists()
 
     def test_a_kernel_spec_passes_as_view(self) -> None:
-        """``as_view()`` checks no drfs field on a kernel spec, which has none of
-        them; a kernel spec well declared passes the checks it does run."""
+        """A kernel spec well declared passes the checks ``as_view()`` runs."""
         assert callable(_CreateView.as_view())
 
     def test_a_kernel_selector_spec_on_a_mutation_view_is_refused_at_as_view(self) -> None:
@@ -336,8 +329,8 @@ class TestASeedNamedFieldValidatesFromTheBody:
 
     def test_input_data_outranks_the_body_beside_a_seed_named_field(self) -> None:
         """A body sending a field the kernel cannot take still has the server's
-        values over the client's: the serializer binds the kernel's checked
-        arguments, ``input_data``'s merged in, over that field's value alone."""
+        values over the client's: the serializer binds the request's body with
+        ``input_data``'s answer put over it."""
 
         class _Input(serializers.Serializer):
             title = serializers.CharField()
@@ -474,9 +467,9 @@ class TestInputDataOverASeedNamedField:
     def test_an_owned_parameter_it_declines_never_takes_the_client_s_value(
         self, extra: dict[str, Any]
     ) -> None:
-        """Beside a seed-named field too: the serializer binds the kernel's
-        checked arguments, which hold no ``title``, and nothing of the body but
-        that field."""
+        """Beside a seed-named field too: the edge takes the owned ``title``
+        off the body the serializer binds, as the kernel takes it off its
+        arguments."""
         principal = User.objects.create(username="ada")
         response, received = _post_as(
             principal, self._spec(_declines_title), {"title": "from the client", **extra}
@@ -484,9 +477,29 @@ class TestInputDataOverASeedNamedField:
         assert response.status_code == 204, response.data
         assert received == extra
 
+    def test_a_hook_s_value_for_an_owned_parameter_it_declines_is_never_bound(self) -> None:
+        """The provider owns ``title``, so a view hook's value for it is no
+        more the serializer's than the client's, as the kernel answers it."""
+        received: dict[str, Any] = {}
+        spec = dataclasses.replace(
+            self._spec(_declines_title), service=lambda *, data: received.update(data)
+        )
+        view = type(
+            "_View",
+            (_CreateView,),
+            {"spec": spec, "get_input_data": lambda self, *_: {"title": "from the hook"}},
+        ).as_view()
+        request = factory.post("/", {"title": "from the client"}, format="json")
+        force_authenticate(request, user=User.objects.create(username="ada"))
+
+        response = view(request)
+
+        assert response.status_code == 204, response.data
+        assert received == {}
+
 
 class TestTheArgumentsAreReadAsTheKernelReadsAWire:
-    def test_a_form_body_is_read_flat_and_coerced(self) -> None:
+    def test_a_form_body_is_read_as_its_serializer_reads_it(self) -> None:
         class _Input(serializers.Serializer):
             title = serializers.CharField()
             views = serializers.IntegerField(required=False)
@@ -504,13 +517,14 @@ class TestTheArgumentsAreReadAsTheKernelReadsAWire:
             format="multipart",
         )
         assert response.status_code == 204, response.data
-        # ``views`` coerced to the integer it declares, a blank boolean absent,
-        # and Django's CSRF field never an argument.
+        # ``views`` parsed to the integer its field declares and a blank
+        # boolean absent, as DRF reads a form, and Django's CSRF field never an
+        # argument.
         assert received == {"title": "t", "views": 3}
 
     def test_a_form_s_true_is_a_boolean(self) -> None:
-        """The kernel's typed check takes an integer's ``"3"`` as sent, so a
-        boolean is what holds the form body's coercion."""
+        """A form's ``"true"`` is the serializer's to parse: the kernel's typed
+        check, which would refuse the string, is lenient for a form body."""
 
         class _Input(serializers.Serializer):
             published = serializers.BooleanField()
@@ -527,7 +541,7 @@ class TestTheArgumentsAreReadAsTheKernelReadsAWire:
 
     def test_a_json_body_is_not_read_as_flat_strings(self) -> None:
         """A JSON ``"true"`` is a string, typed by the client, and reaches the
-        kernel's typed check as one, where a form's ``"true"`` is coerced.
+        kernel's typed check as one, where a form's ``"true"`` is the serializer's.
 
         The kernel's check answers before the serializer does, so DRF, which
         would read ``"true"`` as ``True``, is never asked. A lenient Validator,
@@ -624,7 +638,6 @@ class TestAManySpec:
             output_selector_spec=SelectorSpec(
                 kind=SelectorKind.LIST,
                 selector=again,
-                permissions=_OPEN,
                 presenter=SerializerPresenter(AuthorSerializer),
             ),
         )
@@ -660,7 +673,6 @@ class TestATargetTheViewHandsOver:
                 kind=SelectorKind.RETRIEVE,
                 selector=lambda *, pk: Author.objects.filter(pk=pk).first(),
                 reads=Parameters.of(Parameter("pk", "integer", required=True)),
-                permissions=_OPEN,
             ),
         )
 

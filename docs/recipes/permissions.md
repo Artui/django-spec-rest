@@ -1,127 +1,71 @@
-# Per-action permissions on the spec
+# DRF permission classes
 
-DRF's `permission_classes` on the view applies to every action a viewset
-serves. When the permissions actually vary per action — `list` is public,
-`create` requires authentication, an `approve` custom action is admin-only —
-the usual workaround is an `if self.action == ...` branch in
-`get_permissions()`. The same dispersion `action_specs` was designed to
-remove.
+A route is guarded twice, in order: the view's own `permission_classes`, which
+DRF asks in `initial()` before any handler runs, and the spec's `permissions`,
+which the kernel's `dispatch` asks. The view's classes guard the route; the
+spec's guard the operation, wherever it is served.
 
-Set `permission_classes` on the spec instead. It overrides the view's
-class-level `permission_classes` for that one action; everything else
-falls through to the view default.
-
-> The value is a sequence of `BasePermission` **subclasses** (not
-> instances). Misconfigurations fail fast at `as_view()` time with
-> `ImproperlyConfigured`.
-
-## Per-action permissions on a viewset
+## On the spec: `DRFPermissionCheck`
 
 ```python
-from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
-from django_spec_rest import (
-    SelectorKind,
-    SelectorSpec,
-    ServiceSpec,
-    ServiceViewSet,
-    service_action,
+from django_service_specs import ServiceSpec
+from rest_framework.permissions import IsAuthenticated
+
+from django_spec_rest.service_specs.drf_permission_check import DRFPermissionCheck
+
+SEND_SPEC = ServiceSpec(
+    service=send_invoice,
+    instance_selector_spec=INVOICE_LOOKUP,
+    permissions=(DRFPermissionCheck([IsAuthenticated]),),
+    presenter=PRESENTER,
 )
-
-
-class AuthorViewSet(ServiceViewSet):
-    queryset = Author.objects.all()
-    permission_classes = [IsAuthenticated]  # view-level default
-
-    action_specs = {
-        "list": SelectorSpec(
-            kind=SelectorKind.LIST,
-            selector=list_authors,
-            output_serializer=AuthorSerializer,
-            permission_classes=[AllowAny],  # public listing
-        ),
-        "create": ServiceSpec(
-            service=create_author,
-            input_serializer=CreateAuthorInput,
-            output_selector_spec=SelectorSpec(
-                kind=SelectorKind.RETRIEVE,
-                output_serializer=AuthorSerializer,
-            ),
-            # falls through to view-level IsAuthenticated
-        ),
-        "destroy": ServiceSpec(
-            service=delete_author,
-            permission_classes=[IsAdminUser],  # admin only
-        ),
-    }
-
-    @service_action(
-        ServiceSpec(
-            service=approve_author,
-            input_serializer=ApproveInput,
-            permission_classes=[IsAdminUser],  # custom action, admin only
-        ),
-        detail=True,
-        methods=["post"],
-    )
-    def approve(self, request, pk=None):
-        """Stubbed — handler supplied by @service_action."""
 ```
 
-## Standalone views
+`DRFPermissionCheck` asks every class in order, a fresh instance each time, as
+DRF's `get_permissions` does:
 
-The same field works on the standalone `Service*View` and `Selector*View`
-classes. The spec wins over the view's class-level `permission_classes`;
-`None` (the default) inherits.
+- **`has_permission`** against the request and view the call carries. A
+  refusal raises `DRFNotPermitted` with that class's own `message` and
+  `code`, which DRF answers 403. A class raising DRF's `NotAuthenticated`
+  leaves as `DRFNotAuthenticated`, which DRF answers 401 where the
+  authenticator supplies a challenge.
+- **`has_object_permission`** of the row a write targets or a retrieve finds,
+  when it is a model instance.
+- The kernel's question about a set (a bulk call, a collection, a create)
+  is allowed: DRF has no such question, and the class-level check has
+  already run.
+
+Each refusal is the kernel's `NotPermitted` as well, so a caller of the
+kernel's `dispatch` catches it by the kernel's class.
+
+## Off HTTP
+
+The same check runs when the spec is dispatched with no request. It builds an
+offline request and view for the principal (`build_offline_context`), so a
+class reading `request.user` reads the principal, and `view.action` is the
+call context's `action` where one is given. The offline request's query
+string is empty.
+
+A class scoping by a route capture reads `view.kwargs`, which off HTTP no
+URLconf fills. Name those arguments in `route_reads`, and the check puts them
+on the offline view's `kwargs` before asking:
 
 ```python
-class CreateAuthorView(ServiceCreateView):
-    spec = ServiceSpec(
-        service=create_author,
-        input_serializer=CreateAuthorInput,
-        output_selector_spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE,
-            output_serializer=AuthorSerializer,
-        ),
-        permission_classes=[IsAuthenticated],
-    )
+DRFPermissionCheck([IsProjectMember], route_reads=["project_pk"])
 ```
 
-## Empty sequence vs. `None`
+```python
+from django_service_specs import NotPermitted, dispatch
 
-- `permission_classes=None` (the default) — **inherit** the view's
-  class-level permissions.
-- `permission_classes=[]` — **no permissions** for this action explicitly.
-  Useful to open a single endpoint on an otherwise-locked-down viewset
-  without touching the global `DEFAULT_PERMISSION_CLASSES`.
+dispatch(SEND_SPEC, principal=user, arguments={"pk": invoice.pk})  # runs
+dispatch(SEND_SPEC, principal=AnonymousUser(), arguments={"pk": invoice.pk})  # NotPermitted
+```
 
-## How the resolution works
+The example project asserts both, and the 403 over HTTP.
 
-For viewsets that compose `_ActionSpecsMixin` (every mixin in this package,
-plus `ServiceViewSet` / `SelectorViewSet`), `get_permissions()`:
+## A nested selector declares none
 
-1. Looks up `action_specs[self.action]`. If the entry has
-   `permission_classes`, those win.
-2. Otherwise looks at the bound action handler. Decorator-attached specs
-   (`@service_action(spec)`, `@selector_action(spec)`) live there, so their
-   `permission_classes` are honored even without the DRF router.
-3. Otherwise falls back to `super().get_permissions()` — the standard DRF
-   lookup of the view's class-level `permission_classes`.
-
-Standalone views (`ServiceCreateView`, `SelectorListView`, etc.) follow the
-same precedence: spec wins, then fall through to the view.
-
-When you wire the viewset through DRF's router, `@service_action` /
-`@selector_action` also carry their `permission_classes` via DRF's standard
-`@action(permission_classes=...)` integration — so the same configuration
-works in both router-driven and direct-`as_view` setups.
-
-**A `PolymorphicServiceSpec` is the exception.** `@action` takes a single
-list, and which list applies to a polymorphic action depends on its
-`permission_strategy` — under `"discriminate"`, on the request body. There is
-nothing to forward, so the variants' `permission_classes` are enforced only by
-`_ActionSpecsMixin.get_permissions`. That makes the mixin a requirement for
-that combination rather than a convenience: compose `ServiceViewSet` (or any
-mixin from this package) and it is already there. On a viewset without it,
-`@service_action` refuses the request instead of serving it under the view's
-default permissions — the decorated class is unknown at decoration time, so
-the check cannot happen any earlier.
+The specs on `instance_selector_spec`, `collection_selector_spec` and
+`output_selector_spec` are never asked for their permissions: the spec being
+served is what authorizes. `as_view()` refuses a nested selector that declares
+`permissions`, so a check placed there cannot look like it guards something.

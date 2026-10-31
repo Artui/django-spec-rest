@@ -11,7 +11,7 @@ from typing import Any
 class ViewHooks:
     """The HTTP view's hook-chain contributions, resolved and passed down.
 
-    ``dispatch_spec`` is the single execution core, but the view layer owns a
+    The kernel's ``dispatch`` is the single execution core, but the view layer owns a
     configuration surface the core knows nothing about: the ``get_service_kwargs`` /
     ``get_<action>_service_kwargs`` / ``get_input_data`` / ``get_<action>_input_data`` /
     ``get_*_serializer_context`` chains declared on
@@ -21,10 +21,10 @@ class ViewHooks:
 
     **These are the *view* layers only — never the spec's own providers.**
     Each chain resolves ``view.get_<x>`` → ``view.get_<action>_<x>`` →
-    ``spec.<x>``, spec winning on overlap. ``dispatch_spec`` owns that last
-    layer, so a caller must pass ``spec_kwargs=None`` / ``spec_provider=None``
-    when resolving these; hand over the *fully* resolved chain instead and the
-    core runs the spec provider **twice**, which a ``spec.kwargs`` doing a
+    ``spec.<x>``, spec winning on overlap. The kernel owns that last layer, so
+    a caller must leave the spec's provider out when resolving these; hand over
+    the *fully* resolved chain instead and the core runs the spec provider
+    **twice**, which a ``spec.kwargs`` doing a
     tenant lookup will not survive.
 
     Every field defaults to ``None`` (contributes nothing), so a transport with
@@ -33,14 +33,12 @@ class ViewHooks:
 
     Attributes:
         extra_kwargs: Merges into the dispatched callable's pool, beneath
-            ``spec.kwargs``. The same carrier serves the selector chain
-            (``get_selector_kwargs`` / ``get_<action>_selector_kwargs``) — only
-            the view-method names differ, not the layering.
+            ``spec.kwargs``.
         input_data: Merges onto the client payload *before* validation, beneath
             ``spec.input_data``; server-provided keys win over the client's.
         input_serializer_context: Layers onto the baseline serializer context
-            ([`base_serializer_context`][django_spec_rest.dispatch.base_serializer_context.base_serializer_context]), beneath
-            ``spec.input_serializer_context``.
+            ([`base_serializer_context`][django_spec_rest.service_specs.base_serializer_context.base_serializer_context]), beneath
+            the Validator's own ``serializer_context``.
         output_serializer_context: **Lazy** — a callable taking the final
             post-selector ``result`` and returning the context — because the
             output context provider is documented to see the exact instance

@@ -6,14 +6,12 @@ import functools
 from collections.abc import Callable
 from typing import Any
 
-from django.core.exceptions import ImproperlyConfigured
+from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
 from rest_framework import status as drf_status
 from rest_framework.decorators import action
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from django_spec_rest.types.polymorphic_service_spec import PolymorphicServiceSpec
-from django_spec_rest.types.service_spec import ServiceSpec
 from django_spec_rest.views.mutation.map_service_error import (
     _AdditionalInputAPIException,
 )
@@ -22,22 +20,15 @@ from django_spec_rest.views.mutation.utils import (
     resolve_mutation_instance,
     restore_raised_schema,
 )
-from django_spec_rest.views.spec_validation import (
-    validate_polymorphic_service_spec,
-    validate_service_spec,
-)
-from django_spec_rest.viewsets.resolve_polymorphic_service_spec import (
-    resolve_polymorphic_service_spec,
-)
-from django_spec_rest.viewsets.utils import _ActionSpecsMixin
+from django_spec_rest.views.spec_validation import validate_mutation_view_spec
 
 
 def _restore_schema_when_handled(view: Any) -> None:
     """Have the exception handler this request's view runs put the raised schema back.
 
-    The restore is otherwise a ``handle_exception`` override on drfs' bases,
-    which a decorated method on DRF's own viewsets never reaches, and which
-    DRF's own method shadows where a drfs base is listed after
+    The restore is otherwise a ``handle_exception`` override on this package's
+    bases, which a decorated method on DRF's own viewsets never reaches, and
+    which DRF's own method shadows where one of them is listed after
     ``GenericViewSet``. The decorator owns no class, but it runs on the view
     instance ``APIView.dispatch`` is about to hand the error to.
 
@@ -59,17 +50,16 @@ def _restore_schema_when_handled(view: Any) -> None:
       itself ran the restore after the whole chain and undid what an override
       wrote to ``schema``. Held by
       test_an_overriding_handle_exception_has_the_last_word_on_every_route.
-    - On drfs' bases ``_ServesRaisedSchema`` restores again on the way out of
-      ``APIView.handle_exception``. No ``handle_exception`` of drfs' runs
-      between the two, and each writes the schema as raised, so the second
-      leaves the body as the first left it.
+    - On this package's bases ``_ServesRaisedSchema`` restores again on the way
+      out of ``APIView.handle_exception``. No ``handle_exception`` of this
+      package's runs between the two, and each writes the schema as raised, so
+      the second leaves the body as the first left it.
 
     The restore inside the handler is what serves the schema as raised where
     the class's chain never reaches ``_ServesRaisedSchema``. Held by
     test_service_action_serves_the_schema_as_raised_on_any_viewset, whose
-    ``GenericViewSet``, ``ViewSet``, ``GenericViewSet, ActionSerializerResolver``
-    and ``GenericViewSet, PolymorphicServiceSpec`` cases are served stringified
-    without it.
+    ``GenericViewSet``, ``ViewSet`` and ``GenericViewSet, ActionSerializerResolver``
+    cases are served stringified without it.
     """
     get_exception_handler: Callable[[], Callable[..., Any]] = view.get_exception_handler
 
@@ -88,8 +78,25 @@ def _restore_schema_when_handled(view: Any) -> None:
     view.get_exception_handler = restoring_exception_handler
 
 
+def _validate_kernel_spec(spec: KernelServiceSpec, *, label: str, detail: bool) -> None:
+    """Ask a kernel spec what a standalone mutation view asks of its own, with no view.
+
+    ``validate_mutation_view_spec`` reads the spec and the view's hooks off a
+    class, and the decorated class does not exist yet, so it is handed one
+    carrying the spec alone, named for the action so a refusal names it. A
+    class with no ``get_service_kwargs`` reads as one overriding it, so the
+    kernel's ``check_seeds`` is not asked: a hook of the viewset's own may fill
+    the keyword it would refuse, and a mixin base would have it refused anyway
+    (test_service_action's test_a_keyword_the_viewset_s_hook_fills_is_not_refused).
+    A detail action with no target selector is refused, since the viewset's
+    ``get_object()`` is never asked for a kernel spec's row
+    (test_a_detail_action_with_no_target_is_refused).
+    """
+    validate_mutation_view_spec(type(label, (), {"spec": spec}), has_instance=detail)
+
+
 def service_action(
-    spec: ServiceSpec | PolymorphicServiceSpec,
+    spec: KernelServiceSpec,
     *,
     detail: bool = False,
     methods: list[str] | None = None,
@@ -103,27 +110,18 @@ def service_action(
     the handler. The method exists so that ``@service_action`` can attach
     DRF ``@action`` metadata and pick up the action name from ``__name__``.
 
-    Pass a [`ServiceSpec`][django_spec_rest.types.service_spec.ServiceSpec] (or a
-    [`PolymorphicServiceSpec`][django_spec_rest.types.polymorphic_service_spec.PolymorphicServiceSpec]
-    for one action accepting several payload shapes) for the service wiring. ``detail``,
-    ``methods``, ``url_path``, ``url_name``, and any extra ``**action_kwargs`` are
-    forwarded to DRF's ``@action``.
+    Pass a [`ServiceSpec`][django_service_specs.specs.service_spec.ServiceSpec]
+    for the service wiring. ``detail``, ``methods``, ``url_path``, ``url_name``,
+    and any extra ``**action_kwargs`` are forwarded to DRF's ``@action``.
 
-    A plain ``ServiceSpec`` forwards its ``permission_classes`` into DRF's
-    ``@action(permission_classes=...)``, so it is enforced on any viewset. A
-    [`PolymorphicServiceSpec`][django_spec_rest.types.polymorphic_service_spec.PolymorphicServiceSpec]
-    has no single list to forward — which list applies depends on the strategy,
-    and under ``"discriminate"`` on the body — so its per-variant
-    ``permission_classes`` are enforced by ``_ActionSpecsMixin.get_permissions``,
-    which reads the spec stashed on the handler. That makes the mixin a
-    **requirement**, not a convenience: on a viewset without it, DRF's stock
-    ``get_permissions`` would apply the view's defaults and every variant rule
-    would go unchecked. The decorated class is unknown at decoration time, so
-    the dependency is checked on the first request through the action and the
-    request is refused rather than served unguarded. Compose ``ServiceViewSet``
-    (or any mixin from this package) and the check never fires.
+    The spec runs through the kernel's own ``dispatch``, as on the standalone
+    mutation views: its ``permissions`` are asked there, after the view's own
+    classes, a detail action's row is its own target selector's (never
+    ``get_object()``), and the answer is its presenter's, under the viewset's
+    ``success_status`` (``200`` by default) and through its
+    ``response_finalizer``.
 
-    An [`AdditionalInputRequired`][django_spec_rest.exceptions.additional_input_required.AdditionalInputRequired]
+    An [`AdditionalInputRequired`][django_service_specs.services.additional_input_required.AdditionalInputRequired]
     answers ``422`` with its ``schema`` as raised on any viewset, DRF's own
     included. The restore runs inside the exception handler the view asks for,
     so the configured ``EXCEPTION_HANDLER`` runs once, and a ``handle_exception``
@@ -136,65 +134,26 @@ def service_action(
         drf_kwargs["url_path"] = url_path
     if url_name is not None:
         drf_kwargs["url_name"] = url_name
-    if isinstance(spec, ServiceSpec) and spec.permission_classes is not None:
-        drf_kwargs["permission_classes"] = list(spec.permission_classes)
     drf_kwargs.update(action_kwargs)
-    # A variant list can only be enforced through ``_ActionSpecsMixin``. When no
-    # variant declares one there is nothing to lose: DRF's own lookup and the
-    # mixin's union both end at the view's class-level permissions.
-    needs_action_specs_mixin = isinstance(spec, PolymorphicServiceSpec) and any(
-        variant.permission_classes is not None for variant in spec.specs.values()
-    )
 
     def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
         fn_label = getattr(fn, "__qualname__", repr(fn))
         # The viewset class is unknown at decoration time, so any
         # ``get_<action>_service_kwargs`` / ``get_service_kwargs`` it may
         # carry has to be assumed permissive.
-        if isinstance(spec, PolymorphicServiceSpec):
-            validate_polymorphic_service_spec(
-                spec,
-                label=f"@service_action {fn_label}",
-                has_instance=detail,
-                permissive_extras=True,
-            )
-        else:
-            validate_service_spec(
-                spec,
-                label=f"@service_action {fn_label}",
-                has_instance=detail,
-                permissive_extras=True,
-            )
+        _validate_kernel_spec(spec, label=f"@service_action {fn_label}", detail=detail)
 
         @functools.wraps(fn)
         def handler(self: Any, request: Request, *args: Any, **kwargs: Any) -> Response:
-            if needs_action_specs_mixin and not isinstance(self, _ActionSpecsMixin):
-                raise ImproperlyConfigured(
-                    f"@service_action {fn_label}: the variants declare "
-                    "`permission_classes`, which only `_ActionSpecsMixin.get_permissions` "
-                    f"enforces — and {type(self).__name__} does not provide it, so DRF "
-                    "applied the view's default permissions and no variant rule ran. "
-                    "Compose the viewset with ServiceViewSet (or any mixin from this "
-                    "package), or move the rule to the view's `permission_classes`."
-                )
             try:
-                # A polymorphic spec resolves to its chosen variant first (memoized
-                # for the request), then dispatches exactly as a plain spec. Inside
-                # the ``try`` because the discriminator's errors are mapped too.
-                concrete: ServiceSpec = (
-                    resolve_polymorphic_service_spec(spec, view=self, request=request)
-                    if isinstance(spec, PolymorphicServiceSpec)
-                    else spec
-                )
-                instance: Any = resolve_mutation_instance(self, concrete) if detail else None
-                # ``success_status`` is resolved per-request inside the dispatch
-                # (``spec.success_status`` may be a callable keyed on the result),
-                # so the decorator passes only the action default (200) — it is
-                # *not* frozen here at decoration time.
+                instance: Any = resolve_mutation_instance(self, spec) if detail else None
+                # The viewset's ``success_status`` is resolved per request inside
+                # the dispatch, since it may be a callable keyed on the result,
+                # so the decorator passes only the action default (200).
                 return dispatch_mutation_for_spec(
                     self,
                     request,
-                    concrete,
+                    spec,
                     instance=instance,
                     default_status=drf_status.HTTP_200_OK,
                     # Detail actions are update-shaped: a service that mutates in
@@ -206,8 +165,8 @@ def service_action(
                 _restore_schema_when_handled(self)
                 raise
 
-        # Stash the spec on the handler so schema generators (and any future
-        # introspection) can recover it; the closure is otherwise opaque.
+        # Stash the spec on the handler so schema generators can recover it;
+        # the closure is otherwise opaque.
         handler._service_spec = spec  # ty: ignore[unresolved-attribute]
         return action(**drf_kwargs)(handler)
 

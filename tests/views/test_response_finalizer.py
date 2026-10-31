@@ -21,11 +21,12 @@ from django_service_specs import (
     ServiceSpec,
     Unrestricted,
 )
+from django_service_specs.mutations.delete_collection import delete_collection
 from rest_framework import serializers
 from rest_framework.response import Response
 from rest_framework.test import APIRequestFactory
 
-from django_spec_rest import ServiceCreateView, ServiceDeleteView, delete_collection
+from django_spec_rest import ServiceCreateView, ServiceDeleteView
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from tests.testapp.models import Author, Post
@@ -86,7 +87,6 @@ class TestResponseFinalizerSingle:
                 kind=SelectorKind.RETRIEVE,
                 selector=lambda *, pk: Author.objects.filter(pk=pk).first(),
                 reads=Parameters.of(Parameter("pk", "integer", required=True)),
-                permissions=_OPEN,
             ),
         )
         response = _view(ServiceDeleteView, spec, add_header)(factory.delete("/"), pk=author.pk)
@@ -126,7 +126,6 @@ class TestResponseFinalizerSingle:
             output_selector_spec=SelectorSpec(
                 kind=SelectorKind.RETRIEVE,
                 selector=lambda *, result: Author.objects.get(pk=result.author.pk),
-                permissions=_OPEN,
                 presenter=SerializerPresenter(AuthorSerializer),
             ),
         )
@@ -180,7 +179,7 @@ class TestResponseFinalizerBulk:
             service=delete_collection(Post),
             permissions=_OPEN,
             collection_selector_spec=SelectorSpec(
-                kind=SelectorKind.LIST, selector=lambda: Post.objects.all(), permissions=_OPEN
+                kind=SelectorKind.LIST, selector=lambda: Post.objects.all()
             ),
             atomic=False,
         )
@@ -191,8 +190,7 @@ class TestResponseFinalizerBulk:
 
 
 class TestAFinalizerTheViewCannotCall:
-    """Refused when the view is built, as a drfs spec's ``response_finalizer``
-    is, rather than raising ``TypeError`` once the service has committed."""
+    """Refused when the view is built, rather than raising ``TypeError`` once the service has committed."""
 
     def test_a_finalizer_requiring_a_key_the_framework_lacks_is_refused_at_as_view(
         self,
@@ -201,6 +199,29 @@ class TestAFinalizerTheViewCannotCall:
 
         spec = ServiceSpec(service=_create_author, permissions=_OPEN)
         with pytest.raises(ImproperlyConfigured, match=r"\['call_context'\] the framework"):
+            _view(ServiceCreateView, spec, finalizer)
+
+    def test_a_finalizer_taking_kwargs_beside_a_key_the_framework_lacks_is_refused_at_as_view(
+        self,
+    ) -> None:
+        """``**kwargs`` takes the framework's keys, never a name it lacks: called,
+        the finalizer would still raise ``TypeError`` for ``call_context``."""
+
+        def finalizer(*, call_context: Any, **kwargs: Any) -> None: ...
+
+        spec = ServiceSpec(service=_create_author, permissions=_OPEN)
+        with pytest.raises(ImproperlyConfigured, match=r"\['call_context'\] the framework"):
+            _view(ServiceCreateView, spec, finalizer)
+
+    def test_a_finalizer_taking_a_positional_only_parameter_is_refused_at_as_view(self) -> None:
+        """The framework hands its keys by keyword, so a positional-only
+        parameter with no default is never supplied, ``response`` included:
+        called, the finalizer would raise ``TypeError``."""
+
+        def finalizer(response: Response, /) -> None: ...
+
+        spec = ServiceSpec(service=_create_author, permissions=_OPEN)
+        with pytest.raises(ImproperlyConfigured, match=r"\['response'\] by position only"):
             _view(ServiceCreateView, spec, finalizer)
 
     def test_a_finalizer_that_is_no_callable_is_refused_at_as_view(self) -> None:

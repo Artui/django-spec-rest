@@ -20,6 +20,6 @@ def seed_named_fields(validator: Any) -> frozenset[str]:
     """
     if not isinstance(validator, SerializerValidator):
         return frozenset()
-    fields = describe_serializer(validator.serializer).fields
+    fields = describe_serializer(validator.serializer, validator).fields
     writable = {name for name, field in fields.items() if is_input(field)}
     return frozenset(writable.difference(validator.parameters().names()))

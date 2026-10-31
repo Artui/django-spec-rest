@@ -4,9 +4,8 @@ The body's value of that name is the field's, so a read of the same name would
 be one argument declared by two sources. The kernel refuses that when it
 assembles ``parameters()``, which a ``SerializerValidator`` answers on first
 use rather than when it is built, so the spec is constructed and the refusal
-comes on the first call that reads its parameters. drfs refused it when the
-spec compiled; a view serving a kernel spec does not ask at ``as_view()``
-yet, and the test of that is a strict xfail until the view's mount checks do.
+comes on the first call that reads its parameters. A view serving a kernel
+spec does not ask at ``as_view()`` yet, and the test of that is a strict xfail until the view's mount checks do.
 """
 
 from __future__ import annotations

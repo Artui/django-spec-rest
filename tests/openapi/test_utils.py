@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
+
 from django_spec_rest import (
     ServiceCreateView,
     ServiceDeleteView,
@@ -20,32 +22,29 @@ def _bound_action(action: str) -> Any:
     return v
 
 
-def test_create_action_defaults_to_201() -> None:
-    assert default_status(_bound_action("create")) == 201
+@pytest.mark.parametrize(
+    ("action", "expected"),
+    [
+        pytest.param("create", 201, id="create_action_defaults_to_201"),
+        pytest.param("destroy", 204, id="destroy_action_defaults_to_204"),
+        pytest.param("partial_update", 200, id="partial_update_defaults_to_200"),
+        pytest.param("approve", 200, id="unknown_action_defaults_to_200"),
+    ],
+)
+def test_an_action_s_default_status(action: str, expected: int) -> None:
+    assert default_status(_bound_action(action)) == expected
 
 
-def test_destroy_action_defaults_to_204() -> None:
-    assert default_status(_bound_action("destroy")) == 204
-
-
-def test_partial_update_defaults_to_200() -> None:
-    assert default_status(_bound_action("partial_update")) == 200
-
-
-def test_unknown_action_defaults_to_200() -> None:
-    assert default_status(_bound_action("approve")) == 200
-
-
-def test_view_class_default_for_create() -> None:
-    assert default_status(ServiceCreateView()) == 201
-
-
-def test_view_class_default_for_update() -> None:
-    assert default_status(ServiceUpdateView()) == 200
-
-
-def test_view_class_default_for_delete() -> None:
-    assert default_status(ServiceDeleteView()) == 204
+@pytest.mark.parametrize(
+    ("view", "expected"),
+    [
+        pytest.param(ServiceCreateView, 201, id="create"),
+        pytest.param(ServiceUpdateView, 200, id="update"),
+        pytest.param(ServiceDeleteView, 204, id="delete"),
+    ],
+)
+def test_a_view_class_s_default_status(view: type, expected: int) -> None:
+    assert default_status(view()) == expected
 
 
 def test_unrecognised_view_falls_back_to_200() -> None:

@@ -2,7 +2,7 @@
 
 The kernel refuses a principal whose ``is_active`` is false before any
 permission check runs, so a view declaring no ``permission_classes`` at all
-refuses it too. The refusal is ``PrincipalUnavailable``:
+refuses it too. The refusal is ``DRFPrincipalUnavailable``:
 ``{"detail": "The acting principal is unavailable."}``, code
 ``permission_denied``. The same user, active, is served, so each test holds the
 flag rather than the view.
@@ -22,8 +22,6 @@ from django_service_specs import (
     ServiceSpec,
     Unrestricted,
 )
-from rest_framework.parsers import JSONParser
-from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from django_spec_rest import (
@@ -33,11 +31,8 @@ from django_spec_rest import (
     ServiceUpdateView,
     ServiceViewSet,
 )
-from django_spec_rest.dispatch.kernel_edge import adispatch_kernel_spec
-from django_spec_rest.service_specs.principal_unavailable import PrincipalUnavailable
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
-from django_spec_rest.views.utils import view_call_context
 from tests.testapp.models import Author
 from tests.testapp.serializers import AuthorSerializer
 
@@ -47,12 +42,6 @@ _factory = APIRequestFactory()
 _UNAVAILABLE = {"detail": "The acting principal is unavailable."}
 _ACTIVE = pytest.mark.parametrize("active", [True, False], ids=["active", "deactivated"])
 _OPEN = (Unrestricted(),)
-
-# A gap in a file this module does not own, a strict xfail naming it.
-_VIEWSET_GAP = pytest.mark.xfail(
-    strict=True,
-    reason="ServiceViewSet.action_specs refuses a kernel ServiceSpec at as_view()",
-)
 
 ran: list[str] = []
 
@@ -102,7 +91,6 @@ _BY_PK = SelectorSpec(
     kind=SelectorKind.RETRIEVE,
     selector=lambda *, pk: Author.objects.filter(pk=pk).first(),
     reads=Parameters.of(Parameter("pk", "integer", required=True)),
-    permissions=_OPEN,
 )
 
 
@@ -117,16 +105,9 @@ def _writes(service: Any, **fields: Any) -> ServiceSpec:
 
 
 class _ViewPermissions:
-    """The view's own ``permission_classes`` answer for a kernel spec.
-
-    ``MutationFlowMixin.get_permissions`` reads a drfs spec's
-    ``permission_classes``, which a kernel spec has no attribute for.
-    """
+    """No permission classes of the view's own."""
 
     permission_classes: Any = []
-
-    def get_permissions(self) -> list[Any]:
-        return [permission() for permission in self.permission_classes]
 
 
 class _Create(_ViewPermissions, ServiceCreateView):
@@ -207,26 +188,7 @@ def test_a_retrieve_view_with_no_permission_classes(active: bool) -> None:
     _answered(_Retrieve.as_view()(request, pk=author.pk), active, 200, "read")
 
 
-@_VIEWSET_GAP
 @_ACTIVE
 def test_a_viewset_action_with_no_permission_classes(active: bool) -> None:
     request = _as(_factory.post("/", {"name": "n"}, format="json"), active)
     _answered(_ViewSet.as_view({"post": "create"})(request), active, 201, "create")
-
-
-@pytest.mark.django_db(transaction=True)
-async def test_the_async_core_refuses_it_on_a_live_view() -> None:
-    user = await get_user_model().objects.acreate(username="u", is_active=False)
-    view = ServiceCreateView()
-    view.request = Request(_factory.post("/", {"name": "n"}, format="json"), parsers=[JSONParser()])
-    view.request.user = user
-    view.args, view.kwargs, view.format_kwarg = (), {}, None
-
-    with pytest.raises(PrincipalUnavailable):
-        await adispatch_kernel_spec(
-            _writes(_acreate),
-            view=view,
-            request=view.request,
-            call_context=view_call_context(view, view.request),
-        )
-    assert ran == []

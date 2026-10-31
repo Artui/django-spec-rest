@@ -9,9 +9,8 @@ On the kernel route the seat that fills a Validator field is ``input_data``,
 the spec's and beneath it the view's ``get_input_data``, so the validating
 cases are given there. ``kwargs`` fills the pool: its value reaches the
 service parameter as given, never through the field, which is what a
-read-only field's case asks of it. The drfs path validated a
-``get_service_kwargs`` value naming a field as well; on the kernel route that
-value is the pool's. The view's hooks reach the kernel call, so each case is given
+read-only field's case asks of it. A ``get_service_kwargs`` value naming a
+field is the pool's too, never validated by the field. The view's hooks reach the kernel call, so each case is given
 through the spec and through the view.
 """
 
@@ -48,16 +47,7 @@ def _service(seen: dict[str, Any]) -> Callable[..., None]:
 
 
 class _KernelCreateView(ServiceCreateView):
-    """``get_permissions`` answers the view's own classes, as for a spec setting none.
-
-    ``MutationFlowMixin.get_permissions`` reads ``spec.permission_classes``,
-    which a kernel spec has no attribute for.
-    """
-
     permission_classes: list[Any] = []
-
-    def get_permissions(self) -> list[Any]:
-        return [permission() for permission in self.permission_classes]
 
 
 def _view(

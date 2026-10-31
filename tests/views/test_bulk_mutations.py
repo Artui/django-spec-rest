@@ -1,7 +1,6 @@
 """Bulk mutations through the HTTP views over kernel specs: ``many`` bodies and collection targets.
 
-Changed by design: a drfs collection spec read its filters from the query
-string beside the body; a kernel service spec's arguments are its body and the
+A kernel service spec's arguments are its body and the
 route captures it declares, so a collection selector's reads come from those
 and the query string is no argument of a write.
 """
@@ -21,16 +20,12 @@ from django_service_specs import (
     ServiceSpec,
     Unrestricted,
 )
+from django_service_specs.mutations.delete_collection import delete_collection
 from rest_framework import serializers
 from rest_framework.permissions import BasePermission
 from rest_framework.test import APIRequestFactory
 
-from django_spec_rest import (
-    ServiceCreateView,
-    ServiceDeleteView,
-    ServiceUpdateView,
-    delete_collection,
-)
+from django_spec_rest import ServiceCreateView, ServiceDeleteView, ServiceUpdateView
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from tests.testapp.models import Author, Post
@@ -74,7 +69,7 @@ def _view(base: type, spec: ServiceSpec, **attrs: Any) -> Any:
 
 
 def _collection(selector: Any = _all_posts, **seats: Any) -> SelectorSpec:
-    return SelectorSpec(kind=SelectorKind.LIST, selector=selector, permissions=_OPEN, **seats)
+    return SelectorSpec(kind=SelectorKind.LIST, selector=selector, **seats)
 
 
 class TestBulkCreateMany:

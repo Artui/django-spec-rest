@@ -23,7 +23,10 @@ from rest_framework import serializers
 
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
-from django_spec_rest.types.json_schema_registry import JsonSchemaRegistry
+from django_spec_rest.types.json_schema_registry import (
+    DEFAULT_JSON_SCHEMA_REGISTRY,
+    JsonSchemaRegistry,
+)
 
 
 class _MoneyField(serializers.CharField): ...
@@ -75,6 +78,19 @@ def test_a_spec_s_input_fields_take_the_validator_s_rules() -> None:
     parameter = _amount_parameter(_service_spec())
     assert (parameter.type, parameter.format) == ("string", None)
     assert parameter.json_schema_extra == {"pattern": "^[0-9]+$"}
+
+
+def test_a_rule_an_extension_prepends_wins_over_the_registrys_own() -> None:
+    """``extend`` puts its rules first, so they answer before the ones it extends,
+    and the registry extended is left as it was."""
+    integer = DEFAULT_JSON_SCHEMA_REGISTRY.extend(fields=[(_MoneyField, {"type": "integer"})])
+
+    assert _amount_parameter(_service_spec(_REGISTRY.extend(fields=[]))).type == "string"
+    assert _amount_parameter(_service_spec(integer)).type == "integer"
+    assert _amount_parameter(_service_spec(integer.extend(fields=_REGISTRY.fields))).type == (
+        "string"
+    )
+    assert integer.fields == ((_MoneyField, {"type": "integer"}),)
 
 
 def test_the_kernel_s_schema_states_the_rule_but_for_the_dropped_format() -> None:
@@ -152,11 +168,7 @@ class _Order:
 
 def test_a_dataclass_input_takes_a_rule_on_the_field_class_it_is_read_through() -> None:
     """A dataclass is read through its ``DataclassSerializer``'s fields, so a rule
-    keyed on its Python type is not read, and one on the field class is."""
-    by_type = JsonSchemaRegistry(python_types=((Decimal, {"type": "string", "pattern": "^1"}),))
-    parameter = _amount_parameter(_service_spec(by_type, input_serializer=_Order))
-    assert (parameter.format, parameter.json_schema_extra) == ("decimal", None)
-
+    on the field class a ``Decimal`` is read through reaches it."""
     by_field = JsonSchemaRegistry(
         fields=((serializers.DecimalField, {"type": "string", "pattern": "^1"}),)
     )
