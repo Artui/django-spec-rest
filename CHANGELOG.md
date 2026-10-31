@@ -11,6 +11,8 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+## [0.1.0] — 2026-10-31
+
 The first release. Every change below is against the previous package's
 0.62.0, and [Moving from djangorestframework-services](https://artui.github.io/django-spec-rest/moving-from-drfs/)
 lists each with what a project rewrites.
@@ -106,4 +108,5 @@ lists each with what a project rewrites.
 - **The package is no longer a Django app.** It has no models, migrations,
   templates, static files or URLs, so it needs no `INSTALLED_APPS` entry.
 
-[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.0.0...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/Artui/django-spec-rest/compare/v0.0.0...v0.1.0
