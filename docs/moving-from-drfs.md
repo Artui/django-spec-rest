@@ -88,7 +88,8 @@ declare every seat above.
   row.
 - **A nested selector declares no `permissions`.** On `instance_selector_spec`,
   `collection_selector_spec` and `output_selector_spec` the kernel never asks
-  them, so `as_view()` refuses them: declare them on the spec being served.
+  them, so the kernel refuses them when the `ServiceSpec` is built: declare
+  them on the spec being served.
 - **A selector view's `get_selector_kwargs` beside a kernel spec is refused**
   at `as_view()`, with the per-action `get_<action>_selector_kwargs`: return
   those keys from the spec's own `kwargs` provider, which may declare
@@ -153,7 +154,8 @@ The query string is read by the kernel's flat reader:
   a spec serves: a handler with no spec is left out, on its 405 too.
   `actions[METHOD]` is a JSON Schema object rather than DRF's per-field
   dictionary, and leaves out the keys the server fills, the route's captures
-  and the target lookup's parameters. A mixed viewset's methods that no kernel
+  and the target lookup's parameters; a key a provider may fill is described
+  and not required. A mixed viewset's methods that no kernel
   spec serves are no longer described.
 - **The browsable API's PUT and PATCH forms are drawn empty**, not prefilled from
   the row: a spec's input need not have the row's fields.
@@ -200,6 +202,9 @@ The query string is read by the kernel's flat reader:
 - A kernel spec under `@selector_action` does not read the view's
   `get_selector_kwargs`, and nothing refuses the override there.
 - `@service_action` does not run the kernel's seed check at `as_view()`.
+- `@selector_action` runs it when the method is decorated, against the
+  kernel's default seeds, so a selector action cannot read a seed its
+  viewset's `pool_seeds` registers.
 - `ActionSerializerResolver` falls back to the view's `serializer_class` for an
   action whose spec has no serializer.
 - A service's `ServiceValidationError` keyed by a model field is answered under

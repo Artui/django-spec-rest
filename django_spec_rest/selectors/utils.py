@@ -19,7 +19,7 @@ from rest_framework.settings import api_settings
 from rest_framework.versioning import QueryParameterVersioning
 
 from django_spec_rest.dispatch.kernel_edge import KernelSpec, dispatch_kernel_spec
-from django_spec_rest.views.utils import view_call_context
+from django_spec_rest.views.utils import view_call_context, view_pool_seeds
 
 
 def dispatch_selector_for_spec(view: Any, spec: KernelSelectorSpec) -> Any:
@@ -66,6 +66,7 @@ def dispatch_kernel_selector(view: Any, spec: KernelSpec) -> DispatchResult:
         request=view.request,
         call_context=view_call_context(view, view.request),
         query=kernel_query(view, cast(KernelSelectorSpec, spec), view.request),
+        pool_seeds=view_pool_seeds(view),
     )
     if found.kind == "not_found":
         raise NotFound()

@@ -11,6 +11,52 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-11-02
+
+### Added
+
+- **`pool_seeds` on every view and viewset**: the kernel `PoolSeeds` the
+  spec's callables are resolved with, `DEFAULT_POOL_SEEDS` unless set as a
+  class attribute or as `as_view(pool_seeds=...)`. A spec whose service,
+  selector, provider, permission check, precondition or affordance condition
+  reads a registered seed (`DEFAULT_POOL_SEEDS.extend(frozen=...)`) is served
+  by a view registering it; until now no view could register one. A
+  `@service_action` or `@selector_action` dispatches with its viewset's, and
+  the OpenAPI request body and the `OPTIONS` answer
+  describe what a caller sends under the same seeds, so a read a registered
+  seed fills is offered in neither, and `OPTIONS` asks a permission check
+  naming a registered seed rather than failing.
+
+### Changed
+
+- **`as_view()` checks a spec against the view's `pool_seeds`**, so an
+  affordance condition or a precondition requiring a seed the view does not
+  register is refused with `ImproperlyConfigured` naming the seed. A spec that
+  mounted before may now be refused: every request reaching that callable
+  failed with `TypeError`. A view overriding `get_service_kwargs` or a
+  per-action `get_<action>_service_kwargs` is still not checked, its
+  conditions and preconditions included. `@selector_action` checks its spec
+  when the method is decorated, against the kernel's default seeds.
+- **The seeds a target's checks resolved are handed on to the run.** Where a
+  write's row is found by its spec's own target selector, the kernel's
+  `resolve_target` and `dispatch` are handed the view's one `pool_seeds` and
+  the call's context, and `dispatch` takes the values the lookup's checks were
+  offered, so each seed a permission check names is resolved once per call
+  rather than twice.
+- **Requires `django-service-specs` 0.23.0.** A nested selector
+  (`instance_selector_spec`, `collection_selector_spec`, `output_selector_spec`)
+  that declares `permissions` is now refused by the kernel when the
+  `ServiceSpec` is built, rather than by the view at `as_view()`.
+- **OpenAPI and OPTIONS ask the caller for what dispatch demands of it.** The
+  OpenAPI request body of a spec whose Validator is not a
+  `SerializerValidator`, and the `actions[POST]` and `actions[PUT]` schemas of
+  OPTIONS, are the kernel's `spec_caller_input_schema` less the target lookup's
+  parameters and the route's captures. A key a provider may fill or decline is
+  offered and no longer required; OPTIONS now requires none of a `partial`
+  spec's fields, as OpenAPI already did; and each row of a `many` spec leaves
+  out a field its typed `input_data` fills and no longer requires one it may
+  fill.
+
 ## [0.1.0] — 2026-10-31
 
 The first release. Every change below is against the previous package's
@@ -108,5 +154,6 @@ lists each with what a project rewrites.
 - **The package is no longer a Django app.** It has no models, migrations,
   templates, static files or URLs, so it needs no `INSTALLED_APPS` entry.
 
-[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/Artui/django-spec-rest/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Artui/django-spec-rest/compare/v0.0.0...v0.1.0

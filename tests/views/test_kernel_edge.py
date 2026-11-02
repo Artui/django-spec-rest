@@ -348,7 +348,6 @@ def _rename_spec() -> ServiceSpec:
             kind=SelectorKind.RETRIEVE,
             selector=lambda *, pk: Author.objects.filter(pk=pk).first(),
             reads=_PK,
-            permissions=_OPEN,
         ),
     )
 

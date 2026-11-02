@@ -26,6 +26,7 @@ import django_filters
 import pytest
 from django.urls import path
 from django_service_specs import (
+    DEFAULT_POOL_SEEDS,
     DataclassPresenter,
     DataclassValidator,
     Parameter,
@@ -34,6 +35,7 @@ from django_service_specs import (
     SelectorSpec,
     ServiceSpec,
     Unrestricted,
+    UnsetType,
     Validator,
 )
 from drf_spectacular.generators import SchemaGenerator
@@ -103,6 +105,30 @@ def _owner() -> _Owned:
     return {"owner": "me"}
 
 
+class _MayOwn(TypedDict):
+    owner: str | UnsetType
+
+
+def _may_own() -> _MayOwn:
+    return {"owner": "me"}
+
+
+@dataclass
+class _OwnedRow:
+    name: str
+    owner: str
+    note: str
+
+
+class _RowFill(TypedDict):
+    owner: str
+    note: str | UnsetType
+
+
+def _row_fill() -> _RowFill:
+    return {"owner": "me", "note": "n"}
+
+
 def _list_authors() -> Any:
     return Author.objects.order_by("id")
 
@@ -115,6 +141,9 @@ def _create_author(*, data: Any) -> Any: ...
 
 
 def _create_owned(*, data: Any, tenant: str, owner: str) -> Any: ...
+
+
+def _create_stamped(*, data: Any, stamp: str) -> Any: ...
 
 
 def _rename(*, instance: Author, data: Any) -> Any: ...
@@ -298,6 +327,44 @@ urlpatterns = [
                 ),
                 kwargs=_owner,
             ),
+        ).as_view(),
+    ),
+    path(
+        "owned-may-decline/",
+        _view(
+            ServiceCreateView,
+            _create(
+                service=_create_owned,
+                validator=DataclassValidator(_NameRow),
+                reads=Parameters.of(Parameter("owner", "string", required=True)),
+                kwargs=_may_own,
+            ),
+        ).as_view(),
+    ),
+    path(
+        "stamped/",
+        _view(
+            ServiceCreateView,
+            _create(
+                service=_create_stamped,
+                validator=DataclassValidator(_NameRow),
+                reads=Parameters.of(Parameter("stamp", "string", reflected=True)),
+            ),
+            pool_seeds=DEFAULT_POOL_SEEDS.extend(stamp=lambda: "stamp"),
+        ).as_view(),
+    ),
+    path(
+        "owner-filled/",
+        _view(
+            ServiceCreateView,
+            _create(validator=DataclassValidator(_OwnedRow), input_data=_row_fill),
+        ).as_view(),
+    ),
+    path(
+        "rows-filled/",
+        _view(
+            ServiceCreateView,
+            _create(many=True, validator=DataclassValidator(_OwnedRow), input_data=_row_fill),
         ).as_view(),
     ),
     path("update/<int:pk>/", _view(ServiceUpdateView, _update()).as_view()),
@@ -486,6 +553,40 @@ class TestTheRequestBody:
         # ``kwargs`` provider, so the client is asked for neither.
         body = _body(schema, "/t/{tenant}/owned/", "post")
         assert set(body["properties"]) == {"name"}
+
+    def test_a_read_a_provider_may_decline_is_offered_and_not_required(
+        self, schema: dict[str, Any]
+    ) -> None:
+        # The ``kwargs`` provider may answer ``owner`` with ``UNSET``, so
+        # dispatch does not demand it of the caller, whose value is kept
+        # beneath the provider's answer: offered, and not required.
+        body = _body(schema, "/owned-may-decline/", "post")
+        assert set(body["properties"]) == {"name", "owner"}
+        assert body["required"] == ["name"]
+
+    def test_a_read_named_for_a_seed_the_view_registers_is_no_body_key(
+        self, schema: dict[str, Any]
+    ) -> None:
+        # ``stamp`` is a reflected read the view's own ``pool_seeds`` fill, so
+        # the kernel withholds it under those seeds and offers it under the
+        # defaults, which this body was once built with.
+        assert set(_body(schema, "/stamped/", "post")["properties"]) == {"name"}
+
+    def test_a_field_a_typed_input_data_fills_is_not_offered(self, schema: dict[str, Any]) -> None:
+        # ``owner`` is always the provider's, and ``note`` it may decline.
+        body = _body(schema, "/owner-filled/", "post")
+        assert set(body["properties"]) == {"name", "note"}
+        assert body["required"] == ["name"]
+
+    def test_a_many_row_withholds_what_input_data_fills_and_relaxes_what_it_may(
+        self, schema: dict[str, Any]
+    ) -> None:
+        # ``input_data`` is merged over every row: ``owner`` is never the
+        # caller's in any row, and ``note`` is offered and not required.
+        body = _body(schema, "/rows-filled/", "post")
+        assert body["type"] == "array"
+        assert set(body["items"]["properties"]) == {"name", "note"}
+        assert body["items"]["required"] == ["name"]
 
     def test_a_delete_with_a_validator_documents_its_body(self, schema: dict[str, Any]) -> None:
         assert _body(schema, "/delete-with-reason/{id}/", "delete") == {

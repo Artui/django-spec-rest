@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from typing import Any, ClassVar
 
+from django_service_specs.pool.pool_seeds import DEFAULT_POOL_SEEDS, PoolSeeds
 from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -60,6 +61,14 @@ class MutationFlowMixin(_ServesRaisedSchema):
     ``response`` / ``result`` / ``request`` / ``view`` / ``instance`` / ``data``
     and returns a ``Response`` to replace the one built, or ``None`` to keep it
     (test_response_finalizer)."""
+
+    pool_seeds: PoolSeeds = DEFAULT_POOL_SEEDS
+    """The seeds the spec's callables are resolved with: the kernel's
+    ``DEFAULT_POOL_SEEDS`` unless the view registers others, as a class
+    attribute or as ``as_view(pool_seeds=...)``. One registry for the view's
+    life: ``as_view()`` checks the spec against it, refusing a callable that
+    requires a seed it does not register, and every call's checks, target
+    lookup and ``dispatch`` are handed that object (test_pool_seeds)."""
 
     def get_service_kwargs(self) -> dict[str, Any]:
         """Hook for additional kwargs available to every mutation service."""

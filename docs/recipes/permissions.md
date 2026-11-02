@@ -67,5 +67,7 @@ The example project asserts both, and the 403 over HTTP.
 
 The specs on `instance_selector_spec`, `collection_selector_spec` and
 `output_selector_spec` are never asked for their permissions: the spec being
-served is what authorizes. `as_view()` refuses a nested selector that declares
-`permissions`, so a check placed there cannot look like it guards something.
+served is what authorizes. The kernel refuses a nested selector that declares
+`permissions` when the `ServiceSpec` is built (`ImproperlyConfigured`), so a
+check placed there cannot look like it guards something. To nest a selector spec
+that is also served on its own, nest `spec.derive(permissions=None)`.

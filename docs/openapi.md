@@ -33,7 +33,11 @@ this call does.
   drf-spectacular's component name for the class, built partial where the
   route validates partially (a `PATCH`, or a spec declaring `partial`). A
   `many` spec takes a list of its rows. Any other validator is the kernel's
-  JSON Schema of the parameters the body carries.
+  `spec_caller_input_schema`, less the target lookup's parameters and the
+  route's captures, which never come from the body: a key the server fills is
+  not offered, and one a provider may fill or decline is offered and not
+  required. A `many` spec's rows are read the same way, by what its
+  `input_data` fills in every row.
 - **The response body** is a `SerializerPresenter`'s serializer, or another
   presenter's output schema, a list where the spec presents rows. A spec with
   no presenter documents no content; a selector spec with none keeps the

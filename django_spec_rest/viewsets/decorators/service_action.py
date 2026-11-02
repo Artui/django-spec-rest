@@ -6,6 +6,7 @@ import functools
 from collections.abc import Callable
 from typing import Any
 
+from django_service_specs.pool.pool_seeds import DEFAULT_POOL_SEEDS
 from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
 from rest_framework import status as drf_status
 from rest_framework.decorators import action
@@ -92,7 +93,11 @@ def _validate_kernel_spec(spec: KernelServiceSpec, *, label: str, detail: bool) 
     ``get_object()`` is never asked for a kernel spec's row
     (test_a_detail_action_with_no_target_is_refused).
     """
-    validate_mutation_view_spec(type(label, (), {"spec": spec}), has_instance=detail)
+    # The registry is the viewset's, unknown here; the probe reads as
+    # hooked, so it is never asked of the spec.
+    validate_mutation_view_spec(
+        type(label, (), {"spec": spec}), has_instance=detail, pool_seeds=DEFAULT_POOL_SEEDS
+    )
 
 
 def service_action(

@@ -72,7 +72,12 @@ dependencies = [
     # 0.21.1 carries ``Validator.unsendable`` as the ABC's default, which the
     # serializer validator answers, and the refusal by ``check_seeds`` of an array
     # read that declares no ``items``.
-    "django-service-specs>=0.21.1",
+    # 0.23.0 adds ``spec_caller_input_schema``, the input schema the OpenAPI
+    # body and the OPTIONS answer advertise; ``CallSeeds``, which carries the
+    # seeds ``resolve_target`` resolved on to ``dispatch``; and ``check_seeds``
+    # reading affordance conditions and preconditions, so the mount check
+    # refuses a condition requiring a seed the view does not register.
+    "django-service-specs>=0.23.0",
 ]
 
 [project.optional-dependencies]
@@ -219,7 +224,7 @@ root = ["./django_spec_rest"]
 # CHANGELOG [Unreleased] block under a new dated heading. Run via
 # `uvx bump-my-version` (no permanent dependency added to the project).
 [tool.bumpversion]
-current_version = "0.1.0"
+current_version = "0.2.0"
 allow_dirty = false
 commit = false
 tag = false
