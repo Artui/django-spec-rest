@@ -11,7 +11,33 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+### Added
+
+- **`pool_seeds` on every view and viewset**: the kernel `PoolSeeds` the
+  spec's callables are resolved with, `DEFAULT_POOL_SEEDS` unless set as a
+  class attribute or as `as_view(pool_seeds=...)`. A spec whose service,
+  selector, provider, permission check, precondition or affordance condition
+  reads a registered seed (`DEFAULT_POOL_SEEDS.extend(frozen=...)`) is served
+  by a view registering it; until now no view could register one. A
+  `@service_action` or `@selector_action` dispatches
+  with its viewset's.
+
 ### Changed
+
+- **`as_view()` checks a spec against the view's `pool_seeds`**, so an
+  affordance condition or a precondition requiring a seed the view does not
+  register is refused with `ImproperlyConfigured` naming the seed. A spec that
+  mounted before may now be refused: every request reaching that callable
+  failed with `TypeError`. A view overriding `get_service_kwargs` or a
+  per-action `get_<action>_service_kwargs` is still not checked, its
+  conditions and preconditions included. `@selector_action` checks its spec
+  when the method is decorated, against the kernel's default seeds.
+- **The seeds a target's checks resolved are handed on to the run.** Where a
+  write's row is found by its spec's own target selector, the kernel's
+  `resolve_target` and `dispatch` are handed the view's one `pool_seeds` and
+  the call's context, and `dispatch` takes the values the lookup's checks were
+  offered, so each seed a permission check names is resolved once per call
+  rather than twice.
 
 - **Requires `django-service-specs` 0.23.0.** A nested selector
   (`instance_selector_spec`, `collection_selector_spec`, `output_selector_spec`)

@@ -5,7 +5,7 @@ through the seats: a ``SerializerValidator`` validates a body with a DRF
 serializer, a ``SerializerPresenter`` renders with one, and a
 ``DRFPermissionCheck`` asks DRF permission classes. The same spec runs off HTTP
 through the kernel's ``dispatch``, which is how ``SEND_SPEC`` is reached in the
-tests without a request.
+tests without a request, handed the same ``SEEDS`` the viewset registers.
 """
 
 from __future__ import annotations
@@ -13,6 +13,8 @@ from __future__ import annotations
 from typing import Any
 
 from django_service_specs import (
+    DEFAULT_POOL_SEEDS,
+    Affordance,
     Parameter,
     Parameters,
     SelectorKind,
@@ -28,10 +30,15 @@ from django_spec_rest.service_specs.serializer_presenter import SerializerPresen
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from invoices.selectors import InvoiceFilter, get_invoice, list_invoices, sent_invoices
 from invoices.serializers import InvoiceInput, InvoiceSerializer
-from invoices.services import create_invoice, send_invoice, update_invoice
+from invoices.services import create_invoice, send_invoice, sending_paused, update_invoice
 
 OPEN = (Unrestricted(),)
 PRESENTER = SerializerPresenter(InvoiceSerializer)
+
+# The seeds the viewset registers (``InvoiceViewSet.pool_seeds``). A callable
+# declaring ``sending_paused`` is handed its value; a view that did not
+# register it would refuse ``SEND_SPEC`` at ``as_view()``.
+SEEDS = DEFAULT_POOL_SEEDS.extend(sending_paused=sending_paused)
 
 # One row by ``pk``. On a detail route the edge reads ``pk`` from the URL;
 # off HTTP the caller passes it as an argument. A nested selector declares no
@@ -76,12 +83,20 @@ UPDATE_SPEC = ServiceSpec(
 )
 
 # Asked of DRF's ``IsAuthenticated`` over HTTP and through the kernel's own
-# ``dispatch`` alike.
+# ``dispatch`` alike. Unavailable (409) while sending is paused, a condition
+# reading the registered seed.
 SEND_SPEC = ServiceSpec(
     service=send_invoice,
     instance_selector_spec=INVOICE_LOOKUP,
     permissions=(DRFPermissionCheck([IsAuthenticated]),),
     presenter=PRESENTER,
+    affordances=[
+        Affordance(
+            code="sending_paused",
+            reason="Sending is paused.",
+            when=lambda *, sending_paused: not sending_paused,
+        )
+    ],
 )
 
 SENT_SPEC = SelectorSpec(
@@ -97,9 +112,11 @@ class InvoiceViewSet(ServiceViewSet):
 
     No ``"destroy"`` spec: ``DELETE`` answers 405 and the detail route's
     ``Allow`` header leaves it out. ``PATCH`` falls back to the ``"update"``
-    spec, validated partially.
+    spec, validated partially. ``pool_seeds`` registers ``SEEDS`` for every
+    action, the decorated one included.
     """
 
+    pool_seeds = SEEDS
     action_specs = {
         "list": LIST_SPEC,
         "retrieve": RETRIEVE_SPEC,

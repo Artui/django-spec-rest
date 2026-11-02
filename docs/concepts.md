@@ -26,8 +26,9 @@ spec through `@service_action(spec)` or `@selector_action(spec)`. See
 `as_view()` checks the spec before the view serves anything: a spec of the
 kind the view does not serve, an update or delete with no target, a nested
 selector declaring `permissions`, a `filter_set` beside `DjangoFilterBackend`,
-and what the kernel's seed check refuses of the callables' signatures are each
-an `ImproperlyConfigured` at import.
+and what the kernel's seed check refuses of the callables' signatures, against
+the seeds the view registers on `pool_seeds`, are each an `ImproperlyConfigured`
+at import. See [Registering a seed](recipes/extra-kwargs.md#registering-a-seed).
 
 ## What the edge reads from a request
 

@@ -1,5 +1,14 @@
 # Viewsets
 
+Every viewset here takes `pool_seeds`, the kernel `PoolSeeds` its specs'
+callables are resolved with, as a class attribute or as
+`as_view(actions, pool_seeds=...)`: the kernel's `DEFAULT_POOL_SEEDS` unless
+set. `as_view()` checks each `action_specs` entry against it, and every action,
+a `@service_action` or `@selector_action` one included, dispatches with it. A
+DRF viewset of your own serving a decorated action reads the same attribute
+where it declares one. See
+[Registering a seed](../recipes/extra-kwargs.md#registering-a-seed).
+
 ## Full CRUD
 
 ::: django_spec_rest.viewsets.service_viewset.ServiceViewSet

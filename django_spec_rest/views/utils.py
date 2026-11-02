@@ -6,6 +6,7 @@ import inspect
 from collections.abc import Callable, Mapping
 from typing import Any
 
+from django_service_specs.pool.pool_seeds import DEFAULT_POOL_SEEDS, PoolSeeds
 from django_service_specs.pool.resolve_callable_kwargs import (
     resolve_callable_kwargs as bind_by_name_only,
 )
@@ -100,6 +101,23 @@ def resolve_input_extras(
                 )
             )
     return collected
+
+
+def view_pool_seeds(view: Any, initkwargs: Mapping[str, Any] | None = None) -> PoolSeeds:
+    """The seeds ``view`` resolves its spec's callables with: its ``pool_seeds``.
+
+    ``view`` is a view or its class. Asked by ``as_view()`` before any
+    instance exists, ``initkwargs`` is what it was handed: a ``pool_seeds``
+    there is the one DRF sets on every instance it builds, so it outranks the
+    class's (test_pool_seeds' ``as_view keyword`` case of
+    test_is_served_with_the_condition_s_answer_where_the_view_registers_it).
+    The kernel's ``DEFAULT_POOL_SEEDS`` for a view with no such attribute: a
+    DRF viewset of the project's own serving ``@service_action`` or
+    ``@selector_action`` (test_service_action's test_acts_on_its_own_target_on_any_viewset).
+    """
+    if initkwargs is not None and "pool_seeds" in initkwargs:
+        return initkwargs["pool_seeds"]
+    return getattr(view, "pool_seeds", DEFAULT_POOL_SEEDS)
 
 
 def view_call_context(view: Any, request: Request) -> dict[str, Any]:

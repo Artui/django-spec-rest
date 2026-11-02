@@ -8,7 +8,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from invoices.models import Invoice
-from invoices.views import SEND_SPEC, UPDATE_SPEC
+from invoices.views import SEEDS, SEND_SPEC, UPDATE_SPEC
 
 
 def _invoice(**fields: object) -> Invoice:
@@ -218,13 +218,20 @@ class DRFPermissionCheckTests(APITestCase):
         self.assertEqual(response.data["status"], Invoice.STATUS_SENT)
 
     def test_off_http_the_same_check_admits_a_user(self) -> None:
-        result = dispatch(SEND_SPEC, principal=self.user, arguments={"pk": self.invoice.pk})
+        result = dispatch(
+            SEND_SPEC, principal=self.user, arguments={"pk": self.invoice.pk}, pool_seeds=SEEDS
+        )
 
         self.assertEqual(result.value.status, Invoice.STATUS_SENT)
 
     def test_off_http_the_same_check_refuses_an_anonymous_principal(self) -> None:
         with self.assertRaises(NotPermitted):
-            dispatch(SEND_SPEC, principal=AnonymousUser(), arguments={"pk": self.invoice.pk})
+            dispatch(
+                SEND_SPEC,
+                principal=AnonymousUser(),
+                arguments={"pk": self.invoice.pk},
+                pool_seeds=SEEDS,
+            )
 
         self.invoice.refresh_from_db()
         self.assertEqual(self.invoice.status, Invoice.STATUS_DRAFT)
@@ -243,3 +250,25 @@ class SharedSerializerContextTests(APITestCase):
         response = self.client.post("/invoices/", {"customer": "Acme", "amount_cents": 1})
 
         self.assertEqual(response.data["warnings"], [])
+
+
+class ASeedTheViewSetRegistersTests(APITestCase):
+    """``InvoiceViewSet.pool_seeds`` hands ``sending_paused`` to the send spec's condition."""
+
+    def setUp(self) -> None:
+        self.client.force_authenticate(User.objects.create_user("clerk"))
+        self.invoice = _invoice()
+
+    def test_while_sending_is_paused_the_send_is_a_409(self) -> None:
+        with self.settings(INVOICES_SENDING_PAUSED=True):
+            response = self.client.post(f"/invoices/{self.invoice.pk}/send/")
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(response.data["code"], "sending_paused")
+        self.invoice.refresh_from_db()
+        self.assertEqual(self.invoice.status, Invoice.STATUS_DRAFT)
+
+    def test_otherwise_the_invoice_is_sent(self) -> None:
+        response = self.client.post(f"/invoices/{self.invoice.pk}/send/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)

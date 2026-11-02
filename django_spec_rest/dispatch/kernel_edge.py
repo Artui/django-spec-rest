@@ -25,6 +25,10 @@ What a view hands it, and what it does with each:
   query string sent (``kernel_arguments``). A capture the spec does not
   declare is no argument and stays on ``view.kwargs`` for DRF's own machinery.
 - **The principal**, ``request.user``.
+- **The seeds**, the view's ``pool_seeds`` (``view_pool_seeds``): one
+  registry for the view's life, handed to the target's lookup and to
+  ``dispatch`` as the very object, since the kernel binds the seed values the
+  lookup's checks resolved to it and refuses them under any other.
 
 Two of the edge's answers are decided for every spec, and both are the
 kernel's own unless stated:
@@ -84,11 +88,12 @@ from django.http import QueryDict
 from django.utils.datastructures import MultiValueDict
 from django_service_specs.dispatch.dispatch import dispatch
 from django_service_specs.dispatch.dispatch_result import DispatchResult
-from django_service_specs.dispatch.grant import Grant
 from django_service_specs.dispatch.resolve_target import resolve_target
+from django_service_specs.dispatch.resolved_target import ResolvedTarget
 from django_service_specs.flat.flat_arguments import flat_arguments
 from django_service_specs.parameters.coerce_flat import coerce_flat
 from django_service_specs.parameters.parameters import Parameters
+from django_service_specs.pool.pool_seeds import DEFAULT_POOL_SEEDS, PoolSeeds
 from django_service_specs.pool.provider_keys import provider_keys
 from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelectorSpec
 from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
@@ -321,6 +326,7 @@ def dispatch_kernel_spec(
     view_hooks: ViewHooks | None = None,
     on_target: Callable[[Any], None] | None = None,
     query: QueryDict | None = None,
+    pool_seeds: PoolSeeds = DEFAULT_POOL_SEEDS,
 ) -> DispatchResult:
     """Run a kernel ``spec`` for ``request`` through the kernel's ``dispatch``.
 
@@ -340,6 +346,11 @@ def dispatch_kernel_spec(
 
     ``query`` is the query string a selector spec reads, where the caller
     hands one in place of the request's (``kernel_arguments``).
+
+    ``pool_seeds`` is the view's registry, its ``pool_seeds``: the one object
+    the target's lookup and ``dispatch`` are both handed, since the seeds the
+    lookup's checks resolved are handed on to ``dispatch`` bound to it
+    (``_resolved``). The kernel's default where a caller hands none.
 
     ``on_target`` is asked of what the spec's own lookup finds before anything
     runs on it, where ``target`` is ``UNSET``: the view's DRF object
@@ -365,6 +376,7 @@ def dispatch_kernel_spec(
                 call_context=call_context,
                 target=target,
                 on_target=on_target,
+                pool_seeds=pool_seeds,
             )
             if isinstance(found, DispatchResult):
                 return found
@@ -373,6 +385,11 @@ def dispatch_kernel_spec(
                 principal=request.user,
                 arguments=arguments,
                 grant=found[1],
+                # The seeds the lookup's checks were offered, so the run
+                # resolves none of them again (test_pool_seeds'
+                # test_are_handed_on_so_a_call_through_the_view_s_lookup_resolves_each_once).
+                seeds=found.seeds if isinstance(found, ResolvedTarget) else None,
+                pool_seeds=pool_seeds,
                 unknown_arguments=UNKNOWN_ARGUMENTS,
                 progress=hooks.progress,
                 target=found[0],
@@ -538,7 +555,8 @@ def _resolved(
     call_context: dict[str, Any],
     target: Any,
     on_target: Callable[[Any], None] | None,
-) -> tuple[Any, Grant | None] | DispatchResult:
+    pool_seeds: PoolSeeds,
+) -> ResolvedTarget | tuple[Any, None] | DispatchResult:
     """The target and grant ``dispatch`` takes for ``spec``, or a missing row's answer.
 
     Where ``on_target`` asks of what the spec's own lookup finds, the kernel's
@@ -546,8 +564,12 @@ def _resolved(
     refuse, and ``on_target`` is asked of it before ``dispatch`` runs anything
     on it; the ``target_checked`` grant it returns, minted for the spec
     dispatched, so ``dispatch`` neither looks the target up again nor asks its
-    object-level check twice. Otherwise ``target`` as given and no grant,
-    ``dispatch``'s own lookup finding it where that is ``UNSET``.
+    object-level check twice, and on ``.seeds`` the values of the registered
+    seeds its checks named, which ``dispatch`` takes rather than resolving
+    them again. The kernel binds both to the call, so the lookup is handed the
+    spec, principal, ``call_context`` and ``pool_seeds`` that ``dispatch`` is.
+    Otherwise ``target`` as given, no grant and no seeds, ``dispatch``'s own
+    lookup finding it where that is ``UNSET``.
 
     One arc to coverage, so each condition is named:
     test_service_update_view's test_a_put_s_own_row_is_asked_of_the_view_once
@@ -571,7 +593,11 @@ def _resolved(
     ):
         return target, None
     found = resolve_target(
-        spec, principal=principal, arguments=arguments, call_context=call_context
+        spec,
+        principal=principal,
+        arguments=arguments,
+        call_context=call_context,
+        pool_seeds=pool_seeds,
     )
     if isinstance(found, DispatchResult):
         return found
