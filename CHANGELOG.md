@@ -11,6 +11,8 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-11-02
+
 ### Added
 
 - **`pool_seeds` on every view and viewset**: the kernel `PoolSeeds` the
@@ -19,8 +21,8 @@ carries; releases up to 0.62.0 are in
   selector, provider, permission check, precondition or affordance condition
   reads a registered seed (`DEFAULT_POOL_SEEDS.extend(frozen=...)`) is served
   by a view registering it; until now no view could register one. A
-  `@service_action` or `@selector_action` dispatches
-  with its viewset's, and the OpenAPI request body and the `OPTIONS` answer
+  `@service_action` or `@selector_action` dispatches with its viewset's, and
+  the OpenAPI request body and the `OPTIONS` answer
   describe what a caller sends under the same seeds, so a read a registered
   seed fills is offered in neither, and `OPTIONS` asks a permission check
   naming a registered seed rather than failing.
@@ -41,7 +43,6 @@ carries; releases up to 0.62.0 are in
   the call's context, and `dispatch` takes the values the lookup's checks were
   offered, so each seed a permission check names is resolved once per call
   rather than twice.
-
 - **Requires `django-service-specs` 0.23.0.** A nested selector
   (`instance_selector_spec`, `collection_selector_spec`, `output_selector_spec`)
   that declares `permissions` is now refused by the kernel when the
@@ -153,5 +154,6 @@ lists each with what a project rewrites.
 - **The package is no longer a Django app.** It has no models, migrations,
   templates, static files or URLs, so it needs no `INSTALLED_APPS` entry.
 
-[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/Artui/django-spec-rest/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Artui/django-spec-rest/compare/v0.0.0...v0.1.0
