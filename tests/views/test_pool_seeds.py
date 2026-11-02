@@ -42,6 +42,7 @@ from django_spec_rest import (
     service_action,
 )
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
+from django_spec_rest.views.utils import view_pool_seeds
 from tests.testapp.models import Post
 from tests.testapp.serializers import PostSerializer
 
@@ -131,18 +132,6 @@ class TestAnAffordanceConditionReadingASeed:
             409,
             {"detail": "The board is frozen.", "code": "board_frozen"},
         )
-
-    @pytest.mark.parametrize(
-        "base", [ServiceCreateView, ServiceUpdateView, ServiceDeleteView], ids=lambda c: c.__name__
-    )
-    def test_is_refused_at_as_view_naming_the_seed_where_the_view_does_not(
-        self, base: type
-    ) -> None:
-        spec = _publish_spec(affordances=[NOT_FROZEN])
-        if base is ServiceCreateView:
-            spec = ServiceSpec(service=lambda: None, permissions=_OPEN, affordances=[NOT_FROZEN])
-        with pytest.raises(ImproperlyConfigured, match="frozen"):
-            type("_View", (base,), {"spec": spec}).as_view()
 
     def test_the_as_view_keyword_outranks_the_class_attribute(self) -> None:
         """DRF sets the keyword's value on every instance over the class's, so
@@ -249,12 +238,103 @@ class TestASelectorReadingASeed:
         with pytest.raises(ImproperlyConfigured, match="frozen"):
             type("_View", (SelectorRetrieveView,), {"spec": _RENDERING}).as_view()
 
-    @pytest.mark.parametrize("base", [SelectorListView, SelectorRetrieveView])
-    def test_a_view_that_does_not_register_it_is_refused_at_as_view(self, base: type) -> None:
-        kind = SelectorKind.LIST if base is SelectorListView else SelectorKind.RETRIEVE
-        spec = SelectorSpec(kind=kind, selector=_frozen_posts, permissions=_OPEN)
+
+class _Case:
+    """One standalone view reading the ``frozen`` seed, and the request that serves it."""
+
+    def __init__(self, base: type, spec: Any, request: Any, ok: int, **kwargs: Any) -> None:
+        self.base, self.spec, self.request, self.ok, self.kwargs = base, spec, request, ok, kwargs
+
+    def view_class(self, **attrs: Any) -> type:
+        extra = {"queryset": Post.objects.all(), "serializer_class": PostSerializer}
+        return type("_View", (self.base,), {"spec": self.spec, **extra, **attrs})
+
+    def status(self, view: Any) -> int:
+        """The status of the request on a row that exists, on the view just built."""
+        pk = str(Post.objects.create(title="t").pk)
+        response = view(self.request(), pk=pk) if self.kwargs.get("by_pk") else view(self.request())
+        return response.status_code
+
+
+def _post_by_pk_when_frozen(*, pk: int, frozen: bool) -> Post | None:
+    return Post.objects.filter(pk=pk).first()
+
+
+_BY_PK_READS = Parameters.of(Parameter("pk", "integer", required=True))
+
+# Each standalone view with a spec whose only seed is ``frozen``, read where
+# the kernel's check looks: a mutation view's affordance condition, a list or
+# retrieve view's selector. The five make every mount site answer for itself.
+_STANDALONE = {
+    "create": _Case(
+        ServiceCreateView,
+        ServiceSpec(
+            service=lambda: Post.objects.create(title="n"),
+            permissions=_OPEN,
+            presenter=SerializerPresenter(PostSerializer),
+            affordances=[NOT_FROZEN],
+        ),
+        lambda: factory.post("/", {}, format="json"),
+        201,
+    ),
+    "update": _Case(
+        ServiceUpdateView, GUARDED, lambda: factory.patch("/", {}, format="json"), 200, by_pk=True
+    ),
+    "delete": _Case(
+        ServiceDeleteView,
+        ServiceSpec(
+            service=lambda *, instance: instance.delete(),
+            permissions=_OPEN,
+            instance_selector_spec=_BY_PK,
+            affordances=[NOT_FROZEN],
+            allow_none=True,
+        ),
+        lambda: factory.delete("/"),
+        200,
+        by_pk=True,
+    ),
+    "list": _Case(
+        SelectorListView,
+        SelectorSpec(kind=SelectorKind.LIST, selector=_frozen_posts, permissions=_OPEN),
+        lambda: factory.get("/"),
+        200,
+    ),
+    "retrieve": _Case(
+        SelectorRetrieveView,
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=_post_by_pk_when_frozen,
+            reads=_BY_PK_READS,
+            permissions=_OPEN,
+            presenter=SerializerPresenter(PostSerializer),
+        ),
+        lambda: factory.get("/"),
+        200,
+        by_pk=True,
+    ),
+}
+
+
+@pytest.mark.parametrize("name", list(_STANDALONE))
+class TestEveryStandaloneViewReadingASeed:
+    """Each of the five views asks the kernel's seed check at ``as_view()`` against
+    the registry it will dispatch with, so a mount site passing the kernel's
+    defaults, or ignoring the keyword, fails its own case here."""
+
+    def test_is_refused_at_as_view_naming_the_seed_where_it_is_not_registered(
+        self, name: str
+    ) -> None:
         with pytest.raises(ImproperlyConfigured, match="frozen"):
-            type("_View", (base,), {"spec": spec}).as_view()
+            _STANDALONE[name].view_class().as_view()
+
+    @pytest.mark.parametrize("how", ["class attribute", "as_view keyword"])
+    def test_is_served_where_the_view_registers_it(self, name: str, how: str) -> None:
+        case = _STANDALONE[name]
+        if how == "class attribute":
+            view = case.view_class(pool_seeds=SEEDS).as_view()
+        else:
+            view = case.view_class().as_view(pool_seeds=SEEDS)
+        assert case.status(view) == case.ok
 
 
 class TestAViewSetRegisteringASeed:
@@ -296,6 +376,21 @@ class TestADecoratedAction:
         assert _patch(view, Post.objects.create(title="t").pk)[0] == 200
         _BOARD["frozen"] = True
         assert _patch(view, Post.objects.create(title="u").pk)[0] == 409
+
+    def test_a_service_action_missing_a_seed_mounts_and_fails_its_first_request(self) -> None:
+        """Not seed-checked at ``as_view()``: the decorator's probe reads as hooked,
+        so the missing seed is the request's ``TypeError`` (the docs say so)."""
+
+        @service_action(GUARDED, detail=True, methods=["patch"])
+        def publish(self: Any, request: Any, pk: Any = None) -> None:
+            """Stubbed: the decorator serves the spec."""
+
+        viewset = type(
+            "_ViewSet", (GenericViewSet,), {"queryset": Post.objects.all(), "publish": publish}
+        )
+        view = viewset.as_view({"patch": "publish"})
+        with pytest.raises(TypeError, match="frozen"):
+            _patch(view, Post.objects.create(title="t").pk)
 
     @pytest.mark.xfail(
         strict=True,
@@ -366,3 +461,18 @@ class TestTheSeedsTheTargetWasCheckedWith:
         view = _update_view(spec, pool_seeds=seeds).as_view()
         assert _patch(view, Post.objects.create(title="t").pk)[0] == 200
         assert resolver.calls == 1
+
+
+class TestTheRegistryAViewIsAsked:
+    """``view_pool_seeds`` reads an ``as_view`` keyword only where one was handed."""
+
+    def test_is_the_class_attribute_when_as_view_is_handed_other_keywords(self) -> None:
+        """Mutating out the ``"pool_seeds" in initkwargs`` conjunct is a KeyError here."""
+        view = _update_view(GUARDED, pool_seeds=SEEDS)
+        assert view_pool_seeds(view, {"other": 1}) is SEEDS
+        assert view_pool_seeds(view, {}) is SEEDS
+        assert view_pool_seeds(view) is SEEDS
+
+    def test_is_the_keyword_over_the_class_attribute(self) -> None:
+        view = _update_view(GUARDED, pool_seeds=SEEDS)
+        assert view_pool_seeds(view, {"pool_seeds": DEFAULT_POOL_SEEDS}) is DEFAULT_POOL_SEEDS

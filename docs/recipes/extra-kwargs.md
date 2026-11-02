@@ -74,14 +74,18 @@ class TaskViewSet(ServiceViewSet):
 Build the registry once, at import: the view checks its spec against it at
 `as_view()` and hands that one object to every call. A view that does not
 register a seed one of its spec's callables requires refuses the spec at
-`as_view()`, naming the seed, rather than failing every request. Each seed a
+`as_view()`, naming the seed, rather than failing every request. A
+`@service_action` spec is not checked at `as_view()`: a seed its viewset does
+not register is its first request's `TypeError`. Each seed a
 permission check names is resolved once per call, its value handed from the
 check to the run. The OpenAPI request body and the `OPTIONS` answer read the
 same registry: a read a registered seed fills is no key a caller is asked to
 send, and `OPTIONS` asks a permission check naming a registered seed.
 `@selector_action` checks its spec when the method is decorated, before the
-viewset exists, against the kernel's default seeds, so a selector action cannot
-read a seed its viewset registers yet.
+viewset exists, against the kernel's default seeds, so a callable the kernel's
+seed check reads (the selector, its providers and its affordance conditions)
+cannot name a seed its viewset registers yet. A permission check naming one is
+not read by that check, and is served.
 
 ## On the view: hooks
 
