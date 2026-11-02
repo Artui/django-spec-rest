@@ -584,6 +584,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#registering-a-seed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Registering a seed
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#on-the-view-hooks" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -986,6 +997,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#registering-a-seed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Registering a seed
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#on-the-view-hooks" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1053,6 +1075,46 @@ value from <code>input_data=</code> instead, where the serializer validates it. 
 named like a field's <code>source</code> stays the provider's.</p>
 <p>A provider is server code, and its values reach the callable as returned: a
 provider's <code>"abc"</code> for an <code>x: int</code> parameter is not coerced.</p>
+<h2 id="registering-a-seed">Registering a seed<a class="headerlink" href="#registering-a-seed" title="Permanent link">&para;</a></h2>
+<p>A fact every callable may need and no argument carries (a tenant, a feature
+flag, a "sending is paused" switch) is a seed: register a resolver for it on
+a <code>PoolSeeds</code> and set that registry on the view's <code>pool_seeds</code>, as a class
+attribute or as <code>as_view(pool_seeds=...)</code>. Any callable of the spec declaring
+the seed's name is handed its value: the service and its selectors, the
+providers, a permission check, a precondition and an affordance condition.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_service_specs</span><span class="w"> </span><span class="kn">import</span> <span class="n">DEFAULT_POOL_SEEDS</span><span class="p">,</span> <span class="n">Affordance</span><span class="p">,</span> <span class="n">ServiceSpec</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_spec_rest</span><span class="w"> </span><span class="kn">import</span> <span class="n">ServiceViewSet</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="n">SEEDS</span> <span class="o">=</span> <span class="n">DEFAULT_POOL_SEEDS</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">frozen</span><span class="o">=</span><span class="n">board_is_frozen</span><span class="p">)</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="n">RENAME_SPEC</span> <span class="o">=</span> <span class="n">ServiceSpec</span><span class="p">(</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    <span class="n">service</span><span class="o">=</span><span class="n">rename_task</span><span class="p">,</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>    <span class="n">instance_selector_spec</span><span class="o">=</span><span class="n">TASK_BY_PK</span><span class="p">,</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>    <span class="n">affordances</span><span class="o">=</span><span class="p">[</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>        <span class="n">Affordance</span><span class="p">(</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>            <span class="n">code</span><span class="o">=</span><span class="s2">&quot;board_frozen&quot;</span><span class="p">,</span> <span class="n">reason</span><span class="o">=</span><span class="s2">&quot;The board is frozen.&quot;</span><span class="p">,</span> <span class="n">when</span><span class="o">=</span><span class="k">lambda</span> <span class="o">*</span><span class="p">,</span> <span class="n">frozen</span><span class="p">:</span> <span class="ow">not</span> <span class="n">frozen</span>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>        <span class="p">),</span>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>    <span class="p">],</span>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>    <span class="n">permissions</span><span class="o">=</span><span class="n">OPEN</span><span class="p">,</span>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="p">)</span>
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>
+</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>
+</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="k">class</span><span class="w"> </span><span class="nc">TaskViewSet</span><span class="p">(</span><span class="n">ServiceViewSet</span><span class="p">):</span>
+</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>    <span class="n">pool_seeds</span> <span class="o">=</span> <span class="n">SEEDS</span>
+</span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>    <span class="n">action_specs</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;partial_update&quot;</span><span class="p">:</span> <span class="n">RENAME_SPEC</span><span class="p">}</span>
+</span></code></pre></div>
+<p>Build the registry once, at import: the view checks its spec against it at
+<code>as_view()</code> and hands that one object to every call. A view that does not
+register a seed one of its spec's callables requires refuses the spec at
+<code>as_view()</code>, naming the seed, rather than failing every request. Each seed a
+permission check names is resolved once per call, its value handed from the
+check to the run. The OpenAPI request body and the <code>OPTIONS</code> answer read the
+same registry: a read a registered seed fills is no key a caller is asked to
+send, and <code>OPTIONS</code> asks a permission check naming a registered seed.
+<code>@selector_action</code> checks its spec when the method is decorated, before the
+viewset exists, against the kernel's default seeds, so a selector action cannot
+read a seed its viewset registers yet.</p>
 <h2 id="on-the-view-hooks">On the view: hooks<a class="headerlink" href="#on-the-view-hooks" title="Permanent link">&para;</a></h2>
 <p>A mutation view or viewset has three hook chains, view-wide then per action,
 the more specific winning on a key both return, and the spec's provider over
@@ -1079,14 +1141,14 @@ both:</p>
 </tr>
 </tbody>
 </table>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_spec_rest</span><span class="w"> </span><span class="kn">import</span> <span class="n">ServiceViewSet</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">NoteViewSet</span><span class="p">(</span><span class="n">ServiceViewSet</span><span class="p">):</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="n">action_specs</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;create&quot;</span><span class="p">:</span> <span class="n">CREATE_SPEC</span><span class="p">}</span>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">get_service_kwargs</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;owner&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">user</span><span class="p">}</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_spec_rest</span><span class="w"> </span><span class="kn">import</span> <span class="n">ServiceViewSet</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">NoteViewSet</span><span class="p">(</span><span class="n">ServiceViewSet</span><span class="p">):</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">action_specs</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;create&quot;</span><span class="p">:</span> <span class="n">CREATE_SPEC</span><span class="p">}</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">get_service_kwargs</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;owner&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">user</span><span class="p">}</span>
 </span></code></pre></div>
 <p><strong>A hook's value outranks the client's.</strong> Where the serializer declares a
 writable <code>owner</code>, the hook's value is what reaches the service, so a client

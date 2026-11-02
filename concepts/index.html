@@ -1239,8 +1239,9 @@ spec through <code>@service_action(spec)</code> or <code>@selector_action(spec)<
 <p><code>as_view()</code> checks the spec before the view serves anything: a spec of the
 kind the view does not serve, an update or delete with no target, a nested
 selector declaring <code>permissions</code>, a <code>filter_set</code> beside <code>DjangoFilterBackend</code>,
-and what the kernel's seed check refuses of the callables' signatures are each
-an <code>ImproperlyConfigured</code> at import.</p>
+and what the kernel's seed check refuses of the callables' signatures, against
+the seeds the view registers on <code>pool_seeds</code>, are each an <code>ImproperlyConfigured</code>
+at import. See <a href="../recipes/extra-kwargs/#registering-a-seed">Registering a seed</a>.</p>
 <h2 id="what-the-edge-reads-from-a-request">What the edge reads from a request<a class="headerlink" href="#what-the-edge-reads-from-a-request" title="Permanent link">&para;</a></h2>
 <p>The view turns the request into the one dict of arguments the kernel's
 <code>dispatch</code> takes, and the principal into <code>request.user</code>:</p>
@@ -1471,9 +1472,14 @@ selector, provider, service, precondition or affordance condition.</p>
 <ul>
 <li><strong><code>Allow</code></strong> names the methods a spec serves, DRF's <code>HEAD</code> beside a <code>GET</code>,
   and <code>OPTIONS</code>.</li>
-<li><strong><code>actions[POST]</code> and <code>actions[PUT]</code></strong> are JSON Schema objects of the spec's
-  parameters, less what the server fills: the keys a seed or a typed provider
-  fills, the route's captures, and on <code>PUT</code> the target lookup's parameters.</li>
+<li><strong><code>actions[POST]</code> and <code>actions[PUT]</code></strong> are JSON Schema objects of what the
+  caller is asked to send, the kernel's <code>spec_caller_input_schema</code>: the spec's
+  parameters less what the server fills (the keys a seed or a typed provider
+  fills), with a key a provider may fill or decline offered and not required,
+  none of a <code>partial</code> spec's fields required, and a <code>many</code> spec's rows read the
+  same way by what its <code>input_data</code> fills. The route's captures and the target
+  lookup's parameters are left out too, since the edge never reads them from
+  the body.</li>
 <li><strong>A method the caller may not send is not described</strong>: DRF's permission
   classes for that method and the kernel's <code>authorize</code> for its spec are both
   asked, and either refusing leaves it out of <code>actions</code>.</li>

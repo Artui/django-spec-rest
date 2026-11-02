@@ -1459,7 +1459,8 @@ declare every seat above.</p>
   row.</li>
 <li><strong>A nested selector declares no <code>permissions</code>.</strong> On <code>instance_selector_spec</code>,
   <code>collection_selector_spec</code> and <code>output_selector_spec</code> the kernel never asks
-  them, so <code>as_view()</code> refuses them: declare them on the spec being served.</li>
+  them, so the kernel refuses them when the <code>ServiceSpec</code> is built: declare
+  them on the spec being served.</li>
 <li><strong>A selector view's <code>get_selector_kwargs</code> beside a kernel spec is refused</strong>
   at <code>as_view()</code>, with the per-action <code>get_&lt;action&gt;_selector_kwargs</code>: return
   those keys from the spec's own <code>kwargs</code> provider, which may declare
@@ -1522,7 +1523,8 @@ declare every seat above.</p>
   a spec serves: a handler with no spec is left out, on its 405 too.
   <code>actions[METHOD]</code> is a JSON Schema object rather than DRF's per-field
   dictionary, and leaves out the keys the server fills, the route's captures
-  and the target lookup's parameters. A mixed viewset's methods that no kernel
+  and the target lookup's parameters; a key a provider may fill is described
+  and not required. A mixed viewset's methods that no kernel
   spec serves are no longer described.</li>
 <li><strong>The browsable API's PUT and PATCH forms are drawn empty</strong>, not prefilled from
   the row: a spec's input need not have the row's fields.</li>
@@ -1569,6 +1571,9 @@ declare every seat above.</p>
 <li>A kernel spec under <code>@selector_action</code> does not read the view's
   <code>get_selector_kwargs</code>, and nothing refuses the override there.</li>
 <li><code>@service_action</code> does not run the kernel's seed check at <code>as_view()</code>.</li>
+<li><code>@selector_action</code> runs it when the method is decorated, against the
+  kernel's default seeds, so a selector action cannot read a seed its
+  viewset's <code>pool_seeds</code> registers.</li>
 <li><code>ActionSerializerResolver</code> falls back to the view's <code>serializer_class</code> for an
   action whose spec has no serializer.</li>
 <li>A service's <code>ServiceValidationError</code> keyed by a model field is answered under

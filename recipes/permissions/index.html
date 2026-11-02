@@ -1097,8 +1097,10 @@ on the offline view's <code>kwargs</code> before asking:</p>
 <h2 id="a-nested-selector-declares-none">A nested selector declares none<a class="headerlink" href="#a-nested-selector-declares-none" title="Permanent link">&para;</a></h2>
 <p>The specs on <code>instance_selector_spec</code>, <code>collection_selector_spec</code> and
 <code>output_selector_spec</code> are never asked for their permissions: the spec being
-served is what authorizes. <code>as_view()</code> refuses a nested selector that declares
-<code>permissions</code>, so a check placed there cannot look like it guards something.</p>
+served is what authorizes. The kernel refuses a nested selector that declares
+<code>permissions</code> when the <code>ServiceSpec</code> is built (<code>ImproperlyConfigured</code>), so a
+check placed there cannot look like it guards something. To nest a selector spec
+that is also served on its own, nest <code>spec.derive(permissions=None)</code>.</p>
 
 
 

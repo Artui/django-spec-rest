@@ -1110,7 +1110,9 @@ action mixins, and <code>@service_action</code> / <code>@selector_action</code>:
   (<code>kernel_spec_variant</code>): a <code>PATCH</code>, unless the Validator cannot take a
   partial call, and a spec declaring <code>partial</code>. A <code>many</code> spec takes a
   list of those rows. Any other Validator is the kernel's
-  <code>parameters_schema</code> over what the body carries (<code>_parameters_body</code>).</li>
+  <code>spec_caller_input_schema</code> less what the body does not carry
+  (<code>_parameters_body</code>): what the server fills is not asked for, and a
+  key a provider may fill is not required.</li>
 <li><strong>The response body</strong> is a <code>SerializerPresenter</code>'s serializer, or any
   other presenter's <code>output_schema</code>, a list of rows where the spec
   presents rows (<code>_presents_rows</code>). A spec with no presenter documents

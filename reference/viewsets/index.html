@@ -1320,6 +1320,14 @@
 
 
 <h1 id="viewsets">Viewsets<a class="headerlink" href="#viewsets" title="Permanent link">&para;</a></h1>
+<p>Every viewset here takes <code>pool_seeds</code>, the kernel <code>PoolSeeds</code> its specs'
+callables are resolved with, as a class attribute or as
+<code>as_view(actions, pool_seeds=...)</code>: the kernel's <code>DEFAULT_POOL_SEEDS</code> unless
+set. <code>as_view()</code> checks each <code>action_specs</code> entry against it, and every action,
+a <code>@service_action</code> or <code>@selector_action</code> one included, dispatches with it. A
+DRF viewset of your own serving a decorated action reads the same attribute
+where it declares one. See
+<a href="../../recipes/extra-kwargs/#registering-a-seed">Registering a seed</a>.</p>
 <h2 id="full-crud">Full CRUD<a class="headerlink" href="#full-crud" title="Permanent link">&para;</a></h2>
 
 

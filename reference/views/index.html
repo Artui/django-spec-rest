@@ -862,6 +862,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="SelectorListView">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_rest.views.query.selector_list_view.SelectorListView.pool_seeds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        pool_seeds
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -875,6 +892,17 @@
   
     <nav class="md-nav" aria-label="SelectorRetrieveView">
       <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_rest.views.query.selector_retrieve_view.SelectorRetrieveView.pool_seeds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        pool_seeds
+      
+    </span>
+  </a>
+  
+</li>
         
           <li class="md-nav__item">
   <a href="#django_spec_rest.views.query.selector_retrieve_view.SelectorRetrieveView.get_object" class="md-nav__link">
@@ -931,6 +959,17 @@
     <span class="md-ellipsis">
       
         response_finalizer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_rest.views.mutation.mutation_flow_mixin.MutationFlowMixin.pool_seeds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        pool_seeds
       
     </span>
   </a>
@@ -1226,6 +1265,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="SelectorListView">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_rest.views.query.selector_list_view.SelectorListView.pool_seeds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        pool_seeds
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1239,6 +1295,17 @@
   
     <nav class="md-nav" aria-label="SelectorRetrieveView">
       <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_rest.views.query.selector_retrieve_view.SelectorRetrieveView.pool_seeds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        pool_seeds
+      
+    </span>
+  </a>
+  
+</li>
         
           <li class="md-nav__item">
   <a href="#django_spec_rest.views.query.selector_retrieve_view.SelectorRetrieveView.get_object" class="md-nav__link">
@@ -1295,6 +1362,17 @@
     <span class="md-ellipsis">
       
         response_finalizer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_rest.views.mutation.mutation_flow_mixin.MutationFlowMixin.pool_seeds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        pool_seeds
       
     </span>
   </a>
@@ -1399,7 +1477,10 @@
 
 <h1 id="views">Views<a class="headerlink" href="#views" title="Permanent link">&para;</a></h1>
 <p>Each view takes a kernel spec on <code>spec</code>. See <a href="../../concepts/">Concepts</a> for
-what the edge reads from the request and how a refusal is answered.</p>
+what the edge reads from the request and how a refusal is answered. Each also
+takes <code>pool_seeds</code>, the seeds its spec's callables are resolved with (on
+<code>MutationFlowMixin</code> below for the mutation views); see
+<a href="../../recipes/extra-kwargs/#registering-a-seed">Registering a seed</a>.</p>
 <h2 id="mutation-views">Mutation views<a class="headerlink" href="#mutation-views" title="Permanent link">&para;</a></h2>
 
 
@@ -1612,6 +1693,36 @@ pagination, response rendering) is the standard DRF <code>ListModelMixin</code>.
 
 
 
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="django_spec_rest.views.query.selector_list_view.SelectorListView.pool_seeds" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">pool_seeds</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+  </span>
+
+<a href="#django_spec_rest.views.query.selector_list_view.SelectorListView.pool_seeds" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">pool_seeds</span><span class="p">:</span> <span class="n">PoolSeeds</span> <span class="o">=</span> <span class="n">DEFAULT_POOL_SEEDS</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The seeds the spec's callables are resolved with: the kernel's
+<code>DEFAULT_POOL_SEEDS</code> unless the view registers others, as a class
+attribute or as <code>as_view(pool_seeds=...)</code>. One registry for the view's
+life: <code>as_view()</code> checks the spec against it, refusing a callable that
+requires a seed it does not register, and every call's checks, target
+lookup and <code>dispatch</code> are handed that object (test_pool_seeds).</p>
+
+    </div>
+
+</div>
+
 
 
 
@@ -1668,6 +1779,36 @@ using <code>queryset</code> and <code>lookup_field</code>, as vanilla DRF.</p>
 
 
 
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="django_spec_rest.views.query.selector_retrieve_view.SelectorRetrieveView.pool_seeds" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">pool_seeds</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+  </span>
+
+<a href="#django_spec_rest.views.query.selector_retrieve_view.SelectorRetrieveView.pool_seeds" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">pool_seeds</span><span class="p">:</span> <span class="n">PoolSeeds</span> <span class="o">=</span> <span class="n">DEFAULT_POOL_SEEDS</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The seeds the spec's callables are resolved with: the kernel's
+<code>DEFAULT_POOL_SEEDS</code> unless the view registers others, as a class
+attribute or as <code>as_view(pool_seeds=...)</code>. One registry for the view's
+life: <code>as_view()</code> checks the spec against it, refusing a callable that
+requires a seed it does not register, and every call's checks, target
+lookup and <code>dispatch</code> are handed that object (test_pool_seeds).</p>
+
+    </div>
+
+</div>
 
 
 
@@ -1821,6 +1962,36 @@ with one; set, it applies to an answer with nothing to present too
 <code>response</code> / <code>result</code> / <code>request</code> / <code>view</code> / <code>instance</code> / <code>data</code>
 and returns a <code>Response</code> to replace the one built, or <code>None</code> to keep it
 (test_response_finalizer).</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="django_spec_rest.views.mutation.mutation_flow_mixin.MutationFlowMixin.pool_seeds" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">pool_seeds</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+  </span>
+
+<a href="#django_spec_rest.views.mutation.mutation_flow_mixin.MutationFlowMixin.pool_seeds" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">pool_seeds</span><span class="p">:</span> <span class="n">PoolSeeds</span> <span class="o">=</span> <span class="n">DEFAULT_POOL_SEEDS</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The seeds the spec's callables are resolved with: the kernel's
+<code>DEFAULT_POOL_SEEDS</code> unless the view registers others, as a class
+attribute or as <code>as_view(pool_seeds=...)</code>. One registry for the view's
+life: <code>as_view()</code> checks the spec against it, refusing a callable that
+requires a seed it does not register, and every call's checks, target
+lookup and <code>dispatch</code> are handed that object (test_pool_seeds).</p>
 
     </div>
 
