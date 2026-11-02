@@ -325,12 +325,6 @@ class _StampedClass(PermissionCheck):
         return stamp == "stamp"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=TypeError,
-    reason="OPTIONS asks the kernel's authorize with DEFAULT_POOL_SEEDS (views/spec_options.py), "
-    "not the view's pool_seeds",
-)
 def test_options_asks_a_check_naming_a_seed_with_the_view_s_seeds() -> None:
     seeds = DEFAULT_POOL_SEEDS.extend(stamp=lambda: "stamp")
     view = _update_view(_publish_spec(permissions=(_StampedClass(),)), pool_seeds=seeds).as_view()

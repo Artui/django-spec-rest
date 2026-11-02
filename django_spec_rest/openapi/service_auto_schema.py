@@ -12,7 +12,6 @@ from collections.abc import Iterable
 from typing import Any, cast
 
 from django_service_specs import (
-    DEFAULT_POOL_SEEDS,
     Presenter,
     SelectorKind,
     filter_set_parameters,
@@ -46,6 +45,7 @@ from django_spec_rest.service_specs.renderable_serializer_class import renderabl
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from django_spec_rest.views.mutation.utils import status_for_a_body
+from django_spec_rest.views.utils import view_pool_seeds
 
 
 class ServiceAutoSchema(AutoSchema):
@@ -114,8 +114,9 @@ class ServiceAutoSchema(AutoSchema):
 
         ``spec_caller_input_schema``: ``spec.parameters()`` relaxed as dispatch
         relaxes a partial call (test_another_validator_s_patch_requires_nothing),
-        less the names the server fills, ``server_owned_keys``
-        (test_a_route_capture_and_a_provider_s_key_are_no_body_key), with a key
+        less the names the server fills, ``server_owned_keys`` under the view's
+        ``pool_seeds`` (test_a_route_capture_and_a_provider_s_key_are_no_body_key,
+        test_a_read_named_for_a_seed_the_view_registers_is_no_body_key), with a key
         a provider may fill offered and not required
         (test_a_read_a_provider_may_decline_is_offered_and_not_required), and
         on a ``many`` spec the same read of each row by what ``input_data``
@@ -137,7 +138,7 @@ class ServiceAutoSchema(AutoSchema):
         target = spec.target_selector_spec()
         schema = _without(
             spec_caller_input_schema(
-                spec, pool_seeds=DEFAULT_POOL_SEEDS, unknown_arguments=UNKNOWN_ARGUMENTS
+                spec, pool_seeds=view_pool_seeds(self.view), unknown_arguments=UNKNOWN_ARGUMENTS
             ),
             (target.parameters().names() if target is not None else frozenset())
             | frozenset(self._route_captures()),

@@ -15,6 +15,7 @@ from typing import Any, TypedDict
 
 import pytest
 from django_service_specs import (
+    DEFAULT_POOL_SEEDS,
     Parameter,
     Parameters,
     SelectorKind,
@@ -333,6 +334,21 @@ def test_a_read_a_provider_may_decline_is_offered_and_not_required() -> None:
     schema = _schema(response, "POST")
     assert set(schema["properties"]) == {"name", "owner"}
     assert schema["required"] == ["name"]
+
+
+def test_a_read_named_for_a_seed_the_view_registers_is_not_described() -> None:
+    """``stamp`` is a reflected read the view's ``pool_seeds`` fill, so the
+    kernel withholds it under those seeds; under the kernel's defaults it
+    would be offered, which OPTIONS once built its answer with."""
+    spec = ServiceSpec(
+        service=_service,
+        permissions=_OPEN,
+        validator=SerializerValidator(_NameIn),
+        reads=Parameters.of(Parameter("stamp", "string", reflected=True)),
+    )
+    seeds = DEFAULT_POOL_SEEDS.extend(stamp=lambda: "stamp")
+    viewset = _viewset(action_specs={"create": spec}, pool_seeds=seeds)
+    assert _described(_options(viewset, {"post": "create"})) == {"POST": {"name"}}
 
 
 def test_a_field_input_data_may_decline_is_offered_and_not_required() -> None:

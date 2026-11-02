@@ -20,7 +20,10 @@ carries; releases up to 0.62.0 are in
   reads a registered seed (`DEFAULT_POOL_SEEDS.extend(frozen=...)`) is served
   by a view registering it; until now no view could register one. A
   `@service_action` or `@selector_action` dispatches
-  with its viewset's.
+  with its viewset's, and the OpenAPI request body and the `OPTIONS` answer
+  describe what a caller sends under the same seeds, so a read a registered
+  seed fills is offered in neither, and `OPTIONS` asks a permission check
+  naming a registered seed rather than failing.
 
 ### Changed
 

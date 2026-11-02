@@ -76,9 +76,12 @@ Build the registry once, at import: the view checks its spec against it at
 register a seed one of its spec's callables requires refuses the spec at
 `as_view()`, naming the seed, rather than failing every request. Each seed a
 permission check names is resolved once per call, its value handed from the
-check to the run. `@selector_action` checks its spec when the method is
-decorated, before the viewset exists, against the kernel's default seeds, so a
-selector action cannot read a seed its viewset registers yet.
+check to the run. The OpenAPI request body and the `OPTIONS` answer read the
+same registry: a read a registered seed fills is no key a caller is asked to
+send, and `OPTIONS` asks a permission check naming a registered seed.
+`@selector_action` checks its spec when the method is decorated, before the
+viewset exists, against the kernel's default seeds, so a selector action cannot
+read a seed its viewset registers yet.
 
 ## On the view: hooks
 

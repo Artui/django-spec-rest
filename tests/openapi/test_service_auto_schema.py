@@ -26,6 +26,7 @@ import django_filters
 import pytest
 from django.urls import path
 from django_service_specs import (
+    DEFAULT_POOL_SEEDS,
     DataclassPresenter,
     DataclassValidator,
     Parameter,
@@ -140,6 +141,9 @@ def _create_author(*, data: Any) -> Any: ...
 
 
 def _create_owned(*, data: Any, tenant: str, owner: str) -> Any: ...
+
+
+def _create_stamped(*, data: Any, stamp: str) -> Any: ...
 
 
 def _rename(*, instance: Author, data: Any) -> Any: ...
@@ -335,6 +339,18 @@ urlpatterns = [
                 reads=Parameters.of(Parameter("owner", "string", required=True)),
                 kwargs=_may_own,
             ),
+        ).as_view(),
+    ),
+    path(
+        "stamped/",
+        _view(
+            ServiceCreateView,
+            _create(
+                service=_create_stamped,
+                validator=DataclassValidator(_NameRow),
+                reads=Parameters.of(Parameter("stamp", "string", reflected=True)),
+            ),
+            pool_seeds=DEFAULT_POOL_SEEDS.extend(stamp=lambda: "stamp"),
         ).as_view(),
     ),
     path(
@@ -547,6 +563,14 @@ class TestTheRequestBody:
         body = _body(schema, "/owned-may-decline/", "post")
         assert set(body["properties"]) == {"name", "owner"}
         assert body["required"] == ["name"]
+
+    def test_a_read_named_for_a_seed_the_view_registers_is_no_body_key(
+        self, schema: dict[str, Any]
+    ) -> None:
+        # ``stamp`` is a reflected read the view's own ``pool_seeds`` fill, so
+        # the kernel withholds it under those seeds and offers it under the
+        # defaults, which this body was once built with.
+        assert set(_body(schema, "/stamped/", "post")["properties"]) == {"name"}
 
     def test_a_field_a_typed_input_data_fills_is_not_offered(self, schema: dict[str, Any]) -> None:
         # ``owner`` is always the provider's, and ``note`` it may decline.

@@ -9,7 +9,6 @@ from django.core.exceptions import PermissionDenied
 from django_service_specs.authorization.not_permitted import NotPermitted
 from django_service_specs.authorization.principal_unavailable import PrincipalUnavailable
 from django_service_specs.dispatch.authorize import authorize
-from django_service_specs.pool.pool_seeds import DEFAULT_POOL_SEEDS
 from django_service_specs.schema.spec_caller_input_schema import spec_caller_input_schema
 from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelectorSpec
 from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
@@ -20,7 +19,7 @@ from rest_framework.request import Request, clone_request
 from rest_framework.response import Response
 
 from django_spec_rest.dispatch.kernel_edge import UNKNOWN_ARGUMENTS
-from django_spec_rest.views.utils import view_call_context
+from django_spec_rest.views.utils import view_call_context, view_pool_seeds
 
 # DRF's ``SimpleMetadata`` describes these two and no other method.
 _DESCRIBED_METHODS = ("POST", "PUT")
@@ -48,13 +47,17 @@ def spec_options(
     A method is described only when the caller may send it: DRF's per-method
     ``check_permissions`` on a clone of the request carrying that method, as
     DRF's metadata asks it, and then the kernel's ``authorize`` for the spec,
-    with the view's call context and the pool seeds the edge dispatches with.
+    with the view's call context and the pool seeds the edge dispatches with,
+    the view's ``pool_seeds`` (test_pool_seeds'
+    test_options_asks_a_check_naming_a_seed_with_the_view_s_seeds).
     Either refusing leaves the method out of ``actions``, never the answer
     a 403: OPTIONS describes, and the method is still routed.
 
     The description is the kernel's ``spec_caller_input_schema``, what a
     caller is asked to send: ``spec.parameters()`` less what the server fills
-    (the seeds and every key a typed provider fills), a key a provider may
+    (the view's seeds, test_options_metadata's
+    test_a_read_named_for_a_seed_the_view_registers_is_not_described, and every
+    key a typed provider fills), a key a provider may
     fill offered and not required, a ``partial`` spec's fields required
     nowhere, and a ``many`` spec's rows read the same way by what its
     ``input_data`` reaches. Less, then, what stays this transport's: the
@@ -98,7 +101,7 @@ class _SpecMetadata(SimpleMetadata):
                 continue
             try:
                 asked = spec_caller_input_schema(
-                    spec, pool_seeds=DEFAULT_POOL_SEEDS, unknown_arguments=UNKNOWN_ARGUMENTS
+                    spec, pool_seeds=view_pool_seeds(view), unknown_arguments=UNKNOWN_ARGUMENTS
                 )
             except (AttributeError, KeyError, TypeError):
                 # A Validator whose serializer cannot be built without the
@@ -126,7 +129,7 @@ def _grants(
     view.request = clone_request(request, method)
     try:
         view.check_permissions(view.request)
-        authorize(spec, request.user, call_context=call_context, pool_seeds=DEFAULT_POOL_SEEDS)
+        authorize(spec, request.user, call_context=call_context, pool_seeds=view_pool_seeds(view))
     except (APIException, PermissionDenied, NotPermitted, PrincipalUnavailable):
         return False
     finally:
