@@ -29,7 +29,9 @@ def _validate_kernel_spec(spec: KernelSelectorSpec, *, label: str) -> None:
     view hook, so nothing of the viewset's can fill a keyword it refuses
     (test_selector_action's test_a_keyword_nothing_fills_is_refused). It is
     asked against the kernel's default seeds, the viewset's ``pool_seeds``
-    being unknown here, so a seed the viewset registers is refused too
+    being unknown here, so a seed the viewset registers is refused too where
+    the selector, a provider or an affordance condition names it (a permission
+    check naming one is not read by ``check_seeds``, and is served)
     (test_pool_seeds'
     test_a_selector_action_reading_a_seed_its_viewset_registers_is_served,
     a strict xfail).
