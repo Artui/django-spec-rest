@@ -1572,8 +1572,10 @@ declare every seat above.</p>
   <code>get_selector_kwargs</code>, and nothing refuses the override there.</li>
 <li><code>@service_action</code> does not run the kernel's seed check at <code>as_view()</code>.</li>
 <li><code>@selector_action</code> runs it when the method is decorated, against the
-  kernel's default seeds, so a selector action cannot read a seed its
-  viewset's <code>pool_seeds</code> registers.</li>
+  kernel's default seeds, so the callables it reads (the selector, its
+  providers and its affordance conditions) cannot name a seed its viewset's
+  <code>pool_seeds</code> registers. A permission check naming one is not read by it, and
+  is served.</li>
 <li><code>ActionSerializerResolver</code> falls back to the view's <code>serializer_class</code> for an
   action whose spec has no serializer.</li>
 <li>A service's <code>ServiceValidationError</code> keyed by a model field is answered under

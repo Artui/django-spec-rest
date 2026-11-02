@@ -1237,11 +1237,14 @@ spec. A custom route takes its
 spec through <code>@service_action(spec)</code> or <code>@selector_action(spec)</code>. See
 <a href="../recipes/service-action/">Viewsets and custom actions</a>.</p>
 <p><code>as_view()</code> checks the spec before the view serves anything: a spec of the
-kind the view does not serve, an update or delete with no target, a nested
-selector declaring <code>permissions</code>, a <code>filter_set</code> beside <code>DjangoFilterBackend</code>,
-and what the kernel's seed check refuses of the callables' signatures, against
-the seeds the view registers on <code>pool_seeds</code>, are each an <code>ImproperlyConfigured</code>
-at import. See <a href="../recipes/extra-kwargs/#registering-a-seed">Registering a seed</a>.</p>
+kind the view does not serve, an update or delete with no target, a
+<code>filter_set</code> beside <code>DjangoFilterBackend</code>, and what the kernel's seed check
+refuses of the callables' signatures, against the seeds the view registers on
+<code>pool_seeds</code>, are each an <code>ImproperlyConfigured</code> at import. A <code>@service_action</code>
+spec is not seed-checked at <code>as_view()</code>: a missing seed is its first request's
+<code>TypeError</code>. A nested selector declaring <code>permissions</code> is refused by the kernel
+when the <code>ServiceSpec</code> is built, not at <code>as_view()</code>. See
+<a href="../recipes/extra-kwargs/#registering-a-seed">Registering a seed</a>.</p>
 <h2 id="what-the-edge-reads-from-a-request">What the edge reads from a request<a class="headerlink" href="#what-the-edge-reads-from-a-request" title="Permanent link">&para;</a></h2>
 <p>The view turns the request into the one dict of arguments the kernel's
 <code>dispatch</code> takes, and the principal into <code>request.user</code>:</p>
