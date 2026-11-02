@@ -154,7 +154,8 @@ The query string is read by the kernel's flat reader:
   a spec serves: a handler with no spec is left out, on its 405 too.
   `actions[METHOD]` is a JSON Schema object rather than DRF's per-field
   dictionary, and leaves out the keys the server fills, the route's captures
-  and the target lookup's parameters. A mixed viewset's methods that no kernel
+  and the target lookup's parameters; a key a provider may fill is described
+  and not required. A mixed viewset's methods that no kernel
   spec serves are no longer described.
 - **The browsable API's PUT and PATCH forms are drawn empty**, not prefilled from
   the row: a spec's input need not have the row's fields.

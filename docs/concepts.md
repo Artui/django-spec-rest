@@ -188,9 +188,14 @@ selector, provider, service, precondition or affordance condition.
 
 - **`Allow`** names the methods a spec serves, DRF's `HEAD` beside a `GET`,
   and `OPTIONS`.
-- **`actions[POST]` and `actions[PUT]`** are JSON Schema objects of the spec's
-  parameters, less what the server fills: the keys a seed or a typed provider
-  fills, the route's captures, and on `PUT` the target lookup's parameters.
+- **`actions[POST]` and `actions[PUT]`** are JSON Schema objects of what the
+  caller is asked to send, the kernel's `spec_caller_input_schema`: the spec's
+  parameters less what the server fills (the keys a seed or a typed provider
+  fills), with a key a provider may fill or decline offered and not required,
+  none of a `partial` spec's fields required, and a `many` spec's rows read the
+  same way by what its `input_data` fills. The route's captures and the target
+  lookup's parameters are left out too, since the edge never reads them from
+  the body.
 - **A method the caller may not send is not described**: DRF's permission
   classes for that method and the kernel's `authorize` for its spec are both
   asked, and either refusing leaves it out of `actions`.

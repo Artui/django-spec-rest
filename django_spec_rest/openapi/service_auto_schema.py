@@ -8,17 +8,17 @@ Importing this module pulls in ``drf-spectacular``, so the package's top-level
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from typing import Any, cast
 
 from django_service_specs import (
-    Parameters,
+    DEFAULT_POOL_SEEDS,
     Presenter,
     SelectorKind,
     filter_set_parameters,
     output_schema,
     parameters_schema,
-    relax_partial,
-    server_owned_keys,
+    spec_caller_input_schema,
 )
 from django_service_specs.schema.can_present_nothing import can_present_nothing
 from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelectorSpec
@@ -62,7 +62,9 @@ class ServiceAutoSchema(AutoSchema):
       (``kernel_spec_variant``): a ``PATCH``, unless the Validator cannot take a
       partial call, and a spec declaring ``partial``. A ``many`` spec takes a
       list of those rows. Any other Validator is the kernel's
-      ``parameters_schema`` over what the body carries (``_parameters_body``).
+      ``spec_caller_input_schema`` less what the body does not carry
+      (``_parameters_body``): what the server fills is not asked for, and a
+      key a provider may fill is not required.
     - **The response body** is a ``SerializerPresenter``'s serializer, or any
       other presenter's ``output_schema``, a list of rows where the spec
       presents rows (``_presents_rows``). A spec with no presenter documents
@@ -108,18 +110,24 @@ class ServiceAutoSchema(AutoSchema):
         return self._parameters_body(variant)
 
     def _parameters_body(self, spec: KernelServiceSpec) -> Any:
-        """The kernel's ``parameters_schema`` over what ``spec``'s body carries, or ``None``.
+        """The kernel's caller schema of ``spec``, less what the body does not choose, or ``None``.
 
-        ``spec.parameters()`` relaxed as dispatch relaxes a partial call
-        (test_another_validator_s_patch_requires_nothing), less every name the
-        body does not choose: the target lookup's reads, which name the row
-        and never come from the body (test_the_target_s_reads_are_no_body_key);
-        the names the server fills, ``server_owned_keys``; and the route's
-        captures, which outrank the body's value
-        (test_a_route_capture_and_a_provider_s_key_are_no_body_key holds those
-        two). Built under the edge's unknown-argument policy, so the body is
-        closed exactly where dispatch closes it. A ``many`` spec's body is the
-        list itself, which the edge reads under its ``many_argument``
+        ``spec_caller_input_schema``: ``spec.parameters()`` relaxed as dispatch
+        relaxes a partial call (test_another_validator_s_patch_requires_nothing),
+        less the names the server fills, ``server_owned_keys``
+        (test_a_route_capture_and_a_provider_s_key_are_no_body_key), with a key
+        a provider may fill offered and not required
+        (test_a_read_a_provider_may_decline_is_offered_and_not_required), and
+        on a ``many`` spec the same read of each row by what ``input_data``
+        reaches there
+        (test_a_many_row_withholds_what_input_data_fills_and_relaxes_what_it_may).
+        Then less what stays this transport's: the target lookup's reads,
+        which name the row and never come from the body
+        (test_the_target_s_reads_are_no_body_key), and the route's captures,
+        which outrank the body's value. Built under the edge's
+        unknown-argument policy, so the body is closed exactly where dispatch
+        closes it. A ``many`` spec's body is the list itself, which the edge
+        reads under its ``many_argument``
         (test_a_many_spec_over_another_validator_takes_an_array_of_its_rows).
 
         Handed to drf-spectacular as an ``OpenApiRequest``, which it renders as
@@ -127,17 +135,15 @@ class ServiceAutoSchema(AutoSchema):
         types.
         """
         target = spec.target_selector_spec()
-        dropped = (
-            server_owned_keys(spec)
-            | (target.parameters().names() if target is not None else frozenset())
-            | frozenset(self._route_captures())
+        schema = _without(
+            spec_caller_input_schema(
+                spec, pool_seeds=DEFAULT_POOL_SEEDS, unknown_arguments=UNKNOWN_ARGUMENTS
+            ),
+            (target.parameters().names() if target is not None else frozenset())
+            | frozenset(self._route_captures()),
         )
-        kept = Parameters.of(
-            *(p for p in relax_partial(spec, spec.parameters()) if p.name not in dropped)
-        )
-        if not len(kept):
+        if not schema["properties"]:
             return None
-        schema = parameters_schema(kept, unknown_arguments=UNKNOWN_ARGUMENTS)
         if spec.many:
             schema = schema["properties"][spec.many_argument]
         return OpenApiRequest(schema)
@@ -276,6 +282,24 @@ def _partial_variant(spec: KernelServiceSpec) -> KernelServiceSpec:
     # The variant of a service spec is a service spec; the function is
     # annotated for both kinds it compiles.
     return cast("KernelServiceSpec", kernel_spec_variant(spec, partial=True))
+
+
+def _without(schema: dict[str, Any], names: Iterable[str]) -> dict[str, Any]:
+    """``schema`` with ``names`` neither offered nor required, an empty ``required`` dropped.
+
+    The same few lines as ``spec_options``' own: the two transports share no
+    module both may import, and ``openapi/`` is opt-in, so ``views/`` never
+    imports it.
+    """
+    dropped = frozenset(names)
+    kept = {key: value for key, value in schema.items() if key != "required"}
+    kept["properties"] = {
+        name: fragment for name, fragment in schema["properties"].items() if name not in dropped
+    }
+    required = [name for name in schema.get("required", ()) if name not in dropped]
+    if required:
+        kept["required"] = required
+    return kept
 
 
 _ROUTE_CAPTURE = re.compile(r"<(?:[^<>:]+:)?([^<>:]+)>|\(\?P<([^<>]+)>")

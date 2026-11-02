@@ -11,7 +11,7 @@ view's serializer could not describe.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TypedDict
 
 import pytest
 from django_service_specs import (
@@ -21,6 +21,7 @@ from django_service_specs import (
     SelectorSpec,
     ServiceSpec,
     Unrestricted,
+    UnsetType,
 )
 from rest_framework import serializers
 from rest_framework.decorators import action
@@ -61,6 +62,37 @@ class _NeedsTenant(serializers.Serializer):
         return fields
 
 
+class _OwnedRow(serializers.Serializer):
+    name = serializers.CharField()
+    owner = serializers.CharField()
+    note = serializers.CharField()
+
+
+class _MayOwn(TypedDict):
+    owner: str | UnsetType
+
+
+class _MayName(TypedDict):
+    name: str | UnsetType
+
+
+class _RowFill(TypedDict):
+    owner: str
+    note: str | UnsetType
+
+
+def _may_own() -> _MayOwn:  # pragma: no cover - never called
+    raise AssertionError
+
+
+def _may_name() -> _MayName:  # pragma: no cover - never called
+    raise AssertionError
+
+
+def _row_fill() -> _RowFill:  # pragma: no cover - never called
+    raise AssertionError
+
+
 class _DenyAll(BasePermission):
     def has_permission(self, request: Any, view: Any) -> bool:
         return False
@@ -94,13 +126,14 @@ def _create(validator: Any = _NameIn) -> ServiceSpec:
     )
 
 
-def _update() -> ServiceSpec:
+def _update(**fields: Any) -> ServiceSpec:
     return ServiceSpec(
         service=_service,
         permissions=_OPEN,
         validator=SerializerValidator(_NameIn),
         presenter=_PRESENTER,
         instance_selector_spec=_TARGET,
+        **fields,
     )
 
 
@@ -125,6 +158,10 @@ def _allow(response: Any) -> set[str]:
 def _described(response: Any) -> dict[str, set[str]]:
     actions = response.data.get("actions", {})
     return {method: set(schema["properties"]) for method, schema in actions.items()}
+
+
+def _schema(response: Any, method: str) -> dict[str, Any]:
+    return response.data["actions"][method]
 
 
 # ----- the defect: an implicit action with no handler -----
@@ -276,6 +313,77 @@ def test_a_post_s_target_reads_are_not_described() -> None:
 
     response = _options(_ViewSet, {"post": "publish"})
     assert _described(response) == {"POST": {"name"}}
+
+
+# ----- what the caller is asked for, as dispatch demands it -----
+
+
+def test_a_read_a_provider_may_decline_is_offered_and_not_required() -> None:
+    """The ``kwargs`` provider may answer ``owner`` with ``UNSET``, so dispatch
+    does not demand it of the caller, whose value is kept beneath the
+    provider's answer: described, and not required."""
+    spec = ServiceSpec(
+        service=_service,
+        permissions=_OPEN,
+        validator=SerializerValidator(_NameIn),
+        reads=Parameters.of(Parameter("owner", "string", required=True)),
+        kwargs=_may_own,
+    )
+    response = _options(_viewset(action_specs={"create": spec}), {"post": "create"})
+    schema = _schema(response, "POST")
+    assert set(schema["properties"]) == {"name", "owner"}
+    assert schema["required"] == ["name"]
+
+
+def test_a_field_input_data_may_decline_is_offered_and_not_required() -> None:
+    spec = ServiceSpec(
+        service=_service,
+        permissions=_OPEN,
+        validator=SerializerValidator(_NameIn),
+        input_data=_may_name,
+    )
+    response = _options(_viewset(action_specs={"create": spec}), {"post": "create"})
+    schema = _schema(response, "POST")
+    assert set(schema["properties"]) == {"name"}
+    assert "required" not in schema
+
+
+def test_a_partial_spec_s_put_requires_none_of_its_fields() -> None:
+    """A ``partial`` spec is dispatched partial on every method, so a PUT
+    leaving a field out is not refused for it."""
+    viewset = _viewset(action_specs={"update": _update(partial=True)})
+    schema = _schema(_options(viewset, {"put": "update"}, pk=1), "PUT")
+    assert set(schema["properties"]) == {"name"}
+    assert "required" not in schema
+
+
+def test_a_many_row_withholds_what_input_data_fills_and_relaxes_what_it_may() -> None:
+    """``input_data`` is merged over every row: ``owner`` is never the
+    caller's in any row, and ``note`` is described and not required."""
+    spec = ServiceSpec(
+        service=_service,
+        permissions=_OPEN,
+        validator=SerializerValidator(_OwnedRow),
+        input_data=_row_fill,
+        many=True,
+    )
+    response = _options(_viewset(action_specs={"create": spec}), {"post": "create"})
+    rows = _schema(response, "POST")["properties"][spec.many_argument]["items"]
+    assert set(rows["properties"]) == {"name", "note"}
+    assert rows["required"] == ["name"]
+
+
+def test_a_field_a_typed_input_data_fills_is_not_described() -> None:
+    spec = ServiceSpec(
+        service=_service,
+        permissions=_OPEN,
+        validator=SerializerValidator(_OwnedRow),
+        input_data=_row_fill,
+    )
+    response = _options(_viewset(action_specs={"create": spec}), {"post": "create"})
+    schema = _schema(response, "POST")
+    assert set(schema["properties"]) == {"name", "note"}
+    assert schema["required"] == ["name"]
 
 
 # ----- what a serializer-probing metadata pass could not describe -----

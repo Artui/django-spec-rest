@@ -17,6 +17,15 @@ carries; releases up to 0.62.0 are in
   (`instance_selector_spec`, `collection_selector_spec`, `output_selector_spec`)
   that declares `permissions` is now refused by the kernel when the
   `ServiceSpec` is built, rather than by the view at `as_view()`.
+- **OpenAPI and OPTIONS ask the caller for what dispatch demands of it.** The
+  OpenAPI request body of a spec whose Validator is not a
+  `SerializerValidator`, and the `actions[POST]` and `actions[PUT]` schemas of
+  OPTIONS, are the kernel's `spec_caller_input_schema` less the target lookup's
+  parameters and the route's captures. A key a provider may fill or decline is
+  offered and no longer required; OPTIONS now requires none of a `partial`
+  spec's fields, as OpenAPI already did; and each row of a `many` spec leaves
+  out a field its typed `input_data` fills and no longer requires one it may
+  fill.
 
 ## [0.1.0] — 2026-10-31
 
