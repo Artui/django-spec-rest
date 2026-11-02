@@ -36,9 +36,9 @@ OPEN = (Unrestricted(),)
 PRESENTER = SerializerPresenter(InvoiceSerializer)
 
 # The seeds the viewset registers (``InvoiceViewSet.pool_seeds``). A callable
-# declaring ``sending_paused`` is handed its value; a view that did not
-# register it would refuse ``SEND_SPEC`` at ``as_view()`` where the view is
-# checked at mount (not a ``@service_action``, whose first request fails).
+# declaring ``sending_paused`` is handed its value. ``SEND_SPEC`` is served by
+# a ``@service_action``, which is not seed-checked at mount, so a viewset that
+# did not register it would fail the action's first request with a TypeError.
 SEEDS = DEFAULT_POOL_SEEDS.extend(sending_paused=sending_paused)
 
 # One row by ``pk``. On a detail route the edge reads ``pk`` from the URL;
