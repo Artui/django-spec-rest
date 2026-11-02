@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from django.conf import settings
 from django_service_specs import ServiceConflict, ServiceError
 
 from invoices.models import Invoice
@@ -21,6 +22,11 @@ def update_invoice(*, instance: Invoice, data: dict[str, Any]) -> Invoice:
         setattr(instance, name, value)
     instance.save()
     return instance
+
+
+def sending_paused() -> bool:
+    """Whether sending is paused: an ambient fact no argument carries, so a seed."""
+    return bool(getattr(settings, "INVOICES_SENDING_PAUSED", False))
 
 
 def send_invoice(*, instance: Invoice) -> Invoice:

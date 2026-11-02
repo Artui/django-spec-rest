@@ -6,6 +6,7 @@ import functools
 from collections.abc import Callable
 from typing import Any
 
+from django_service_specs.pool.pool_seeds import DEFAULT_POOL_SEEDS
 from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelectorSpec
 from django_service_specs.types.selector_kind import SelectorKind
 from rest_framework.decorators import action
@@ -26,9 +27,19 @@ def _validate_kernel_spec(spec: KernelSelectorSpec, *, label: str) -> None:
     declaring no ``get_selector_kwargs`` to be refused. The kernel's
     ``check_seeds`` is asked in full: the edge hands a kernel selector no
     view hook, so nothing of the viewset's can fill a keyword it refuses
-    (test_selector_action's test_a_keyword_nothing_fills_is_refused).
+    (test_selector_action's test_a_keyword_nothing_fills_is_refused). It is
+    asked against the kernel's default seeds, the viewset's ``pool_seeds``
+    being unknown here, so a seed the viewset registers is refused too
+    (test_pool_seeds'
+    test_a_selector_action_reading_a_seed_its_viewset_registers_is_served,
+    a strict xfail).
     """
-    validate_selector_view_spec(type(label, (), {"spec": spec}), expected_kind=spec.kind)
+    # The viewset and its ``pool_seeds`` do not exist yet, so the spec is
+    # asked against the kernel's default seeds: a selector reading a seed the
+    # viewset registers is refused here though the viewset would serve it.
+    validate_selector_view_spec(
+        type(label, (), {"spec": spec}), expected_kind=spec.kind, pool_seeds=DEFAULT_POOL_SEEDS
+    )
 
 
 def selector_action(

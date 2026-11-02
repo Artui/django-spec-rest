@@ -201,6 +201,9 @@ The query string is read by the kernel's flat reader:
 - A kernel spec under `@selector_action` does not read the view's
   `get_selector_kwargs`, and nothing refuses the override there.
 - `@service_action` does not run the kernel's seed check at `as_view()`.
+- `@selector_action` runs it when the method is decorated, against the
+  kernel's default seeds, so a selector action cannot read a seed its
+  viewset's `pool_seeds` registers.
 - `ActionSerializerResolver` falls back to the view's `serializer_class` for an
   action whose spec has no serializer.
 - A service's `ServiceValidationError` keyed by a model field is answered under

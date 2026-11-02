@@ -39,6 +39,7 @@ from django_spec_rest.views.utils import (
     get_class_attr,
     resolve_view_hooks,
     view_call_context,
+    view_pool_seeds,
 )
 
 
@@ -117,6 +118,7 @@ def dispatch_mutation_for_spec(
         target=UNSET if instance is None else instance,
         view_hooks=resolve_view_hooks(view, request, instance=resolved),
         on_target=lambda found: _object_permissions(view, request, found),
+        pool_seeds=view_pool_seeds(view),
     )
     if result.kind == "not_found":
         raise NotFound()

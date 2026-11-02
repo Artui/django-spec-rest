@@ -17,6 +17,7 @@ from django_spec_rest.views.mutation.kernel_input_serializer_class import (
 from django_spec_rest.views.mutation.mutation_flow_mixin import MutationFlowMixin
 from django_spec_rest.views.spec_options import spec_options
 from django_spec_rest.views.spec_validation import validate_mutation_view_spec
+from django_spec_rest.views.utils import view_pool_seeds
 
 
 class ServiceCreateView(MutationFlowMixin, GenericAPIView):
@@ -29,7 +30,9 @@ class ServiceCreateView(MutationFlowMixin, GenericAPIView):
 
     @classmethod
     def as_view(cls, **initkwargs: Any) -> Any:
-        validate_mutation_view_spec(cls, has_instance=False)
+        validate_mutation_view_spec(
+            cls, has_instance=False, pool_seeds=view_pool_seeds(cls, initkwargs)
+        )
         return super().as_view(**initkwargs)
 
     def get_serializer_class(self) -> type[BaseSerializer[Any]]:

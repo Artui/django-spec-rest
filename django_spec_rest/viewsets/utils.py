@@ -6,6 +6,7 @@ from collections.abc import Callable, Mapping
 from typing import Any, ClassVar, TypeVar
 
 from django.core.exceptions import ImproperlyConfigured
+from django_service_specs.pool.pool_seeds import DEFAULT_POOL_SEEDS, PoolSeeds
 from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelectorSpec
 from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
 from django_service_specs.types.selector_kind import SelectorKind
@@ -17,6 +18,7 @@ from django_spec_rest.views.spec_validation import (
     validate_mutation_view_spec,
     validate_selector_view_spec,
 )
+from django_spec_rest.views.utils import view_pool_seeds
 
 ActionSpec = KernelServiceSpec | KernelSelectorSpec
 
@@ -173,7 +175,12 @@ def _as_mounted(view_cls: type, action: str, spec: object, *, label: str) -> typ
 
 
 def _validate_kernel_action_spec(
-    view_cls: type, action: str, spec: KernelServiceSpec | KernelSelectorSpec, *, label: str
+    view_cls: type,
+    action: str,
+    spec: KernelServiceSpec | KernelSelectorSpec,
+    *,
+    label: str,
+    pool_seeds: PoolSeeds,
 ) -> None:
     """Ask a kernel entry the checks a standalone view asks of its kernel ``spec``.
 
@@ -181,7 +188,7 @@ def _validate_kernel_action_spec(
     (``has_instance`` for an update or a delete, so a spec naming no target is
     refused), and a read action as the matching selector view is, the
     ``kind`` included. A kernel spec under the other kind of action is refused
-    by those same checks.
+    by those same checks, against ``pool_seeds``, the viewset's registry.
 
     **A custom key is refused.** Such an entry feeds ``get_permissions`` and
     the serializer resolver alone, while a kernel spec declares no
@@ -192,11 +199,16 @@ def _validate_kernel_action_spec(
     """
     mounted = _as_mounted(view_cls, action, spec, label=label)
     if action in _MUTATION_ACTIONS:
-        validate_mutation_view_spec(mounted, has_instance=_MUTATION_ACTIONS[action]["has_instance"])
+        validate_mutation_view_spec(
+            mounted,
+            has_instance=_MUTATION_ACTIONS[action]["has_instance"],
+            pool_seeds=pool_seeds,
+        )
     elif action in _SELECTOR_ACTION_KIND:
         validate_selector_view_spec(
             mounted,
             expected_kind=_SELECTOR_ACTION_KIND[action],
+            pool_seeds=pool_seeds,
         )
     else:
         raise ImproperlyConfigured(
@@ -206,17 +218,20 @@ def _validate_kernel_action_spec(
         )
 
 
-def _validate_action_spec(view_cls: type, action: str, spec: object) -> None:
+def _validate_action_spec(
+    view_cls: type, action: str, spec: object, *, pool_seeds: PoolSeeds
+) -> None:
     """Run fail-fast validation for a single ``action_specs`` entry.
 
-    Every entry is validated, whatever it is keyed on.
+    Every entry is validated, whatever it is keyed on, against the registry
+    the viewset dispatches with.
     """
     label = f"{view_cls.__name__}.action_specs[{action!r}]"
     if not isinstance(spec, KernelServiceSpec | KernelSelectorSpec):
         raise ImproperlyConfigured(
             f"{label} must be a ServiceSpec or SelectorSpec, got {type(spec).__name__}."
         )
-    _validate_kernel_action_spec(view_cls, action, spec, label=label)
+    _validate_kernel_action_spec(view_cls, action, spec, label=label, pool_seeds=pool_seeds)
 
 
 class _ActionSpecsMixin(_ServesRaisedSchema):
@@ -235,6 +250,14 @@ class _ActionSpecsMixin(_ServesRaisedSchema):
 
     action_specs: ClassVar[Mapping[str, ActionSpec]] = {}
 
+    pool_seeds: PoolSeeds = DEFAULT_POOL_SEEDS
+    """The seeds the spec's callables are resolved with: the kernel's
+    ``DEFAULT_POOL_SEEDS`` unless the view registers others, as a class
+    attribute or as ``as_view(pool_seeds=...)``. One registry for the view's
+    life: ``as_view()`` checks the spec against it, refusing a callable that
+    requires a seed it does not register, and every call's checks, target
+    lookup and ``dispatch`` are handed that object (test_pool_seeds)."""
+
     # Provided by ``GenericAPIView`` / ``ViewSetMixin`` at runtime.
     action: str | None
     action_map: dict[str, str]
@@ -243,8 +266,11 @@ class _ActionSpecsMixin(_ServesRaisedSchema):
 
     @classmethod
     def as_view(cls, *args: Any, **initkwargs: Any) -> Any:
+        # Read once, before any instance exists, from what ``as_view`` was
+        # handed and then the class (``view_pool_seeds``).
+        pool_seeds = view_pool_seeds(cls, initkwargs)
         for action, spec in cls.action_specs.items():
-            _validate_action_spec(cls, action, spec)
+            _validate_action_spec(cls, action, spec, pool_seeds=pool_seeds)
         return super().as_view(*args, **initkwargs)  # ty: ignore[unresolved-attribute]
 
     def options(self, request: Any, *args: Any, **kwargs: Any) -> Any:
