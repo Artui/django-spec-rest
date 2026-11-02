@@ -11,6 +11,8 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-11-02
+
 ### Fixed
 
 - **The docs and the example no longer say every view refuses a missing seed
@@ -169,6 +171,7 @@ lists each with what a project rewrites.
 - **The package is no longer a Django app.** It has no models, migrations,
   templates, static files or URLs, so it needs no `INSTALLED_APPS` entry.
 
-[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/Artui/django-spec-rest/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Artui/django-spec-rest/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Artui/django-spec-rest/compare/v0.0.0...v0.1.0
