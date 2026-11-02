@@ -11,6 +11,13 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+### Changed
+
+- **Requires `django-service-specs` 0.23.0.** A nested selector
+  (`instance_selector_spec`, `collection_selector_spec`, `output_selector_spec`)
+  that declares `permissions` is now refused by the kernel when the
+  `ServiceSpec` is built, rather than by the view at `as_view()`.
+
 ## [0.1.0] — 2026-10-31
 
 The first release. Every change below is against the previous package's

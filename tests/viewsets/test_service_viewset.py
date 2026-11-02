@@ -449,14 +449,12 @@ class TestAsView:
             viewset.as_view({"get": "list"})
 
     @pytest.mark.parametrize("action", ["update", "partial_update", "destroy"])
-    def test_a_nested_selector_s_permissions_are_refused(self, action: str) -> None:
-        nested = _retrieve(presenter=None)
-        viewset = _viewset(action_specs={action: _update(instance_selector_spec=nested)})
+    def test_a_nested_selector_s_permissions_are_refused_by_the_kernel(self, action: str) -> None:
+        # The kernel refuses the spec when it is built, so no viewset is ever mounted with one.
         with pytest.raises(
-            ImproperlyConfigured,
-            match=rf"action_specs\['{action}'\]\.spec\.instance_selector_spec declares permissions",
+            ImproperlyConfigured, match="ServiceSpec.instance_selector_spec declares permissions"
         ):
-            viewset.as_view({"get": "list"})
+            _update(instance_selector_spec=_retrieve(presenter=None))
 
     def test_a_create_with_no_target_passes(self) -> None:
         assert callable(_viewset(action_specs={"create": _create()}).as_view({"post": "create"}))

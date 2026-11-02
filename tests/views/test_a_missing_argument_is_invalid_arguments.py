@@ -62,7 +62,7 @@ _TARGET_LOOKUP = ServiceSpec(
     service=_any_instance,
     permissions=_OPEN,
     instance_selector_spec=SelectorSpec(
-        kind=SelectorKind.RETRIEVE, selector=_unfilled, permissions=_OPEN, reads=_TENANT
+        kind=SelectorKind.RETRIEVE, selector=_unfilled, reads=_TENANT
     ),
     atomic=False,
 )

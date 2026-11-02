@@ -13,12 +13,12 @@ driven through ``as_view()``.
   service, and the view's input context layer at the input serializer
   (``test_a_service_kwargs_hook_value_reaches_the_service``,
   ``test_the_view_s_input_context_layer_reaches_the_input_serializer``).
-- **A nested selector's ``permissions`` are refused at ``as_view()``.** The
-  kernel asks the spec being dispatched, never the selector resolving its
-  target, so checks declared there would guard nothing: a denying declaration
-  is refused on each of the three seats, naming the seat
-  (``test_a_nested_selector_s_permissions_are_refused``), and so is
-  ``Unrestricted()``, which guards nothing either
+- **A nested selector's ``permissions`` are refused by the kernel, not the view.**
+  The kernel asks the spec being dispatched, never the selector resolving its
+  target, so checks declared there would guard nothing: building the
+  ``ServiceSpec`` raises ``ImproperlyConfigured`` on each of the three seats,
+  naming the seat (``test_a_nested_selector_s_permissions_are_refused_by_the_kernel``),
+  and for ``Unrestricted()`` too, which guards nothing either
   (``test_an_unrestricted_nested_selector_is_refused_too``). The refusal is of
   a declaration, so a nested selector declaring none mounts
   (``test_a_nested_selector_declaring_no_permissions_mounts``).
@@ -26,7 +26,6 @@ driven through ``as_view()``.
 
 from __future__ import annotations
 
-import dataclasses
 from typing import Any
 
 import pytest
@@ -142,79 +141,68 @@ class _Deny(BasePermission):
 _DENY = (DRFPermissionCheck((_Deny,)),)
 
 
-def _instance_seat() -> type:
+def _instance_seat(permissions: Any = None) -> type:
     spec = ServiceSpec(
         service=lambda *, instance: None,
         instance_selector_spec=SelectorSpec(
             kind=SelectorKind.RETRIEVE,
             selector=lambda pk: [],
             reads=Parameters.of(Parameter("pk", "integer", required=True)),
-            permissions=_DENY,
+            permissions=permissions,
         ),
         permissions=_OPEN,
     )
     return type("_View", (_UpdateView,), {"spec": spec})
 
 
-def _collection_seat() -> type:
+def _collection_seat(permissions: Any = None) -> type:
     spec = ServiceSpec(
         service=lambda *, collection: None,
         collection_selector_spec=SelectorSpec(
-            kind=SelectorKind.LIST, selector=lambda: [], permissions=_DENY
+            kind=SelectorKind.LIST, selector=lambda: [], permissions=permissions
         ),
         permissions=_OPEN,
     )
     return type("_View", (_CreateView,), {"spec": spec})
 
 
-def _output_seat() -> type:
+def _output_seat(permissions: Any = None) -> type:
     spec = ServiceSpec(
         service=lambda: None,
         output_selector_spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE, selector=lambda *, result: result, permissions=_DENY
+            kind=SelectorKind.RETRIEVE, selector=lambda *, result: result, permissions=permissions
         ),
         permissions=_OPEN,
     )
     return type("_View", (_CreateView,), {"spec": spec})
 
 
+_SEATS = pytest.mark.parametrize(
+    ("seat", "build"),
+    [
+        ("instance_selector_spec", _instance_seat),
+        ("collection_selector_spec", _collection_seat),
+        ("output_selector_spec", _output_seat),
+    ],
+)
+
+
 # A nested selector is a step of the call, so the kernel never asks its
-# ``permissions``: one declared guards nothing, so the mount refuses it on each seat.
-@pytest.mark.parametrize(
-    ("seat", "build"),
-    [
-        ("instance_selector_spec", _instance_seat),
-        ("collection_selector_spec", _collection_seat),
-        ("output_selector_spec", _output_seat),
-    ],
-)
-def test_a_nested_selector_s_permissions_are_refused(seat: str, build: Any) -> None:
-    with pytest.raises(ImproperlyConfigured, match=seat):
-        build().as_view()
+# ``permissions``, and refuses one declared when the ServiceSpec is built, on each
+# seat: the view is never reached, so building the spec is what raises.
+@_SEATS
+def test_a_nested_selector_s_permissions_are_refused_by_the_kernel(seat: str, build: Any) -> None:
+    with pytest.raises(ImproperlyConfigured, match=f"ServiceSpec.{seat} declares permissions"):
+        build(_DENY)
 
 
-@pytest.mark.parametrize(
-    ("seat", "build"),
-    [
-        ("instance_selector_spec", _instance_seat),
-        ("collection_selector_spec", _collection_seat),
-        ("output_selector_spec", _output_seat),
-    ],
-)
+@_SEATS
 def test_a_nested_selector_declaring_no_permissions_mounts(seat: str, build: Any) -> None:
     """The refusal is of a declaration: the default, ``None``, mounts on every seat."""
-    view_cls = build()
-    nested = dataclasses.replace(getattr(view_cls.spec, seat), permissions=None)
-    spec = dataclasses.replace(view_cls.spec, **{seat: nested})
-
-    type("_View", (view_cls,), {"spec": spec}).as_view()
+    build().as_view()
 
 
 def test_an_unrestricted_nested_selector_is_refused_too() -> None:
     """``Unrestricted()`` is a declaration that guards nothing, as a denying one is."""
-    view_cls = _collection_seat()
-    nested = dataclasses.replace(view_cls.spec.collection_selector_spec, permissions=_OPEN)
-    spec = dataclasses.replace(view_cls.spec, collection_selector_spec=nested)
-
     with pytest.raises(ImproperlyConfigured, match="collection_selector_spec"):
-        type("_View", (view_cls,), {"spec": spec}).as_view()
+        _collection_seat(_OPEN)

@@ -11,9 +11,9 @@ A kernel call never reaches a class without a request, where DRF would raise
 ``AttributeError`` from inside the caller's class, since the check builds the offline pair for whatever the call lacks,
 so a call with no ``call_context`` at all is answered rather than refused.
 
-A hazard for a port: the kernel asks the spec being dispatched, never the
-``collection_selector_spec`` resolving its target, so classes moved onto
-the nested selector refuse nothing.
+The kernel asks the spec being dispatched, never a nested selector, and refuses
+a nested selector that declares ``permissions`` when the ``ServiceSpec`` is built
+(test_what_the_edge_owes_a_kernel_spec holds that refusal).
 """
 
 from __future__ import annotations
@@ -74,22 +74,6 @@ def test_a_list_s_queryset_is_never_asked_about_an_object() -> None:
 def test_the_class_level_check_still_refuses_a_list() -> None:
     with pytest.raises(DRFNotPermitted):
         dispatch(_every_tag(_DenyRequest), principal=User(), arguments={})
-
-
-def test_a_collection_selector_s_own_classes_are_not_what_answers() -> None:
-    # The kernel asks the spec being dispatched, never the selector resolving
-    # its target, so classes a port moves onto the nested selector refuse
-    # nothing: they belong on the service. Refusing them at ``as_view()`` is
-    # owed, held as a strict xfail in
-    # test_what_the_edge_owes_a_kernel_spec.
-    Tag.objects.create(name="a")
-    spec = ServiceSpec(
-        service=lambda *, collection: collection.count(),
-        collection_selector_spec=_every_tag(_DenyRequest),
-        permissions=(DRFPermissionCheck(()),),
-    )
-
-    assert dispatch(spec, principal=User(), arguments={}).value == 1
 
 
 @pytest.mark.parametrize(("is_staff", "admitted"), [(True, True), (False, False)])

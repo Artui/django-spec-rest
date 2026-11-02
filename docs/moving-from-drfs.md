@@ -88,7 +88,8 @@ declare every seat above.
   row.
 - **A nested selector declares no `permissions`.** On `instance_selector_spec`,
   `collection_selector_spec` and `output_selector_spec` the kernel never asks
-  them, so `as_view()` refuses them: declare them on the spec being served.
+  them, so the kernel refuses them when the `ServiceSpec` is built: declare
+  them on the spec being served.
 - **A selector view's `get_selector_kwargs` beside a kernel spec is refused**
   at `as_view()`, with the per-action `get_<action>_selector_kwargs`: return
   those keys from the spec's own `kwargs` provider, which may declare

@@ -118,17 +118,13 @@ def _service_spec(
         return ServiceSpec(
             permissions=_OPEN,
             service=lambda **_: None,
-            instance_selector_spec=SelectorSpec(
-                kind=SelectorKind.RETRIEVE, selector=wrap(refuse), permissions=_OPEN
-            ),
+            instance_selector_spec=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=wrap(refuse)),
         )
     if seat == "output_selector":
         return ServiceSpec(
             permissions=_OPEN,
             service=lambda **_: Post.objects.create(title="t"),
-            output_selector_spec=SelectorSpec(
-                kind=SelectorKind.RETRIEVE, selector=wrap(refuse), permissions=_OPEN
-            ),
+            output_selector_spec=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=wrap(refuse)),
         )
     assert seat == "output_extend_queryset"
     return ServiceSpec(
@@ -138,7 +134,6 @@ def _service_spec(
             kind=SelectorKind.RETRIEVE,
             selector=lambda *, instance: Post.objects.filter(pk=instance.pk),
             extend_queryset=wrap(_extending_from(refuse)),
-            permissions=_OPEN,
         ),
     )
 

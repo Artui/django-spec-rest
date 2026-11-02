@@ -35,8 +35,8 @@ PRESENTER = SerializerPresenter(InvoiceSerializer)
 
 # One row by ``pk``. On a detail route the edge reads ``pk`` from the URL;
 # off HTTP the caller passes it as an argument. A nested selector declares no
-# ``permissions``: the spec being dispatched is what authorizes, and
-# ``as_view()`` refuses a nested selector that declares them.
+# ``permissions``: the spec being dispatched is what authorizes, and the kernel
+# refuses a nested selector that declares them when the ServiceSpec is built.
 INVOICE_LOOKUP = SelectorSpec(
     kind=SelectorKind.RETRIEVE,
     selector=get_invoice,

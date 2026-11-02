@@ -114,7 +114,7 @@ class TestTheRouteIsFilledBeforeTheClassLevelCheck:
     def test_a_class_reading_view_kwargs_sees_the_route_read(self) -> None:
         spec = ServiceSpec(
             service=_update,
-            instance_selector_spec=_retrieve(),
+            instance_selector_spec=_retrieve().derive(permissions=None),
             permissions=_check(_OnlySeven, route_reads=("pk",)),
         )
 
@@ -241,7 +241,6 @@ class TestTheScopeCheck:
             collection_selector_spec=SelectorSpec(
                 kind=SelectorKind.LIST,
                 selector=lambda: Post.objects.all(),
-                permissions=_check(),
             ),
             permissions=_check(_RaisesOnAnyObject),
         )
