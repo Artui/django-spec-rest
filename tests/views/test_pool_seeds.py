@@ -184,6 +184,18 @@ def _frozen_posts(*, frozen: bool) -> QuerySet[Post]:
     return Post.objects.filter(published=frozen)
 
 
+_RENDERING = SelectorSpec(
+    kind=SelectorKind.RETRIEVE,
+    selector=_BY_PK.selector,
+    reads=_BY_PK.reads,
+    permissions=_OPEN,
+    presenter=SerializerPresenter(PostSerializer),
+    affordances={
+        "publish": ServiceSpec(service=lambda: None, permissions=_OPEN, affordances=[NOT_FROZEN])
+    },
+)
+
+
 class TestASelectorReadingASeed:
     def test_a_list_view_registering_it_serves_the_selector_s_answer(self) -> None:
         Post.objects.create(title="draft")
@@ -209,6 +221,33 @@ class TestASelectorReadingASeed:
         )
         view = type("_View", (SelectorRetrieveView,), {"spec": spec}).as_view(pool_seeds=SEEDS)
         assert view(factory.get("/"), pk=str(post.pk)).data["title"] == "t"
+
+    def test_a_retrieve_view_registering_it_renders_an_affordance_s_answer(self) -> None:
+        """A selector's affordance answers are asked when the row is presented,
+        with the seeds the view registers."""
+        post = Post.objects.create(title="t")
+        view = type(
+            "_View", (SelectorRetrieveView,), {"spec": _RENDERING, "pool_seeds": SEEDS}
+        ).as_view()
+
+        def answer() -> Any:
+            response = view(factory.get("/"), pk=str(post.pk))
+            response.render()
+            return json.loads(response.content)["affordances"]["publish"]
+
+        assert answer() == {"available": True}
+        _BOARD["frozen"] = True
+        assert answer() == {
+            "available": False,
+            "code": "board_frozen",
+            "reason": "The board is frozen.",
+        }
+
+    def test_an_affordance_s_answer_needing_a_seed_unregistered_is_refused_at_as_view(
+        self,
+    ) -> None:
+        with pytest.raises(ImproperlyConfigured, match="frozen"):
+            type("_View", (SelectorRetrieveView,), {"spec": _RENDERING}).as_view()
 
     @pytest.mark.parametrize("base", [SelectorListView, SelectorRetrieveView])
     def test_a_view_that_does_not_register_it_is_refused_at_as_view(self, base: type) -> None:
@@ -277,6 +316,28 @@ class TestADecoratedAction:
             {"serializer_class": PostSerializer, "posts": posts, "pool_seeds": SEEDS},
         )
         assert viewset.as_view({"get": "posts"})(factory.get("/")).status_code == 200
+
+
+class _StampedClass(PermissionCheck):
+    """A class-level check opting into the ``stamp`` seed by naming it."""
+
+    def has_permission(self, principal: Any, spec: Any, *, stamp: str) -> bool:
+        return stamp == "stamp"
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=TypeError,
+    reason="OPTIONS asks the kernel's authorize with DEFAULT_POOL_SEEDS (views/spec_options.py), "
+    "not the view's pool_seeds",
+)
+def test_options_asks_a_check_naming_a_seed_with_the_view_s_seeds() -> None:
+    seeds = DEFAULT_POOL_SEEDS.extend(stamp=lambda: "stamp")
+    view = _update_view(_publish_spec(permissions=(_StampedClass(),)), pool_seeds=seeds).as_view()
+    post = Post.objects.create(title="t")
+    assert _patch(view, post.pk)[0] == 200
+    response = view(factory.options("/"), pk=str(post.pk))
+    assert "PUT" in response.data["actions"]
 
 
 class _CountingResolver:
