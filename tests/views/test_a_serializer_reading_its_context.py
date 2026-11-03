@@ -179,6 +179,30 @@ def test_a_live_view_builds_the_fields_from_its_query_string(owner: User) -> Non
     assert seen == {"data": {"extra": "e"}}
 
 
+def test_a_kwargs_answer_is_checked_against_the_fields_the_call_validates(owner: User) -> None:
+    """The twin's ``kwargs`` seat checks an answer against the Validator's
+    parameters, read in the edge's own call: described under the call's request,
+    so a serializer reading ``self.context["request"]`` is built as the call
+    builds it, not unbound."""
+    seen: dict[str, Any] = {}
+
+    def service(*, data: Any, scope: str) -> None:
+        seen["data"] = dict(data)
+
+    spec = ServiceSpec(
+        service=service,
+        permissions=_OPEN,
+        validator=SerializerValidator(_FieldsFromTheQuery),
+        kwargs=lambda: {"scope": "s"},
+        atomic=False,
+    )
+
+    response = _create(spec, {"extra": "e"}, owner, url="/?extra=1")
+
+    assert response.status_code == 204, response.data
+    assert seen == {"data": {"extra": "e"}}
+
+
 def test_a_live_view_builds_the_fields_from_its_route(owner: User) -> None:
     seen: dict[str, Any] = {}
 
@@ -419,29 +443,58 @@ def test_a_kernel_call_for_another_principal_is_never_described_under_the_view_s
     assert all(pair == (None, None) for pair in _DESCRIBED_UNDER)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "The kernel asks a Validator's parameters() with no call, so a service's kernel "
-        "call of the view's own spec for another principal is checked against the "
-        "description the edge built under the view's request, and describes nothing of "
-        "its own."
-    ),
-)
 def test_a_kernel_call_of_the_view_s_own_spec_for_another_principal_is_never_described_under_the_view_s_request(
     owner: User,
 ) -> None:
     """The service dispatches the view's own spec for another principal: the
     parameters that call is checked against are read off a description built as
-    outside any call, never the one the edge built under the view's request."""
+    outside any call, never the one the edge built under the view's request.
+    The edge's own call and the inner one declare the same serializer through
+    the same Validator, and the kernel tells them apart by the dict each asks
+    ``parameters()`` with (``EdgeCallState.call_context``)."""
     _DESCRIBED_UNDER.clear()
     other = User.objects.create(username="other")
+    by_the_edge: list[Any] = []
     by_the_inner_call: list[Any] = []
 
     def service(*, title: str) -> None:
         if title == "outer":
-            before = len(_DESCRIBED_UNDER)
+            by_the_edge.extend(_DESCRIBED_UNDER[built:])
             dispatch(spec, principal=other, arguments={"title": "inner"})
+            by_the_inner_call.extend(_DESCRIBED_UNDER[built + len(by_the_edge) :])
+
+    spec = ServiceSpec(
+        service=service,
+        permissions=_OPEN,
+        validator=SerializerValidator(_ReadsItsRequestWhileValidating),
+        atomic=False,
+    )
+    # Building the spec and the view describes the serializer outside any call.
+    built = len(_DESCRIBED_UNDER)
+
+    assert _create(spec, {"title": "outer"}, owner).status_code == 204
+    assert by_the_edge
+    # The edge's own call is described once, under the view that dispatched it.
+    (under_the_view,) = [pair for pair in by_the_edge if pair != (None, None)]
+    assert isinstance(under_the_view[1], ServiceCreateView)
+    assert by_the_inner_call
+    assert all(pair == (None, None) for pair in by_the_inner_call)
+
+
+def test_a_dispatch_handed_the_request_s_call_context_is_described_as_the_request_s_call(
+    owner: User,
+) -> None:
+    """The documented gap (docs/recipes/off-http-inputs.md): a service handing
+    its own ``call_context`` to a dispatch of the view's spec makes that the
+    request's call again, so it is described under the view."""
+    _DESCRIBED_UNDER.clear()
+    other = User.objects.create(username="other")
+    by_the_inner_call: list[Any] = []
+
+    def service(*, title: str, call_context: dict[str, Any]) -> None:
+        if title == "outer":
+            before = len(_DESCRIBED_UNDER)
+            dispatch(spec, principal=other, arguments={"title": "inner"}, call_context=call_context)
             by_the_inner_call.extend(_DESCRIBED_UNDER[before:])
 
     spec = ServiceSpec(
@@ -452,8 +505,7 @@ def test_a_kernel_call_of_the_view_s_own_spec_for_another_principal_is_never_des
     )
 
     assert _create(spec, {"title": "outer"}, owner).status_code == 204
-    assert by_the_inner_call
-    assert all(pair == (None, None) for pair in by_the_inner_call)
+    assert by_the_inner_call == []
 
 
 _SAME_SEEN: list[tuple[Any, Any, Any]] = []

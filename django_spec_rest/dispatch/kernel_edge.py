@@ -204,7 +204,8 @@ def kernel_arguments(
     ``None``, and the Validator takes what the kernel hands it. The kernel's
     arguments leave out each seed-named field, which is no parameter.
     """
-    parameters: Parameters = spec.parameters()
+    call_context = edge_call_state().call_context
+    parameters: Parameters = spec.parameters(call_context=call_context)
     route = {
         name: value
         for name, value in (getattr(view, "kwargs", None) or {}).items()
@@ -243,7 +244,7 @@ def kernel_arguments(
         # with no such Validator has no serializer to describe
         # (test_kernel_views' test_a_capture_outranks_a_form_body).
         if isinstance(spec.validator, SerializerValidator):
-            flat = read_form_spellings(spec.validator, body, flat)
+            flat = read_form_spellings(spec.validator, body, flat, call_context=call_context)
         sent = coerce_flat(parameters, {**flat, **scope})
     elif isinstance(body, Mapping):
         sent = {**_unscoped(body, reads), **coerce_flat(parameters, scope)}
@@ -253,8 +254,8 @@ def kernel_arguments(
     validator = spec.validator
     if not isinstance(validator, SerializerValidator):
         return sent, None
-    seeded = seed_named_fields(validator)
-    fields = validator.parameters().names() | seeded
+    seeded = seed_named_fields(validator, call_context=call_context)
+    fields = validator.parameters(call_context=call_context).names() | seeded
     keys = provider_keys(spec.input_data)
     # A key the spec's typed ``input_data`` provider owns is the provider's
     # alone: what the client sent for it is never bound, and what the provider
@@ -505,6 +506,7 @@ def _edge_state(
         )
 
     return EdgeCallState(
+        call_context=call_context,
         view_hooks=hooks,
         principal=request.user,
         # The spec's own, which describes the serializer before the twin is
@@ -540,9 +542,18 @@ def _overlay(
     overlay's.
     """
     overlay = dict(hooks.extra_kwargs or {})
-    names = spec.parameters().names()
+    call_context = edge_call_state().call_context
+    names = spec.parameters(call_context=call_context).names()
     if isinstance(spec, KernelServiceSpec) and spec.validator is not None:
-        names = names | spec.validator.parameters().names() | seed_named_fields(spec.validator)
+        # Only a SerializerValidator is known to take the call's dict: another
+        # Validator declares its fields itself and is asked as it always was.
+        validator = spec.validator
+        rows = (
+            validator.parameters(call_context=call_context)
+            if isinstance(validator, SerializerValidator)
+            else validator.parameters()
+        )
+        names = names | rows.names() | seed_named_fields(validator, call_context=call_context)
     pinned = {key: overlay.pop(key) for key in names.intersection(overlay)}
     return overlay, frozenset(pinned), {**pinned, **(hooks.input_data or {})}
 

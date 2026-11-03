@@ -200,7 +200,7 @@ class SerializerValidator(Validator):
             dataclasses.is_dataclass(serializer) or issubclass(serializer, DataclassSerializer)
         )
 
-    def parameters(self) -> Parameters:
+    def parameters(self, *, call_context: dict[str, Any] | None = None) -> Parameters:
         """The serializer's input fields, as Parameters.
 
         Read off ``describe_serializer``: inside an edge call, the serializer
@@ -208,6 +208,12 @@ class SerializerValidator(Validator):
         as it is built queries once in the call
         (test_its_queries_run_once); outside one, a serializer built
         afresh for each read, as a schema or a registration reads it.
+        ``call_context`` is the dict of the call asking, which the kernel hands
+        a Validator declaring the keyword on every ask inside a call and none
+        outside one; only the edge's own call is described as the edge's
+        (``describe_serializer``), so the same declaration dispatched by a
+        service for another principal is described unbound
+        (test_a_kernel_call_of_the_view_s_own_spec_for_another_principal_is_never_described_under_the_view_s_request).
 
         A field named like a seed of the call is no parameter: one of the
         dispatcher's own names (``RESERVED_POOL_SEEDS``, the ``user`` case of
@@ -228,7 +234,9 @@ class SerializerValidator(Validator):
         always was answered (``kernel_spec_variant(lenient=True)``).
         """
         seeded = self._seeded()
-        walked = Parameters.of(*(param for param in self._walk() if param.name not in seeded))
+        walked = Parameters.of(
+            *(param for param in self._walk(call_context) if param.name not in seeded)
+        )
         if not self.lenient:
             return walked
         return Parameters.of(
@@ -288,10 +296,11 @@ class SerializerValidator(Validator):
         """The field names this Validator leaves out of ``parameters()``: the one place that list is written."""
         return RESERVED_POOL_SEEDS | BOUND | self.excluded
 
-    def _walk(self) -> Parameters:
+    def _walk(self, call_context: dict[str, Any] | None = None) -> Parameters:
         """Every input field of the described serializer as a Parameter, seed-named ones included."""
         return input_parameters(
-            describe_serializer(self.serializer, self), registry=self.json_schema_registry
+            describe_serializer(self.serializer, self, call_context=call_context),
+            registry=self.json_schema_registry,
         )
 
     def validate(self, arguments: Mapping[str, Any], context: ValidationContext) -> dict[str, Any]:
