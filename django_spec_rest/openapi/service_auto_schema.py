@@ -126,6 +126,9 @@ class ServiceAutoSchema(AutoSchema):
                 "type[Serializer[Any]]", renderable_serializer_class(validator.serializer)
             )
             owned, reached = _input_data_reach(variant.input_data, validator.parameters())
+            # Only where ``input_data`` reaches a field: a second class under
+            # the author's name would collide with the author's own
+            # (test_a_spec_reaching_nothing_is_documented_by_the_author_s_class).
             if reached:
                 serializer = caller_serializer_class(
                     serializer,

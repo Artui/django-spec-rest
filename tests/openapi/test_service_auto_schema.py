@@ -42,6 +42,7 @@ from django_service_specs import (
 )
 from drf_spectacular.drainage import reset_generator_stats
 from drf_spectacular.generators import SchemaGenerator
+from drf_spectacular.settings import spectacular_settings
 from drf_spectacular.utils import extend_schema, extend_schema_serializer
 from rest_framework import serializers
 from rest_framework.decorators import action
@@ -278,6 +279,17 @@ class _AnnotatedUpdateView(ServiceUpdateView):
         return super().patch(request, *args, **kwargs)
 
 
+class _AnnotatedTaskView(ServiceCreateView):
+    """The author's ``TaskInSerializer`` itself, documented beside a spec over it reaching nothing."""
+
+    queryset = Author.objects.all()
+    spec = _create()
+
+    @extend_schema(request=TaskInSerializer)
+    def post(self, request: Any, *args: Any, **kwargs: Any) -> Any:
+        return super().post(request, *args, **kwargs)
+
+
 class _AuthorViewSet(ServiceViewSet):
     queryset = Author.objects.all()
     action_specs = {
@@ -403,6 +415,7 @@ urlpatterns = [
     ),
     path("task/", _view(ServiceCreateView, _task()).as_view()),
     path("task-plain/", _view(ServiceCreateView, _task(input_data=None)).as_view()),
+    path("task-annotated/", _AnnotatedTaskView.as_view()),
     path("task/<int:pk>/", _view(ServiceUpdateView, _task(**_ON_A_ROW)).as_view()),
     path(
         "task-partial/<int:pk>/",
@@ -699,6 +712,14 @@ class TestASerializerBodyInputDataReaches:
         assert body == {"$ref": "#/components/schemas/TaskIn"}
         assert _asked(schema, body) == ({"name", "owner", "note"}, {"name", "owner", "note"})
 
+    def test_a_spec_reaching_nothing_is_documented_by_the_author_s_class(
+        self, schema: dict[str, Any]
+    ) -> None:
+        # ``task-annotated/`` documents ``TaskInSerializer`` itself under
+        # ``TaskIn``; a second class under that name would be a collision
+        # (test_no_two_components_share_a_name).
+        assert _body(schema, "/task-annotated/", "post") == {"$ref": "#/components/schemas/TaskIn"}
+
     def test_one_filled_field_and_one_relaxed_field_are_named_apart(
         self, schema: dict[str, Any]
     ) -> None:
@@ -957,3 +978,15 @@ def test_an_operation_with_no_service_spec_documents_drf_s_own_request_body() ->
     generated = SchemaGenerator(patterns=router.urls).get_schema(request=None, public=True)
 
     assert _body(generated, "/plain/plain/", "post") == {"$ref": "#/components/schemas/NameIn"}
+
+
+def test_a_split_request_component_is_named_from_the_author_s_stem(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # drf-spectacular appends ``Request`` to every request component, the
+    # derived one included, so the stem is read without it.
+    monkeypatch.setattr(spectacular_settings, "COMPONENT_SPLIT_REQUEST", True)
+    schema = SchemaGenerator(patterns=urlpatterns).get_schema(request=None, public=True)
+    assert _body(schema, "/task/", "post") == {
+        "$ref": "#/components/schemas/TaskInLessOwner__OptionalNoteRequest"
+    }
