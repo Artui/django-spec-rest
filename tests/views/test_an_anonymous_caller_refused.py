@@ -6,11 +6,14 @@ first authenticator's ``WWW-Authenticate``, or 403 where that authenticator
 gives no header. A caller one did recognise, or a request with no
 authenticator at all, is refused with the permission's own message, 403.
 
-The rule holds for both kinds of refusal a spec makes: a DRF class adapted by
-``DRFPermissionCheck`` answering ``False``, and a kernel ``PermissionCheck``
-the kernel's ``dispatch`` refuses with its ``NotPermitted``. Each is served by
-a view and by a viewset action, and each answer is DRF's for a plain
-``APIView`` guarded by a class carrying the same message.
+The rule holds for a DRF class adapted by ``DRFPermissionCheck`` answering
+``False``. A kernel ``PermissionCheck`` the kernel's ``dispatch`` refuses with
+its ``NotPermitted`` is still the kernel's 403 with its message: the kernel
+raises a bare ``NotPermitted``, which the edge cannot tell from a service's own
+or a refused inner dispatch's, so those cases are strict xfails until the kernel
+marks a permission check's denial and this route keys the 401 on the mark. Each
+route is served by a view and by a viewset action, and each answer is DRF's for
+a plain ``APIView`` guarded by a class carrying the same message.
 """
 
 from __future__ import annotations
@@ -19,7 +22,14 @@ from typing import Any
 
 import pytest
 from django.contrib.auth.models import User
-from django_service_specs import PermissionCheck, SelectorKind, SelectorSpec, ServiceSpec
+from django_service_specs import (
+    NotPermitted,
+    PermissionCheck,
+    SelectorKind,
+    SelectorSpec,
+    ServiceSpec,
+    dispatch,
+)
 from rest_framework.authentication import BasicAuthentication, SessionAuthentication
 from rest_framework.permissions import AllowAny, BasePermission
 from rest_framework.response import Response
@@ -161,8 +171,28 @@ def test_drf_s_own_view_answers_each_caller_so(caller: str) -> None:
     assert _answer(_drf_view(authentication), signed_in=signed_in) == expected
 
 
+def _awaiting_the_kernel(refusal: str, caller: str) -> list[Any]:
+    """A kernel check's refusal of an anonymous caller is not asked to sign in yet.
+
+    The kernel raises a bare ``NotPermitted`` for a permission check's denial,
+    the same class a service raises of its own accord or a refused inner
+    dispatch raises, so the edge cannot ask only the first to authenticate
+    (``test_a_service_s_own_denial_is_not_asked_to_sign_in`` holds the others).
+    Strict, so the marks come off with the kernel's mark and this route's key on it.
+    """
+    if refusal == "kernel-check" and CALLERS[caller][0] and not CALLERS[caller][1]:
+        return [
+            pytest.mark.xfail(
+                strict=True,
+                reason="the kernel does not mark a permission check's denial apart "
+                "from any other NotPermitted",
+            )
+        ]
+    return []
+
+
 CASES = [
-    (route, refusal, caller)
+    pytest.param(route, refusal, caller, marks=_awaiting_the_kernel(refusal, caller))
     for route in ROUTES
     for refusal in ["drf-class", "kernel-check"]
     for caller in CALLERS
@@ -177,3 +207,59 @@ def test_a_refused_caller_is_answered_as_drf_answers_it(
     build, method = ROUTES[route]
     view = build(_check(refusal), authentication)
     assert _answer(view, signed_in=signed_in, method=method) == expected
+
+
+class _Open(PermissionCheck):
+    def has_permission(self, principal: Any, spec: Any) -> bool:
+        return True
+
+
+def _anonymous_post(spec: ServiceSpec) -> Any:
+    """An anonymous caller of a view with ``BasicAuthentication`` first, which would challenge."""
+    view = _view_of(spec, [BasicAuthentication])
+    return view(factory.post("/", {}, format="json"))
+
+
+def _view_of(spec: ServiceSpec, authentication: list[type]) -> Any:
+    attrs = {"spec": spec, "permission_classes": [], "authentication_classes": authentication}
+    return type("_View", (ServiceCreateView,), attrs).as_view()
+
+
+def test_a_service_s_own_denial_is_not_asked_to_sign_in() -> None:
+    """The author's ``NotPermitted`` is no permission check refusing: 403 with their message.
+
+    Fails when the edge hands the refusal map the request: every kernel
+    ``NotPermitted`` is then read as a permission check's and answered 401.
+    """
+
+    def archived() -> None:
+        raise NotPermitted("Archived invoices are read-only.")
+
+    response = _anonymous_post(ServiceSpec(service=archived, permissions=(_Open(),)))
+    assert response.status_code == 403
+    assert response.data == {"detail": "Archived invoices are read-only."}
+    assert response.get("WWW-Authenticate") is None
+
+
+def test_a_refused_inner_dispatch_is_not_asked_to_sign_in() -> None:
+    """An inner ``dispatch`` its check refuses reaches the caller as that check's 403.
+
+    The caller reached the outer spec through its own check, so the inner's
+    refusal is the service's, not a request to authenticate.
+    """
+
+    class Never(PermissionCheck):
+        message = "Inner refused."
+
+        def has_permission(self, principal: Any, spec: Any) -> bool:
+            return False
+
+    inner = ServiceSpec(service=lambda: None, permissions=(Never(),))
+
+    def outer() -> None:
+        dispatch(inner, principal=None, arguments={})
+
+    response = _anonymous_post(ServiceSpec(service=outer, permissions=(_Open(),)))
+    assert response.status_code == 403
+    assert response.data == {"detail": "Inner refused."}
+    assert response.get("WWW-Authenticate") is None

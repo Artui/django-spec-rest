@@ -183,17 +183,28 @@ The query string is read by the kernel's flat reader:
 - **`DRFPermissionCheck` takes `route_reads=`** for the arguments that go onto
   the offline view's `kwargs`; its `url_kwargs=` and `query_params=` are gone,
   and the offline request's query string is empty.
-- **A caller nobody authenticated is still asked to sign in.** Whether a DRF
-  class in `DRFPermissionCheck` or a kernel `PermissionCheck` refuses, a caller
-  the request's authenticators did not recognise is answered DRF's
-  `NotAuthenticated`, as drfs' view answered it: 401 with the first
-  authenticator's `WWW-Authenticate` (`Basic realm="api"` with
-  `BasicAuthentication` first), or 403 "Authentication credentials were not
-  provided." where that authenticator sends no challenge, as
-  `SessionAuthentication` does not. A signed-in caller, and any caller of a
-  view with no authenticator, is refused 403 with the check's own `message`.
-  Off HTTP there is no authenticator, so the refusal is the kernel's
-  `NotPermitted`.
+- **An adapted DRF class still asks a caller nobody authenticated to sign in.**
+  A DRF class in `DRFPermissionCheck` refusing a caller the request's
+  authenticators did not recognise is answered DRF's `NotAuthenticated`, as
+  drfs' view answered it: 401 with the first authenticator's
+  `WWW-Authenticate` (`Basic realm="api"` with `BasicAuthentication` first),
+  or 403 "Authentication credentials were not provided." where that
+  authenticator sends no challenge, as `SessionAuthentication` does not. A
+  signed-in caller, and any caller of a view with no authenticator, is refused
+  403 with the class's own `message`. Off HTTP there is no authenticator, so
+  the refusal is the kernel's `NotPermitted`.
+- **A kernel `PermissionCheck`'s refusal is the kernel's 403 for now**, with
+  its message, even for an anonymous caller where drfs answered 401. The
+  kernel raises the same bare `NotPermitted` for a permission check's denial,
+  a service's own and a refused inner dispatch's, so the edge cannot ask only
+  the first to sign in; a later release will, once the kernel marks the
+  denial.
+- **`DRFPermissionCheck` can raise `DRFNotAuthenticated`**, not only
+  `DRFNotPermitted`, when the call carries a real DRF request with
+  authenticators and nobody was recognised. `DRFNotAuthenticated` is DRF's
+  `NotAuthenticated`, not a `PermissionDenied`, so code catching
+  `PermissionDenied` by name around such a dispatch no longer catches that
+  refusal; catch the kernel's `NotPermitted`, which both classes are.
 - **`UNAUTHENTICATED_USER = None` is passed as `None`**: the principal an
   anonymous request hands the kernel is `None` where the project sets it so,
   rather than an `AnonymousUser`.
