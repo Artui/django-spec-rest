@@ -11,6 +11,54 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+### Security
+
+- **A spec handed to `as_view(spec=...)` meets every check the same class
+  attribute meets at `as_view()`.** It was never checked, and a mutation view
+  still dispatched it. So do the other keywords those checks read:
+  `pool_seeds`, `success_status`, `response_finalizer`, `filter_backends`, and
+  a viewset's `action_specs`. A selector view handed `as_view(spec=...)` no
+  longer falls through to DRF's own `queryset`, which served every row without
+  asking the spec's `permissions`.
+
+### Changed
+
+- **A refused caller nobody authenticated is asked to sign in, as a DRF view
+  asks.** When a DRF permission class in `DRFPermissionCheck` returns `False`,
+  or a kernel `PermissionCheck` refuses on the kernel route, a caller the
+  request's authenticators did not recognise gets DRF's `NotAuthenticated`:
+  401 with the first authenticator's `WWW-Authenticate` when it sends one,
+  otherwise 403 "Authentication credentials were not provided.". A signed-in
+  caller, and any caller of a view with no authenticator, still gets 403 with
+  the check's own `message`. Off HTTP the refusal is still the kernel's
+  `NotPermitted`.
+- **The OpenAPI request body of a `SerializerValidator` spec agrees with
+  OPTIONS.** Where the spec's `input_data` fills or may fill one of the
+  serializer's fields, the body no longer lists the fields `input_data` always
+  fills and no longer requires the ones it may fill. It is documented under a
+  component of its own named from the serializer's, such as `TaskLessOwner` or
+  `TaskLessOwner__OptionalNote` (the rule is in the OpenAPI page), so the class
+  name a generated client uses changes for such specs. A spec whose
+  `input_data` reaches none of the serializer's fields keeps its component.
+
+### Added
+
+- **`permission_denied`** (`django_spec_rest.service_specs.permission_denied`):
+  the refusal DRF's `APIView.permission_denied` would raise for a request, as
+  the kernel's denial.
+
+### Fixed
+
+- **A kernel dispatch a service makes of the view's own spec for another
+  principal is described afresh, not as the request's own call.** A
+  `SerializerValidator` declares `parameters(call_context=)`: the request's
+  call builds its serializer once under the view, and an inner dispatch gets
+  its own description. A service handing its own `call_context` to the inner
+  dispatch is still described as the request's call.
+- **`SelectorListView` and `SelectorRetrieveView` serve a spec handed to
+  `as_view(spec=...)`**, and a mutation view answers with an `as_view()`
+  keyword's `success_status` and `response_finalizer`.
+
 ## [0.2.1] — 2026-11-02
 
 ### Fixed
