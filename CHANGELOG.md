@@ -11,6 +11,8 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+## [0.3.1] — 2026-11-03
+
 ### Fixed
 
 - **The documented 400 admits what the edge sends.** The `ValidationErrors`
@@ -25,9 +27,10 @@ carries; releases up to 0.62.0 are in
   neither the 400 nor the 422 the edge answers it with. It now documents a 422
   (the selector, a precondition or a provider can raise a plain `ServiceError`)
   and, where the spec takes a parameter (a read, a shape or a filter), the 400
-  of its refusal, in the same body as a service spec's. The 422 body also names the `schema` an `AdditionalInputRequired`
-  carries (an object, not required), which the `ServiceError` component allowed
-  but did not name, on service specs too.
+  of its refusal, in the same body as a service spec's. The 422 body also
+  names the `schema` an `AdditionalInputRequired` carries (an object, not
+  required), which the `ServiceError` component allowed but did not name, on
+  service specs too.
 - **A serializer cannot take the `ValidationErrors` component's name.**
   drf-spectacular only warns of two components of one name and keeps one for
   both, so a serializer that resolved to that name had its own response
@@ -281,7 +284,8 @@ lists each with what a project rewrites.
 - **The package is no longer a Django app.** It has no models, migrations,
   templates, static files or URLs, so it needs no `INSTALLED_APPS` entry.
 
-[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/Artui/django-spec-rest/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/Artui/django-spec-rest/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/Artui/django-spec-rest/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Artui/django-spec-rest/compare/v0.1.0...v0.2.0
