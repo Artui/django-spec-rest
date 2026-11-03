@@ -161,25 +161,8 @@ def test_drf_s_own_view_answers_each_caller_so(caller: str) -> None:
     assert _answer(_drf_view(authentication), signed_in=signed_in) == expected
 
 
-def _awaiting_the_edge(refusal: str, caller: str) -> list[Any]:
-    """A kernel check's refusal of an anonymous caller needs the request at the map.
-
-    The kernel route's refusal map applies the rule to a kernel denial only
-    when the edge hands it the request it served (``answering_refusals``), and
-    ``dispatch/kernel_edge.py`` does not hand it yet. Strict, so the line that
-    hands it over fails here until these marks come off with it.
-    """
-    if (
-        refusal == "kernel-check"
-        and caller.startswith("anonymous")
-        and "no authenticator" not in caller
-    ):
-        return [pytest.mark.xfail(strict=True, reason="the edge hands the map no request yet")]
-    return []
-
-
 CASES = [
-    pytest.param(route, refusal, caller, marks=_awaiting_the_edge(refusal, caller))
+    (route, refusal, caller)
     for route in ROUTES
     for refusal in ["drf-class", "kernel-check"]
     for caller in CALLERS
