@@ -75,17 +75,21 @@ Build the registry once, at import: the view checks its spec against it at
 `as_view()` and hands that one object to every call. A view that does not
 register a seed one of its spec's callables requires refuses the spec at
 `as_view()`, naming the seed, rather than failing every request. A
-`@service_action` spec is not checked at `as_view()`: a seed its viewset does
-not register is its first request's `TypeError`. Each seed a
+`@service_action` or `@selector_action` spec is checked by its viewset's
+`as_view()`, against the viewset's `pool_seeds`, as an `action_specs` entry
+is, so a seed the viewset registers serves and one it does not is refused
+there. A `@service_action` on a viewset overriding `get_service_kwargs` or
+`get_<action>_service_kwargs` is not asked, since the hook may fill what the
+check would refuse. Each seed a
 permission check names is resolved once per call, its value handed from the
 check to the run. The OpenAPI request body and the `OPTIONS` answer read the
 same registry: a read a registered seed fills is no key a caller is asked to
 send, and `OPTIONS` asks a permission check naming a registered seed.
-`@selector_action` checks its spec when the method is decorated, before the
-viewset exists, against the kernel's default seeds, so a callable the kernel's
-seed check reads (the selector, its providers and its affordance conditions)
-cannot name a seed its viewset registers yet. A permission check naming one is
-not read by that check, and is served.
+The decorated action's check is made by this package's viewsets
+(`ServiceViewSet`, `SelectorViewSet` or a class built on their mixins or
+`ActionSerializerResolver`). On DRF's own `GenericViewSet` or `ViewSet`
+nothing asks it, so a seed nobody registers is the action's first request's
+`TypeError`.
 
 ## On the view: hooks
 

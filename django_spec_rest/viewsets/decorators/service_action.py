@@ -86,15 +86,17 @@ def _validate_kernel_spec(spec: KernelServiceSpec, *, label: str, detail: bool) 
     class, and the decorated class does not exist yet, so it is handed one
     carrying the spec alone, named for the action so a refusal names it. A
     class with no ``get_service_kwargs`` reads as one overriding it, so the
-    kernel's ``check_seeds`` is not asked: a hook of the viewset's own may fill
-    the keyword it would refuse, and a mixin base would have it refused anyway
-    (test_service_action's test_a_keyword_the_viewset_s_hook_fills_is_not_refused).
+    kernel's ``check_seeds`` is not asked here: the viewset's seeds and hooks
+    are unknown until it is mounted, and ``as_view()`` on a viewset built on
+    this package's mixins asks it then, against the viewset's ``pool_seeds``
+    (test_service_action's test_a_keyword_the_viewset_s_hook_fills_is_not_refused,
+    test_a_decorated_action_s_seeds).
     A detail action with no target selector is refused, since the viewset's
     ``get_object()`` is never asked for a kernel spec's row
     (test_a_detail_action_with_no_target_is_refused).
     """
     # The registry is the viewset's, unknown here; the probe reads as
-    # hooked, so it is never asked of the spec.
+    # hooked, so the seed check waits for the viewset's ``as_view()``.
     validate_mutation_view_spec(
         type(label, (), {"spec": spec}), has_instance=detail, pool_seeds=DEFAULT_POOL_SEEDS
     )
@@ -131,6 +133,14 @@ def service_action(
     included. The restore runs inside the exception handler the view asks for,
     so the configured ``EXCEPTION_HANDLER`` runs once, and a ``handle_exception``
     override on the viewset still has the last word on the body.
+
+    A detail action with no target selector is refused here. The spec's
+    keywords are checked when its viewset is mounted: ``as_view()`` on a
+    viewset built on this package's mixins asks the kernel's ``check_seeds``
+    against the viewset's ``pool_seeds``, unless a service-kwargs hook of the
+    viewset's may fill what it would refuse. On DRF's own ``GenericViewSet`` or
+    ``ViewSet`` nothing asks it, and a seed nobody registers is the first
+    request's ``TypeError``.
     """
     drf_kwargs: dict[str, Any] = {"detail": detail}
     if methods is not None:
@@ -145,7 +155,7 @@ def service_action(
         fn_label = getattr(fn, "__qualname__", repr(fn))
         # The viewset class is unknown at decoration time, so any
         # ``get_<action>_service_kwargs`` / ``get_service_kwargs`` it may
-        # carry has to be assumed permissive.
+        # carry has to be assumed permissive until its ``as_view()``.
         _validate_kernel_spec(spec, label=f"@service_action {fn_label}", detail=detail)
 
         @functools.wraps(fn)

@@ -118,7 +118,10 @@ def recording_spec(spec: KernelSpec, *, lenient: bool = False) -> KernelSpec:
         and spec.input_data is not None
         and isinstance(spec.validator, SerializerValidator)
     ):
-        names = spec.validator.parameters().names() | seed_named_fields(spec.validator)
+        call_context = edge_call_state().call_context
+        names = spec.validator.parameters(call_context=call_context).names() | seed_named_fields(
+            spec.validator, call_context=call_context
+        )
         if names:
             changes["input_data"] = _recording(spec.input_data, names)
     # One arc to coverage, so each conjunct is named: a spec with no ``kwargs``
@@ -241,7 +244,9 @@ def _refuse_parameters(
         return
     named = sorted(
         name
-        for name in validator.parameters().names().intersection(answer)
+        for name in validator.parameters(call_context=edge_call_state().call_context)
+        .names()
+        .intersection(answer)
         if answer[name] is not UNSET
     )
     if named:

@@ -28,7 +28,7 @@ The tests assert, one class each:
 | `ARefusalOfEachStatusTests` | 400 keyed by field, 403 from a `DRFPermissionCheck`, 404 for a missing row on a read and on a write, 409 from `ServiceConflict`, 422 from any other `ServiceError` |
 | `DRFPermissionCheckTests` | One `DRFPermissionCheck([IsAuthenticated])` admitting an authenticated client over HTTP, and admitting a user and refusing an anonymous principal with the kernel's `NotPermitted` through the kernel's plain `dispatch` |
 | `SharedSerializerContextTests` | A key the input serializer's `validate()` writes, rendered by the output serializer |
-| `ASeedTheViewSetRegistersTests` | The send spec's condition reading `sending_paused`, the seed `InvoiceViewSet.pool_seeds` registers: a 409 carrying its `code` while sending is paused, the invoice sent otherwise |
+| `ASeedTheViewSetRegistersTests` | The send spec's condition reading `sending_paused`, the seed `InvoiceViewSet.pool_seeds` registers: a 409 carrying its `code` while sending is paused, the invoice sent otherwise; the viewset mounted without it refused at `as_view()`, naming the seed |
 
 ## Run it
 

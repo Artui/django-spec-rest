@@ -6,7 +6,6 @@ import functools
 from collections.abc import Callable
 from typing import Any
 
-from django_service_specs.pool.pool_seeds import DEFAULT_POOL_SEEDS
 from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelectorSpec
 from django_service_specs.types.selector_kind import SelectorKind
 from rest_framework.decorators import action
@@ -14,34 +13,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from django_spec_rest.selectors.utils import present_kernel_list, present_kernel_row
-from django_spec_rest.views.spec_validation import validate_selector_view_spec
 from django_spec_rest.views.utils import _JsonNullResponse
-
-
-def _validate_kernel_spec(spec: KernelSelectorSpec, *, label: str) -> None:
-    """Ask a kernel spec what a standalone selector view asks of its own, with no view.
-
-    ``validate_selector_view_spec`` reads the spec and the view's hooks off a
-    class, and the decorated class does not exist yet, so it is handed one
-    carrying the spec alone, named for the action so a refusal names it, and
-    declaring no ``get_selector_kwargs`` to be refused. The kernel's
-    ``check_seeds`` is asked in full: the edge hands a kernel selector no
-    view hook, so nothing of the viewset's can fill a keyword it refuses
-    (test_selector_action's test_a_keyword_nothing_fills_is_refused). It is
-    asked against the kernel's default seeds, the viewset's ``pool_seeds``
-    being unknown here, so a seed the viewset registers is refused too where
-    the selector, a provider or an affordance condition names it (a permission
-    check naming one is not read by ``check_seeds``, and is served)
-    (test_pool_seeds'
-    test_a_selector_action_reading_a_seed_its_viewset_registers_is_served,
-    a strict xfail).
-    """
-    # The viewset and its ``pool_seeds`` do not exist yet, so the spec is
-    # asked against the kernel's default seeds: a selector reading a seed the
-    # viewset registers is refused here though the viewset would serve it.
-    validate_selector_view_spec(
-        type(label, (), {"spec": spec}), expected_kind=spec.kind, pool_seeds=DEFAULT_POOL_SEEDS
-    )
 
 
 def selector_action(
@@ -73,6 +45,14 @@ def selector_action(
     and the view's object permission of the row a RETRIEVE finds. Its
     ``presenter`` renders the row or the page's rows, or the viewset's
     ``get_serializer`` where it declares neither presenter nor affordances.
+
+    The spec's keywords are checked when its viewset is mounted, not here:
+    ``as_view()`` on a viewset built on this package's mixins asks the
+    kernel's ``check_seeds`` against the viewset's ``pool_seeds``, so a seed
+    the viewset registers serves and a keyword nothing fills is refused there
+    (test_a_decorated_action_s_seeds). On DRF's own ``GenericViewSet`` or
+    ``ViewSet`` nothing asks it, and such a keyword is the first request's
+    ``TypeError``.
     """
     is_retrieve = spec.kind is SelectorKind.RETRIEVE
 
@@ -86,9 +66,6 @@ def selector_action(
     drf_kwargs.update(action_kwargs)
 
     def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
-        fn_label = getattr(fn, "__qualname__", repr(fn))
-        _validate_kernel_spec(spec, label=f"@selector_action {fn_label}")
-
         @functools.wraps(fn)
         def handler(self: Any, request: Request, *args: Any, **kwargs: Any) -> Response:
             return _serve_kernel_spec(self, spec)

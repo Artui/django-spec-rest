@@ -27,11 +27,20 @@ spec through `@service_action(spec)` or `@selector_action(spec)`. See
 kind the view does not serve, an update or delete with no target, a
 `filter_set` beside `DjangoFilterBackend`, and what the kernel's seed check
 refuses of the callables' signatures, against the seeds the view registers on
-`pool_seeds`, are each an `ImproperlyConfigured` at import. A `@service_action`
-spec is not seed-checked at `as_view()`: a missing seed is its first request's
+`pool_seeds`, are each an `ImproperlyConfigured` at import. The specs of
+`@service_action` and `@selector_action` are seed-checked by their viewset's
+`as_view()`; on DRF's own `GenericViewSet` or `ViewSet`, with no base of this
+package's, they are not, and a missing seed is the first request's
 `TypeError`. A nested selector declaring `permissions` is refused by the kernel
 when the `ServiceSpec` is built, not at `as_view()`. See
 [Registering a seed](recipes/extra-kwargs.md#registering-a-seed).
+
+A spec handed to `as_view(spec=...)` is checked and served exactly as the same
+class attribute is, and so is every other keyword the checks read
+(`pool_seeds`, `success_status`, `response_finalizer`, `filter_backends`): DRF
+sets each on the instance, which outranks the class. A viewset's specs are its
+`action_specs`, so `as_view(actions, action_specs=...)` is checked the same way;
+a viewset declares no `spec`, and DRF refuses that keyword with a `TypeError`.
 
 ## What the edge reads from a request
 
@@ -171,7 +180,7 @@ project's `EXCEPTION_HANDLER`, answers it as it answers DRF's own:
 | The kernel's `InvalidArguments` (a missing, mistyped or refused argument) | 400 | keyed by argument |
 | `ServiceValidationError` | 400 | its error tree |
 | A bare `DispatchError` | 400 | `{"detail": ...}` |
-| `NotPermitted` (a permission check refusing) | 403; 401 where a DRF permission class raised `NotAuthenticated` and DRF answers that with 401 | `{"detail": ...}` |
+| `NotPermitted` (a permission check refusing) | 403 with the check's message. An adapted DRF permission class refusing a caller the request's authenticators did not recognise is DRF's `NotAuthenticated` instead, as a DRF view answers it: 401 with the first authenticator's `WWW-Authenticate`, or 403 where it sends none. A kernel `PermissionCheck`'s refusal is still the kernel's 403 for now | `{"detail": ...}` |
 | `PrincipalUnavailable` (a deactivated user) | 403 | `{"detail": ...}` |
 | `ServiceNotFound`, or a target selector's miss | 404 | `{"detail": ...}` |
 | `ActionUnavailable` | 409 | `{"detail": ..., "code": ...}` |

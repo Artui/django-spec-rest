@@ -13,7 +13,7 @@ from rest_framework.response import Response
 from django_spec_rest.views.mutation.mutation_flow_mixin import MutationFlowMixin
 from django_spec_rest.views.mutation.utils import resolve_mutation_instance
 from django_spec_rest.views.spec_validation import validate_mutation_view_spec
-from django_spec_rest.views.utils import view_pool_seeds
+from django_spec_rest.views.utils import mounted_view, view_pool_seeds
 
 
 class ServiceDeleteView(MutationFlowMixin, GenericAPIView):
@@ -34,9 +34,9 @@ class ServiceDeleteView(MutationFlowMixin, GenericAPIView):
 
     @classmethod
     def as_view(cls, **initkwargs: Any) -> Any:
-        validate_mutation_view_spec(
-            cls, has_instance=True, pool_seeds=view_pool_seeds(cls, initkwargs)
-        )
+        # Checked as the instances will be, keywords included (``mounted_view``).
+        mounted = mounted_view(cls, initkwargs)
+        validate_mutation_view_spec(mounted, has_instance=True, pool_seeds=view_pool_seeds(mounted))
         return super().as_view(**initkwargs)
 
     def delete(self, request: Request, *args: Any, **kwargs: Any) -> Response:

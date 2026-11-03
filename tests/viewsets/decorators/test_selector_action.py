@@ -27,7 +27,7 @@ from rest_framework.routers import SimpleRouter
 from rest_framework.test import APIRequestFactory
 from rest_framework.viewsets import GenericViewSet, ViewSet
 
-from django_spec_rest import selector_action
+from django_spec_rest import SelectorViewSet, selector_action
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from tests.testapp.models import Author
 from tests.testapp.serializers import AuthorSerializer
@@ -156,12 +156,19 @@ class TestPermissions:
         assert "permission_classes" not in _viewset(_rows()).act.kwargs
 
 
-class TestAtDecoration:
+class TestAtMount:
     def test_a_keyword_nothing_fills_is_refused(self) -> None:
         """The edge hands a kernel selector no view hook, so a keyword the
-        spec's own declarations leave unfilled can be filled by nothing."""
-        with pytest.raises(ImproperlyConfigured, match="owner"):
-            _viewset(_rows(selector=lambda *, owner: None))
+        spec's own declarations and the viewset's seeds leave unfilled can be
+        filled by nothing. Asked at ``as_view()``, once the viewset's
+        ``pool_seeds`` exist, so the class is built outside the refusal."""
+        viewset = _viewset(_rows(selector=lambda *, owner: None), base=SelectorViewSet)
+        with pytest.raises(ImproperlyConfigured, match=r"_ViewSet\.act: .*\['owner'\]"):
+            viewset.as_view({"get": "act"})
+
+    def test_on_drf_s_own_viewset_it_is_not_asked(self) -> None:
+        """DRF's ``as_view()`` asks nothing of the spec: the documented limit."""
+        assert callable(_viewset(_rows(selector=lambda *, owner: None)).as_view({"get": "act"}))
 
     def test_a_well_declared_spec_is_accepted(self) -> None:
         assert callable(_viewset(_rows()).as_view({"get": "act"}))

@@ -41,6 +41,13 @@ A kernel dispatch a service makes for another principal runs under that
 principal's offline request and view as well: neither the outer request nor the
 view reaches its validation or the description of its serializer.
 
+That holds when the service dispatches the view's own spec as well: the view's
+serializer is described once for the request's own call, under its request and
+view, and a dispatch the service makes of the same spec is described afresh,
+the kernel telling the two apart by the `call_context` each call carries. A
+service that hands its own `call_context` on to such a dispatch makes it the
+request's call again, so pass it none, or a new dict.
+
 ## DRF's seats without a request
 
 - **`DRFPermissionCheck`** asks its classes against an offline request and view

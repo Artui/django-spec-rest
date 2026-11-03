@@ -6,7 +6,9 @@ Validator and the response off its presenter, never off the view's missing
 ``serializer_class``.
 
 - **A ``SerializerValidator``** is documented by its serializer, under the
-  component name drf-spectacular gives that class; **any other Validator** by
+  component name drf-spectacular gives that class, or, where ``input_data``
+  reaches a field, by a subclass less what it fills, under a name of its own;
+  **any other Validator** by
   the kernel's ``parameters_schema`` over the parameters the body carries,
   under the edge's unknown-argument policy.
 - **A ``SerializerPresenter``** is documented by its serializer; **any other
@@ -38,8 +40,10 @@ from django_service_specs import (
     UnsetType,
     Validator,
 )
+from drf_spectacular.drainage import reset_generator_stats
 from drf_spectacular.generators import SchemaGenerator
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.settings import spectacular_settings
+from drf_spectacular.utils import extend_schema, extend_schema_serializer
 from rest_framework import serializers
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
@@ -74,6 +78,27 @@ class NameInSerializer(serializers.Serializer):
 
 class ReasonSerializer(serializers.Serializer):
     reason = serializers.CharField()
+
+
+class TaskInSerializer(serializers.Serializer):
+    name = serializers.CharField(max_length=20)
+    owner = serializers.CharField()
+    note = serializers.CharField()
+
+
+@extend_schema_serializer(component_name="Ticket")
+class TicketInSerializer(TaskInSerializer): ...
+
+
+@dataclass
+class TaskRow:
+    name: str
+    owner: str
+    note: str
+
+
+def _untyped_fill() -> dict[str, Any]:
+    return {"owner": "me"}
 
 
 @dataclass
@@ -177,6 +202,16 @@ def _update(**fields: Any) -> ServiceSpec:
     return ServiceSpec(**{**defaults, **fields})
 
 
+def _task(**fields: Any) -> ServiceSpec:
+    """A spec over ``TaskInSerializer`` whose ``input_data`` fills ``owner`` and may fill ``note``."""
+    return _create(
+        **{"validator": SerializerValidator(TaskInSerializer), "input_data": _row_fill, **fields}
+    )
+
+
+_ON_A_ROW: dict[str, Any] = {"service": _rename, "instance_selector_spec": _target()}
+
+
 def _destroy(**fields: Any) -> ServiceSpec:
     defaults: dict[str, Any] = {
         "service": _delete,
@@ -242,6 +277,17 @@ class _AnnotatedUpdateView(ServiceUpdateView):
     @extend_schema(request=ReasonSerializer)
     def patch(self, request: Any, *args: Any, **kwargs: Any) -> Any:
         return super().patch(request, *args, **kwargs)
+
+
+class _AnnotatedTaskView(ServiceCreateView):
+    """The author's ``TaskInSerializer`` itself, documented beside a spec over it reaching nothing."""
+
+    queryset = Author.objects.all()
+    spec = _create()
+
+    @extend_schema(request=TaskInSerializer)
+    def post(self, request: Any, *args: Any, **kwargs: Any) -> Any:
+        return super().post(request, *args, **kwargs)
 
 
 class _AuthorViewSet(ServiceViewSet):
@@ -365,6 +411,34 @@ urlpatterns = [
         _view(
             ServiceCreateView,
             _create(many=True, validator=DataclassValidator(_OwnedRow), input_data=_row_fill),
+        ).as_view(),
+    ),
+    path("task/", _view(ServiceCreateView, _task()).as_view()),
+    path("task-plain/", _view(ServiceCreateView, _task(input_data=None)).as_view()),
+    path("task-annotated/", _AnnotatedTaskView.as_view()),
+    path("task/<int:pk>/", _view(ServiceUpdateView, _task(**_ON_A_ROW)).as_view()),
+    path(
+        "task-partial/<int:pk>/",
+        _view(ServiceUpdateView, _task(partial=True, **_ON_A_ROW)).as_view(),
+    ),
+    path("task-many/", _view(ServiceCreateView, _task(many=True)).as_view()),
+    path("task-owned/", _view(ServiceCreateView, _task(input_data=_owner)).as_view()),
+    path("task-may-own/", _view(ServiceCreateView, _task(input_data=_may_own)).as_view()),
+    path("task-untyped/", _view(ServiceCreateView, _task(input_data=_untyped_fill)).as_view()),
+    path(
+        "task-row/",
+        _view(ServiceCreateView, _task(validator=SerializerValidator(TaskRow))).as_view(),
+    ),
+    path(
+        "task-row-plain/",
+        _view(
+            ServiceCreateView, _task(validator=SerializerValidator(TaskRow), input_data=None)
+        ).as_view(),
+    ),
+    path(
+        "ticket/",
+        _view(
+            ServiceCreateView, _task(validator=SerializerValidator(TicketInSerializer))
         ).as_view(),
     ),
     path("update/<int:pk>/", _view(ServiceUpdateView, _update()).as_view()),
@@ -599,6 +673,119 @@ class TestTheRequestBody:
         assert "requestBody" not in _op(schema, "/create-no-input/", "post")
 
 
+def _asked(schema: dict[str, Any], body: dict[str, Any]) -> tuple[set[str], set[str]]:
+    """The fields a documented body offers, and those it requires."""
+    component = _component(schema, body["$ref"])
+    return set(component["properties"]), set(component.get("required", ()))
+
+
+def _options_asked(route: str, method: str, **captures: Any) -> tuple[set[str], set[str]]:
+    """The fields OPTIONS describes ``method`` of ``route`` as taking, and those it requires."""
+    resolved = next(pattern for pattern in urlpatterns if str(pattern.pattern) == route)
+    response = resolved.callback(APIRequestFactory().options("/"), **captures)
+    described = response.data["actions"][method]
+    return set(described["properties"]), set(described.get("required", ()))
+
+
+class TestASerializerBodyInputDataReaches:
+    """A ``SerializerValidator`` body less what ``input_data`` fills, under a name of its own."""
+
+    def test_the_body_agrees_with_options(self, schema: dict[str, Any]) -> None:
+        # ``owner`` is always ``input_data``'s, so it is not offered, and
+        # ``note`` it may decline, so it is offered and not required: what
+        # OPTIONS already says of the same route.
+        assert _asked(schema, _body(schema, "/task/", "post")) == _options_asked("task/", "POST")
+        assert _asked(schema, _body(schema, "/task/{id}/", "put")) == _options_asked(
+            "task/<int:pk>/", "PUT", pk=1
+        )
+        assert _asked(schema, _body(schema, "/task/", "post")) == ({"name", "note"}, {"name"})
+
+    def test_it_is_a_component_of_its_own(self, schema: dict[str, Any]) -> None:
+        assert _body(schema, "/task/", "post") == {
+            "$ref": "#/components/schemas/TaskInLessOwner__OptionalNote"
+        }
+
+    def test_a_spec_reaching_nothing_keeps_the_author_s_component(
+        self, schema: dict[str, Any]
+    ) -> None:
+        body = _body(schema, "/task-plain/", "post")
+        assert body == {"$ref": "#/components/schemas/TaskIn"}
+        assert _asked(schema, body) == ({"name", "owner", "note"}, {"name", "owner", "note"})
+
+    def test_a_spec_reaching_nothing_is_documented_by_the_author_s_class(
+        self, schema: dict[str, Any]
+    ) -> None:
+        # ``task-annotated/`` documents ``TaskInSerializer`` itself under
+        # ``TaskIn``; a second class under that name would be a collision
+        # (test_no_two_components_share_a_name).
+        assert _body(schema, "/task-annotated/", "post") == {"$ref": "#/components/schemas/TaskIn"}
+
+    def test_one_filled_field_and_one_relaxed_field_are_named_apart(
+        self, schema: dict[str, Any]
+    ) -> None:
+        owned = _body(schema, "/task-owned/", "post")
+        may_own = _body(schema, "/task-may-own/", "post")
+        assert owned == {"$ref": "#/components/schemas/TaskInLessOwner"}
+        assert may_own == {"$ref": "#/components/schemas/TaskInOptionalOwner"}
+        assert _asked(schema, owned) == ({"name", "note"}, {"name", "note"})
+        assert _asked(schema, may_own) == ({"name", "owner", "note"}, {"name", "note"})
+
+    def test_a_patch_and_a_partial_spec_are_its_patched_form(self, schema: dict[str, Any]) -> None:
+        ref = {"$ref": "#/components/schemas/PatchedTaskInLessOwner__OptionalNote"}
+        assert _body(schema, "/task/{id}/", "patch") == ref
+        assert _body(schema, "/task-partial/{id}/", "put") == ref
+        assert _asked(schema, ref) == ({"name", "note"}, set())
+
+    def test_a_many_spec_takes_an_array_of_its_rows(self, schema: dict[str, Any]) -> None:
+        assert _body(schema, "/task-many/", "post") == {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/TaskInLessOwner__OptionalNote"},
+        }
+
+    def test_an_untyped_input_data_requires_no_field(self, schema: dict[str, Any]) -> None:
+        # It may fill any field, so dispatch demands none of the caller and
+        # OPTIONS requires none: every field is offered, none required.
+        body = _body(schema, "/task-untyped/", "post")
+        assert body == {"$ref": "#/components/schemas/TaskInOptionalName_Note_Owner"}
+        assert _asked(schema, body) == ({"name", "owner", "note"}, set())
+        assert _asked(schema, body) == _options_asked("task-untyped/", "POST")
+
+    @pytest.mark.django_db
+    def test_the_serializer_still_refuses_a_field_an_untyped_input_data_left_out(self) -> None:
+        # Required of no caller by the schema, and still validated: the
+        # provider fills ``owner`` only, so the serializer refuses the missing
+        # ``name``.
+        view = next(p for p in urlpatterns if str(p.pattern) == "task-untyped/").callback
+        response = view(APIRequestFactory().post("/", {"note": "n"}, format="json"))
+        assert response.status_code == 400
+        assert set(response.data) == {"name"}
+
+    def test_a_dataclass_gets_a_component_of_its_own(self, schema: dict[str, Any]) -> None:
+        # drf-spectacular identifies a dataclass's component by the dataclass,
+        # so under the base's name it would reuse that component silently.
+        derived = _body(schema, "/task-row/", "post")
+        base = _body(schema, "/task-row-plain/", "post")
+        assert derived == {"$ref": "#/components/schemas/TaskRowLessOwner__OptionalNote"}
+        assert base == {"$ref": "#/components/schemas/TaskRow"}
+        assert _asked(schema, derived) == ({"name", "note"}, {"name"})
+        assert _asked(schema, base) == ({"name", "owner", "note"}, {"name", "owner", "note"})
+
+    def test_a_base_s_component_name_is_the_stem_and_not_the_name(
+        self, schema: dict[str, Any]
+    ) -> None:
+        # ``component_name`` is inherited, and outranks ``Meta.ref_name``.
+        assert _body(schema, "/ticket/", "post") == {
+            "$ref": "#/components/schemas/TicketLessOwner__OptionalNote"
+        }
+
+    def test_no_two_components_share_a_name(self, capsys: pytest.CaptureFixture[str]) -> None:
+        # A plain serializer under its base's name warns, and the first
+        # component documented wins.
+        reset_generator_stats()
+        SchemaGenerator(patterns=urlpatterns).get_schema(request=None, public=True)
+        assert "identical names" not in capsys.readouterr().err
+
+
 class TestTheResponse:
     def test_a_create_answers_201_with_its_presenter_s_serializer(
         self, schema: dict[str, Any]
@@ -606,26 +793,26 @@ class TestTheResponse:
         assert _response(schema, "/create/", "post", "201") == {
             "$ref": "#/components/schemas/Author"
         }
-        assert set(_op(schema, "/create/", "post")["responses"]) == {"201", "422"}
+        assert set(_op(schema, "/create/", "post")["responses"]) == {"201", "400", "422"}
 
     def test_the_view_s_status_is_documented(self, schema: dict[str, Any]) -> None:
-        assert set(_op(schema, "/create-202/", "post")["responses"]) == {"202", "422"}
+        assert set(_op(schema, "/create-202/", "post")["responses"]) == {"202", "400", "422"}
 
     def test_a_callable_status_documents_the_action_s_default(self, schema: dict[str, Any]) -> None:
-        assert set(_op(schema, "/create-callable/", "post")["responses"]) == {"201", "422"}
+        assert set(_op(schema, "/create-callable/", "post")["responses"]) == {"201", "400", "422"}
 
     def test_a_spec_that_may_present_nothing_documents_its_204(
         self, schema: dict[str, Any]
     ) -> None:
         responses = _op(schema, "/create-may-be-none/", "post")["responses"]
-        assert set(responses) == {"201", "204", "422"}
+        assert set(responses) == {"201", "204", "400", "422"}
         assert "content" not in responses["204"]
 
     def test_no_presenter_documents_no_content_at_the_status(self, schema: dict[str, Any]) -> None:
         # The spec may present nothing, and the no-content response is already
         # the one documented, at its status: no 204 beside it.
         responses = _op(schema, "/create-bare/", "post")["responses"]
-        assert set(responses) == {"201", "422"}
+        assert set(responses) == {"201", "400", "422"}
         assert "content" not in responses["201"]
 
     def test_another_presenter_is_its_output_schema(self, schema: dict[str, Any]) -> None:
@@ -652,7 +839,7 @@ class TestTheResponse:
         # The output selector's presenter renders its rows, and a LIST re-read
         # never presents nothing, so no 204 is documented beside them.
         responses = _op(schema, "/create-re-read-list/", "post")["responses"]
-        assert set(responses) == {"201", "422"}
+        assert set(responses) == {"201", "400", "422"}
         assert _response(schema, "/create-re-read-list/", "post", "201") == {
             "type": "array",
             "items": {"$ref": "#/components/schemas/Author"},
@@ -664,16 +851,20 @@ class TestTheResponse:
         }
 
     def test_a_destroy_presenting_nothing_answers_204(self, schema: dict[str, Any]) -> None:
-        assert set(_op(schema, "/delete/{id}/", "delete")["responses"]) == {"204"}
+        assert set(_op(schema, "/delete/{id}/", "delete")["responses"]) == {"204", "422"}
 
-    def test_a_service_error_is_documented_where_there_is_a_validator(
+    def test_a_service_error_is_documented_with_or_without_a_validator(
         self, schema: dict[str, Any]
     ) -> None:
-        # The ``ServiceError`` component carries under its name.
+        # The ``ServiceError`` component carries under its name; what the 422
+        # is, and the 400 a Validator's refusal answers, are held end to end by
+        # test_validator_refusal_schema.
         assert _response(schema, "/create/", "post", "422") == {
             "$ref": "#/components/schemas/ServiceError"
         }
-        assert "422" not in _op(schema, "/create-no-input/", "post")["responses"]
+        responses = _op(schema, "/create-no-input/", "post")["responses"]
+        assert "422" in responses
+        assert "400" not in responses
 
 
 class TestTheReadSide:
@@ -750,7 +941,7 @@ class TestViewsets:
         assert _body(schema, "/authors/{id}/", "patch") == {
             "$ref": "#/components/schemas/PatchedNameIn"
         }
-        assert set(_op(schema, "/authors/{id}/", "delete")["responses"]) == {"204"}
+        assert set(_op(schema, "/authors/{id}/", "delete")["responses"]) == {"204", "422"}
         assert _response(schema, "/authors/", "get", "200")["type"] == "array"
         assert _response(schema, "/authors/{id}/", "get", "200") == {
             "$ref": "#/components/schemas/Author"
@@ -791,3 +982,15 @@ def test_an_operation_with_no_service_spec_documents_drf_s_own_request_body() ->
     generated = SchemaGenerator(patterns=router.urls).get_schema(request=None, public=True)
 
     assert _body(generated, "/plain/plain/", "post") == {"$ref": "#/components/schemas/NameIn"}
+
+
+def test_a_split_request_component_is_named_from_the_author_s_stem(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # drf-spectacular appends ``Request`` to every request component, the
+    # derived one included, so the stem is read without it.
+    monkeypatch.setattr(spectacular_settings, "COMPONENT_SPLIT_REQUEST", True)
+    schema = SchemaGenerator(patterns=urlpatterns).get_schema(request=None, public=True)
+    assert _body(schema, "/task/", "post") == {
+        "$ref": "#/components/schemas/TaskInLessOwner__OptionalNoteRequest"
+    }

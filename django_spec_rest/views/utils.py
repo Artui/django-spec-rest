@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Callable, Mapping
-from typing import Any
+from typing import Any, TypeVar, cast
 
 from django_service_specs.pool.pool_seeds import DEFAULT_POOL_SEEDS, PoolSeeds
 from django_service_specs.pool.resolve_callable_kwargs import (
@@ -17,6 +17,8 @@ from rest_framework.response import Response
 
 from django_spec_rest.dispatch.utils import fill_call_context
 from django_spec_rest.types.view_hooks import ViewHooks
+
+_ViewT = TypeVar("_ViewT")
 
 
 def resolve_extra_kwargs(
@@ -103,20 +105,18 @@ def resolve_input_extras(
     return collected
 
 
-def view_pool_seeds(view: Any, initkwargs: Mapping[str, Any] | None = None) -> PoolSeeds:
+def view_pool_seeds(view: Any) -> PoolSeeds:
     """The seeds ``view`` resolves its spec's callables with: its ``pool_seeds``.
 
     ``view`` is a view or its class. Asked by ``as_view()`` before any
-    instance exists, ``initkwargs`` is what it was handed: a ``pool_seeds``
-    there is the one DRF sets on every instance it builds, so it outranks the
+    instance exists, it is the ``mounted_view``, so a ``pool_seeds`` handed as
+    a keyword, the one DRF sets on every instance it builds, outranks the
     class's (test_pool_seeds' ``as_view keyword`` case of
     test_is_served_with_the_condition_s_answer_where_the_view_registers_it).
     The kernel's ``DEFAULT_POOL_SEEDS`` for a view with no such attribute: a
     DRF viewset of the project's own serving ``@service_action`` or
     ``@selector_action`` (test_service_action's test_acts_on_its_own_target_on_any_viewset).
     """
-    if initkwargs is not None and "pool_seeds" in initkwargs:
-        return initkwargs["pool_seeds"]
     return getattr(view, "pool_seeds", DEFAULT_POOL_SEEDS)
 
 
@@ -259,12 +259,31 @@ def layer_serializer_context(
 
 
 def get_class_attr(view: Any, name: str) -> Any:
-    """Return the named class attribute without instance binding.
+    """Return the named attribute as the view was configured, without instance binding.
 
     A function stored as a plain class attribute (``service = my_fn``) would
-    otherwise be wrapped in a bound method when read via ``self``.
+    otherwise be wrapped in a bound method when read via ``self``. An
+    ``as_view()`` keyword is set on the instance, where nothing binds it, and
+    outranks the class's, as ``mounted_view`` checks it
+    (test_a_spec_handed_to_as_view's TestAKeywordSpecServed).
     """
-    return getattr(type(view), name, None)
+    configured = vars(view)
+    return configured[name] if name in configured else getattr(type(view), name, None)
+
+
+def mounted_view(view_cls: type[_ViewT], initkwargs: Mapping[str, Any]) -> type[_ViewT]:
+    """``view_cls`` as every instance ``as_view(**initkwargs)`` builds answers it.
+
+    DRF sets each keyword on the instance, and refuses one the class does not
+    declare, so a subclass carrying them as class attributes is the view the
+    instance is: ``as_view()`` checks that, so a spec, a ``pool_seeds``, a
+    ``success_status``, a ``response_finalizer`` or a ``filter_backends``
+    handed as a keyword is asked what the same class attribute is
+    (test_a_spec_handed_to_as_view's TestARefusalAtMount,
+    test_action_specs_handed_to_as_view). Named after ``view_cls``, so a
+    refusal names the class the author wrote.
+    """
+    return cast("type[_ViewT]", type(view_cls.__name__, (view_cls,), dict(initkwargs)))
 
 
 def resolve_callable_kwargs(

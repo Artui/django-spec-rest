@@ -11,6 +11,85 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-11-03
+
+### Security
+
+- **A spec handed to `as_view(spec=...)` meets every check the same class
+  attribute meets at `as_view()`.** It was never checked, and a mutation view
+  still dispatched it. So do the other keywords those checks read:
+  `success_status`, `response_finalizer`, `filter_backends`, and a viewset's
+  `action_specs`. A selector view handed `as_view(spec=...)` no
+  longer falls through to DRF's own `queryset`, which served every row without
+  asking the spec's `permissions`.
+
+### Changed
+
+- **An adapted DRF permission class refusing a caller nobody authenticated
+  asks them to sign in, as a DRF view asks.** When a DRF permission class in
+  `DRFPermissionCheck` returns `False`, a caller the request's authenticators
+  did not recognise gets DRF's `NotAuthenticated`: 401 with the first
+  authenticator's `WWW-Authenticate` when it sends one, otherwise 403
+  "Authentication credentials were not provided.". A signed-in caller, and any
+  caller of a view with no authenticator, still gets 403 with the class's own
+  `message`. So `DRFPermissionCheck` can now raise `DRFNotAuthenticated`, which
+  is not a `PermissionDenied`: code catching `PermissionDenied` around such a
+  dispatch should catch the kernel's `NotPermitted`, their common base (see
+  `docs/moving-from-drfs.md`). A kernel `PermissionCheck`'s refusal is still the
+  kernel's 403 with its message: the kernel raises the same `NotPermitted` for
+  a permission check's denial, a service's own and a refused inner dispatch's,
+  so asking that caller to sign in waits for the kernel to mark the denial.
+  Off HTTP the refusal is still the kernel's `NotPermitted`.
+- **The OpenAPI request body of a `SerializerValidator` spec agrees with
+  OPTIONS.** Where the spec's `input_data` fills or may fill one of the
+  serializer's fields, the body no longer lists the fields `input_data` always
+  fills and no longer requires the ones it may fill. It is documented under a
+  component of its own named from the serializer's, such as `TaskLessOwner` or
+  `TaskLessOwner__OptionalNote` (the rule is in the OpenAPI page), so the class
+  name a generated client uses changes for such specs. A spec whose
+  `input_data` reaches none of the serializer's fields keeps its component.
+- **A decorated action's spec is seed-checked when its viewset is mounted.**
+  On a viewset built on this package's bases (`ServiceViewSet`,
+  `SelectorViewSet`, or a class on their mixins or `ActionSerializerResolver`),
+  `as_view()` runs the kernel's seed check on every `@service_action` and
+  `@selector_action` spec against the viewset's `pool_seeds`. A spec needing a
+  keyword nothing fills, such as a seed the viewset does not register, is
+  refused there with `ImproperlyConfigured` naming the action and the seed,
+  where a `@service_action` used to mount and fail its first request with
+  `TypeError`; so a mount that passed may now be refused. A `@selector_action`
+  reading a seed its viewset registers is now served: it is no longer checked
+  against the kernel's default seeds when the method is decorated. A
+  `@service_action` on a viewset overriding `get_service_kwargs` or
+  `get_<action>_service_kwargs` is not asked, as a standalone view with one is
+  not. On DRF's own `GenericViewSet` or `ViewSet` nothing runs the check, and a
+  missing seed is the action's first request's `TypeError`.
+
+### Added
+
+- **`permission_denied`** (`django_spec_rest.service_specs.permission_denied`):
+  the refusal DRF's `APIView.permission_denied` would raise for a request, as
+  the kernel's denial. `DRFPermissionCheck` raises it for an adapted DRF class.
+
+### Fixed
+
+- **A kernel dispatch a service makes of the view's own spec for another
+  principal is described afresh, not as the request's own call.** A
+  `SerializerValidator` declares `parameters(call_context=)`: the request's
+  call builds its serializer once under the view, and an inner dispatch gets
+  its own description. A service handing its own `call_context` to the inner
+  dispatch is still described as the request's call.
+- **`SelectorListView` and `SelectorRetrieveView` serve a spec handed to
+  `as_view(spec=...)`**, and a mutation view answers with an `as_view()`
+  keyword's `success_status` and `response_finalizer`.
+- **A Validator's refusal is documented as the 400 the edge sends, not a
+  422.** Every kind of Validator (`SerializerValidator`, `DataclassValidator`,
+  another raising `InvalidArguments`) answers DRF's field errors under a 400,
+  which the generated schema never mentioned. A spec with a Validator now
+  documents that 400, with the errors in a `ValidationErrors` component (or
+  `{"detail": ...}` for a body that is no object). The 422 is the status of a
+  plain `ServiceError` raised by the service, a precondition or a provider, so
+  it is now documented on every service spec, with or without a Validator.
+
 ## [0.2.1] — 2026-11-02
 
 ### Fixed
@@ -171,7 +250,8 @@ lists each with what a project rewrites.
 - **The package is no longer a Django app.** It has no models, migrations,
   templates, static files or URLs, so it needs no `INSTALLED_APPS` entry.
 
-[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Artui/django-spec-rest/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/Artui/django-spec-rest/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Artui/django-spec-rest/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Artui/django-spec-rest/compare/v0.0.0...v0.1.0

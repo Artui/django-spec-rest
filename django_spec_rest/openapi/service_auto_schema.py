@@ -8,7 +8,7 @@ Importing this module pulls in ``drf-spectacular``, so the package's top-level
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from typing import Any, cast
 
 from django_service_specs import (
@@ -17,13 +17,19 @@ from django_service_specs import (
     filter_set_parameters,
     output_schema,
     parameters_schema,
+    provider_keys,
     spec_caller_input_schema,
 )
+from django_service_specs.parameters.parameters import Parameters
 from django_service_specs.schema.can_present_nothing import can_present_nothing
 from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelectorSpec
 from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
 from drf_spectacular.openapi import AutoSchema
-from drf_spectacular.plumbing import build_array_type, build_parameter_type
+from drf_spectacular.plumbing import (
+    ResolvedComponent,
+    build_array_type,
+    build_parameter_type,
+)
 from drf_spectacular.utils import (
     OpenApiParameter,
     OpenApiRequest,
@@ -32,6 +38,7 @@ from drf_spectacular.utils import (
 from rest_framework.serializers import Serializer
 
 from django_spec_rest.dispatch.kernel_edge import UNKNOWN_ARGUMENTS
+from django_spec_rest.openapi._caller_serializer_class import caller_serializer_class
 from django_spec_rest.openapi._resolve import (
     resolve_selector_spec,
     resolve_service_spec,
@@ -56,12 +63,15 @@ class ServiceAutoSchema(AutoSchema):
     ``Selector*View`` classes, the ``ServiceViewSet`` and ``SelectorViewSet``
     action mixins, and ``@service_action`` / ``@selector_action``:
 
-    - **The request body** is a ``SerializerValidator``'s serializer, so its
-      component is drf-spectacular's name for the author's class, built partial
-      exactly where the route dispatches the spec's partial variant
+    - **The request body** is a ``SerializerValidator``'s serializer, built
+      partial exactly where the route dispatches the spec's partial variant
       (``kernel_spec_variant``): a ``PATCH``, unless the Validator cannot take a
-      partial call, and a spec declaring ``partial``. A ``many`` spec takes a
-      list of those rows. Any other Validator is the kernel's
+      partial call, and a spec declaring ``partial``. Its component is
+      drf-spectacular's name for the author's class, except where the spec's
+      ``input_data`` reaches a field: then a subclass less the fields it fills,
+      with those it may fill not required, under a name of its own
+      (``caller_serializer_class``). A ``many`` spec takes a list of those
+      rows. Any other Validator is the kernel's
       ``spec_caller_input_schema`` less what the body does not carry
       (``_parameters_body``): what the server fills is not asked for, and a
       key a provider may fill is not required.
@@ -74,7 +84,13 @@ class ServiceAutoSchema(AutoSchema):
       since a kernel spec declares none, over the action's default; a body is
       documented as the ``200`` it is served as where that is ``204``, and the
       ``204`` beside it where ``can_present_nothing``.
-    - **A** ``422`` is documented wherever the spec declares a Validator.
+    - **A** ``400`` is documented wherever the spec declares a Validator: its
+      refusal is DRF's field errors, whichever seat refused, so the body is the
+      ``ValidationErrors`` component (a ``detail`` sentence, as a body that is
+      no object is refused, is the ``ServiceError`` component beside it).
+    - **A** ``422`` is documented on every service spec, since the service, a
+      precondition or a provider can raise a plain ``ServiceError``, which the
+      edge answers 422 with or without a Validator.
     - **A FilterSet's query parameters** are the kernel's
       ``filter_set_parameters``, on a list operation only.
 
@@ -99,13 +115,37 @@ class ServiceAutoSchema(AutoSchema):
         partial as the variant is and over a list for a ``many`` spec
         (test_a_patch_is_documented_partial,
         test_a_patch_a_dataclass_validates_whole_is_documented_whole,
-        test_a_many_spec_takes_an_array_of_rows). Any other Validator, or
+        test_a_many_spec_takes_an_array_of_rows). Where the variant's
+        ``input_data`` reaches one of its fields, it is the subclass
+        ``caller_serializer_class`` derives, less what ``input_data`` fills
+        and with what it may fill not required, as OPTIONS describes the
+        route (test_the_body_agrees_with_options); the same reading of each
+        row on a ``many`` spec, since ``input_data`` is merged over every
+        row. Named from the component drf-spectacular gives the author's
+        class, read without the ``Patched`` and ``Request`` it adds itself.
+        A spec reaching nothing keeps the author's component
+        (test_a_spec_reaching_nothing_keeps_the_author_s_component). Any other Validator, or
         none, is ``_parameters_body`` (test_another_validator_is_its_parameters_schema).
         """
         variant = _partial_variant(spec) if self.method == "PATCH" else spec
         validator = variant.validator
         if isinstance(validator, SerializerValidator):
-            serializer = renderable_serializer_class(validator.serializer)
+            # A ``SerializerValidator`` takes a ``Serializer`` subclass or a
+            # dataclass, which renders through a ``DataclassSerializer``.
+            serializer = cast(
+                "type[Serializer[Any]]", renderable_serializer_class(validator.serializer)
+            )
+            owned, reached = _input_data_reach(variant.input_data, validator.parameters())
+            # Only where ``input_data`` reaches a field: a second class under
+            # the author's name would collide with the author's own
+            # (test_a_spec_reaching_nothing_is_documented_by_the_author_s_class).
+            if reached:
+                serializer = caller_serializer_class(
+                    serializer,
+                    self._get_serializer_name(serializer(), "response"),
+                    owned=owned,
+                    relaxed=reached - owned,
+                )
             return serializer(many=variant.many, partial=variant.partial)
         return self._parameters_body(variant)
 
@@ -232,11 +272,35 @@ class ServiceAutoSchema(AutoSchema):
         )
         if body is not None and can_present_nothing(spec):
             responses[204] = OpenApiResponse(description="")
-        # A Validator's refusal is a 422
-        # (test_a_service_error_is_documented_where_there_is_a_validator).
+        # A Validator's refusal is a 400 of DRF's field errors, whichever kind
+        # of Validator refused
+        # (test_the_documented_400_describes_the_body_the_edge_sends); a plain
+        # ``ServiceError`` from the service, a precondition or a provider is a
+        # 422 whether or not the spec has a Validator
+        # (test_it_is_documented_on_a_spec_with_a_service_whether_or_not_it_has_a_validator,
+        # test_a_spec_with_no_validator_documents_no_400).
         if spec.validator is not None:
-            responses[422] = ServiceErrorSerializer
+            responses[400] = self._validation_errors_response()
+        responses[422] = ServiceErrorSerializer
         return responses
+
+    def _validation_errors_response(self) -> OpenApiResponse:
+        """The ``400`` a Validator's refusal answers: the ``ValidationErrors`` tree, or a ``detail``.
+
+        ``ValidationErrors`` is registered once as a component of its own: a
+        serializer cannot describe it, being a tree of any depth. A ``detail``
+        sentence is the ``ServiceError`` shape, which the edge sends for a body
+        that is no object (test_a_body_that_is_no_object_is_a_detail_the_400_also_describes).
+        """
+        component = ResolvedComponent(
+            name=_VALIDATION_ERRORS,
+            type=ResolvedComponent.SCHEMA,
+            object=_ValidationErrors,
+            schema=_VALIDATION_ERRORS_SCHEMA,
+        )
+        self.registry.register_on_missing(component)
+        detail = self.resolve_serializer(ServiceErrorSerializer, "response")
+        return OpenApiResponse(response={"oneOf": [component.ref, detail.ref]})
 
     def _kernel_rows(self, spec: KernelSelectorSpec, presenter: Presenter) -> Any:
         """A kernel selector spec's body: one row, or every row for a ``LIST``.
@@ -285,6 +349,27 @@ def _partial_variant(spec: KernelServiceSpec) -> KernelServiceSpec:
     return cast("KernelServiceSpec", kernel_spec_variant(spec, partial=True))
 
 
+def _input_data_reach(
+    provider: Callable[..., Any] | None, parameters: Parameters
+) -> tuple[frozenset[str], frozenset[str]]:
+    """The fields in ``parameters`` that ``provider`` is annotated to fill, and those it fills or may fill.
+
+    The kernel's own reading, ``reach`` in its ``dispatch/utils.py``, by which
+    ``spec_caller_input_schema`` withholds and relaxes a Validator's fields;
+    that module exports nothing, so the few lines are repeated here over the
+    public ``provider_keys``. A typed provider reaches its ``filled`` and its
+    ``declinable`` keys; one whose return says nothing about its keys may fill
+    every field and is annotated to fill none
+    (test_an_untyped_input_data_requires_no_field); no provider reaches
+    nothing (test_a_spec_reaching_nothing_keeps_the_author_s_component).
+    """
+    keys = provider_keys(provider)
+    names = parameters.names()
+    if keys is None:
+        return frozenset(), names
+    return names & keys.filled, names & (keys.filled | keys.declinable)
+
+
 def _without(schema: dict[str, Any], names: Iterable[str]) -> dict[str, Any]:
     """``schema`` with ``names`` neither offered nor required, an empty ``required`` dropped.
 
@@ -302,6 +387,36 @@ def _without(schema: dict[str, Any], names: Iterable[str]) -> dict[str, Any]:
         kept["required"] = required
     return kept
 
+
+_VALIDATION_ERRORS = "ValidationErrors"
+
+
+class _ValidationErrors:
+    """The ``ValidationErrors`` component's identity in drf-spectacular's registry.
+
+    The registry tells components apart by the class handed as their
+    ``object``. ``ComponentIdentity`` would say this too, but it is new in
+    drf-spectacular 0.28 and the floor is 0.27.
+    """
+
+
+_VALIDATION_ERRORS_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "description": (
+        "A refused call's errors by name, as DRF sends them: a field's list of "
+        "messages, an object for a nested field, and for a list its rows' "
+        "errors keyed by the row's index. A many spec's rows sit under its "
+        "many argument. Messages the whole call earned are under "
+        "`non_field_errors`."
+    ),
+    "additionalProperties": {
+        "oneOf": [
+            {"type": "array", "items": {"type": "string"}},
+            {"$ref": f"#/components/schemas/{_VALIDATION_ERRORS}"},
+        ]
+    },
+}
+"""The ``400`` body of a Validator's refusal; recursive, so no serializer can state it."""
 
 _ROUTE_CAPTURE = re.compile(r"<(?:[^<>:]+:)?([^<>:]+)>|\(\?P<([^<>]+)>")
 """A route's captured name: a ``path()`` converter's, or a regex's named group."""

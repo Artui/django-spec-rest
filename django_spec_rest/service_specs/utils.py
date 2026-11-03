@@ -77,7 +77,9 @@ fields do not subclass one another across rows, so the order matters only
 within the CharField family, which ends the string rows."""
 
 
-def describe_serializer(declaration: Any, validator: Any = None) -> serializers.Serializer:
+def describe_serializer(
+    declaration: Any, validator: Any = None, *, call_context: dict[str, Any] | None = None
+) -> serializers.Serializer:
     """The serializer ``declaration`` describes its fields with: the call's own, inside one.
 
     ``declaration`` is what a ``SerializerValidator`` takes: a ``Serializer``
@@ -85,10 +87,13 @@ def describe_serializer(declaration: Any, validator: Any = None) -> serializers.
     exactly as the Validator validates it. Anything else is
     refused with ``ImproperlyConfigured``. ``validator`` is the Validator
     asking, whose ``serializer`` it is, or ``None`` for a reader that is no
-    Validator's.
+    Validator's. ``call_context`` is the dict of the call asking, which the
+    kernel hands a Validator's ``parameters()`` inside a call and none outside
+    one.
 
     Inside an edge call, the declaration of the edge's own spec, read by one
-    of the edge's own Validators (``EdgeCallState.describing``), is built once
+    of the edge's own Validators (``EdgeCallState.describing``) for the edge's
+    own call (``EdgeCallState.call_context``), is built once
     for the call (``EdgeCallState.described``) and every such description of
     the call reads that one. It is built with the call's context - the call's
     request and view, its view's input layers and the Validator's
@@ -98,8 +103,10 @@ def describe_serializer(declaration: Any, validator: Any = None) -> serializers.
     row, so one reading ``initial_data``, ``instance`` or ``partial`` reads
     none of the call's (the strict xfails of
     test_the_input_serializer_is_built_once_per_call). Any other Validator's,
-    the same declaration's included, and every one outside a call, as a schema or a registration describes it,
-    is built unbound, with the context DRF builds on HTTP with no view and no
+    the same declaration's included, a kernel call the service makes of the
+    edge's own spec for another principal among them (its ``call_context`` is
+    its own dict), and every one outside a call, as a schema or a registration
+    describes it, is built unbound, with the context DRF builds on HTTP with no view and no
     request: a ``get_fields`` reading ``self.context["request"]`` finds the
     key and reads ``None``, rather than raising ``KeyError`` from a schema
     while dispatch would have rendered it. What the serializer raises while it
@@ -119,13 +126,17 @@ def describe_serializer(declaration: Any, validator: Any = None) -> serializers.
     # (test_a_kernel_call_of_another_spec_declaring_the_serializer_is_not_described_as_the_edge_s).
     # The edge sets ``describing`` and ``describe_context`` together, so the
     # middle condition holds no case of its own: it narrows the type. A kernel
-    # call of the edge's own spec reaches the edge's own Validator, and is
-    # described as the edge's: ``parameters()`` is asked with no principal
-    # and no call, so nothing here tells the two apart.
+    # call of the edge's own spec reaches the edge's own Validator, and the
+    # dict the kernel hands ``parameters()`` is the one thing that tells it
+    # from the edge's call: the edge dispatches with its own, and a service's
+    # inner dispatch makes its own, or is handed none outside a call. The last
+    # conjunct is held by
+    # test_a_kernel_call_of_the_view_s_own_spec_for_another_principal_is_never_described_under_the_view_s_request.
     if (
         state is None
         or state.describe_context is None
         or not any(validator is own for own in state.describing)
+        or call_context is not state.call_context
     ):
         return bind_serializer(
             declaration, context=base_serializer_context(view=None, request=None)
@@ -214,6 +225,10 @@ class EdgeCallState:
       annotated to fill, which no client's value becomes, declined or not:
       the Validator hands the client's value for one on in ``data`` alone
       (``provider_owned``).
+    - ``call_context``: the dict the edge hands the kernel's ``dispatch`` as the
+      call's context, which the kernel hands a Validator's ``parameters()`` in
+      every ask inside the call: a description is the call's own when it is
+      handed this very dict (``describe_serializer``).
     - ``describing``: the edge's own ``SerializerValidator``s, the spec's and
       the recording twin's, a lenient copy for a form body, the ones
       ``describe_context`` is for: another Validator a kernel call inside the
@@ -253,6 +268,7 @@ class EdgeCallState:
     server_values: Mapping[str, Any] = dataclasses.field(default_factory=dict)
     author_keys: Mapping[str, str] = dataclasses.field(default_factory=dict)
     provider_owned: frozenset[str] = frozenset()
+    call_context: dict[str, Any] | None = None
     describing: tuple[Any, ...] = ()
     describe_context: Callable[[], dict[str, Any]] | None = None
     base_context: tuple[Any, Any, dict[str, Any]] | None = None
@@ -371,7 +387,13 @@ def write_form_value(body: QueryDict, name: str, value: Any) -> None:
         body[name] = value
 
 
-def read_form_spellings(validator: Any, body: Any, flat: Mapping[str, Any]) -> dict[str, Any]:
+def read_form_spellings(
+    validator: Any,
+    body: Any,
+    flat: Mapping[str, Any],
+    *,
+    call_context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """``flat`` with each field DRF reads off a form's prefixed keys read as the field reads it.
 
     A form body carries a nested serializer, a dict or a list field as DRF's
@@ -385,9 +407,13 @@ def read_form_spellings(validator: Any, body: Any, flat: Mapping[str, Any]) -> d
     test_input_data_is_the_value_put_over_a_prefixed_form_key_under_reject).
     Spellings the field reads nothing from are left as sent, keys no parameter
     declares (test_a_spelling_its_field_does_not_read_is_an_unknown_argument).
+    ``call_context`` is the dict of the call reading the body, as
+    ``describe_serializer`` takes it.
     """
     read = dict(flat)
-    for name, field in describe_serializer(validator.serializer, validator).fields.items():
+    for name, field in describe_serializer(
+        validator.serializer, validator, call_context=call_context
+    ).fields.items():
         prefixes = (f"{name}.", f"{name}[")
         spellings = [key for key in flat if key.startswith(prefixes)]
         if not spellings:

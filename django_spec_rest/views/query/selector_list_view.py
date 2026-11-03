@@ -14,7 +14,7 @@ from rest_framework.response import Response
 
 from django_spec_rest.selectors.utils import dispatch_selector_for_spec, present_kernel_list
 from django_spec_rest.views.spec_validation import validate_selector_view_spec
-from django_spec_rest.views.utils import get_class_attr, view_pool_seeds
+from django_spec_rest.views.utils import get_class_attr, mounted_view, view_pool_seeds
 
 
 class SelectorListView(ListModelMixin, GenericAPIView):
@@ -43,8 +43,10 @@ class SelectorListView(ListModelMixin, GenericAPIView):
 
     @classmethod
     def as_view(cls, **initkwargs: Any) -> Any:
+        # Checked as the instances will be, keywords included (``mounted_view``).
+        mounted = mounted_view(cls, initkwargs)
         validate_selector_view_spec(
-            cls, expected_kind=SelectorKind.LIST, pool_seeds=view_pool_seeds(cls, initkwargs)
+            mounted, expected_kind=SelectorKind.LIST, pool_seeds=view_pool_seeds(mounted)
         )
         return super().as_view(**initkwargs)
 

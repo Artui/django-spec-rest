@@ -163,8 +163,9 @@ The query string is read by the kernel's flat reader:
   `filter_set_parameters`: its description wording, a `NumberFilter` as a
   decimal string, an `OrderingFilter` with no `explode` or `style`, in declared
   order, with `maxItems` 1000, a `MultipleChoiceFilter` with `maxItems`, and
-  an array as a repeated key. A 422 is documented where the spec has a
-  validator. A selector's reads are not documented as query parameters, nor
+  an array as a repeated key. A validator's refusal is documented as the 400 it
+  answers, and a 422 on every service spec, the status of a plain
+  `ServiceError`. A selector's reads are not documented as query parameters, nor
   the affordance envelope, nor the `null` body of an `allow_none` retrieve.
 
 ## Serializer context
@@ -183,6 +184,28 @@ The query string is read by the kernel's flat reader:
 - **`DRFPermissionCheck` takes `route_reads=`** for the arguments that go onto
   the offline view's `kwargs`; its `url_kwargs=` and `query_params=` are gone,
   and the offline request's query string is empty.
+- **An adapted DRF class still asks a caller nobody authenticated to sign in.**
+  A DRF class in `DRFPermissionCheck` refusing a caller the request's
+  authenticators did not recognise is answered DRF's `NotAuthenticated`, as
+  drfs' view answered it: 401 with the first authenticator's
+  `WWW-Authenticate` (`Basic realm="api"` with `BasicAuthentication` first),
+  or 403 "Authentication credentials were not provided." where that
+  authenticator sends no challenge, as `SessionAuthentication` does not. A
+  signed-in caller, and any caller of a view with no authenticator, is refused
+  403 with the class's own `message`. Off HTTP there is no authenticator, so
+  the refusal is the kernel's `NotPermitted`.
+- **A kernel `PermissionCheck`'s refusal is the kernel's 403 for now**, with
+  its message, even for an anonymous caller where drfs answered 401. The
+  kernel raises the same bare `NotPermitted` for a permission check's denial,
+  a service's own and a refused inner dispatch's, so the edge cannot ask only
+  the first to sign in; a later release will, once the kernel marks the
+  denial.
+- **`DRFPermissionCheck` can raise `DRFNotAuthenticated`**, not only
+  `DRFNotPermitted`, when the call carries a real DRF request with
+  authenticators and nobody was recognised. `DRFNotAuthenticated` is DRF's
+  `NotAuthenticated`, not a `PermissionDenied`, so code catching
+  `PermissionDenied` by name around such a dispatch no longer catches that
+  refusal; catch the kernel's `NotPermitted`, which both classes are.
 - **`UNAUTHENTICATED_USER = None` is passed as `None`**: the principal an
   anonymous request hands the kernel is `None` where the project sets it so,
   rather than an `AnonymousUser`.
@@ -201,12 +224,11 @@ The query string is read by the kernel's flat reader:
 
 - A kernel spec under `@selector_action` does not read the view's
   `get_selector_kwargs`, and nothing refuses the override there.
-- `@service_action` does not run the kernel's seed check at `as_view()`.
-- `@selector_action` runs it when the method is decorated, against the
-  kernel's default seeds, so the callables it reads (the selector, its
-  providers and its affordance conditions) cannot name a seed its viewset's
-  `pool_seeds` registers. A permission check naming one is not read by it, and
-  is served.
+- A `@service_action` or `@selector_action` spec is seed-checked by its
+  viewset's `as_view()`, so only on a viewset built on this package's bases.
+  On DRF's own `GenericViewSet` or `ViewSet` nothing runs the kernel's seed
+  check, and a keyword nothing fills is the action's first request's
+  `TypeError`.
 - `ActionSerializerResolver` falls back to the view's `serializer_class` for an
   action whose spec has no serializer.
 - A service's `ServiceValidationError` keyed by a model field is answered under
