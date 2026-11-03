@@ -35,7 +35,7 @@ carries; releases up to 0.62.0 are in
   `message`. So `DRFPermissionCheck` can now raise `DRFNotAuthenticated`, which
   is not a `PermissionDenied`: code catching `PermissionDenied` around such a
   dispatch should catch the kernel's `NotPermitted`, their common base (see
-  the move-from-drfs page). A kernel `PermissionCheck`'s refusal is still the
+  `docs/moving-from-drfs.md`). A kernel `PermissionCheck`'s refusal is still the
   kernel's 403 with its message: the kernel raises the same `NotPermitted` for
   a permission check's denial, a service's own and a refused inner dispatch's,
   so asking that caller to sign in waits for the kernel to mark the denial.
