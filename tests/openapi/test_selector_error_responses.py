@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+import django_filters
 import jsonschema
 import pytest
 from django.urls import path
@@ -54,6 +55,18 @@ def _asking(**_: Any) -> Any:
     raise AdditionalInputRequired("Say which.", schema=_ASK_SCHEMA)
 
 
+class _PostFilter(django_filters.FilterSet):
+    kind = django_filters.ChoiceFilter(field_name="body", choices=[("a", "A"), ("b", "B")])
+
+    class Meta:
+        model = Post
+        fields: list[str] = []
+
+
+def _every_post() -> Any:
+    return Post.objects.order_by("id")
+
+
 def _spec(selector: Any, *, kind: SelectorKind = SelectorKind.LIST, **fields: Any) -> SelectorSpec:
     return SelectorSpec(
         **{
@@ -74,6 +87,7 @@ _SPECS: dict[str, tuple[type, SelectorSpec]] = {
     "read": (SelectorListView, _spec(_posts, reads=_PUBLISHED)),
     "unprocessable": (SelectorListView, _spec(_unprocessable)),
     "asking": (SelectorListView, _spec(_asking)),
+    "filtered": (SelectorListView, _spec(_every_post, filter_set=_PostFilter)),
     "no-reads": (SelectorListView, _spec(_posts)),
     "captured": (
         SelectorRetrieveView,
@@ -84,7 +98,7 @@ _SPECS: dict[str, tuple[type, SelectorSpec]] = {
 urlpatterns = [
     path(
         f"{key}/<int:pk>/" if key == "captured" else f"{key}/",
-        type("_View", (view,), {"spec": spec}).as_view(),
+        type("_View", (view,), {"spec": spec, "queryset": Post.objects.all()}).as_view(),
     )
     for key, (view, spec) in _SPECS.items()
 ]
@@ -110,9 +124,9 @@ def _documented(schema: dict[str, Any], key: str, status: str) -> dict[str, Any]
     return {**body, "components": schema["components"]}
 
 
-def _get(key: str, query: str = "") -> tuple[int, Any]:
+def _get(key: str, query: str = "", *, pk: str = "1") -> tuple[int, Any]:
     view = urlpatterns[list(_SPECS).index(key)].callback
-    kwargs = {"pk": 1} if key == "captured" else {}
+    kwargs = {"pk": pk} if key == "captured" else {}
     response = view(APIRequestFactory().get(f"/{query}"), **kwargs)
     response.render()
     return response.status_code, json.loads(response.content)
@@ -134,16 +148,25 @@ class TestARefusedReadIsA400:
     ) -> None:
         assert "ValidationErrors" in json.dumps(_responses(schema, "read")["400"])
 
-    def test_a_selector_with_no_parameter_documents_no_400_and_is_sent_none(
+    def test_a_filter_is_refused_under_its_name(self, schema: dict[str, Any]) -> None:
+        status, sent = _get("filtered", "?kind=zzz")
+        assert status == 400
+        assert list(sent) == ["kind"]
+        jsonschema.validate(sent, _documented(schema, "filtered", "400"))
+
+    def test_a_route_capture_is_refused_under_its_name(self, schema: dict[str, Any]) -> None:
+        # The route's converter would match only digits; a ``str`` converter or
+        # a router's default lookup pattern lets any text through to the read.
+        status, sent = _get("captured", pk="abc")
+        assert status == 400
+        assert list(sent) == ["pk"]
+        jsonschema.validate(sent, _documented(schema, "captured", "400"))
+
+    def test_a_selector_with_no_parameter_documents_no_400_for_a_key_it_drops(
         self, schema: dict[str, Any]
     ) -> None:
         assert _get("no-reads", "?nope=1")[0] == 200
         assert "400" not in _responses(schema, "no-reads")
-
-    def test_a_route_capture_alone_is_no_query_parameter_to_refuse(
-        self, schema: dict[str, Any]
-    ) -> None:
-        assert "400" not in _responses(schema, "captured")
 
     def test_the_success_response_is_kept(self, schema: dict[str, Any]) -> None:
         documented = _documented(schema, "read", "200")

@@ -75,11 +75,11 @@ this call does.
 - **A selector spec** documents the same two refusals, since a selector is
   refused the same way: a **422** on every selector spec (the selector, a
   precondition or a provider can raise a plain `ServiceError`), and a **400**
-  where the spec takes a query parameter, that is a read, a shape or a filter
-  that is not a route capture (a capture is matched by the route before the
-  kernel reads it). The 400's body is the same as a validator's. A selector
-  taking no parameter is sent no 400, since an argument it declares nothing
-  for is dropped.
+  where the spec takes any parameter, a read, a shape or a filter. The 400's
+  body is the same as a validator's. A route capture is a parameter too: only
+  a converter guarantees its type, and a router's default lookup pattern or a
+  `str` converter guarantees none. A key the spec declares nothing for is
+  dropped rather than refused, so it earns no 400 of its own.
 - **A `filter_set`'s query parameters**, on a list operation, are the kernel's
   `filter_set_parameters`.
 

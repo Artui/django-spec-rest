@@ -24,9 +24,8 @@ carries; releases up to 0.62.0 are in
 - **A selector's refusals are documented.** A selector operation documented
   neither the 400 nor the 422 the edge answers it with. It now documents a 422
   (the selector, a precondition or a provider can raise a plain `ServiceError`)
-  and, where the spec takes a query parameter (a read, a shape or a filter that
-  is no route capture), the 400 of its refusal, in the same body as a service
-  spec's. The 422 body also names the `schema` an `AdditionalInputRequired`
+  and, where the spec takes a parameter (a read, a shape or a filter), the 400
+  of its refusal, in the same body as a service spec's. The 422 body also names the `schema` an `AdditionalInputRequired`
   carries (an object, not required), which the `ServiceError` component allowed
   but did not name, on service specs too.
 - **A serializer cannot take the `ValidationErrors` component's name.**
