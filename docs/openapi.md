@@ -47,12 +47,26 @@ this call does.
 - **The status** is the view's `success_status` where it is an `int`, over the
   action's default. A body documented under 204 is documented as the 200 it is
   served as, with a 204 beside it where the spec can present nothing.
-- **A 422** is documented wherever the spec declares a validator.
+- **A 400** is documented wherever the spec declares a validator, because that
+  is the status a validator's refusal gets, whichever kind refused
+  (`SerializerValidator`, `DataclassValidator` or another validator raising the
+  kernel's `InvalidArguments`). Its body is the `ValidationErrors` component:
+  the errors by name, as DRF sends them, each a list of messages, or an object
+  for a nested field, or for a list its rows' errors keyed by the row's index
+  (a `many` spec's rows sit under its `many_argument`); the whole call's
+  messages are under `non_field_errors`. A body that is no object is refused
+  with `{"detail": ...}`, so the 400 is either that component or the
+  `ServiceError` one.
+- **A 422** is documented on every service spec, whether or not it has a
+  validator. It is not a validator's refusal: it is a plain `ServiceError`
+  raised by the service, a precondition or a provider, which no spec can rule
+  out. Its body is `{"detail": ...}` (an `AdditionalInputRequired` carrying a
+  schema adds a `schema` key beside it).
 - **A `filter_set`'s query parameters**, on a list operation, are the kernel's
   `filter_set_parameters`.
 
-`ServiceErrorSerializer`, a single `detail` field, is the body of that 422,
-under the `ServiceError` component.
+`ServiceErrorSerializer`, a single `detail` field, is the body of that 422 and
+of the 400 for a body that is no object, under the `ServiceError` component.
 
 User-supplied `@extend_schema` annotations always win, and
 `@extend_schema(parameters=...)` merges over the filter parameters as it does

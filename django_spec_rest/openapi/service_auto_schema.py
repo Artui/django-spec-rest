@@ -25,7 +25,12 @@ from django_service_specs.schema.can_present_nothing import can_present_nothing
 from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelectorSpec
 from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
 from drf_spectacular.openapi import AutoSchema
-from drf_spectacular.plumbing import build_array_type, build_parameter_type
+from drf_spectacular.plumbing import (
+    ComponentIdentity,
+    ResolvedComponent,
+    build_array_type,
+    build_parameter_type,
+)
 from drf_spectacular.utils import (
     OpenApiParameter,
     OpenApiRequest,
@@ -80,7 +85,13 @@ class ServiceAutoSchema(AutoSchema):
       since a kernel spec declares none, over the action's default; a body is
       documented as the ``200`` it is served as where that is ``204``, and the
       ``204`` beside it where ``can_present_nothing``.
-    - **A** ``422`` is documented wherever the spec declares a Validator.
+    - **A** ``400`` is documented wherever the spec declares a Validator: its
+      refusal is DRF's field errors, whichever seat refused, so the body is the
+      ``ValidationErrors`` component (a ``detail`` sentence, as a body that is
+      no object is refused, is the ``ServiceError`` component beside it).
+    - **A** ``422`` is documented on every service spec, since the service, a
+      precondition or a provider can raise a plain ``ServiceError``, which the
+      edge answers 422 with or without a Validator.
     - **A FilterSet's query parameters** are the kernel's
       ``filter_set_parameters``, on a list operation only.
 
@@ -262,11 +273,35 @@ class ServiceAutoSchema(AutoSchema):
         )
         if body is not None and can_present_nothing(spec):
             responses[204] = OpenApiResponse(description="")
-        # A Validator's refusal is a 422
-        # (test_a_service_error_is_documented_where_there_is_a_validator).
+        # A Validator's refusal is a 400 of DRF's field errors, whichever kind
+        # of Validator refused
+        # (test_the_documented_400_describes_the_body_the_edge_sends); a plain
+        # ``ServiceError`` from the service, a precondition or a provider is a
+        # 422 whether or not the spec has a Validator
+        # (test_it_is_documented_on_a_spec_with_a_service_whether_or_not_it_has_a_validator,
+        # test_a_spec_with_no_validator_documents_no_400).
         if spec.validator is not None:
-            responses[422] = ServiceErrorSerializer
+            responses[400] = self._validation_errors_response()
+        responses[422] = ServiceErrorSerializer
         return responses
+
+    def _validation_errors_response(self) -> OpenApiResponse:
+        """The ``400`` a Validator's refusal answers: the ``ValidationErrors`` tree, or a ``detail``.
+
+        ``ValidationErrors`` is registered once as a component of its own: a
+        serializer cannot describe it, being a tree of any depth. A ``detail``
+        sentence is the ``ServiceError`` shape, which the edge sends for a body
+        that is no object (test_a_body_that_is_no_object_is_a_detail_the_400_also_describes).
+        """
+        component = ResolvedComponent(
+            name=_VALIDATION_ERRORS,
+            type=ResolvedComponent.SCHEMA,
+            object=ComponentIdentity(_VALIDATION_ERRORS),
+            schema=_VALIDATION_ERRORS_SCHEMA,
+        )
+        self.registry.register_on_missing(component)
+        detail = self.resolve_serializer(ServiceErrorSerializer, "response")
+        return OpenApiResponse(response={"oneOf": [component.ref, detail.ref]})
 
     def _kernel_rows(self, spec: KernelSelectorSpec, presenter: Presenter) -> Any:
         """A kernel selector spec's body: one row, or every row for a ``LIST``.
@@ -353,6 +388,26 @@ def _without(schema: dict[str, Any], names: Iterable[str]) -> dict[str, Any]:
         kept["required"] = required
     return kept
 
+
+_VALIDATION_ERRORS = "ValidationErrors"
+
+_VALIDATION_ERRORS_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "description": (
+        "A refused call's errors by name, as DRF sends them: a field's list of "
+        "messages, an object for a nested field, and for a list its rows' "
+        "errors keyed by the row's index. A many spec's rows sit under its "
+        "many argument. Messages the whole call earned are under "
+        "`non_field_errors`."
+    ),
+    "additionalProperties": {
+        "oneOf": [
+            {"type": "array", "items": {"type": "string"}},
+            {"$ref": f"#/components/schemas/{_VALIDATION_ERRORS}"},
+        ]
+    },
+}
+"""The ``400`` body of a Validator's refusal; recursive, so no serializer can state it."""
 
 _ROUTE_CAPTURE = re.compile(r"<(?:[^<>:]+:)?([^<>:]+)>|\(\?P<([^<>]+)>")
 """A route's captured name: a ``path()`` converter's, or a regex's named group."""
