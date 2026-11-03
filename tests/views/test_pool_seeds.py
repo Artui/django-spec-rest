@@ -377,8 +377,10 @@ class TestADecoratedAction:
         assert _patch(view, Post.objects.create(title="u").pk)[0] == 409
 
     def test_a_service_action_missing_a_seed_mounts_and_fails_its_first_request(self) -> None:
-        """Not seed-checked at ``as_view()``: the decorator's probe reads as hooked,
-        so the missing seed is the request's ``TypeError`` (the docs say so)."""
+        """On DRF's own ``GenericViewSet`` nothing asks the seed check: its
+        ``as_view()`` is DRF's, so the missing seed is the request's
+        ``TypeError`` (the docs say so). A viewset built on this package's
+        mixins refuses it at ``as_view()`` (test_a_decorated_action_s_seeds)."""
 
         @service_action(GUARDED, detail=True, methods=["patch"])
         def publish(self: Any, request: Any, pk: Any = None) -> None:
@@ -391,12 +393,6 @@ class TestADecoratedAction:
         with pytest.raises(TypeError, match="frozen"):
             _patch(view, Post.objects.create(title="t").pk)
 
-    @pytest.mark.xfail(
-        strict=True,
-        raises=ImproperlyConfigured,
-        reason="@selector_action checks its spec at decoration, before the viewset and its "
-        "pool_seeds exist, so against the kernel's default seeds",
-    )
     def test_a_selector_action_reading_a_seed_its_viewset_registers_is_served(self) -> None:
         spec = SelectorSpec(kind=SelectorKind.LIST, selector=_frozen_posts, permissions=_OPEN)
 
