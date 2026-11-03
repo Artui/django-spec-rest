@@ -25,10 +25,12 @@ SEND_SPEC = ServiceSpec(
 DRF's `get_permissions` does:
 
 - **`has_permission`** against the request and view the call carries. A
-  refusal raises `DRFNotPermitted` with that class's own `message` and
+  refusal is decided as DRF's view decides it: for a caller the request's
+  authenticators did not recognise, `DRFNotAuthenticated`, which DRF answers
+  401 with the first authenticator's challenge, or 403 where it sends none;
+  for anyone else, `DRFNotPermitted` with that class's own `message` and
   `code`, which DRF answers 403. A class raising DRF's `NotAuthenticated`
-  leaves as `DRFNotAuthenticated`, which DRF answers 401 where the
-  authenticator supplies a challenge.
+  itself leaves as `DRFNotAuthenticated` too.
 - **`has_object_permission`** of the row a write targets or a retrieve finds,
   when it is a model instance.
 - The kernel's question about a set (a bulk call, a collection, a create)
@@ -38,13 +40,20 @@ DRF's `get_permissions` does:
 Each refusal is the kernel's `NotPermitted` as well, so a caller of the
 kernel's `dispatch` catches it by the kernel's class.
 
+A kernel `PermissionCheck` on the spec is answered by the same rule over HTTP
+(`permission_denied`): its refusal of a caller nobody authenticated is DRF's
+`NotAuthenticated`, and its `message` reaches only the 403 a signed-in caller
+gets. So a client is asked to sign in the same way whichever kind of check
+refused it.
+
 ## Off HTTP
 
 The same check runs when the spec is dispatched with no request. It builds an
 offline request and view for the principal (`build_offline_context`), so a
 class reading `request.user` reads the principal, and `view.action` is the
 call context's `action` where one is given. The offline request's query
-string is empty.
+string is empty, and it has no authenticator, so an anonymous principal is
+refused with `NotPermitted`, never asked to authenticate.
 
 A class scoping by a route capture reads `view.kwargs`, which off HTTP no
 URLconf fills. Name those arguments in `route_reads`, and the check puts them

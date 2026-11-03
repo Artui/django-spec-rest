@@ -40,6 +40,8 @@ handler answers it with DRF's status.
 
 ## Translating refusals
 
+::: django_spec_rest.service_specs.permission_denied.permission_denied
+
 ::: django_spec_rest.service_specs.translate_dispatch_errors.translate_dispatch_errors
 
 ::: django_spec_rest.service_specs.translate_drf_refusals.translate_drf_refusals

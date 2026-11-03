@@ -46,12 +46,25 @@ from django_service_specs import (
     unanswered_refusals,
 )
 from django_service_specs import InvalidArguments as KernelInvalidArguments
+from django_service_specs.authorization.not_permitted import NotPermitted as KernelNotPermitted
+from django_service_specs.authorization.principal_unavailable import (
+    PrincipalUnavailable as KernelPrincipalUnavailable,
+)
 from rest_framework import serializers
+from rest_framework.authentication import BasicAuthentication
+from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.test import APIRequestFactory, force_authenticate
 
-from django_spec_rest.dispatch.kernel_refusals import KERNEL_REFUSALS, answer_refusal
+from django_spec_rest.dispatch.kernel_refusals import (
+    KERNEL_REFUSALS,
+    answer_refusal,
+    answering_refusals,
+)
 from django_spec_rest.service_specs.drf_invalid_arguments import DRFInvalidArguments
+from django_spec_rest.service_specs.drf_not_authenticated import DRFNotAuthenticated
+from django_spec_rest.service_specs.drf_not_permitted import DRFNotPermitted
+from django_spec_rest.service_specs.drf_principal_unavailable import DRFPrincipalUnavailable
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from tests.views.test_kernel_views import _CreateView
 
@@ -127,6 +140,51 @@ def test_a_deactivated_principal_is_403() -> None:
     response = _call(spec, user=gone)
     assert response.status_code == 403
     assert response.data["detail"].code == "permission_denied"
+
+
+def _served_on(user: Any = None) -> Request:
+    """A request served with ``BasicAuthentication``, by ``user`` or by nobody it recognised."""
+    request = factory.post("/", {}, format="json")
+    if user is not None:
+        force_authenticate(request, user=user)
+    return Request(request, authenticators=[BasicAuthentication()])
+
+
+class TestADenialWithTheRequestItRefused:
+    """The kernel's denial, given the request, is answered as DRF's view answers a refusal.
+
+    Over HTTP: ``tests/views/test_an_anonymous_caller_refused.py``.
+    """
+
+    def test_a_caller_nobody_recognised_is_asked_to_authenticate(self) -> None:
+        answer = answer_refusal(KernelNotPermitted("Not for you."), _served_on())
+        assert isinstance(answer, DRFNotAuthenticated)
+        assert answer.detail == "Authentication credentials were not provided."
+
+    def test_a_recognised_caller_is_refused_with_the_check_s_message(self) -> None:
+        user = User.objects.create(username="ada")
+        answer = answer_refusal(KernelNotPermitted("Not for you."), _served_on(user))
+        assert type(answer) is DRFNotPermitted
+        assert answer.detail == "Not for you."
+
+    def test_with_no_request_a_kernel_denial_is_the_map_s_403(self) -> None:
+        answer = answer_refusal(KernelNotPermitted("Not for you."))
+        assert type(answer) is DRFNotPermitted
+        assert answer.detail == "Not for you."
+
+    def test_a_refusal_that_is_no_denial_is_the_map_s_with_a_request(self) -> None:
+        """A principal who cannot act is no permission refusing it: still 403."""
+        answer = answer_refusal(KernelPrincipalUnavailable(), _served_on())
+        assert isinstance(answer, DRFPrincipalUnavailable)
+
+    def test_a_denial_that_is_drf_s_already_leaves_as_raised(self) -> None:
+        """``DRFPermissionCheck`` decided its own refusal with the request it asked."""
+        raised = DRFNotPermitted("Not for you.")
+        assert answer_refusal(raised, _served_on()) is raised
+
+    def test_the_block_hands_its_request_to_the_map(self) -> None:
+        with pytest.raises(DRFNotAuthenticated), answering_refusals(_served_on()):
+            raise KernelNotPermitted("Not for you.")
 
 
 def test_a_bare_dispatch_error_is_400_with_its_sentence() -> None:

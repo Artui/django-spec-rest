@@ -11,7 +11,9 @@ class DRFNotAuthenticated(KernelNotPermitted, NotAuthenticated):
 
     What an author callable's or a permission class's DRF ``NotAuthenticated``
     leaves the kernel route as, through
-    [`translate_drf_refusals`][django_spec_rest.service_specs.translate_drf_refusals.translate_drf_refusals].
+    [`translate_drf_refusals`][django_spec_rest.service_specs.translate_drf_refusals.translate_drf_refusals],
+    and what a refusal of a caller nobody authenticated is, by
+    [`permission_denied`][django_spec_rest.service_specs.permission_denied.permission_denied].
     A transport reading the kernel's classes ends the attempt on it as a
     denial, and DRF's exception handler still answers it 401, with the
     authenticator's challenge, rather than the 403 the dual

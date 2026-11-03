@@ -11,7 +11,7 @@ from django_service_specs.authorization.permission_check import PermissionCheck
 from rest_framework.permissions import BasePermission
 
 from django_spec_rest.service_specs.build_offline_context import build_offline_context
-from django_spec_rest.service_specs.drf_not_permitted import DRFNotPermitted
+from django_spec_rest.service_specs.permission_denied import permission_denied
 from django_spec_rest.service_specs.translate_drf_refusals import translate_drf_refusals
 from django_spec_rest.service_specs.utils import carried, offline_action
 from django_spec_rest.types.offline_context import OfflineContext
@@ -26,7 +26,11 @@ class DRFPermissionCheck(PermissionCheck):
     request and view the call carries, else the offline pair
     [`build_offline_context`][django_spec_rest.service_specs.build_offline_context.build_offline_context]
     builds for the principal. The first refusal
-    raises the dual-base
+    raises what DRF's view raises for it,
+    [`permission_denied`][django_spec_rest.service_specs.permission_denied.permission_denied]'s
+    answer for the request asked: the dual-base
+    [`DRFNotAuthenticated`][django_spec_rest.service_specs.drf_not_authenticated.DRFNotAuthenticated]
+    for a caller the request's authenticators did not recognise, else
     [`DRFNotPermitted`][django_spec_rest.service_specs.drf_not_permitted.DRFNotPermitted]
     with that class's own ``message`` and ``code``, so a client is told what
     a DRF view would have told it; returning ``False`` instead would leave the
@@ -114,7 +118,7 @@ class DRFPermissionCheck(PermissionCheck):
             with translate_drf_refusals():
                 admitted = permission.has_permission(request, view)
             if not admitted:
-                _deny(permission)
+                _deny(permission, request)
         return True
 
     def has_object_permission(
@@ -136,7 +140,7 @@ class DRFPermissionCheck(PermissionCheck):
             with translate_drf_refusals():
                 admitted = permission.has_object_permission(request, view, target)
             if not admitted:
-                _deny(permission)
+                _deny(permission, request)
         return True
 
     def has_scope_permission(
@@ -206,5 +210,7 @@ class DRFPermissionCheck(PermissionCheck):
         )
 
 
-def _deny(permission: BasePermission) -> None:
-    raise DRFNotPermitted(getattr(permission, "message", None), getattr(permission, "code", None))
+def _deny(permission: BasePermission, request: Any) -> None:
+    raise permission_denied(
+        request, getattr(permission, "message", None), getattr(permission, "code", None)
+    )
