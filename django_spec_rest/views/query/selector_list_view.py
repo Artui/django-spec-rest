@@ -13,11 +13,12 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from django_spec_rest.selectors.utils import dispatch_selector_for_spec, present_kernel_list
+from django_spec_rest.views.mutation.utils import _ServesRaisedSchema
 from django_spec_rest.views.spec_validation import validate_selector_view_spec
 from django_spec_rest.views.utils import get_class_attr, mounted_view, view_pool_seeds
 
 
-class SelectorListView(ListModelMixin, GenericAPIView):
+class SelectorListView(_ServesRaisedSchema, ListModelMixin, GenericAPIView):
     """``GET`` endpoint that delegates to a selector spec or to ``get_queryset()``.
 
     A kernel ``SelectorSpec`` on ``spec`` runs through the kernel's own

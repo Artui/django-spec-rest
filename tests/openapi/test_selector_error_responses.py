@@ -195,12 +195,7 @@ class TestA422IsASelectorRefusal:
     ) -> None:
         status, sent = _get("asking")
         assert status == 422
-        assert sent["detail"] == "Say which."
-        # The schema's own leaves are not asserted: a standalone selector view
-        # does not restore them from the error details' strings, which the
-        # mutation views do.
-        assert set(sent) == {"detail", "schema"}
-        assert set(sent["schema"]) == set(_ASK_SCHEMA)
+        assert sent == {"detail": "Say which.", "schema": _ASK_SCHEMA}
         documented = _documented(schema, "asking", "422")
         jsonschema.validate(sent, documented)
         component = schema["components"]["schemas"]["ServiceError"]

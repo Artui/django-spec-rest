@@ -13,6 +13,10 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from django_spec_rest.selectors.utils import present_kernel_list, present_kernel_row
+from django_spec_rest.views.mutation.map_service_error import (
+    _AdditionalInputAPIException,
+)
+from django_spec_rest.views.mutation.utils import restore_schema_when_handled
 from django_spec_rest.views.utils import _JsonNullResponse
 
 
@@ -45,6 +49,10 @@ def selector_action(
     and the view's object permission of the row a RETRIEVE finds. Its
     ``presenter`` renders the row or the page's rows, or the viewset's
     ``get_serializer`` where it declares neither presenter nor affordances.
+    An
+    [`AdditionalInputRequired`][django_service_specs.services.additional_input_required.AdditionalInputRequired]
+    answers ``422`` with its ``schema`` as raised on any viewset, DRF's own
+    included, as on ``@service_action``.
 
     The spec's keywords are checked when its viewset is mounted, not here:
     ``as_view()`` on a viewset built on this package's mixins asks the
@@ -68,7 +76,11 @@ def selector_action(
     def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
         @functools.wraps(fn)
         def handler(self: Any, request: Request, *args: Any, **kwargs: Any) -> Response:
-            return _serve_kernel_spec(self, spec)
+            try:
+                return _serve_kernel_spec(self, spec)
+            except _AdditionalInputAPIException:
+                restore_schema_when_handled(self)
+                raise
 
         # Stash the spec so schema generators can recover it; the closure is
         # otherwise opaque.

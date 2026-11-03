@@ -12,6 +12,7 @@ defined here, so the edge can map errors without importing this one.
 from __future__ import annotations
 
 import dataclasses
+from collections.abc import Callable
 from typing import Any, Literal
 
 from django.db.models import Model
@@ -237,8 +238,10 @@ def restore_raised_schema(exc: Exception, response: Response) -> Response:
 
     Called from two places, which between them cover every route the package
     ships to a mapped ``ServiceError``: ``_ServesRaisedSchema`` below, for its
-    views and viewset bases, and the exception handler ``@service_action`` hands
-    ``APIView.handle_exception`` on whatever viewset declares it. Where both run,
+    views and viewset bases, and the exception handler
+    ``restore_schema_when_handled`` hands ``APIView.handle_exception`` for
+    ``@service_action`` and ``@selector_action`` on whatever viewset declares
+    them. Where both run,
     the second writes what the first wrote, so the body is the same. A handler
     that declines the error answers ``None``, which comes back as ``None`` for
     DRF to raise; held by test_a_handler_declining_the_error_runs_once_on_any_viewset.
@@ -274,10 +277,12 @@ class _ServesRaisedSchema:
     """Runs ``restore_raised_schema`` over every response ``handle_exception`` builds.
 
     Inherited by ``MutationFlowMixin`` (the three mutation views and the
-    viewset mixins) and ``_ActionSpecsMixin`` (every viewset base,
-    ``ActionSerializerResolver`` included), which between them are every class
-    the package ships that maps a ``ServiceError`` into a response. Defined once, so a
-    class inheriting both runs it once.
+    viewset mixins), ``_ActionSpecsMixin`` (every viewset base,
+    ``ActionSerializerResolver`` included) and the two selector views, which
+    between them are every class the package ships that maps a ``ServiceError``
+    into a response (test_a_selector_asking_for_more_input's
+    test_a_selector_view_serves_the_schema_as_raised). Defined once, so a class
+    inheriting two of them runs it once.
 
     It runs only where it precedes DRF's view in the bases: in
     ``class V(GenericViewSet, ActionSerializerResolver)``, ``APIView``'s own
@@ -294,3 +299,60 @@ class _ServesRaisedSchema:
             exc,
             super().handle_exception(exc),  # ty: ignore[unresolved-attribute]
         )
+
+
+def restore_schema_when_handled(view: Any) -> None:
+    """Have the exception handler this request's view runs put the raised schema back.
+
+    Called by ``@service_action`` and ``@selector_action`` as the error leaves
+    their handler. The restore is otherwise a ``handle_exception`` override on
+    this package's bases, which a decorated method on DRF's own viewsets never
+    reaches, and which DRF's own method shadows where one of them is listed
+    after ``GenericViewSet``. A decorator owns no class, but it runs on the view
+    instance ``APIView.dispatch`` is about to hand the error to.
+
+    So that instance's ``get_exception_handler`` is wrapped, for that request,
+    and the error is re-raised rather than answered here.
+    ``APIView.handle_exception`` asks for the handler as it always does, and gets
+    one that runs the handler it would have got and then restores the schema on
+    the response that built. Everything else follows from where that is:
+
+    - The handler runs once and sees DRF's ``ErrorDetail`` leaves, and one that
+      declines the error by returning ``None`` still returns ``None``, so DRF
+      raises the error once, as on any other view. Answering from inside the
+      action instead would hand a declined error back to ``dispatch``, which
+      runs the handler a second time. Held by
+      test_a_handler_declining_the_error_runs_once_on_any_viewset.
+    - The restore runs inside ``APIView.handle_exception``, beneath every
+      ``handle_exception`` in the class's chain, so an override of it has the
+      last word on the body on every viewset. Wrapping ``handle_exception``
+      itself ran the restore after the whole chain and undid what an override
+      wrote to ``schema``. Held by
+      test_an_overriding_handle_exception_has_the_last_word_on_every_route.
+    - On this package's bases ``_ServesRaisedSchema`` restores again on the way
+      out of ``APIView.handle_exception``. No ``handle_exception`` of this
+      package's runs between the two, and each writes the schema as raised, so
+      the second leaves the body as the first left it.
+
+    The restore inside the handler is what serves the schema as raised where
+    the class's chain never reaches ``_ServesRaisedSchema``. Held by
+    test_service_action_serves_the_schema_as_raised_on_any_viewset and
+    test_a_selector_action_serves_the_schema_as_raised_on_any_viewset, whose
+    ``GenericViewSet``, ``ViewSet`` and ``GenericViewSet, ActionSerializerResolver``
+    cases are served stringified without it.
+    """
+    get_exception_handler: Callable[[], Callable[..., Any]] = view.get_exception_handler
+
+    def restoring_exception_handler() -> Callable[[Exception, dict[str, Any]], Response | None]:
+        # Asked through the bound method when ``handle_exception`` asks, as DRF
+        # asks it, so a ``get_exception_handler`` of the viewset's own still
+        # chooses the handler. Held by
+        # test_a_viewsets_own_exception_handler_still_answers_on_any_viewset.
+        handler: Callable[..., Any] = get_exception_handler()
+
+        def restoring(exc: Exception, context: dict[str, Any]) -> Response | None:
+            return restore_raised_schema(exc, handler(exc, context))
+
+        return restoring
+
+    view.get_exception_handler = restoring_exception_handler

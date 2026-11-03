@@ -44,6 +44,12 @@ carries; releases up to 0.62.0 are in
   subclass registry saw classes it never wrote. The checks now read the
   author's class through the keywords instead, and ask the same questions;
   refusals still name the author's class.
+- **A selector asking for more input is answered with its schema as raised.**
+  A kernel selector, precondition or provider raising `AdditionalInputRequired`
+  on `SelectorListView`, `SelectorRetrieveView`, or a `@selector_action` on
+  DRF's own `GenericViewSet` or `ViewSet`, answered the 422 with every leaf of
+  the schema a string (`"default": "False"`, `"maximum": "3"`). It now serves
+  the schema as raised, as the mutation views and `@service_action` do.
 
 ## [0.3.0] — 2026-11-03
 
