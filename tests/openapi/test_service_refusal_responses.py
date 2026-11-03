@@ -10,6 +10,7 @@ body is the producer's, never typed here.
 
 from __future__ import annotations
 
+import inspect
 import json
 from typing import Any
 
@@ -221,7 +222,9 @@ def test_a_declared_serializer_is_documented_as_its_component(
     assert _responses(schema, key)[str(status)]["content"]["application/json"]["schema"] == {
         "$ref": f"#/components/schemas/{component}"
     }
-    assert schema["components"]["schemas"][component]["description"] == serializer.__doc__
+    assert schema["components"]["schemas"][component]["description"] == inspect.cleandoc(
+        serializer.__doc__
+    )
 
 
 @pytest.mark.django_db

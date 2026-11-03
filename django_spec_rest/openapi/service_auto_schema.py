@@ -7,6 +7,7 @@ Importing this module pulls in ``drf-spectacular``, so the package's top-level
 
 from __future__ import annotations
 
+import inspect
 import re
 from collections.abc import Callable, Iterable
 from typing import Any, NamedTuple, cast
@@ -836,7 +837,7 @@ class _ServiceValidationErrorExtension(OpenApiSerializerExtension):
             ]
         }
         return {
-            "description": ServiceValidationErrorSerializer.__doc__,
+            "description": inspect.cleandoc(ServiceValidationErrorSerializer.__doc__ or ""),
             "anyOf": [
                 {"type": "array", "items": member},
                 {"type": "object", "additionalProperties": member},
