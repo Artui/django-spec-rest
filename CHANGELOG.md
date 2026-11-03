@@ -11,6 +11,56 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-11-03
+
+### Added
+
+- **A permission-checked operation documents its 403.** Every operation whose
+  spec declares a check other than `Unrestricted` documents a 403, the body of
+  a check's denial and of a principal who cannot act (`{"detail": ...}`, the
+  `PermissionDenied` component). Where one of the checks is a
+  `DRFPermissionCheck` (directly, or in `AllOf` or `AnyOf`) and the view's
+  first authenticator sends a `WWW-Authenticate` challenge, the 401 that check
+  answers a caller nobody authenticated with is documented beside it (the
+  `NotAuthenticated` component). The wire is unchanged. As with
+  `ValidationErrors`, a serializer that components under either name
+  (`PermissionDeniedSerializer`, `NotAuthenticatedSerializer`) is refused with
+  `ImproperlyConfigured` naming the `component_name` that fixes it, rather than
+  re-pointing every 403 or 401 at its fields.
+- **Serializers for the refusals a service raises.** Which refusals a service
+  raises is the project's to declare, with drf-spectacular's
+  `@extend_schema(responses=...)`. `django_spec_rest.openapi` now exports a
+  schema-only serializer per body `map_service_error` sends:
+  `ServiceValidationErrorSerializer` (400: a list, or an object by name, whose
+  members are a message, a list or an object of the same shape, so a list of
+  mappings too), `ServiceNotFoundSerializer` (404),
+  `ServiceConflictSerializer` (409, with `code` named and not required) and
+  `ActionUnavailableSerializer` (409, `code` required), beside the existing
+  `ServiceErrorSerializer` (422). The recipe is in the OpenAPI page. Importing
+  `django_spec_rest.openapi` still does not import drf-spectacular;
+  `ServiceValidationErrorSerializer` is rendered once `enable_openapi()` has
+  run.
+
+### Changed
+
+- **`@extend_schema(responses=...)` on a spec's operation adds to what the
+  spec documents.** drf-spectacular answers a declared `responses` as it is,
+  so declaring a 404 dropped the operation's success body, its 400 and its
+  422. A mapping of statuses is now laid over the spec's responses: a status
+  declared replaces the spec's at that status, and a declared `2xx` replaces
+  every success status the spec documents. A bare serializer passed as
+  `responses=` is the success body at the status the route answers with, where
+  it was documented at drf-spectacular's default for the method (a create
+  view's `POST` as a 200); where the spec answers a 204, which the edge sends
+  with no body, it stays the no-content 204. A project that declared every
+  response itself now sees the spec's others beside them. Only drf-spectacular's
+  own `extend_schema` is merged this way: a project's `ServiceAutoSchema`
+  subclass overriding `get_response_serializers` is answered as it writes it
+  (a status it leaves out stays out), and under `extend_schema` it is the base
+  the declared statuses are laid over. Generation writes nothing to the shared
+  schema a class-level `extend_schema` leaves on the view, so two threads
+  generating at once do not interfere.
+
 ## [0.3.1] — 2026-11-03
 
 ### Fixed
@@ -295,7 +345,8 @@ lists each with what a project rewrites.
 - **The package is no longer a Django app.** It has no models, migrations,
   templates, static files or URLs, so it needs no `INSTALLED_APPS` entry.
 
-[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/Artui/django-spec-rest/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/Artui/django-spec-rest/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/Artui/django-spec-rest/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/Artui/django-spec-rest/compare/v0.2.0...v0.2.1
