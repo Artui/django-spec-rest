@@ -41,6 +41,22 @@ carries; releases up to 0.62.0 are in
   name a generated client uses changes for such specs. A spec whose
   `input_data` reaches none of the serializer's fields keeps its component.
 
+- **A decorated action's spec is seed-checked when its viewset is mounted.**
+  On a viewset built on this package's bases (`ServiceViewSet`,
+  `SelectorViewSet`, or a class on their mixins or `ActionSerializerResolver`),
+  `as_view()` runs the kernel's seed check on every `@service_action` and
+  `@selector_action` spec against the viewset's `pool_seeds`. A spec needing a
+  keyword nothing fills, such as a seed the viewset does not register, is
+  refused there with `ImproperlyConfigured` naming the action and the seed,
+  where a `@service_action` used to mount and fail its first request with
+  `TypeError`; so a mount that passed may now be refused. A `@selector_action`
+  reading a seed its viewset registers is now served: it is no longer checked
+  against the kernel's default seeds when the method is decorated. A
+  `@service_action` on a viewset overriding `get_service_kwargs` or
+  `get_<action>_service_kwargs` is not asked, as a standalone view with one is
+  not. On DRF's own `GenericViewSet` or `ViewSet` nothing runs the check, and a
+  missing seed is the action's first request's `TypeError`.
+
 ### Added
 
 - **`permission_denied`** (`django_spec_rest.service_specs.permission_denied`):
