@@ -1,9 +1,16 @@
 """Opt-in OpenAPI / Swagger integration for ``django-spec-rest``.
 
-The framework-agnostic helpers —
+The framework-agnostic helpers live here:
+[`enable_openapi`][django_spec_rest.openapi.enable_openapi.enable_openapi], and
+the schema-only serializers documenting the bodies a service's refusals are
+answered with, which a project declares with
+``@extend_schema(responses=...)``:
 [`ServiceErrorSerializer`][django_spec_rest.openapi.service_error_serializer.ServiceErrorSerializer],
-[`enable_openapi`][django_spec_rest.openapi.enable_openapi.enable_openapi] — live
-here. Importing this module is safe even without ``drf-spectacular`` installed; it does
+[`ServiceValidationErrorSerializer`][django_spec_rest.openapi.service_validation_error_serializer.ServiceValidationErrorSerializer],
+[`ServiceNotFoundSerializer`][django_spec_rest.openapi.service_not_found_serializer.ServiceNotFoundSerializer],
+[`ServiceConflictSerializer`][django_spec_rest.openapi.service_conflict_serializer.ServiceConflictSerializer]
+and
+[`ActionUnavailableSerializer`][django_spec_rest.openapi.action_unavailable_serializer.ActionUnavailableSerializer]. Importing this module is safe even without ``drf-spectacular`` installed; it does
 not pull in the schema-generator code itself.
 
 The actual ``drf-spectacular`` integration lives in
@@ -19,12 +26,28 @@ Then call
 [`enable_openapi`][django_spec_rest.openapi.enable_openapi.enable_openapi] once
 from ``AppConfig.ready()``."""
 
+from django_spec_rest.openapi.action_unavailable_serializer import (
+    ActionUnavailableSerializer,
+)
 from django_spec_rest.openapi.enable_openapi import enable_openapi
+from django_spec_rest.openapi.service_conflict_serializer import (
+    ServiceConflictSerializer,
+)
 from django_spec_rest.openapi.service_error_serializer import (
     ServiceErrorSerializer,
 )
+from django_spec_rest.openapi.service_not_found_serializer import (
+    ServiceNotFoundSerializer,
+)
+from django_spec_rest.openapi.service_validation_error_serializer import (
+    ServiceValidationErrorSerializer,
+)
 
 __all__ = [
+    "ActionUnavailableSerializer",
+    "ServiceConflictSerializer",
     "ServiceErrorSerializer",
+    "ServiceNotFoundSerializer",
+    "ServiceValidationErrorSerializer",
     "enable_openapi",
 ]

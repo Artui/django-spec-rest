@@ -84,6 +84,19 @@ this call does.
   a converter guarantees its type, and a router's default lookup pattern or a
   `str` converter guarantees none. A key the spec declares nothing for is
   dropped rather than refused, so it earns no 400 of its own.
+- **A 403** is documented wherever the spec declares a permission check, any
+  check but `Unrestricted`: a check's denial and a principal who cannot act (a
+  deactivated account) are both answered 403, with the refusal's sentence under
+  `detail` (the `PermissionDenied` component). A spec whose checks are all
+  `Unrestricted` documents none.
+- **A 401** is documented beside it where one of the spec's checks is a
+  `DRFPermissionCheck` (directly, or inside `AllOf` or `AnyOf`) and the view's
+  first authenticator sends a `WWW-Authenticate` challenge, such as DRF's
+  `BasicAuthentication` or `TokenAuthentication`. Such a check refusing a
+  caller nobody authenticated is answered 401 there, under `detail` (the
+  `NotAuthenticated` component); behind `SessionAuthentication`, which sends no
+  challenge, or a view with no authenticator, the same refusal is the 403. A
+  kernel `PermissionCheck`'s denial is always the 403.
 - **A `filter_set`'s query parameters**, on a list operation, are the kernel's
   `filter_set_parameters`.
 
@@ -91,9 +104,69 @@ this call does.
 the body of that 422 and of the 400's `{"detail": ...}` alternative, under the
 `ServiceError` component.
 
-User-supplied `@extend_schema` annotations always win, and
+Every other `@extend_schema` argument a project supplies wins, and
 `@extend_schema(parameters=...)` merges over the filter parameters as it does
-for a view-level `FilterSet`.
+for a view-level `FilterSet`. `responses=` is added to what the spec documents,
+as the next section says.
+
+## Refusals a service raises
+
+Which refusals a service raises is yours to declare: a service may never
+raise a `ServiceValidationError`, and a retrieval with a default never answers
+404, so the schema documents only what the spec itself shows. Declare the rest
+with drf-spectacular's own `@extend_schema(responses=...)`, using the
+schema-only serializers `django_spec_rest.openapi` exports. Each documents the
+body `map_service_error` sends:
+
+| The service raises | Status | Declare | Body |
+| --- | --- | --- | --- |
+| `ServiceValidationError` | 400 | `ServiceValidationErrorSerializer` | a list, or an object by name, whose members are a message, a list or an object of the same shape |
+| `ServiceNotFound` | 404 | `ServiceNotFoundSerializer` | `{"detail": ...}` |
+| `ServiceConflict` | 409 | `ServiceConflictSerializer` | `{"detail": ...}`, and `code` where it is an `ActionUnavailable` |
+| `ActionUnavailable` | 409 | `ActionUnavailableSerializer` | `{"detail": ..., "code": ...}` |
+| any other `ServiceError` | 422 | already documented (`ServiceErrorSerializer`) | `{"detail": ...}`, and `schema` where an `AdditionalInputRequired` carries one |
+
+```python
+from drf_spectacular.utils import OpenApiResponse, extend_schema
+
+from django_spec_rest import ServiceUpdateView
+from django_spec_rest.openapi import (
+    ActionUnavailableSerializer,
+    ServiceNotFoundSerializer,
+)
+
+
+@extend_schema(
+    responses={
+        404: ServiceNotFoundSerializer,
+        409: OpenApiResponse(ActionUnavailableSerializer, description="The task is closed."),
+    }
+)
+class CloseTaskView(ServiceUpdateView):
+    spec = close_task_spec
+```
+
+A mapping of statuses is **added** to what the spec documents: the operation
+above still documents its success body, its validator's 400, its permission
+check's 403 and its 422, with the 404 and 409 beside them. A status you declare
+replaces the spec's at that status (`404` and `"404"` are one status, and so is
+a `(404, "application/json")` key), and any `2xx` you declare replaces every
+success status the spec documents. Anything else passed as `responses=`, a bare
+serializer say, is the success body at the status the route answers with.
+
+A service raising both `ServiceConflict` and its `ActionUnavailable` declares
+`ServiceConflictSerializer`, which names `code` without requiring it.
+`ServiceValidationErrorSerializer` admits every body the validator's 400
+admits, so declaring it on a spec with a validator loses none of them.
+
+The serializers are rendered by `ServiceAutoSchema`'s module, which
+`enable_openapi()` loads, so call it first. An `@extend_schema` on a view
+**class** builds on the schema the class has when it is decorated: decorated
+before `enable_openapi()` runs (a module imported from your `AppConfig`, say),
+the class keeps drf-spectacular's own `AutoSchema` and documents nothing of its
+spec. Decorating a view method, or an action through `extend_schema_view`, has
+no such order, since drf-spectacular reads the class's schema when it
+generates the document.
 
 ## A serializer body that `input_data` reaches
 
@@ -140,3 +213,11 @@ A selector spec's declared reads are not documented as query parameters, nor
 the affordance envelope a spec declaring affordances renders, nor the `null`
 body of an `allow_none` retrieve. Add them with `@extend_schema` where a
 client needs them.
+
+A refusal a service raises is not documented unless you declare it (see
+above). Nor are the refusals DRF itself answers before the spec is asked: an
+authenticator refusing credentials, and the view's own `permission_classes`.
+A deactivated principal is refused 403 on every operation, a spec whose checks
+are all `Unrestricted` included, which documents no 403: DRF's own
+authenticators and Django's `ModelBackend` never sign one in, so only a backend
+of your own that does can be answered so.

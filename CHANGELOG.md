@@ -11,6 +11,43 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+### Added
+
+- **A permission-checked operation documents its 403.** Every operation whose
+  spec declares a check other than `Unrestricted` documents a 403, the body of
+  a check's denial and of a principal who cannot act (`{"detail": ...}`, the
+  `PermissionDenied` component). Where one of the checks is a
+  `DRFPermissionCheck` (directly, or in `AllOf` or `AnyOf`) and the view's
+  first authenticator sends a `WWW-Authenticate` challenge, the 401 that check
+  answers a caller nobody authenticated with is documented beside it (the
+  `NotAuthenticated` component). The wire is unchanged.
+- **Serializers for the refusals a service raises.** Which refusals a service
+  raises is the project's to declare, with drf-spectacular's
+  `@extend_schema(responses=...)`. `django_spec_rest.openapi` now exports a
+  schema-only serializer per body `map_service_error` sends:
+  `ServiceValidationErrorSerializer` (400: a list, or an object by name, whose
+  members are a message, a list or an object of the same shape, so a list of
+  mappings too), `ServiceNotFoundSerializer` (404),
+  `ServiceConflictSerializer` (409, with `code` named and not required) and
+  `ActionUnavailableSerializer` (409, `code` required), beside the existing
+  `ServiceErrorSerializer` (422). The recipe is in the OpenAPI page. Importing
+  `django_spec_rest.openapi` still does not import drf-spectacular;
+  `ServiceValidationErrorSerializer` is rendered once `enable_openapi()` has
+  run.
+
+### Changed
+
+- **`@extend_schema(responses=...)` on a spec's operation adds to what the
+  spec documents.** drf-spectacular answers a declared `responses` as it is,
+  so declaring a 404 dropped the operation's success body, its 400 and its
+  422. A mapping of statuses is now laid over the spec's responses: a status
+  declared replaces the spec's at that status, and a declared `2xx` replaces
+  every success status the spec documents. A bare serializer passed as
+  `responses=` is the success body at the status the route answers with, where
+  it was documented at drf-spectacular's default for the method (a create
+  view's `POST` as a 200). A project that declared every response itself now
+  sees the spec's others beside them.
+
 ## [0.3.1] — 2026-11-03
 
 ### Fixed
