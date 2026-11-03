@@ -1092,19 +1092,42 @@ this call does.</p>
   the errors by name, as DRF sends them, each a list of messages, or an object
   for a nested field, or for a list its rows' errors keyed by the row's index
   (a <code>many</code> spec's rows sit under its <code>many_argument</code>); the whole call's
-  messages are under <code>non_field_errors</code>. A body that is no object is refused
-  with <code>{"detail": ...}</code>, so the 400 is either that component or the
-  <code>ServiceError</code> one.</li>
+  messages are under <code>non_field_errors</code>. The 400 is any of three shapes,
+  because the edge sends all three: that component; <code>{"detail": ...}</code> (the
+  <code>ServiceError</code> component), for a body that is no object; and a bare list of
+  messages, which is what a service's <code>ServiceValidationError</code> over a sentence
+  or a list answers with. A <code>ServiceValidationError</code> over a mapping of
+  sentences gives a sentence where the component has a field's list, so a leaf
+  of the component is a list of messages or a message. The component's name is
+  this schema's: name a serializer's component another way with
+  <code>@extend_schema_serializer(component_name=...)</code> if it would be named
+  <code>ValidationErrors</code>, since drf-spectacular keeps one schema for both and
+  documents it by the 400's body (or the 400 by its fields). Generating the
+  schema refuses such a serializer with <code>ImproperlyConfigured</code> where it is
+  resolved through this package's schema, or before the 400 is. On a view of
+  the project's own, resolved through drf-spectacular's <code>AutoSchema</code> after the
+  400, drf-spectacular's warning of two components of one name is all there
+  is.</li>
 <li><strong>A 422</strong> is documented on every service spec, whether or not it has a
   validator. It is not a validator's refusal: it is a plain <code>ServiceError</code>
   raised by the service, a precondition or a provider, which no spec can rule
-  out. Its body is <code>{"detail": ...}</code> (an <code>AdditionalInputRequired</code> carrying a
-  schema adds a <code>schema</code> key beside it).</li>
+  out. Its body is <code>{"detail": ...}</code>, with the <code>schema</code> an
+  <code>AdditionalInputRequired</code> carries beside it when it carries one (an object,
+  not required).</li>
+<li><strong>A selector spec</strong> documents the same two refusals, since a selector is
+  refused the same way: a <strong>422</strong> on every selector spec (the selector, a
+  precondition or a provider can raise a plain <code>ServiceError</code>), and a <strong>400</strong>
+  where the spec takes any parameter, a read, a shape or a filter. The 400's
+  body is the same as a validator's. A route capture is a parameter too: only
+  a converter guarantees its type, and a router's default lookup pattern or a
+  <code>str</code> converter guarantees none. A key the spec declares nothing for is
+  dropped rather than refused, so it earns no 400 of its own.</li>
 <li><strong>A <code>filter_set</code>'s query parameters</strong>, on a list operation, are the kernel's
   <code>filter_set_parameters</code>.</li>
 </ul>
-<p><code>ServiceErrorSerializer</code>, a single <code>detail</code> field, is the body of that 422 and
-of the 400 for a body that is no object, under the <code>ServiceError</code> component.</p>
+<p><code>ServiceErrorSerializer</code>, a <code>detail</code> field and the optional <code>schema</code> object, is
+the body of that 422 and of the 400's <code>{"detail": ...}</code> alternative, under the
+<code>ServiceError</code> component.</p>
 <p>User-supplied <code>@extend_schema</code> annotations always win, and
 <code>@extend_schema(parameters=...)</code> merges over the filter parameters as it does
 for a view-level <code>FilterSet</code>.</p>

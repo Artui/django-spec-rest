@@ -1903,7 +1903,11 @@ runs through the kernel's own <code>dispatch</code>, as on the standalone select
 views: its <code>permissions</code> are asked there, after the view's own classes,
 and the view's object permission of the row a RETRIEVE finds. Its
 <code>presenter</code> renders the row or the page's rows, or the viewset's
-<code>get_serializer</code> where it declares neither presenter nor affordances.</p>
+<code>get_serializer</code> where it declares neither presenter nor affordances.
+An
+<a class="autorefs autorefs-external" href="https://artui.github.io/django-service-specs/reference/#django_service_specs.services.additional_input_required.AdditionalInputRequired"><code>AdditionalInputRequired</code></a>
+answers <code>422</code> with its <code>schema</code> as raised on any viewset, DRF's own
+included, as on <code>@service_action</code>.</p>
 <p>The spec's keywords are checked when its viewset is mounted, not here:
 <code>as_view()</code> on a viewset built on this package's mixins asks the
 kernel's <code>check_seeds</code> against the viewset's <code>pool_seeds</code>, so a seed

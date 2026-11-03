@@ -1127,11 +1127,16 @@ action mixins, and <code>@service_action</code> / <code>@selector_action</code>:
   <code>204</code> beside it where <code>can_present_nothing</code>.</li>
 <li><strong>A</strong> <code>400</code> is documented wherever the spec declares a Validator: its
   refusal is DRF's field errors, whichever seat refused, so the body is the
-  <code>ValidationErrors</code> component (a <code>detail</code> sentence, as a body that is
-  no object is refused, is the <code>ServiceError</code> component beside it).</li>
+  <code>ValidationErrors</code> component. Beside it, any of what else the edge
+  sends as a 400: a <code>detail</code> sentence (the body is no object), and the
+  bare list of messages a service's <code>ServiceValidationError</code> over a
+  sentence or a list answers with.</li>
 <li><strong>A</strong> <code>422</code> is documented on every service spec, since the service, a
   precondition or a provider can raise a plain <code>ServiceError</code>, which the
-  edge answers 422 with or without a Validator.</li>
+  edge answers 422 with or without a Validator; and on every selector spec,
+  whose selector, preconditions and providers can raise one too. A selector
+  spec taking a parameter (a read, a shape or a filter) documents the
+  <code>400</code> its refusal is, with the same body.</li>
 <li><strong>A FilterSet's query parameters</strong> are the kernel's
   <code>filter_set_parameters</code>, on a list operation only.</li>
 </ul>
@@ -1185,10 +1190,10 @@ as it does for a view-level FilterSet.</p>
 
 
 
-        <p>Single-field <code>detail</code> serializer that mirrors <code>_ServiceAPIException</code>.</p>
+        <p><code>detail</code> and the optional <code>schema</code> serializer that mirrors <code>_ServiceAPIException</code>.</p>
 <p>Used by
 <a class="autorefs autorefs-internal" title="ServiceAutoSchema" href="#django_spec_rest.openapi.service_auto_schema.ServiceAutoSchema"><code>ServiceAutoSchema</code></a>
-to attach a <code>422</code> response to every spec-driven mutation in the generated OpenAPI
+to attach a <code>422</code> response to every spec-driven mutation and selector in the generated OpenAPI
 document, and as the <code>detail</code> alternative of a Validator's <code>400</code> (a body that is
 no object). It is <em>only</em> used for schema generation; runtime bodies are produced
 by DRF's exception handler.</p>
