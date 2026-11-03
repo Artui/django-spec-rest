@@ -421,6 +421,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#refusals-a-service-raises" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Refusals a service raises
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#a-serializer-body-that-input_data-reaches" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -997,6 +1008,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#refusals-a-service-raises" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Refusals a service raises
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#a-serializer-body-that-input_data-reaches" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1122,15 +1144,125 @@ this call does.</p>
   a converter guarantees its type, and a router's default lookup pattern or a
   <code>str</code> converter guarantees none. A key the spec declares nothing for is
   dropped rather than refused, so it earns no 400 of its own.</li>
+<li><strong>A 403</strong> is documented wherever the spec declares a permission check, any
+  check but <code>Unrestricted</code>: a check's denial and a principal who cannot act (a
+  deactivated account) are both answered 403, with the refusal's sentence under
+  <code>detail</code> (the <code>PermissionDenied</code> component). A spec whose checks are all
+  <code>Unrestricted</code> documents none.</li>
+<li><strong>A 401</strong> is documented beside it where one of the spec's checks is a
+  <code>DRFPermissionCheck</code> (directly, or inside <code>AllOf</code> or <code>AnyOf</code>) and the view's
+  first authenticator sends a <code>WWW-Authenticate</code> challenge, such as DRF's
+  <code>BasicAuthentication</code> or <code>TokenAuthentication</code>. Such a check refusing a
+  caller nobody authenticated is answered 401 there, under <code>detail</code> (the
+  <code>NotAuthenticated</code> component); behind <code>SessionAuthentication</code>, which sends no
+  challenge, or a view with no authenticator, the same refusal is the 403. A
+  kernel <code>PermissionCheck</code>'s denial is always the 403. The 403 and the 401
+  bodies are the <code>PermissionDenied</code> and <code>NotAuthenticated</code> components, names
+  this schema keeps as it does <code>ValidationErrors</code>: a serializer that would
+  component under either (a <code>PermissionDeniedSerializer</code>, say) is refused with
+  <code>ImproperlyConfigured</code>, whichever is resolved first, until you name its
+  component another way with <code>@extend_schema_serializer(component_name=...)</code>.</li>
 <li><strong>A <code>filter_set</code>'s query parameters</strong>, on a list operation, are the kernel's
   <code>filter_set_parameters</code>.</li>
 </ul>
 <p><code>ServiceErrorSerializer</code>, a <code>detail</code> field and the optional <code>schema</code> object, is
 the body of that 422 and of the 400's <code>{"detail": ...}</code> alternative, under the
 <code>ServiceError</code> component.</p>
-<p>User-supplied <code>@extend_schema</code> annotations always win, and
+<p>Every other <code>@extend_schema</code> argument a project supplies wins, and
 <code>@extend_schema(parameters=...)</code> merges over the filter parameters as it does
-for a view-level <code>FilterSet</code>.</p>
+for a view-level <code>FilterSet</code>. <code>responses=</code> is added to what the spec documents,
+as the next section says.</p>
+<h2 id="refusals-a-service-raises">Refusals a service raises<a class="headerlink" href="#refusals-a-service-raises" title="Permanent link">&para;</a></h2>
+<p>Which refusals a service raises is yours to declare: a service may never
+raise a <code>ServiceValidationError</code>, and a retrieval with a default never answers
+404, so the schema documents only what the spec itself shows. Declare the rest
+with drf-spectacular's own <code>@extend_schema(responses=...)</code>, using the
+schema-only serializers <code>django_spec_rest.openapi</code> exports. Each documents the
+body <code>map_service_error</code> sends:</p>
+<table>
+<thead>
+<tr>
+<th>The service raises</th>
+<th>Status</th>
+<th>Declare</th>
+<th>Body</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ServiceValidationError</code></td>
+<td>400</td>
+<td><code>ServiceValidationErrorSerializer</code></td>
+<td>a list, or an object by name, whose members are a message, a list or an object of the same shape</td>
+</tr>
+<tr>
+<td><code>ServiceNotFound</code></td>
+<td>404</td>
+<td><code>ServiceNotFoundSerializer</code></td>
+<td><code>{"detail": ...}</code></td>
+</tr>
+<tr>
+<td><code>ServiceConflict</code></td>
+<td>409</td>
+<td><code>ServiceConflictSerializer</code></td>
+<td><code>{"detail": ...}</code>, and <code>code</code> where it is an <code>ActionUnavailable</code></td>
+</tr>
+<tr>
+<td><code>ActionUnavailable</code></td>
+<td>409</td>
+<td><code>ActionUnavailableSerializer</code></td>
+<td><code>{"detail": ..., "code": ...}</code></td>
+</tr>
+<tr>
+<td>any other <code>ServiceError</code></td>
+<td>422</td>
+<td>already documented (<code>ServiceErrorSerializer</code>)</td>
+<td><code>{"detail": ...}</code>, and <code>schema</code> where an <code>AdditionalInputRequired</code> carries one</td>
+</tr>
+</tbody>
+</table>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">drf_spectacular.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">OpenApiResponse</span><span class="p">,</span> <span class="n">extend_schema</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_spec_rest</span><span class="w"> </span><span class="kn">import</span> <span class="n">ServiceUpdateView</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_spec_rest.openapi</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">ActionUnavailableSerializer</span><span class="p">,</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="n">ServiceNotFoundSerializer</span><span class="p">,</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="p">)</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="nd">@extend_schema</span><span class="p">(</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>    <span class="n">responses</span><span class="o">=</span><span class="p">{</span>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>        <span class="mi">404</span><span class="p">:</span> <span class="n">ServiceNotFoundSerializer</span><span class="p">,</span>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>        <span class="mi">409</span><span class="p">:</span> <span class="n">OpenApiResponse</span><span class="p">(</span><span class="n">ActionUnavailableSerializer</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;The task is closed.&quot;</span><span class="p">),</span>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>    <span class="p">}</span>
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="p">)</span>
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="k">class</span><span class="w"> </span><span class="nc">CloseTaskView</span><span class="p">(</span><span class="n">ServiceUpdateView</span><span class="p">):</span>
+</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>    <span class="n">spec</span> <span class="o">=</span> <span class="n">close_task_spec</span>
+</span></code></pre></div>
+<p>A mapping of statuses is <strong>added</strong> to what the spec documents: the operation
+above still documents its success body, its validator's 400, its permission
+check's 403 and its 422, with the 404 and 409 beside them. A status you declare
+replaces the spec's at that status (<code>404</code> and <code>"404"</code> are one status, and so is
+a <code>(404, "application/json")</code> key), and any <code>2xx</code> you declare replaces every
+success status the spec documents. Anything else passed as <code>responses=</code>, a bare
+serializer say, is the success body at the status the route answers with, except
+where that is a <code>204</code>: the edge sends no body with one, so it stays the
+no-content <code>204</code>. Only <code>@extend_schema</code>'s own subclass is merged this way. A
+<code>ServiceAutoSchema</code> subclass of yours that overrides <code>get_response_serializers</code>
+is answered as you wrote it (a status you leave out stays out), and under an
+<code>@extend_schema</code> it is what the declared statuses are laid over.</p>
+<p>A service raising both <code>ServiceConflict</code> and its <code>ActionUnavailable</code> declares
+<code>ServiceConflictSerializer</code>, which names <code>code</code> without requiring it.
+<code>ServiceValidationErrorSerializer</code> admits every body the validator's 400
+sends, so declaring it on a spec with a validator loses none of them.</p>
+<p>The serializers are rendered by <code>ServiceAutoSchema</code>'s module, which
+<code>enable_openapi()</code> loads, so call it first. An <code>@extend_schema</code> on a view
+<strong>class</strong> builds on the schema the class has when it is decorated: decorated
+before <code>enable_openapi()</code> runs (a module imported from your <code>AppConfig</code>, say),
+the class keeps drf-spectacular's own <code>AutoSchema</code> and documents nothing of its
+spec. Decorating a view method, or an action through <code>extend_schema_view</code>, has
+no such order, since drf-spectacular reads the class's schema when it
+generates the document.</p>
 <h2 id="a-serializer-body-that-input_data-reaches">A serializer body that <code>input_data</code> reaches<a class="headerlink" href="#a-serializer-body-that-input_data-reaches" title="Permanent link">&para;</a></h2>
 <p>A field the spec's <code>input_data</code> is annotated to fill is never the caller's,
 and one it may fill (a key its <code>TypedDict</code> declares as <code>T | UnsetType</code>) is
@@ -1194,6 +1326,13 @@ which fields it fills.</p>
 the affordance envelope a spec declaring affordances renders, nor the <code>null</code>
 body of an <code>allow_none</code> retrieve. Add them with <code>@extend_schema</code> where a
 client needs them.</p>
+<p>A refusal a service raises is not documented unless you declare it (see
+above). Nor are the refusals DRF itself answers before the spec is asked: an
+authenticator refusing credentials, and the view's own <code>permission_classes</code>.
+A deactivated principal is refused 403 on every operation, a spec whose checks
+are all <code>Unrestricted</code> included, which documents no 403: DRF's own
+authenticators and Django's <code>ModelBackend</code> never sign one in, so only a backend
+of your own that does can be answered so.</p>
 
 
 

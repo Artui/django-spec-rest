@@ -941,6 +941,50 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#django_spec_rest.openapi.service_validation_error_serializer.ServiceValidationErrorSerializer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ServiceValidationErrorSerializer
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_rest.openapi.service_not_found_serializer.ServiceNotFoundSerializer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ServiceNotFoundSerializer
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_rest.openapi.service_conflict_serializer.ServiceConflictSerializer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ServiceConflictSerializer
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_rest.openapi.action_unavailable_serializer.ActionUnavailableSerializer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ActionUnavailableSerializer
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1010,6 +1054,50 @@
     <span class="md-ellipsis">
       
         ServiceErrorSerializer
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_rest.openapi.service_validation_error_serializer.ServiceValidationErrorSerializer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ServiceValidationErrorSerializer
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_rest.openapi.service_not_found_serializer.ServiceNotFoundSerializer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ServiceNotFoundSerializer
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_rest.openapi.service_conflict_serializer.ServiceConflictSerializer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ServiceConflictSerializer
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_rest.openapi.action_unavailable_serializer.ActionUnavailableSerializer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ActionUnavailableSerializer
       
     </span>
   </a>
@@ -1137,12 +1225,27 @@ action mixins, and <code>@service_action</code> / <code>@selector_action</code>:
   whose selector, preconditions and providers can raise one too. A selector
   spec taking a parameter (a read, a shape or a filter) documents the
   <code>400</code> its refusal is, with the same body.</li>
+<li><strong>A</strong> <code>403</code> is documented wherever the spec declares a permission
+  check, any check but <code>Unrestricted</code>: a check's denial and a principal
+  who cannot act are both answered 403 with a <code>detail</code>. A <code>401</code> beside
+  it where one of those checks is a <code>DRFPermissionCheck</code>, at any depth
+  of <code>AllOf</code> and <code>AnyOf</code>, and the view's first
+  authenticator sends a <code>WWW-Authenticate</code>: DRF answers such a check's
+  refusal of a caller nobody authenticated 401 there, and 403 where the
+  authenticator sends none (<code>_caller_refusals</code>).</li>
 <li><strong>A FilterSet's query parameters</strong> are the kernel's
   <code>filter_set_parameters</code>, on a list operation only.</li>
 </ul>
-<p>User-supplied <code>@extend_schema</code> annotations always win, and
-<code>@extend_schema(parameters=...)</code> merges over the filter parameters exactly
-as it does for a view-level FilterSet.</p>
+<p>A refusal a service raises is the project's to declare, with
+<code>@extend_schema(responses={404: ServiceNotFoundSerializer})</code> and the
+other serializers <code>django_spec_rest.openapi</code> exports. A mapping of
+statuses is added to what the spec documents, each status declared
+replacing the spec's own at that status and any <code>2xx</code> declared replacing
+every success status the spec documents; any other <code>responses=</code> is the
+success body at the spec's own status (<code>_get_response_bodies</code>). Every
+other <code>@extend_schema</code> argument wins whole, and
+<code>@extend_schema(parameters=...)</code> merges over the filter parameters
+exactly as it does for a view-level FilterSet.</p>
 
 
 
@@ -1197,6 +1300,181 @@ to attach a <code>422</code> response to every spec-driven mutation and selector
 document, and as the <code>detail</code> alternative of a Validator's <code>400</code> (a body that is
 no object). It is <em>only</em> used for schema generation; runtime bodies are produced
 by DRF's exception handler.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_rest.openapi.service_validation_error_serializer.ServiceValidationErrorSerializer" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">ServiceValidationErrorSerializer</span>
+
+
+<a href="#django_spec_rest.openapi.service_validation_error_serializer.ServiceValidationErrorSerializer" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="rest_framework.serializers.Serializer">Serializer</span></code></p>
+
+
+
+        <p>The call was refused as invalid. The messages are a list, or an object by name whose values are a message, a list or an object of the same shape.</p>
+
+
+
+
+
+
+
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_rest.openapi.service_not_found_serializer.ServiceNotFoundSerializer" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">ServiceNotFoundSerializer</span>
+
+
+<a href="#django_spec_rest.openapi.service_not_found_serializer.ServiceNotFoundSerializer" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="rest_framework.serializers.Serializer">Serializer</span></code></p>
+
+
+
+        <p>The service found nothing to act on. Why is under <code>detail</code>.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_rest.openapi.service_conflict_serializer.ServiceConflictSerializer" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">ServiceConflictSerializer</span>
+
+
+<a href="#django_spec_rest.openapi.service_conflict_serializer.ServiceConflictSerializer" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="rest_framework.serializers.Serializer">Serializer</span></code></p>
+
+
+
+        <p>The call conflicts with the state of what it acts on. Why is under <code>detail</code>.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_rest.openapi.action_unavailable_serializer.ActionUnavailableSerializer" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">ActionUnavailableSerializer</span>
+
+
+<a href="#django_spec_rest.openapi.action_unavailable_serializer.ActionUnavailableSerializer" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><a class="autorefs autorefs-internal" title="ServiceConflictSerializer (django_spec_rest.openapi.service_conflict_serializer.ServiceConflictSerializer)" href="#django_spec_rest.openapi.service_conflict_serializer.ServiceConflictSerializer">ServiceConflictSerializer</a></code></p>
+
+
+
+        <p>The action is unavailable in the state of what it acts on. Why is under <code>detail</code>, and the action's stable code under <code>code</code>.</p>
 
 
 
