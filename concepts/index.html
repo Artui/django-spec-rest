@@ -1240,11 +1240,19 @@ spec through <code>@service_action(spec)</code> or <code>@selector_action(spec)<
 kind the view does not serve, an update or delete with no target, a
 <code>filter_set</code> beside <code>DjangoFilterBackend</code>, and what the kernel's seed check
 refuses of the callables' signatures, against the seeds the view registers on
-<code>pool_seeds</code>, are each an <code>ImproperlyConfigured</code> at import. A <code>@service_action</code>
-spec is not seed-checked at <code>as_view()</code>: a missing seed is its first request's
+<code>pool_seeds</code>, are each an <code>ImproperlyConfigured</code> at import. The specs of
+<code>@service_action</code> and <code>@selector_action</code> are seed-checked by their viewset's
+<code>as_view()</code>; on DRF's own <code>GenericViewSet</code> or <code>ViewSet</code>, with no base of this
+package's, they are not, and a missing seed is the first request's
 <code>TypeError</code>. A nested selector declaring <code>permissions</code> is refused by the kernel
 when the <code>ServiceSpec</code> is built, not at <code>as_view()</code>. See
 <a href="../recipes/extra-kwargs/#registering-a-seed">Registering a seed</a>.</p>
+<p>A spec handed to <code>as_view(spec=...)</code> is checked and served exactly as the same
+class attribute is, and so is every other keyword the checks read
+(<code>pool_seeds</code>, <code>success_status</code>, <code>response_finalizer</code>, <code>filter_backends</code>): DRF
+sets each on the instance, which outranks the class. A viewset's specs are its
+<code>action_specs</code>, so <code>as_view(actions, action_specs=...)</code> is checked the same way;
+a viewset declares no <code>spec</code>, and DRF refuses that keyword with a <code>TypeError</code>.</p>
 <h2 id="what-the-edge-reads-from-a-request">What the edge reads from a request<a class="headerlink" href="#what-the-edge-reads-from-a-request" title="Permanent link">&para;</a></h2>
 <p>The view turns the request into the one dict of arguments the kernel's
 <code>dispatch</code> takes, and the principal into <code>request.user</code>:</p>
@@ -1429,7 +1437,7 @@ project's <code>EXCEPTION_HANDLER</code>, answers it as it answers DRF's own:</p
 </tr>
 <tr>
 <td><code>NotPermitted</code> (a permission check refusing)</td>
-<td>403; 401 where a DRF permission class raised <code>NotAuthenticated</code> and DRF answers that with 401</td>
+<td>403 with the check's message. An adapted DRF permission class refusing a caller the request's authenticators did not recognise is DRF's <code>NotAuthenticated</code> instead, as a DRF view answers it: 401 with the first authenticator's <code>WWW-Authenticate</code>, or 403 where it sends none. A kernel <code>PermissionCheck</code>'s refusal is still the kernel's 403 for now</td>
 <td><code>{"detail": ...}</code></td>
 </tr>
 <tr>

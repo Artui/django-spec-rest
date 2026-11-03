@@ -421,6 +421,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#a-serializer-body-that-input_data-reaches" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A serializer body that input_data reaches
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#not-documented" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -986,6 +997,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#a-serializer-body-that-input_data-reaches" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A serializer body that input_data reaches
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#not-documented" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1047,8 +1069,10 @@ this call does.</p>
 <ul>
 <li><strong>The request body</strong> is a <code>SerializerValidator</code>'s serializer, under
   drf-spectacular's component name for the class, built partial where the
-  route validates partially (a <code>PATCH</code>, or a spec declaring <code>partial</code>). A
-  <code>many</code> spec takes a list of its rows. Any other validator is the kernel's
+  route validates partially (a <code>PATCH</code>, or a spec declaring <code>partial</code>).
+  Where the spec's <code>input_data</code> fills or may fill one of its fields, the body
+  is a component of its own (see below). A <code>many</code> spec takes a list of its
+  rows. Any other validator is the kernel's
   <code>spec_caller_input_schema</code>, less the target lookup's parameters and the
   route's captures, which never come from the body: a key the server fills is
   not offered, and one a provider may fill or decline is offered and not
@@ -1061,15 +1085,87 @@ this call does.</p>
 <li><strong>The status</strong> is the view's <code>success_status</code> where it is an <code>int</code>, over the
   action's default. A body documented under 204 is documented as the 200 it is
   served as, with a 204 beside it where the spec can present nothing.</li>
-<li><strong>A 422</strong> is documented wherever the spec declares a validator.</li>
+<li><strong>A 400</strong> is documented wherever the spec declares a validator, because that
+  is the status a validator's refusal gets, whichever kind refused
+  (<code>SerializerValidator</code>, <code>DataclassValidator</code> or another validator raising the
+  kernel's <code>InvalidArguments</code>). Its body is the <code>ValidationErrors</code> component:
+  the errors by name, as DRF sends them, each a list of messages, or an object
+  for a nested field, or for a list its rows' errors keyed by the row's index
+  (a <code>many</code> spec's rows sit under its <code>many_argument</code>); the whole call's
+  messages are under <code>non_field_errors</code>. A body that is no object is refused
+  with <code>{"detail": ...}</code>, so the 400 is either that component or the
+  <code>ServiceError</code> one.</li>
+<li><strong>A 422</strong> is documented on every service spec, whether or not it has a
+  validator. It is not a validator's refusal: it is a plain <code>ServiceError</code>
+  raised by the service, a precondition or a provider, which no spec can rule
+  out. Its body is <code>{"detail": ...}</code> (an <code>AdditionalInputRequired</code> carrying a
+  schema adds a <code>schema</code> key beside it).</li>
 <li><strong>A <code>filter_set</code>'s query parameters</strong>, on a list operation, are the kernel's
   <code>filter_set_parameters</code>.</li>
 </ul>
-<p><code>ServiceErrorSerializer</code>, a single <code>detail</code> field, is the body of that 422,
-under the <code>ServiceError</code> component.</p>
+<p><code>ServiceErrorSerializer</code>, a single <code>detail</code> field, is the body of that 422 and
+of the 400 for a body that is no object, under the <code>ServiceError</code> component.</p>
 <p>User-supplied <code>@extend_schema</code> annotations always win, and
 <code>@extend_schema(parameters=...)</code> merges over the filter parameters as it does
 for a view-level <code>FilterSet</code>.</p>
+<h2 id="a-serializer-body-that-input_data-reaches">A serializer body that <code>input_data</code> reaches<a class="headerlink" href="#a-serializer-body-that-input_data-reaches" title="Permanent link">&para;</a></h2>
+<p>A field the spec's <code>input_data</code> is annotated to fill is never the caller's,
+and one it may fill (a key its <code>TypedDict</code> declares as <code>T | UnsetType</code>) is
+not required of the caller, so the body says what OPTIONS says of the same
+route. drf-spectacular documents a serializer, so the body is a subclass of
+yours with the first kind of field dropped and the second not required,
+under a component name of its own. A spec whose <code>input_data</code> reaches none of
+the serializer's fields keeps your component as it is.</p>
+<p>The name is your component's, then <code>Less</code> and the fields dropped, then
+<code>Optional</code> and the fields relaxed. Each list is in sorted order, joined by
+<code>_</code>, and the two lists, where both are present, by <code>__</code>. For a <code>Task</code>
+component:</p>
+<table>
+<thead>
+<tr>
+<th><code>input_data</code> fills</th>
+<th>it may fill</th>
+<th>Component</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>owner</code></td>
+<td></td>
+<td><code>TaskLessOwner</code></td>
+</tr>
+<tr>
+<td></td>
+<td><code>owner</code></td>
+<td><code>TaskOptionalOwner</code></td>
+</tr>
+<tr>
+<td><code>owner</code>, <code>tenant</code></td>
+<td><code>note</code></td>
+<td><code>TaskLessOwner_Tenant__OptionalNote</code></td>
+</tr>
+<tr>
+<td><code>owner_id</code></td>
+<td></td>
+<td><code>TaskLessOwnerId</code></td>
+</tr>
+</tbody>
+</table>
+<p>A lower <code>snake_case</code> field is spelled in <code>PascalCase</code>. Any other field name,
+such as <code>ownerId</code>, is spelled <code>0</code> and its UTF-8 bytes in hex, so that no two
+sets of fields over one component spell the same name. drf-spectacular adds
+what it adds to your own component: <code>Patched</code> in front for a <code>PATCH</code> or a
+<code>partial</code> spec (<code>PatchedTaskLessOwner</code>), and <code>Request</code> behind under
+<code>COMPONENT_SPLIT_REQUEST</code>. A name set with
+<code>@extend_schema_serializer(component_name=...)</code> is the stem the subclass is
+named from.</p>
+<p>An <code>input_data</code> provider whose return type does not name its keys (a plain
+<code>dict</code>) may fill any field, so it requires none: every field is offered and
+none is required (<code>TaskOptionalName_Note_Owner</code>), as dispatch demands none of
+the caller and OPTIONS requires none. The serializer still validates what the
+provider leaves out, so a call missing a field the provider did not fill is
+still refused. Annotate the provider's return with a <code>TypedDict</code> to document
+which fields it fills.</p>
 <h2 id="not-documented">Not documented<a class="headerlink" href="#not-documented" title="Permanent link">&para;</a></h2>
 <p>A selector spec's declared reads are not documented as query parameters, nor
 the affordance envelope a spec declaring affordances renders, nor the <code>null</code>

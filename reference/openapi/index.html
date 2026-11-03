@@ -1104,12 +1104,15 @@ route serves it, on every surface: the standalone <code>Service*View</code> and
 <code>Selector*View</code> classes, the <code>ServiceViewSet</code> and <code>SelectorViewSet</code>
 action mixins, and <code>@service_action</code> / <code>@selector_action</code>:</p>
 <ul>
-<li><strong>The request body</strong> is a <code>SerializerValidator</code>'s serializer, so its
-  component is drf-spectacular's name for the author's class, built partial
-  exactly where the route dispatches the spec's partial variant
+<li><strong>The request body</strong> is a <code>SerializerValidator</code>'s serializer, built
+  partial exactly where the route dispatches the spec's partial variant
   (<code>kernel_spec_variant</code>): a <code>PATCH</code>, unless the Validator cannot take a
-  partial call, and a spec declaring <code>partial</code>. A <code>many</code> spec takes a
-  list of those rows. Any other Validator is the kernel's
+  partial call, and a spec declaring <code>partial</code>. Its component is
+  drf-spectacular's name for the author's class, except where the spec's
+  <code>input_data</code> reaches a field: then a subclass less the fields it fills,
+  with those it may fill not required, under a name of its own
+  (<code>caller_serializer_class</code>). A <code>many</code> spec takes a list of those
+  rows. Any other Validator is the kernel's
   <code>spec_caller_input_schema</code> less what the body does not carry
   (<code>_parameters_body</code>): what the server fills is not asked for, and a
   key a provider may fill is not required.</li>
@@ -1122,7 +1125,13 @@ action mixins, and <code>@service_action</code> / <code>@selector_action</code>:
   since a kernel spec declares none, over the action's default; a body is
   documented as the <code>200</code> it is served as where that is <code>204</code>, and the
   <code>204</code> beside it where <code>can_present_nothing</code>.</li>
-<li><strong>A</strong> <code>422</code> is documented wherever the spec declares a Validator.</li>
+<li><strong>A</strong> <code>400</code> is documented wherever the spec declares a Validator: its
+  refusal is DRF's field errors, whichever seat refused, so the body is the
+  <code>ValidationErrors</code> component (a <code>detail</code> sentence, as a body that is
+  no object is refused, is the <code>ServiceError</code> component beside it).</li>
+<li><strong>A</strong> <code>422</code> is documented on every service spec, since the service, a
+  precondition or a provider can raise a plain <code>ServiceError</code>, which the
+  edge answers 422 with or without a Validator.</li>
 <li><strong>A FilterSet's query parameters</strong> are the kernel's
   <code>filter_set_parameters</code>, on a list operation only.</li>
 </ul>
@@ -1180,8 +1189,9 @@ as it does for a view-level FilterSet.</p>
 <p>Used by
 <a class="autorefs autorefs-internal" title="ServiceAutoSchema" href="#django_spec_rest.openapi.service_auto_schema.ServiceAutoSchema"><code>ServiceAutoSchema</code></a>
 to attach a <code>422</code> response to every spec-driven mutation in the generated OpenAPI
-document. It is <em>only</em> used for schema generation; runtime 422 bodies are produced
-by DRF's exception handler from <code>_ServiceAPIException</code>.</p>
+document, and as the <code>detail</code> alternative of a Validator's <code>400</code> (a body that is
+no object). It is <em>only</em> used for schema generation; runtime bodies are produced
+by DRF's exception handler.</p>
 
 
 

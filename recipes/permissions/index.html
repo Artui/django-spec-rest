@@ -1065,10 +1065,12 @@ spec's guard the operation, wherever it is served.</p>
 DRF's <code>get_permissions</code> does:</p>
 <ul>
 <li><strong><code>has_permission</code></strong> against the request and view the call carries. A
-  refusal raises <code>DRFNotPermitted</code> with that class's own <code>message</code> and
+  refusal is decided as DRF's view decides it: for a caller the request's
+  authenticators did not recognise, <code>DRFNotAuthenticated</code>, which DRF answers
+  401 with the first authenticator's challenge, or 403 where it sends none;
+  for anyone else, <code>DRFNotPermitted</code> with that class's own <code>message</code> and
   <code>code</code>, which DRF answers 403. A class raising DRF's <code>NotAuthenticated</code>
-  leaves as <code>DRFNotAuthenticated</code>, which DRF answers 401 where the
-  authenticator supplies a challenge.</li>
+  itself leaves as <code>DRFNotAuthenticated</code> too.</li>
 <li><strong><code>has_object_permission</code></strong> of the row a write targets or a retrieve finds,
   when it is a model instance.</li>
 <li>The kernel's question about a set (a bulk call, a collection, a create)
@@ -1077,12 +1079,21 @@ DRF's <code>get_permissions</code> does:</p>
 </ul>
 <p>Each refusal is the kernel's <code>NotPermitted</code> as well, so a caller of the
 kernel's <code>dispatch</code> catches it by the kernel's class.</p>
+<p>A kernel <code>PermissionCheck</code> on the spec is not decided by that rule for now: its
+<code>NotPermitted</code> is the kernel's 403 with its <code>message</code>, even to a caller nobody
+authenticated. The kernel raises the same bare <code>NotPermitted</code> for a permission
+check's denial, for a service's own and for an inner <code>dispatch</code> its check
+refused, so the edge cannot tell the first apart; asking every one of them to
+sign in would answer an author's "Archived invoices are read-only." 401. Only
+an adapted DRF class refusing an anonymous caller is answered 401 with the
+challenge.</p>
 <h2 id="off-http">Off HTTP<a class="headerlink" href="#off-http" title="Permanent link">&para;</a></h2>
 <p>The same check runs when the spec is dispatched with no request. It builds an
 offline request and view for the principal (<code>build_offline_context</code>), so a
 class reading <code>request.user</code> reads the principal, and <code>view.action</code> is the
 call context's <code>action</code> where one is given. The offline request's query
-string is empty.</p>
+string is empty, and it has no authenticator, so an anonymous principal is
+refused with <code>NotPermitted</code>, never asked to authenticate.</p>
 <p>A class scoping by a route capture reads <code>view.kwargs</code>, which off HTTP no
 URLconf fills. Name those arguments in <code>route_reads</code>, and the check puts them
 on the offline view's <code>kwargs</code> before asking:</p>

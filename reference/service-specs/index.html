@@ -1166,6 +1166,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#django_spec_rest.service_specs.permission_denied.permission_denied" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        permission_denied
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#django_spec_rest.service_specs.translate_dispatch_errors.translate_dispatch_errors" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1663,6 +1674,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#django_spec_rest.service_specs.permission_denied.permission_denied" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        permission_denied
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#django_spec_rest.service_specs.translate_dispatch_errors.translate_dispatch_errors" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2007,7 +2029,7 @@ its model when specs are built.</p>
 
 
 <a href="#django_spec_rest.service_specs.serializer_validator.SerializerValidator.parameters" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">parameters</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Parameters</span>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">parameters</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">call_context</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Parameters</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
@@ -2017,7 +2039,13 @@ its model when specs are built.</p>
 the call builds once and validates with, so a serializer that queries
 as it is built queries once in the call
 (test_its_queries_run_once); outside one, a serializer built
-afresh for each read, as a schema or a registration reads it.</p>
+afresh for each read, as a schema or a registration reads it.
+<code>call_context</code> is the dict of the call asking, which the kernel hands
+a Validator declaring the keyword on every ask inside a call and none
+outside one; only the edge's own call is described as the edge's
+(<code>describe_serializer</code>), so the same declaration dispatched by a
+service for another principal is described unbound
+(test_a_kernel_call_of_the_view_s_own_spec_for_another_principal_is_never_described_under_the_view_s_request).</p>
 <p>A field named like a seed of the call is no parameter: one of the
 dispatcher's own names (<code>RESERVED_POOL_SEEDS</code>, the <code>user</code> case of
 test_a_writable_field_named_like_a_seed_validates_into_data) and the
@@ -2342,7 +2370,11 @@ instance each time, as a DRF view's <code>get_permissions</code> does, against t
 request and view the call carries, else the offline pair
 <a class="autorefs autorefs-internal" title="build_offline_context" href="#django_spec_rest.service_specs.build_offline_context.build_offline_context"><code>build_offline_context</code></a>
 builds for the principal. The first refusal
-raises the dual-base
+raises what DRF's view raises for it,
+<a class="autorefs autorefs-internal" title="permission_denied" href="#django_spec_rest.service_specs.permission_denied.permission_denied"><code>permission_denied</code></a>'s
+answer for the request asked: the dual-base
+<a class="autorefs autorefs-internal" title="DRFNotAuthenticated" href="#django_spec_rest.service_specs.drf_not_authenticated.DRFNotAuthenticated"><code>DRFNotAuthenticated</code></a>
+for a caller the request's authenticators did not recognise, else
 <a class="autorefs autorefs-internal" title="DRFNotPermitted" href="#django_spec_rest.service_specs.drf_not_permitted.DRFNotPermitted"><code>DRFNotPermitted</code></a>
 with that class's own <code>message</code> and <code>code</code>, so a client is told what
 a DRF view would have told it; returning <code>False</code> instead would leave the
@@ -2715,7 +2747,9 @@ never passes: <code>test_a_code_given_is_kept</code> fails without it.</p>
         <p>No principal was authenticated, as both the kernel's <code>NotPermitted</code> and DRF's <code>NotAuthenticated</code>.</p>
 <p>What an author callable's or a permission class's DRF <code>NotAuthenticated</code>
 leaves the kernel route as, through
-<a class="autorefs autorefs-internal" title="translate_drf_refusals" href="#django_spec_rest.service_specs.translate_drf_refusals.translate_drf_refusals"><code>translate_drf_refusals</code></a>.
+<a class="autorefs autorefs-internal" title="translate_drf_refusals" href="#django_spec_rest.service_specs.translate_drf_refusals.translate_drf_refusals"><code>translate_drf_refusals</code></a>,
+and what a refusal of a caller nobody authenticated is, by
+<a class="autorefs autorefs-internal" title="permission_denied" href="#django_spec_rest.service_specs.permission_denied.permission_denied"><code>permission_denied</code></a>.
 A transport reading the kernel's classes ends the attempt on it as a
 denial, and DRF's exception handler still answers it 401, with the
 authenticator's challenge, rather than the 403 the dual
@@ -2918,7 +2952,52 @@ without it.</p>
     </div>
 
 </div><h2 id="translating-refusals">Translating refusals<a class="headerlink" href="#translating-refusals" title="Permanent link">&para;</a></h2>
+<p>An adapted DRF permission class refusing a caller nobody authenticated is
+answered as DRF's view answers it, <code>permission_denied</code> below: 401 with the first
+authenticator's challenge, or 403 where it sends none. A kernel
+<code>PermissionCheck</code>'s refusal is still the kernel's 403 with its message for now.</p>
 
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="django_spec_rest.service_specs.permission_denied.permission_denied" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">permission_denied</span>
+
+
+<a href="#django_spec_rest.service_specs.permission_denied.permission_denied" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">permission_denied</span><span class="p">(</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">request</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">message</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">code</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">DRFNotAuthenticated</span> <span class="o">|</span> <span class="n">DRFNotPermitted</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>The refusal of a caller <code>request</code> carries, decided as DRF's view decides it.</p>
+<p>A request whose authenticators recognised nobody is
+<a class="autorefs autorefs-internal" title="DRFNotAuthenticated" href="#django_spec_rest.service_specs.drf_not_authenticated.DRFNotAuthenticated"><code>DRFNotAuthenticated</code></a>,
+with DRF's wording, which the view answers 401 with the first
+authenticator's <code>WWW-Authenticate</code>, or 403 where that authenticator gives
+no header. Any other, a request with no authenticator at all among them, is
+<a class="autorefs autorefs-internal" title="DRFNotPermitted" href="#django_spec_rest.service_specs.drf_not_permitted.DRFNotPermitted"><code>DRFNotPermitted</code></a>
+with <code>message</code> and <code>code</code>, 403. So a permission's <code>message</code> reaches
+only a caller who is signed in or could not have been, as in DRF.</p>
+<p>The rule an adapted DRF class is answered by:
+<a class="autorefs autorefs-internal" title="DRFPermissionCheck" href="#django_spec_rest.service_specs.drf_permission_check.DRFPermissionCheck"><code>DRFPermissionCheck</code></a>
+raises it for a class answering <code>False</code>. A kernel <code>PermissionCheck</code>'s
+<code>NotPermitted</code> is not decided by it for now: the kernel raises the same
+bare class for a permission check's denial, a service's own and a refused
+inner dispatch's, so the kernel route answers all of them 403 with their
+message, and a caller nobody authenticated is not asked to sign in by one
+(<code>tests/views/test_an_anonymous_caller_refused.py</code>). An offline request
+has no authenticator, so off HTTP a refusal is always the denial.</p>
+<p>A request that is not DRF's has no <code>authenticators</code> and is read as having
+none, so a carried stand-in is refused as an offline request is.</p>
+
+
+    </div>
+
+</div>
 
 <div class="doc doc-object doc-function">
 

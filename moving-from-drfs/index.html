@@ -1532,8 +1532,9 @@ declare every seat above.</p>
   <code>filter_set_parameters</code>: its description wording, a <code>NumberFilter</code> as a
   decimal string, an <code>OrderingFilter</code> with no <code>explode</code> or <code>style</code>, in declared
   order, with <code>maxItems</code> 1000, a <code>MultipleChoiceFilter</code> with <code>maxItems</code>, and
-  an array as a repeated key. A 422 is documented where the spec has a
-  validator. A selector's reads are not documented as query parameters, nor
+  an array as a repeated key. A validator's refusal is documented as the 400 it
+  answers, and a 422 on every service spec, the status of a plain
+  <code>ServiceError</code>. A selector's reads are not documented as query parameters, nor
   the affordance envelope, nor the <code>null</code> body of an <code>allow_none</code> retrieve.</li>
 </ul>
 <h2 id="serializer-context">Serializer context<a class="headerlink" href="#serializer-context" title="Permanent link">&para;</a></h2>
@@ -1552,6 +1553,28 @@ declare every seat above.</p>
 <li><strong><code>DRFPermissionCheck</code> takes <code>route_reads=</code></strong> for the arguments that go onto
   the offline view's <code>kwargs</code>; its <code>url_kwargs=</code> and <code>query_params=</code> are gone,
   and the offline request's query string is empty.</li>
+<li><strong>An adapted DRF class still asks a caller nobody authenticated to sign in.</strong>
+  A DRF class in <code>DRFPermissionCheck</code> refusing a caller the request's
+  authenticators did not recognise is answered DRF's <code>NotAuthenticated</code>, as
+  drfs' view answered it: 401 with the first authenticator's
+  <code>WWW-Authenticate</code> (<code>Basic realm="api"</code> with <code>BasicAuthentication</code> first),
+  or 403 "Authentication credentials were not provided." where that
+  authenticator sends no challenge, as <code>SessionAuthentication</code> does not. A
+  signed-in caller, and any caller of a view with no authenticator, is refused
+  403 with the class's own <code>message</code>. Off HTTP there is no authenticator, so
+  the refusal is the kernel's <code>NotPermitted</code>.</li>
+<li><strong>A kernel <code>PermissionCheck</code>'s refusal is the kernel's 403 for now</strong>, with
+  its message, even for an anonymous caller where drfs answered 401. The
+  kernel raises the same bare <code>NotPermitted</code> for a permission check's denial,
+  a service's own and a refused inner dispatch's, so the edge cannot ask only
+  the first to sign in; a later release will, once the kernel marks the
+  denial.</li>
+<li><strong><code>DRFPermissionCheck</code> can raise <code>DRFNotAuthenticated</code></strong>, not only
+  <code>DRFNotPermitted</code>, when the call carries a real DRF request with
+  authenticators and nobody was recognised. <code>DRFNotAuthenticated</code> is DRF's
+  <code>NotAuthenticated</code>, not a <code>PermissionDenied</code>, so code catching
+  <code>PermissionDenied</code> by name around such a dispatch no longer catches that
+  refusal; catch the kernel's <code>NotPermitted</code>, which both classes are.</li>
 <li><strong><code>UNAUTHENTICATED_USER = None</code> is passed as <code>None</code></strong>: the principal an
   anonymous request hands the kernel is <code>None</code> where the project sets it so,
   rather than an <code>AnonymousUser</code>.</li>
@@ -1570,12 +1593,11 @@ declare every seat above.</p>
 <ul>
 <li>A kernel spec under <code>@selector_action</code> does not read the view's
   <code>get_selector_kwargs</code>, and nothing refuses the override there.</li>
-<li><code>@service_action</code> does not run the kernel's seed check at <code>as_view()</code>.</li>
-<li><code>@selector_action</code> runs it when the method is decorated, against the
-  kernel's default seeds, so the callables it reads (the selector, its
-  providers and its affordance conditions) cannot name a seed its viewset's
-  <code>pool_seeds</code> registers. A permission check naming one is not read by it, and
-  is served.</li>
+<li>A <code>@service_action</code> or <code>@selector_action</code> spec is seed-checked by its
+  viewset's <code>as_view()</code>, so only on a viewset built on this package's bases.
+  On DRF's own <code>GenericViewSet</code> or <code>ViewSet</code> nothing runs the kernel's seed
+  check, and a keyword nothing fills is the action's first request's
+  <code>TypeError</code>.</li>
 <li><code>ActionSerializerResolver</code> falls back to the view's <code>serializer_class</code> for an
   action whose spec has no serializer.</li>
 <li>A service's <code>ServiceValidationError</code> keyed by a model field is answered under

@@ -1078,6 +1078,12 @@ is the route's.</p>
 <p>A kernel dispatch a service makes for another principal runs under that
 principal's offline request and view as well: neither the outer request nor the
 view reaches its validation or the description of its serializer.</p>
+<p>That holds when the service dispatches the view's own spec as well: the view's
+serializer is described once for the request's own call, under its request and
+view, and a dispatch the service makes of the same spec is described afresh,
+the kernel telling the two apart by the <code>call_context</code> each call carries. A
+service that hands its own <code>call_context</code> on to such a dispatch makes it the
+request's call again, so pass it none, or a new dict.</p>
 <h2 id="drfs-seats-without-a-request">DRF's seats without a request<a class="headerlink" href="#drfs-seats-without-a-request" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong><code>DRFPermissionCheck</code></strong> asks its classes against an offline request and view
