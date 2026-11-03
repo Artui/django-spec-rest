@@ -25,15 +25,21 @@ carries; releases up to 0.62.0 are in
 
 ### Changed
 
-- **A refused caller nobody authenticated is asked to sign in, as a DRF view
-  asks.** When a DRF permission class in `DRFPermissionCheck` returns `False`,
-  or a kernel `PermissionCheck` refuses on the kernel route, a caller the
-  request's authenticators did not recognise gets DRF's `NotAuthenticated`:
-  401 with the first authenticator's `WWW-Authenticate` when it sends one,
-  otherwise 403 "Authentication credentials were not provided.". A signed-in
-  caller, and any caller of a view with no authenticator, still gets 403 with
-  the check's own `message`. Off HTTP the refusal is still the kernel's
-  `NotPermitted`.
+- **An adapted DRF permission class refusing a caller nobody authenticated
+  asks them to sign in, as a DRF view asks.** When a DRF permission class in
+  `DRFPermissionCheck` returns `False`, a caller the request's authenticators
+  did not recognise gets DRF's `NotAuthenticated`: 401 with the first
+  authenticator's `WWW-Authenticate` when it sends one, otherwise 403
+  "Authentication credentials were not provided.". A signed-in caller, and any
+  caller of a view with no authenticator, still gets 403 with the class's own
+  `message`. So `DRFPermissionCheck` can now raise `DRFNotAuthenticated`, which
+  is not a `PermissionDenied`: code catching `PermissionDenied` around such a
+  dispatch should catch the kernel's `NotPermitted`, their common base (see
+  the move-from-drfs page). A kernel `PermissionCheck`'s refusal is still the
+  kernel's 403 with its message: the kernel raises the same `NotPermitted` for
+  a permission check's denial, a service's own and a refused inner dispatch's,
+  so asking that caller to sign in waits for the kernel to mark the denial.
+  Off HTTP the refusal is still the kernel's `NotPermitted`.
 - **The OpenAPI request body of a `SerializerValidator` spec agrees with
   OPTIONS.** Where the spec's `input_data` fills or may fill one of the
   serializer's fields, the body no longer lists the fields `input_data` always
@@ -42,7 +48,6 @@ carries; releases up to 0.62.0 are in
   `TaskLessOwner__OptionalNote` (the rule is in the OpenAPI page), so the class
   name a generated client uses changes for such specs. A spec whose
   `input_data` reaches none of the serializer's fields keeps its component.
-
 - **A decorated action's spec is seed-checked when its viewset is mounted.**
   On a viewset built on this package's bases (`ServiceViewSet`,
   `SelectorViewSet`, or a class on their mixins or `ActionSerializerResolver`),
@@ -63,7 +68,7 @@ carries; releases up to 0.62.0 are in
 
 - **`permission_denied`** (`django_spec_rest.service_specs.permission_denied`):
   the refusal DRF's `APIView.permission_denied` would raise for a request, as
-  the kernel's denial.
+  the kernel's denial. `DRFPermissionCheck` raises it for an adapted DRF class.
 
 ### Fixed
 
@@ -76,6 +81,14 @@ carries; releases up to 0.62.0 are in
 - **`SelectorListView` and `SelectorRetrieveView` serve a spec handed to
   `as_view(spec=...)`**, and a mutation view answers with an `as_view()`
   keyword's `success_status` and `response_finalizer`.
+- **A Validator's refusal is documented as the 400 the edge sends, not a
+  422.** Every kind of Validator (`SerializerValidator`, `DataclassValidator`,
+  another raising `InvalidArguments`) answers DRF's field errors under a 400,
+  which the generated schema never mentioned. A spec with a Validator now
+  documents that 400, with the errors in a `ValidationErrors` component (or
+  `{"detail": ...}` for a body that is no object). The 422 is the status of a
+  plain `ServiceError` raised by the service, a precondition or a provider, so
+  it is now documented on every service spec, with or without a Validator.
 
 ## [0.2.1] — 2026-11-02
 
