@@ -8,7 +8,9 @@ from django_spec_rest.service_specs.serializer_validator import SerializerValida
 from django_spec_rest.service_specs.utils import describe_serializer, is_input
 
 
-def seed_named_fields(validator: Any) -> frozenset[str]:
+def seed_named_fields(
+    validator: Any, *, call_context: dict[str, Any] | None = None
+) -> frozenset[str]:
     """The writable fields of ``validator``'s serializer that are no parameter of it.
 
     A ``SerializerValidator`` leaves out of ``parameters()`` a field named like
@@ -16,10 +18,12 @@ def seed_named_fields(validator: Any) -> frozenset[str]:
     its ``excluded`` lists, because the kernel refuses a parameter a seed
     occupies. These are the names a body may still send, for the serializer
     alone. Any other Validator declares every field it takes, so it has none
-    (test_another_validator_s_body_is_stripped_of_nothing).
+    (test_another_validator_s_body_is_stripped_of_nothing). ``call_context`` is
+    the dict of the call asking, handed to the serializer's description as
+    ``SerializerValidator.parameters`` hands it.
     """
     if not isinstance(validator, SerializerValidator):
         return frozenset()
-    fields = describe_serializer(validator.serializer, validator).fields
+    fields = describe_serializer(validator.serializer, validator, call_context=call_context).fields
     writable = {name for name, field in fields.items() if is_input(field)}
-    return frozenset(writable.difference(validator.parameters().names()))
+    return frozenset(writable.difference(validator.parameters(call_context=call_context).names()))
