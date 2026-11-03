@@ -331,7 +331,10 @@ class ServiceAutoSchema(AutoSchema):
 
         A component of this name that another object holds is refused rather
         than shared, since a ``$ref`` to the wrong schema documents a body the
-        edge never sends (test_a_serializer_taking_the_component_name_is_refused_whichever_comes_first).
+        edge never sends (test_validation_errors_component_name's
+        test_is_refused_whichever_comes_first). Only where this package's schema
+        sees both: a view on drf-spectacular's own ``AutoSchema`` resolving the
+        serializer after the 400 gets drf-spectacular's warning alone.
         """
         component = ResolvedComponent(
             name=_VALIDATION_ERRORS,

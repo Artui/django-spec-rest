@@ -279,8 +279,9 @@ class MountedView:
     (test_mounting_makes_no_class). A name is read off the class, never an
     instance, so a function stored there is returned unbound, as the checks
     read it. ``base`` is a view class or another ``MountedView``, and
-    ``__dir__`` lists both sides, so ``inspect.getmembers`` sees the class's
-    decorated actions through it (test_selector_action's
+    ``__dir__`` lists the base's names, so ``inspect.getmembers`` sees the
+    class's decorated actions through it; an override never adds one, since
+    DRF refuses a keyword the class does not declare (test_selector_action's
     test_a_keyword_nothing_fills_is_refused fails without it).
     """
 
@@ -296,7 +297,7 @@ class MountedView:
         return overrides[name] if name in overrides else getattr(self._mounted_base, name)
 
     def __dir__(self) -> list[str]:
-        return sorted({*dir(self._mounted_base), *self._mounted_overrides})
+        return dir(self._mounted_base)
 
 
 def mounted_view(view_cls: type, initkwargs: Mapping[str, Any]) -> MountedView:

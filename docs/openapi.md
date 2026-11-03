@@ -61,11 +61,15 @@ this call does.
   or a list answers with. A `ServiceValidationError` over a mapping of
   sentences gives a sentence where the component has a field's list, so a leaf
   of the component is a list of messages or a message. The component's name is
-  this schema's: a serializer whose component would be named
-  `ValidationErrors` is refused with `ImproperlyConfigured` while the schema is
-  generated, since drf-spectacular would otherwise document it by the 400's
-  body (or the 400 by its fields); name its component another way with
-  `@extend_schema_serializer(component_name=...)`.
+  this schema's: name a serializer's component another way with
+  `@extend_schema_serializer(component_name=...)` if it would be named
+  `ValidationErrors`, since drf-spectacular keeps one schema for both and
+  documents it by the 400's body (or the 400 by its fields). Generating the
+  schema refuses such a serializer with `ImproperlyConfigured` where it is
+  resolved through this package's schema, or before the 400 is. On a view of
+  the project's own, resolved through drf-spectacular's `AutoSchema` after the
+  400, drf-spectacular's warning of two components of one name is all there
+  is.
 - **A 422** is documented on every service spec, whether or not it has a
   validator. It is not a validator's refusal: it is a plain `ServiceError`
   raised by the service, a precondition or a provider, which no spec can rule
