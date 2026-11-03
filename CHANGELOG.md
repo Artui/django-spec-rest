@@ -11,6 +11,8 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-11-03
+
 ### Security
 
 - **A spec handed to `as_view(spec=...)` meets every check the same class
@@ -235,7 +237,8 @@ lists each with what a project rewrites.
 - **The package is no longer a Django app.** It has no models, migrations,
   templates, static files or URLs, so it needs no `INSTALLED_APPS` entry.
 
-[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Artui/django-spec-rest/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/Artui/django-spec-rest/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Artui/django-spec-rest/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Artui/django-spec-rest/compare/v0.0.0...v0.1.0
