@@ -22,7 +22,8 @@ from django_service_specs import (
     ServiceSpec,
     Unrestricted,
 )
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.authentication import BasicAuthentication
+from rest_framework.permissions import BasePermission, IsAuthenticated
 
 from django_spec_rest import SelectorListView, ServiceViewSet, service_action
 from django_spec_rest.service_specs.drf_permission_check import DRFPermissionCheck
@@ -101,6 +102,27 @@ SEND_SPEC = ServiceSpec(
     ],
 )
 
+
+class IsStaff(BasePermission):
+    """Admits staff only; its ``message`` reaches a caller who is signed in."""
+
+    message = "Only staff can list every invoice."
+
+    def has_permission(self, request: Any, view: Any) -> bool:
+        return bool(request.user and request.user.is_staff)
+
+
+# An adapted DRF class refusing a caller nobody authenticated is answered as a
+# DRF view answers it: 401 with the first authenticator's challenge. A signed-in
+# caller it refuses is a 403 carrying its ``message``. A kernel
+# ``PermissionCheck`` refusing is still a 403 for either.
+STAFF_SPEC = SelectorSpec(
+    kind=SelectorKind.LIST,
+    selector=list_invoices,
+    permissions=(DRFPermissionCheck([IsStaff]),),
+    presenter=PRESENTER,
+)
+
 SENT_SPEC = SelectorSpec(
     kind=SelectorKind.LIST,
     selector=sent_invoices,
@@ -135,3 +157,15 @@ class SentInvoiceListView(SelectorListView):
     """``GET /sent-invoices/``: one selector spec on a standalone view."""
 
     spec = SENT_SPEC
+
+
+class StaffInvoiceListView(SelectorListView):
+    """``GET /staff-invoices/``: the only route here with an authenticator.
+
+    The project configures none, so every other route answers a refused
+    anonymous caller 403; this one's ``BasicAuthentication`` is the
+    ``WWW-Authenticate`` challenge of the 401.
+    """
+
+    authentication_classes = [BasicAuthentication]
+    spec = STAFF_SPEC
