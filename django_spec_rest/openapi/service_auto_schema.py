@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Iterable
-from typing import Any, cast
+from typing import Any, NamedTuple, cast
 
 from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import (
@@ -267,37 +267,52 @@ class ServiceAutoSchema(AutoSchema):
         drf-spectacular's ``extend_schema`` subclasses this schema and answers
         ``get_response_serializers`` with the declared ``responses`` as they
         are, which would drop every response the spec documents for the ones
-        a project declares, the ``2xx`` body included. So where a subclass
-        answers it, a mapping of statuses is laid over this class's own
-        reading of a spec (``_merged``) and rendered by drf-spectacular as if
-        it had been declared (test_a_declared_refusal_is_added_to_the_spec_s_responses).
+        a project declares, the ``2xx`` body included. So where that subclass
+        answers it (``_under_extend_schema``), a mapping of statuses is laid
+        over the reading of the class beneath it, this one or a project's own
+        subclass with its customisation (``_merged``), and rendered as
+        drf-spectacular renders a mapping
+        (test_a_declared_refusal_is_added_to_the_spec_s_responses). Nothing is
+        written to the schema, which a class-level ``extend_schema`` shares
+        between every generation
+        (test_one_shared_class_level_schema_renders_in_two_threads).
         Anything else declared is the success body, at the status the spec
         answers with, where drf-spectacular would document it at its own
         default for the method alone
-        (test_a_bare_serializer_declared_is_the_success_body). A view no spec
+        (test_a_bare_serializer_declared_is_the_success_body); the edge sends
+        no body with a ``204``, so where the spec answers one there is no
+        success body to declare (test_keeps_the_no_content_204). A view no spec
         documents, and a schema no ``extend_schema`` subclassed, are rendered
         as drf-spectacular renders them
-        (test_a_view_no_spec_documents_is_drf_spectacular_s).
+        (test_a_view_no_spec_documents_is_drf_spectacular_s,
+        test_a_subclass_dropping_a_status_keeps_it_dropped).
         """
-        if type(self).get_response_serializers is ServiceAutoSchema.get_response_serializers:
+        beneath = _under_extend_schema(type(self))
+        if beneath is None:
             return super()._get_response_bodies(direction)
-        own = ServiceAutoSchema.get_response_serializers(self)
+        own = beneath.get_response_serializers(self)
         if not isinstance(own, dict):
             return super()._get_response_bodies(direction)
         declared = self.get_response_serializers()
         if not isinstance(declared, dict):
             # The spec's own responses lead with its success status.
-            declared = {next(iter(own)): declared}
-        merged = _merged(own, declared)
-        # drf-spectacular reads the mapping off ``get_response_serializers``,
-        # which ``extend_schema``'s subclass answers above this class; an
-        # attribute of the instance outranks both for this one call, as
-        # ``_as_method`` swaps ``method``.
-        vars(self)["get_response_serializers"] = lambda: merged
-        try:
-            return super()._get_response_bodies(direction)
-        finally:
-            del vars(self)["get_response_serializers"]
+            lead = next(iter(own))
+            declared = {} if _status(lead) == "204" else {lead: declared}
+        responses: dict[str, Any] = {}
+        # drf-spectacular's own rendering of a mapping, since its
+        # ``_get_response_bodies`` reads the mapping off an attribute that
+        # ``extend_schema``'s subclass answers.
+        for code, serializer in _merged(own, declared).items():
+            if isinstance(code, tuple):
+                code, media_types = str(code[0]), code[1:]
+            else:
+                code, media_types = str(code), None
+            rendered = self._get_response_for_code(serializer, code, media_types, direction)
+            if code in responses:
+                responses[code]["content"].update(rendered["content"])
+            else:
+                responses[code] = rendered
+        return responses
 
     def get_response_serializers(self) -> Any:
         spec = resolve_service_spec(self.view)
@@ -457,7 +472,7 @@ class ServiceAutoSchema(AutoSchema):
             self.registry.register_on_missing(component)
         else:
             if holder is not _ValidationErrors:
-                raise _name_taken(holder)
+                raise _name_taken(holder, _VALIDATION_ERRORS, _VALIDATION_ERRORS_BODY)
         detail = self.resolve_serializer(ServiceErrorSerializer, "response")
         return OpenApiResponse(
             response={"anyOf": [component.ref, detail.ref, _MESSAGES]},
@@ -470,7 +485,19 @@ class ServiceAutoSchema(AutoSchema):
         # No serializer is ``ValidationErrors``: the registry answered one for
         # the name it was given, which this schema registered first.
         if resolved.object is _ValidationErrors:
-            raise _name_taken(serializer)
+            raise _name_taken(serializer, _VALIDATION_ERRORS, _VALIDATION_ERRORS_BODY)
+        # The two refusal serializers are named the same way, but the registry
+        # answers whichever registered first: a mismatch is a project serializer
+        # on either side of this schema's own
+        # (test_is_refused_when_the_serializer_comes_first,
+        # test_is_refused_when_the_refusal_comes_first).
+        reserved = _REFUSAL_COMPONENTS.get(resolved.name)
+        if reserved is not None:
+            asked = _is_a(serializer, reserved.serializer)
+            if asked != _is_a(resolved.object, reserved.serializer):
+                raise _name_taken(
+                    resolved.object if asked else serializer, resolved.name, reserved.body
+                )
         return resolved
 
     def _kernel_rows(self, spec: KernelSelectorSpec, presenter: Presenter) -> Any:
@@ -560,20 +587,21 @@ def _without(schema: dict[str, Any], names: Iterable[str]) -> dict[str, Any]:
 
 
 _VALIDATION_ERRORS = "ValidationErrors"
+_VALIDATION_ERRORS_BODY = "the body of a Validator's refusal"
 
 
-def _name_taken(holder: Any) -> ImproperlyConfigured:
-    """The refusal for a serializer that components under the name this schema reserves.
+def _name_taken(holder: Any, name: str, body: str) -> ImproperlyConfigured:
+    """The refusal for a serializer that components under a name this schema reserves.
 
     drf-spectacular only warns of two components of one name and then keeps one
-    for both, so the serializer's own response, or this schema's ``400``, would
-    be documented by the other's body.
+    for both, so the serializer's own response, or this schema's ``body``, would
+    be documented by the other's.
     """
     owner = holder if isinstance(holder, type) else type(holder)
     return ImproperlyConfigured(
         f"{owner.__module__}.{owner.__qualname__} is documented as the component "
-        f"{_VALIDATION_ERRORS!r}, the name django_spec_rest gives the body of a "
-        "Validator's refusal. Name the serializer's component another way, with "
+        f"{name!r}, the name django_spec_rest gives {body}. "
+        "Name the serializer's component another way, with "
         "@extend_schema_serializer(component_name=...)."
     )
 
@@ -609,6 +637,8 @@ _VALIDATION_ERRORS_SCHEMA: dict[str, Any] = {
     },
 }
 """The ``400`` body of a Validator's refusal; recursive, so no serializer can state it."""
+
+_EXTEND_SCHEMA_MODULE = "drf_spectacular.utils"
 
 _ROUTE_CAPTURE = re.compile(r"<(?:[^<>:]+:)?([^<>:]+)>|\(\?P<([^<>]+)>")
 """A route's captured name: a ``path()`` converter's, or a regex's named group."""
@@ -693,6 +723,35 @@ def _merged(own: dict[Any, Any], declared: dict[Any, Any]) -> dict[Any, Any]:
     return {**kept, **declared}
 
 
+def _is_extend_schema(schema_type: type) -> bool:
+    """Whether ``schema_type`` is drf-spectacular's ``extend_schema`` subclass.
+
+    A local class of ``extend_schema``, so named by where it is defined. A
+    project's own class called ``ExtendedSchema`` is not it
+    (test_a_project_class_named_for_it_is_not_extend_schema_s).
+    """
+    return (
+        schema_type.__module__ == _EXTEND_SCHEMA_MODULE and schema_type.__name__ == "ExtendedSchema"
+    )
+
+
+def _under_extend_schema(schema_type: type) -> type[AutoSchema] | None:
+    """The class whose ``get_response_serializers`` a schema's is laid over, or ``None``.
+
+    Only where ``extend_schema``'s subclass answers it (the first class of the
+    MRO that does): the class below every one of those, which is this schema or
+    a project's subclass of it. A project's subclass that overrides it with no
+    ``extend_schema`` above is answered as it is, so what it leaves out stays
+    out (test_a_subclass_dropping_a_status_keeps_it_dropped), and one beneath
+    ``extend_schema`` keeps its own reading
+    (test_and_so_does_one_under_a_class_level_extend_schema).
+    """
+    answering = [cls for cls in schema_type.__mro__ if "get_response_serializers" in vars(cls)]
+    if not _is_extend_schema(answering[0]):
+        return None
+    return cast("type[AutoSchema]", next(cls for cls in answering if not _is_extend_schema(cls)))
+
+
 def _status(code: Any) -> str:
     """The status a key of a ``responses`` mapping names, as drf-spectacular spells it."""
     return str(code[0] if isinstance(code, tuple) else code)
@@ -730,6 +789,24 @@ class _NotAuthenticated(Serializer):
     detail = CharField()
 
 
+class _Reserved(NamedTuple):
+    """A component name this schema keeps for one of its serializers, and what it documents."""
+
+    serializer: type[Serializer]
+    body: str
+
+
+_REFUSAL_COMPONENTS: dict[str, _Reserved] = {
+    "PermissionDenied": _Reserved(_PermissionDenied, "the body of a refused permission check"),
+    "NotAuthenticated": _Reserved(_NotAuthenticated, "the body of a caller nobody authenticated"),
+}
+
+
+def _is_a(candidate: Any, serializer: type[Serializer]) -> bool:
+    """Whether ``candidate``, a serializer class or instance, is ``serializer``'s."""
+    return candidate is serializer or isinstance(candidate, serializer)
+
+
 class _ServiceValidationErrorExtension(OpenApiSerializerExtension):
     """Renders ``ServiceValidationErrorSerializer`` as the body DRF sends for a ``ServiceValidationError``.
 
@@ -739,9 +816,9 @@ class _ServiceValidationErrorExtension(OpenApiSerializerExtension):
     same rules, to any depth; never a bare sentence. So the component is a list
     or an object whose every member is a message or the component itself
     (test_each_service_error_the_edge_sends_is_the_documented_body).
-    It admits every body the package's own ``400`` does, so a project
-    declaring it over a Validator's ``400`` loses none of them
-    (test_every_body_the_spec_s_400_admits_is_admitted). Registered by
+    It admits every body the Validator's ``400`` sends, so a project
+    declaring it over that ``400`` loses none of them
+    (test_every_body_the_validator_s_400_sends_is_admitted). Registered by
     defining it: drf-spectacular collects each extension class as it is
     created, and this module is what ``enable_openapi`` imports.
     """

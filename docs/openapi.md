@@ -96,7 +96,12 @@ this call does.
   caller nobody authenticated is answered 401 there, under `detail` (the
   `NotAuthenticated` component); behind `SessionAuthentication`, which sends no
   challenge, or a view with no authenticator, the same refusal is the 403. A
-  kernel `PermissionCheck`'s denial is always the 403.
+  kernel `PermissionCheck`'s denial is always the 403. The 403 and the 401
+  bodies are the `PermissionDenied` and `NotAuthenticated` components, names
+  this schema keeps as it does `ValidationErrors`: a serializer that would
+  component under either (a `PermissionDeniedSerializer`, say) is refused with
+  `ImproperlyConfigured`, whichever is resolved first, until you name its
+  component another way with `@extend_schema_serializer(component_name=...)`.
 - **A `filter_set`'s query parameters**, on a list operation, are the kernel's
   `filter_set_parameters`.
 
@@ -152,12 +157,17 @@ check's 403 and its 422, with the 404 and 409 beside them. A status you declare
 replaces the spec's at that status (`404` and `"404"` are one status, and so is
 a `(404, "application/json")` key), and any `2xx` you declare replaces every
 success status the spec documents. Anything else passed as `responses=`, a bare
-serializer say, is the success body at the status the route answers with.
+serializer say, is the success body at the status the route answers with, except
+where that is a `204`: the edge sends no body with one, so it stays the
+no-content `204`. Only `@extend_schema`'s own subclass is merged this way. A
+`ServiceAutoSchema` subclass of yours that overrides `get_response_serializers`
+is answered as you wrote it (a status you leave out stays out), and under an
+`@extend_schema` it is what the declared statuses are laid over.
 
 A service raising both `ServiceConflict` and its `ActionUnavailable` declares
 `ServiceConflictSerializer`, which names `code` without requiring it.
 `ServiceValidationErrorSerializer` admits every body the validator's 400
-admits, so declaring it on a spec with a validator loses none of them.
+sends, so declaring it on a spec with a validator loses none of them.
 
 The serializers are rendered by `ServiceAutoSchema`'s module, which
 `enable_openapi()` loads, so call it first. An `@extend_schema` on a view

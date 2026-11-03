@@ -262,7 +262,7 @@ def test_an_action_unavailable_requires_its_code(schema: dict[str, Any]) -> None
 
 
 @pytest.mark.django_db
-class TestEveryBodyTheSpecS400AdmitsIsAdmitted:
+class TestEveryBodyTheValidatorS400SendsIsAdmitted:
     """A declared ``ServiceValidationErrorSerializer`` replaces a Validator's 400 and loses none of its bodies."""
 
     @pytest.mark.parametrize(
@@ -279,7 +279,7 @@ class TestEveryBodyTheSpecS400AdmitsIsAdmitted:
             ("serializer", [1]),
         ],
     )
-    def test_every_body_the_spec_s_400_admits_is_admitted(
+    def test_every_body_the_validator_s_400_sends_is_admitted(
         self, schema: dict[str, Any], key: str, body: Any
     ) -> None:
         route = f"declared-{key}"

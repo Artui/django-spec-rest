@@ -22,7 +22,11 @@ carries; releases up to 0.62.0 are in
   `DRFPermissionCheck` (directly, or in `AllOf` or `AnyOf`) and the view's
   first authenticator sends a `WWW-Authenticate` challenge, the 401 that check
   answers a caller nobody authenticated with is documented beside it (the
-  `NotAuthenticated` component). The wire is unchanged.
+  `NotAuthenticated` component). The wire is unchanged. As with
+  `ValidationErrors`, a serializer that components under either name
+  (`PermissionDeniedSerializer`, `NotAuthenticatedSerializer`) is refused with
+  `ImproperlyConfigured` naming the `component_name` that fixes it, rather than
+  re-pointing every 403 or 401 at its fields.
 - **Serializers for the refusals a service raises.** Which refusals a service
   raises is the project's to declare, with drf-spectacular's
   `@extend_schema(responses=...)`. `django_spec_rest.openapi` now exports a
@@ -47,8 +51,15 @@ carries; releases up to 0.62.0 are in
   every success status the spec documents. A bare serializer passed as
   `responses=` is the success body at the status the route answers with, where
   it was documented at drf-spectacular's default for the method (a create
-  view's `POST` as a 200). A project that declared every response itself now
-  sees the spec's others beside them.
+  view's `POST` as a 200); where the spec answers a 204, which the edge sends
+  with no body, it stays the no-content 204. A project that declared every
+  response itself now sees the spec's others beside them. Only drf-spectacular's
+  own `extend_schema` is merged this way: a project's `ServiceAutoSchema`
+  subclass overriding `get_response_serializers` is answered as it writes it
+  (a status it leaves out stays out), and under `extend_schema` it is the base
+  the declared statuses are laid over. Generation writes nothing to the shared
+  schema a class-level `extend_schema` leaves on the view, so two threads
+  generating at once do not interfere.
 
 ## [0.3.1] — 2026-11-03
 
