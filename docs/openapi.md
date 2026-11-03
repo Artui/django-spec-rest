@@ -54,19 +54,42 @@ this call does.
   the errors by name, as DRF sends them, each a list of messages, or an object
   for a nested field, or for a list its rows' errors keyed by the row's index
   (a `many` spec's rows sit under its `many_argument`); the whole call's
-  messages are under `non_field_errors`. A body that is no object is refused
-  with `{"detail": ...}`, so the 400 is either that component or the
-  `ServiceError` one.
+  messages are under `non_field_errors`. The 400 is any of three shapes,
+  because the edge sends all three: that component; `{"detail": ...}` (the
+  `ServiceError` component), for a body that is no object; and a bare list of
+  messages, which is what a service's `ServiceValidationError` over a sentence
+  or a list answers with. A `ServiceValidationError` over a mapping of
+  sentences gives a sentence where the component has a field's list, so a leaf
+  of the component is a list of messages or a message. The component's name is
+  this schema's: name a serializer's component another way with
+  `@extend_schema_serializer(component_name=...)` if it would be named
+  `ValidationErrors`, since drf-spectacular keeps one schema for both and
+  documents it by the 400's body (or the 400 by its fields). Generating the
+  schema refuses such a serializer with `ImproperlyConfigured` where it is
+  resolved through this package's schema, or before the 400 is. On a view of
+  the project's own, resolved through drf-spectacular's `AutoSchema` after the
+  400, drf-spectacular's warning of two components of one name is all there
+  is.
 - **A 422** is documented on every service spec, whether or not it has a
   validator. It is not a validator's refusal: it is a plain `ServiceError`
   raised by the service, a precondition or a provider, which no spec can rule
-  out. Its body is `{"detail": ...}` (an `AdditionalInputRequired` carrying a
-  schema adds a `schema` key beside it).
+  out. Its body is `{"detail": ...}`, with the `schema` an
+  `AdditionalInputRequired` carries beside it when it carries one (an object,
+  not required).
+- **A selector spec** documents the same two refusals, since a selector is
+  refused the same way: a **422** on every selector spec (the selector, a
+  precondition or a provider can raise a plain `ServiceError`), and a **400**
+  where the spec takes any parameter, a read, a shape or a filter. The 400's
+  body is the same as a validator's. A route capture is a parameter too: only
+  a converter guarantees its type, and a router's default lookup pattern or a
+  `str` converter guarantees none. A key the spec declares nothing for is
+  dropped rather than refused, so it earns no 400 of its own.
 - **A `filter_set`'s query parameters**, on a list operation, are the kernel's
   `filter_set_parameters`.
 
-`ServiceErrorSerializer`, a single `detail` field, is the body of that 422 and
-of the 400 for a body that is no object, under the `ServiceError` component.
+`ServiceErrorSerializer`, a `detail` field and the optional `schema` object, is
+the body of that 422 and of the 400's `{"detail": ...}` alternative, under the
+`ServiceError` component.
 
 User-supplied `@extend_schema` annotations always win, and
 `@extend_schema(parameters=...)` merges over the filter parameters as it does

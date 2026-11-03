@@ -26,6 +26,7 @@ from django_service_specs import (
     Parameters,
     ServiceError,
     ServiceSpec,
+    ServiceValidationError,
     Unrestricted,
     Validator,
 )
@@ -80,6 +81,13 @@ def _unprocessable(*, data: Any = None, **_: Any) -> None:
     raise ServiceError("Could not.")
 
 
+def _refusing(detail: Any) -> Any:
+    def service(*, data: Any = None, **_: Any) -> None:
+        raise ServiceValidationError(detail)
+
+    return service
+
+
 def _spec(validator: Validator | None, **fields: Any) -> ServiceSpec:
     return ServiceSpec(
         **{
@@ -100,6 +108,12 @@ _SPECS: dict[str, ServiceSpec] = {
     "custom": _spec(_Refusing()),
     "unprocessable": _spec(SerializerValidator(_Person), service=_unprocessable),
     "unprocessable-bare": _spec(None, service=_unprocessable),
+    # A service's own ``ServiceValidationError`` is answered as DRF answers
+    # ``ValidationError(detail)``: a sentence or a list of them is a bare list,
+    # a mapping's string is a string leaf.
+    "service-sentence": _spec(SerializerValidator(_Person), service=_refusing("Bad.")),
+    "service-list": _spec(SerializerValidator(_Person), service=_refusing(["Bad."])),
+    "service-mapping": _spec(SerializerValidator(_Person), service=_refusing({"name": "Bad."})),
 }
 
 _VALID = {"name": "ab", "address": {"street": 1}, "tags": [1]}
@@ -186,9 +200,24 @@ class TestARefusedCallIsA400:
         assert set(sent) == {"detail"}
         jsonschema.validate(sent, _documented(schema, "serializer", "400"))
 
+    @pytest.mark.parametrize(
+        ("key", "wire"),
+        [
+            ("service-sentence", ["Bad."]),
+            ("service-list", ["Bad."]),
+            ("service-mapping", {"name": "Bad."}),
+        ],
+    )
+    def test_a_service_s_validation_error_is_documented_in_the_shape_it_is_sent(
+        self, schema: dict[str, Any], key: str, wire: Any
+    ) -> None:
+        status, sent = _post(key, _VALID)
+        assert (status, sent) == (400, wire)
+        jsonschema.validate(sent, _documented(schema, key, "400"))
+
     def test_the_400_refuses_a_body_the_edge_never_sends(self, schema: dict[str, Any]) -> None:
         documented = _documented(schema, "serializer", "400")
-        for never in ({"name": 1}, {"name": {"a": 1}}, ["x"]):
+        for never in ({"name": 1}, {"name": [1]}, {"name": {"a": 1}}, ["x", 1], "x", [[]]):
             with pytest.raises(jsonschema.ValidationError):
                 jsonschema.validate(never, documented)
 

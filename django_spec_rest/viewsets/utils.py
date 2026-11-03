@@ -21,7 +21,7 @@ from django_spec_rest.views.spec_validation import (
     validate_mutation_view_spec,
     validate_selector_view_spec,
 )
-from django_spec_rest.views.utils import mounted_view, view_pool_seeds
+from django_spec_rest.views.utils import MountedView, mounted_view, view_pool_seeds
 
 ActionSpec = KernelServiceSpec | KernelSelectorSpec
 
@@ -160,25 +160,29 @@ def resolve_action_selector_spec(
     return entry
 
 
-def _as_mounted(view_cls: type, action: str, spec: object, *, label: str) -> type:
+def _as_mounted(
+    view_cls: type | MountedView, action: str, spec: object, *, label: str
+) -> MountedView:
     """``view_cls`` as a standalone view would carry ``spec``: on ``spec``, serving ``action``.
 
     The standalone views' kernel checks (``validate_mutation_view_spec`` and
     ``validate_selector_view_spec``) read the spec, the view's hooks, its
     ``success_status`` and ``response_finalizer`` and the ``action`` its
-    per-action hooks are named for, all off the class. A subclass of the
-    viewset carrying the entry as its ``spec`` and the key as its ``action``
-    answers each of those as the viewset does for that action, so the entry
-    is asked exactly what the standalone view asks of its spec, the checks
-    added to those entry points included, rather than a copy of them. Named
-    after the entry, so a refusal names the action it is about
-    (test_service_viewset's test_the_refusal_names_the_action).
+    per-action hooks are named for, all off the class. The viewset read
+    through the entry as its ``spec`` and the key as its ``action`` answers
+    each of those as the viewset does for that action, so the entry is asked
+    exactly what the standalone view asks of its spec, the checks added to
+    those entry points included, rather than a copy of them. A ``MountedView``
+    rather than a subclass, so no class is made per entry
+    (test_mounting_makes_no_class), and named after the entry, so a refusal
+    names the action it is about (test_service_viewset's
+    test_the_refusal_names_the_action).
     """
-    return type(label, (view_cls,), {"spec": spec, "action": action})
+    return MountedView(view_cls, {"spec": spec, "action": action}, name=label)
 
 
 def _validate_kernel_action_spec(
-    view_cls: type,
+    view_cls: type | MountedView,
     action: str,
     spec: KernelServiceSpec | KernelSelectorSpec,
     *,
@@ -222,7 +226,7 @@ def _validate_kernel_action_spec(
 
 
 def _validate_action_spec(
-    view_cls: type, action: str, spec: object, *, pool_seeds: PoolSeeds
+    view_cls: type | MountedView, action: str, spec: object, *, pool_seeds: PoolSeeds
 ) -> None:
     """Run fail-fast validation for a single ``action_specs`` entry.
 
@@ -242,7 +246,7 @@ def _is_decorated(member: object) -> bool:
     return hasattr(member, "_service_spec") or hasattr(member, "_selector_spec")
 
 
-def _fills_service_keywords(view_cls: type, action: str) -> bool:
+def _fills_service_keywords(view_cls: type | MountedView, action: str) -> bool:
     """Whether ``view_cls`` has a service-kwargs hook that reaches ``action``'s service.
 
     A hook's keys reach the service's pool through the edge's overlay, which
@@ -262,7 +266,7 @@ def _fills_service_keywords(view_cls: type, action: str) -> bool:
     )
 
 
-def _validate_decorated_actions(view_cls: type, *, pool_seeds: PoolSeeds) -> None:
+def _validate_decorated_actions(view_cls: type | MountedView, *, pool_seeds: PoolSeeds) -> None:
     """Ask each decorated action's spec the kernel's ``check_seeds`` against ``pool_seeds``.
 
     ``@service_action`` and ``@selector_action`` run before their viewset and

@@ -11,6 +11,7 @@ import re
 from collections.abc import Callable, Iterable
 from typing import Any, cast
 
+from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import (
     Presenter,
     SelectorKind,
@@ -86,11 +87,16 @@ class ServiceAutoSchema(AutoSchema):
       ``204`` beside it where ``can_present_nothing``.
     - **A** ``400`` is documented wherever the spec declares a Validator: its
       refusal is DRF's field errors, whichever seat refused, so the body is the
-      ``ValidationErrors`` component (a ``detail`` sentence, as a body that is
-      no object is refused, is the ``ServiceError`` component beside it).
+      ``ValidationErrors`` component. Beside it, any of what else the edge
+      sends as a 400: a ``detail`` sentence (the body is no object), and the
+      bare list of messages a service's ``ServiceValidationError`` over a
+      sentence or a list answers with.
     - **A** ``422`` is documented on every service spec, since the service, a
       precondition or a provider can raise a plain ``ServiceError``, which the
-      edge answers 422 with or without a Validator.
+      edge answers 422 with or without a Validator; and on every selector spec,
+      whose selector, preconditions and providers can raise one too. A selector
+      spec taking a parameter (a read, a shape or a filter) documents the
+      ``400`` its refusal is, with the same body.
     - **A FilterSet's query parameters** are the kernel's
       ``filter_set_parameters``, on a list operation only.
 
@@ -235,12 +241,37 @@ class ServiceAutoSchema(AutoSchema):
         if spec is not None:
             return self._kernel_responses(spec)
         selector = resolve_selector_spec(self.view)
-        # A selector spec with no presenter is rendered by the view's
-        # ``serializer_class``, which the base reads
-        # (test_no_presenter_is_the_view_s_serializer_class).
-        if selector is not None and selector.presenter is not None:
-            return self._kernel_rows(selector, selector.presenter)
+        if selector is not None:
+            return self._kernel_selector_responses(selector)
         return super().get_response_serializers()
+
+    def _kernel_selector_responses(self, spec: KernelSelectorSpec) -> dict[Any, Any]:
+        """A kernel selector spec's responses: its body, then the refusals the edge sends.
+
+        The body is the presenter's; a spec with no presenter is rendered by the
+        view's ``serializer_class``, which the base reads
+        (test_no_presenter_is_the_view_s_serializer_class). A ``400`` is documented
+        where the spec takes any parameter (its reads, shapes and filters),
+        which the edge refuses with the field errors a Validator's refusal sends
+        (test_the_documented_400_describes_the_body_the_edge_sends). A route
+        capture is one too: only its converter guarantees its type, and a
+        router's default lookup regex or a ``str`` converter guarantees none
+        (test_a_route_capture_is_refused_under_its_name). A ``422`` is documented on every selector spec, since the selector, a
+        precondition or a provider can raise a plain ``ServiceError``
+        (test_it_is_documented_whatever_the_selector_reads).
+        """
+        body = (
+            self._kernel_rows(spec, spec.presenter)
+            if spec.presenter is not None
+            else super().get_response_serializers()
+        )
+        # Always the ``200`` the base gives a read: it answers ``201`` only for
+        # a ``POST`` create operation, which no selector is.
+        responses: dict[Any, Any] = {200: body}
+        if spec.parameters():
+            responses[400] = self._validation_errors_response()
+        responses[422] = ServiceErrorSerializer
+        return responses
 
     def _kernel_responses(self, spec: KernelServiceSpec) -> dict[Any, Any]:
         """A kernel service spec's responses.
@@ -285,12 +316,25 @@ class ServiceAutoSchema(AutoSchema):
         return responses
 
     def _validation_errors_response(self) -> OpenApiResponse:
-        """The ``400`` a Validator's refusal answers: the ``ValidationErrors`` tree, or a ``detail``.
+        """The ``400`` the edge sends over a Validator: the ``ValidationErrors`` tree, a ``detail`` or a list.
 
         ``ValidationErrors`` is registered once as a component of its own: a
         serializer cannot describe it, being a tree of any depth. A ``detail``
         sentence is the ``ServiceError`` shape, which the edge sends for a body
         that is no object (test_a_body_that_is_no_object_is_a_detail_the_400_also_describes).
+        A bare list of messages is what DRF's ``ValidationError`` answers for a
+        service's ``ServiceValidationError`` over a sentence or a list
+        (test_a_service_s_validation_error_is_documented_in_the_shape_it_is_sent).
+        The alternatives are ``anyOf``: a ``{"detail": "..."}`` is both the
+        ``ServiceError`` and a ``ValidationErrors`` with a string leaf, which a
+        ``oneOf`` would refuse.
+
+        A component of this name that another object holds is refused rather
+        than shared, since a ``$ref`` to the wrong schema documents a body the
+        edge never sends (test_validation_errors_component_name's
+        test_is_refused_whichever_comes_first). Only where this package's schema
+        sees both: a view on drf-spectacular's own ``AutoSchema`` resolving the
+        serializer after the 400 gets drf-spectacular's warning alone.
         """
         component = ResolvedComponent(
             name=_VALIDATION_ERRORS,
@@ -298,9 +342,27 @@ class ServiceAutoSchema(AutoSchema):
             object=_ValidationErrors,
             schema=_VALIDATION_ERRORS_SCHEMA,
         )
-        self.registry.register_on_missing(component)
+        try:
+            holder = self.registry[component].object
+        except KeyError:
+            self.registry.register_on_missing(component)
+        else:
+            if holder is not _ValidationErrors:
+                raise _name_taken(holder)
         detail = self.resolve_serializer(ServiceErrorSerializer, "response")
-        return OpenApiResponse(response={"oneOf": [component.ref, detail.ref]})
+        return OpenApiResponse(
+            response={"anyOf": [component.ref, detail.ref, _MESSAGES]},
+        )
+
+    def resolve_serializer(self, serializer: Any, *args: Any, **kwargs: Any) -> Any:
+        # Passed through whole: the base's later parameters differ by version
+        # (``bypass_extensions`` is not in every release the floor admits).
+        resolved = super().resolve_serializer(serializer, *args, **kwargs)
+        # No serializer is ``ValidationErrors``: the registry answered one for
+        # the name it was given, which this schema registered first.
+        if resolved.object is _ValidationErrors:
+            raise _name_taken(serializer)
+        return resolved
 
     def _kernel_rows(self, spec: KernelSelectorSpec, presenter: Presenter) -> Any:
         """A kernel selector spec's body: one row, or every row for a ``LIST``.
@@ -391,6 +453,22 @@ def _without(schema: dict[str, Any], names: Iterable[str]) -> dict[str, Any]:
 _VALIDATION_ERRORS = "ValidationErrors"
 
 
+def _name_taken(holder: Any) -> ImproperlyConfigured:
+    """The refusal for a serializer that components under the name this schema reserves.
+
+    drf-spectacular only warns of two components of one name and then keeps one
+    for both, so the serializer's own response, or this schema's ``400``, would
+    be documented by the other's body.
+    """
+    owner = holder if isinstance(holder, type) else type(holder)
+    return ImproperlyConfigured(
+        f"{owner.__module__}.{owner.__qualname__} is documented as the component "
+        f"{_VALIDATION_ERRORS!r}, the name django_spec_rest gives the body of a "
+        "Validator's refusal. Name the serializer's component another way, with "
+        "@extend_schema_serializer(component_name=...)."
+    )
+
+
 class _ValidationErrors:
     """The ``ValidationErrors`` component's identity in drf-spectacular's registry.
 
@@ -400,6 +478,9 @@ class _ValidationErrors:
     """
 
 
+_MESSAGES: dict[str, Any] = {"type": "array", "items": {"type": "string"}}
+"""A list of messages: a field's errors, and a bare ``400`` over a sentence or a list."""
+
 _VALIDATION_ERRORS_SCHEMA: dict[str, Any] = {
     "type": "object",
     "description": (
@@ -407,11 +488,13 @@ _VALIDATION_ERRORS_SCHEMA: dict[str, Any] = {
         "messages, an object for a nested field, and for a list its rows' "
         "errors keyed by the row's index. A many spec's rows sit under its "
         "many argument. Messages the whole call earned are under "
-        "`non_field_errors`."
+        "`non_field_errors`. A service's `ServiceValidationError` over a "
+        "mapping of sentences gives a sentence where a field's list would be."
     ),
     "additionalProperties": {
         "oneOf": [
-            {"type": "array", "items": {"type": "string"}},
+            _MESSAGES,
+            {"type": "string"},
             {"$ref": f"#/components/schemas/{_VALIDATION_ERRORS}"},
         ]
     },

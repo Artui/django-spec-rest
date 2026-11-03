@@ -11,6 +11,51 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+## [0.3.1] — 2026-11-03
+
+### Fixed
+
+- **The documented 400 admits what the edge sends.** The `ValidationErrors`
+  component allowed a field's list of messages, a nested object or a row's
+  index, and `{"detail": ...}` stood beside it. A service raising
+  `ServiceValidationError` is answered with DRF's `ValidationError(detail)`, so
+  the body can also be a bare list (`["Bad."]`) or an object with a string
+  leaf (`{"name": "Bad."}`), which failed the schema and could be refused by a
+  strict generated client. The 400 now has the list as a third alternative, and
+  a leaf may be a string; the wire is unchanged.
+- **A selector's refusals are documented.** A selector operation documented
+  neither the 400 nor the 422 the edge answers it with. It now documents a 422
+  (the selector, a precondition or a provider can raise a plain `ServiceError`)
+  and, where the spec takes a parameter (a read, a shape or a filter), the 400
+  of its refusal, in the same body as a service spec's. The 422 body also
+  names the `schema` an `AdditionalInputRequired` carries (an object, not
+  required), which the `ServiceError` component allowed but did not name, on
+  service specs too.
+- **A serializer taking the `ValidationErrors` component's name is refused.**
+  drf-spectacular only warns of two components of one name and keeps one for
+  both, so since 0.3.0 a serializer that resolved to that name had its own
+  response documented by the 400's body, or the 400 by its fields. Generating
+  the schema now raises `ImproperlyConfigured` naming the serializer and the
+  `component_name` that fixes it, so such a project renames the component
+  (a `SpectacularAPIView` answers 500 until it does). It is refused where the
+  serializer is resolved through this package's schema, or before the 400; a
+  view of the project's own on drf-spectacular's `AutoSchema`, resolved after
+  the 400, still gets only drf-spectacular's warning.
+- **Mounting a view makes no class.** Since 0.3.0 every `as_view()` checked
+  the view against a subclass named like the author's, and since 0.1.0 a
+  viewset's made one more per `action_specs` entry, so a project's
+  `__init_subclass__`, metaclass or subclass registry saw classes it never
+  wrote. The checks now read the
+  author's class through the keywords instead, and ask the same questions;
+  refusals still name the author's class.
+- **A selector asking for more input is answered with its schema as raised.**
+  A kernel selector, precondition or provider raising `AdditionalInputRequired`
+  on `SelectorListView`, `SelectorRetrieveView`, or a `@selector_action` on
+  DRF's own `GenericViewSet` or `ViewSet` (or with `GenericViewSet` listed
+  before `ActionSerializerResolver`), answered the 422 with every leaf of
+  the schema a string (`"default": "False"`, `"maximum": "3"`). It now serves
+  the schema as raised, as the mutation views and `@service_action` do.
+
 ## [0.3.0] — 2026-11-03
 
 ### Security
@@ -250,7 +295,8 @@ lists each with what a project rewrites.
 - **The package is no longer a Django app.** It has no models, migrations,
   templates, static files or URLs, so it needs no `INSTALLED_APPS` entry.
 
-[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/Artui/django-spec-rest/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/Artui/django-spec-rest/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/Artui/django-spec-rest/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Artui/django-spec-rest/compare/v0.1.0...v0.2.0
