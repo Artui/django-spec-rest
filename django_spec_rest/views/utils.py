@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Callable, Mapping
-from typing import Any, TypeVar, cast
+from typing import Any
 
 from django_service_specs.pool.pool_seeds import DEFAULT_POOL_SEEDS, PoolSeeds
 from django_service_specs.pool.resolve_callable_kwargs import (
@@ -17,8 +17,6 @@ from rest_framework.response import Response
 
 from django_spec_rest.dispatch.utils import fill_call_context
 from django_spec_rest.types.view_hooks import ViewHooks
-
-_ViewT = TypeVar("_ViewT")
 
 
 def resolve_extra_kwargs(
@@ -271,19 +269,50 @@ def get_class_attr(view: Any, name: str) -> Any:
     return configured[name] if name in configured else getattr(type(view), name, None)
 
 
-def mounted_view(view_cls: type[_ViewT], initkwargs: Mapping[str, Any]) -> type[_ViewT]:
+class MountedView:
+    """A view class read through ``overrides``: each name from them first, then from the class.
+
+    What ``as_view()``'s checks ask in place of a subclass carrying the
+    overrides as class attributes, which would answer the same reads but be a
+    class: a project's ``__init_subclass__``, metaclass or subclass registry
+    would see one per mount, named like the author's
+    (test_mounting_makes_no_class). A name is read off the class, never an
+    instance, so a function stored there is returned unbound, as the checks
+    read it. ``base`` is a view class or another ``MountedView``, and
+    ``__dir__`` lists both sides, so ``inspect.getmembers`` sees the class's
+    decorated actions through it (test_selector_action's
+    test_a_keyword_nothing_fills_is_refused fails without it).
+    """
+
+    __name__: str
+
+    def __init__(self, base: Any, overrides: Mapping[str, Any], *, name: str) -> None:
+        self._mounted_base = base
+        self._mounted_overrides = dict(overrides)
+        self.__name__ = name
+
+    def __getattr__(self, name: str) -> Any:
+        overrides: dict[str, Any] = self._mounted_overrides
+        return overrides[name] if name in overrides else getattr(self._mounted_base, name)
+
+    def __dir__(self) -> list[str]:
+        return sorted({*dir(self._mounted_base), *self._mounted_overrides})
+
+
+def mounted_view(view_cls: type, initkwargs: Mapping[str, Any]) -> MountedView:
     """``view_cls`` as every instance ``as_view(**initkwargs)`` builds answers it.
 
     DRF sets each keyword on the instance, and refuses one the class does not
-    declare, so a subclass carrying them as class attributes is the view the
-    instance is: ``as_view()`` checks that, so a spec, a ``pool_seeds``, a
+    declare, so the class read through the keywords is the view the instance
+    is: ``as_view()`` checks that, so a spec, a ``pool_seeds``, a
     ``success_status``, a ``response_finalizer`` or a ``filter_backends``
     handed as a keyword is asked what the same class attribute is
     (test_a_spec_handed_to_as_view's TestARefusalAtMount,
-    test_action_specs_handed_to_as_view). Named after ``view_cls``, so a
-    refusal names the class the author wrote.
+    test_action_specs_handed_to_as_view). A ``MountedView`` rather than a
+    subclass, so no class is made (test_mounting_makes_no_class), and named
+    after ``view_cls``, so a refusal names the class the author wrote.
     """
-    return cast("type[_ViewT]", type(view_cls.__name__, (view_cls,), dict(initkwargs)))
+    return MountedView(view_cls, initkwargs, name=view_cls.__name__)
 
 
 def resolve_callable_kwargs(

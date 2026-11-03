@@ -11,6 +11,16 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+### Fixed
+
+- **Mounting a view makes no class.** Since 0.3.0, `as_view()` checked each
+  view against a subclass named like the author's, made on every mount (a
+  router mounts each viewset with keywords, so always), and one more per
+  `action_specs` entry, so a project's `__init_subclass__`, metaclass or
+  subclass registry saw classes it never wrote. The checks now read the
+  author's class through the keywords instead, and ask the same questions;
+  refusals still name the author's class.
+
 ## [0.3.0] — 2026-11-03
 
 ### Security

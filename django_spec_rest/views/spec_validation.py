@@ -24,6 +24,7 @@ from django_service_specs.specs.service_spec import ServiceSpec as KernelService
 from django_service_specs.types.selector_kind import SelectorKind
 
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
+from django_spec_rest.views.utils import MountedView
 
 
 def _required_kw_params(fn: Callable[..., Any]) -> dict[str, inspect.Parameter]:
@@ -69,7 +70,7 @@ def _refuse_positional_only(fn: Callable[..., Any], *, label: str, seat: str) ->
         )
 
 
-def is_overridden(view_cls: type, base_cls: type, method_name: str) -> bool:
+def is_overridden(view_cls: type | MountedView, base_cls: type, method_name: str) -> bool:
     """Return ``True`` if ``view_cls`` overrides ``base_cls``'s ``method_name``.
 
     Drives the seed check: an overridden ``get_*_kwargs`` is assumed to
@@ -81,7 +82,7 @@ def is_overridden(view_cls: type, base_cls: type, method_name: str) -> bool:
     return getattr(view_cls, method_name, None) is not base
 
 
-def _uses_django_filter_backend(view_cls: type) -> bool:
+def _uses_django_filter_backend(view_cls: type | MountedView) -> bool:
     """True when ``view_cls.filter_backends`` includes a ``DjangoFilterBackend``.
 
     Matched by name across each backend's MRO (so subclasses count) rather than
@@ -99,7 +100,7 @@ def _uses_django_filter_backend(view_cls: type) -> bool:
 
 
 def validate_filter_set_no_backend_conflict(
-    view_cls: type,
+    view_cls: type | MountedView,
     spec: KernelSelectorSpec,
     *,
     label: str,
@@ -206,7 +207,7 @@ def _validate_selector_kind(
         )
 
 
-def _serves_the_other_kind(view_cls: type, spec: Any, served: type) -> str:
+def _serves_the_other_kind(view_cls: type | MountedView, spec: Any, served: type) -> str:
     """Why ``view_cls`` refuses ``spec``: a kernel spec of the kind the view does not serve."""
     return (
         f"{view_cls.__name__}.spec is a {type(spec).__name__}, but this view serves a "
@@ -280,7 +281,7 @@ def _check_kernel_seeds(
 
 
 def validate_mutation_view_spec(
-    view_cls: type,
+    view_cls: type | MountedView,
     *,
     has_instance: bool,
     pool_seeds: PoolSeeds,
@@ -332,7 +333,7 @@ def validate_mutation_view_spec(
 
 
 def _refuse_a_detail_spec_with_no_target(
-    view_cls: type, spec: KernelServiceSpec, *, has_instance: bool
+    view_cls: type | MountedView, spec: KernelServiceSpec, *, has_instance: bool
 ) -> None:
     """Refuse an update or delete view's kernel spec that names nothing for it to act on.
 
@@ -360,7 +361,7 @@ def _refuse_a_detail_spec_with_no_target(
         )
 
 
-def _refuse_selector_hooks(view_cls: type) -> None:
+def _refuse_selector_hooks(view_cls: type | MountedView) -> None:
     """Refuse a selector view's ``get_selector_kwargs`` hooks beside a kernel spec.
 
     A kernel selector spec is handed its own ``kwargs`` provider's values and
@@ -388,7 +389,7 @@ def _refuse_selector_hooks(view_cls: type) -> None:
             )
 
 
-def _overrides_the_action_hook(view_cls: type, chain: str) -> bool:
+def _overrides_the_action_hook(view_cls: type | MountedView, chain: str) -> bool:
     """Whether ``view_cls`` defines ``get_<action>_<chain>_kwargs`` for the ``action`` it sets.
 
     A standalone view has no ``action`` unless its class sets one, and the
@@ -402,7 +403,7 @@ def _overrides_the_action_hook(view_cls: type, chain: str) -> bool:
 
 
 def validate_selector_view_spec(
-    view_cls: type,
+    view_cls: type | MountedView,
     *,
     expected_kind: SelectorKind,
     pool_seeds: PoolSeeds,
