@@ -42,7 +42,6 @@ from django_spec_rest import (
     service_action,
 )
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
-from django_spec_rest.views.utils import view_pool_seeds
 from tests.testapp.models import Post
 from tests.testapp.serializers import PostSerializer
 
@@ -461,18 +460,3 @@ class TestTheSeedsTheTargetWasCheckedWith:
         view = _update_view(spec, pool_seeds=seeds).as_view()
         assert _patch(view, Post.objects.create(title="t").pk)[0] == 200
         assert resolver.calls == 1
-
-
-class TestTheRegistryAViewIsAsked:
-    """``view_pool_seeds`` reads an ``as_view`` keyword only where one was handed."""
-
-    def test_is_the_class_attribute_when_as_view_is_handed_other_keywords(self) -> None:
-        """Mutating out the ``"pool_seeds" in initkwargs`` conjunct is a KeyError here."""
-        view = _update_view(GUARDED, pool_seeds=SEEDS)
-        assert view_pool_seeds(view, {"other": 1}) is SEEDS
-        assert view_pool_seeds(view, {}) is SEEDS
-        assert view_pool_seeds(view) is SEEDS
-
-    def test_is_the_keyword_over_the_class_attribute(self) -> None:
-        view = _update_view(GUARDED, pool_seeds=SEEDS)
-        assert view_pool_seeds(view, {"pool_seeds": DEFAULT_POOL_SEEDS}) is DEFAULT_POOL_SEEDS

@@ -33,6 +33,13 @@ spec is not seed-checked at `as_view()`: a missing seed is its first request's
 when the `ServiceSpec` is built, not at `as_view()`. See
 [Registering a seed](recipes/extra-kwargs.md#registering-a-seed).
 
+A spec handed to `as_view(spec=...)` is checked and served exactly as the same
+class attribute is, and so is every other keyword the checks read
+(`pool_seeds`, `success_status`, `response_finalizer`, `filter_backends`): DRF
+sets each on the instance, which outranks the class. A viewset's specs are its
+`action_specs`, so `as_view(actions, action_specs=...)` is checked the same way;
+a viewset declares no `spec`, and DRF refuses that keyword with a `TypeError`.
+
 ## What the edge reads from a request
 
 The view turns the request into the one dict of arguments the kernel's

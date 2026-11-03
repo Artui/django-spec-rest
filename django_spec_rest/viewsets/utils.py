@@ -18,7 +18,7 @@ from django_spec_rest.views.spec_validation import (
     validate_mutation_view_spec,
     validate_selector_view_spec,
 )
-from django_spec_rest.views.utils import view_pool_seeds
+from django_spec_rest.views.utils import mounted_view, view_pool_seeds
 
 ActionSpec = KernelServiceSpec | KernelSelectorSpec
 
@@ -266,11 +266,13 @@ class _ActionSpecsMixin(_ServesRaisedSchema):
 
     @classmethod
     def as_view(cls, *args: Any, **initkwargs: Any) -> Any:
-        # Read once, before any instance exists, from what ``as_view`` was
-        # handed and then the class (``view_pool_seeds``).
-        pool_seeds = view_pool_seeds(cls, initkwargs)
-        for action, spec in cls.action_specs.items():
-            _validate_action_spec(cls, action, spec, pool_seeds=pool_seeds)
+        # Checked as the instances will be, keywords included: an
+        # ``action_specs`` handed here is the one the mixins dispatch, and is
+        # this viewset's ``as_view(spec=...)`` (``mounted_view``).
+        mounted = mounted_view(cls, initkwargs)
+        pool_seeds = view_pool_seeds(mounted)
+        for action, spec in mounted.action_specs.items():
+            _validate_action_spec(mounted, action, spec, pool_seeds=pool_seeds)
         return super().as_view(*args, **initkwargs)  # ty: ignore[unresolved-attribute]
 
     def options(self, request: Any, *args: Any, **kwargs: Any) -> Any:

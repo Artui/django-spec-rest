@@ -14,7 +14,12 @@ from rest_framework.response import Response
 
 from django_spec_rest.selectors.utils import dispatch_selector_for_spec, present_kernel_row
 from django_spec_rest.views.spec_validation import validate_selector_view_spec
-from django_spec_rest.views.utils import _JsonNullResponse, get_class_attr, view_pool_seeds
+from django_spec_rest.views.utils import (
+    _JsonNullResponse,
+    get_class_attr,
+    mounted_view,
+    view_pool_seeds,
+)
 
 
 class SelectorRetrieveView(RetrieveModelMixin, GenericAPIView):
@@ -44,8 +49,10 @@ class SelectorRetrieveView(RetrieveModelMixin, GenericAPIView):
 
     @classmethod
     def as_view(cls, **initkwargs: Any) -> Any:
+        # Checked as the instances will be, keywords included (``mounted_view``).
+        mounted = mounted_view(cls, initkwargs)
         validate_selector_view_spec(
-            cls, expected_kind=SelectorKind.RETRIEVE, pool_seeds=view_pool_seeds(cls, initkwargs)
+            mounted, expected_kind=SelectorKind.RETRIEVE, pool_seeds=view_pool_seeds(mounted)
         )
         return super().as_view(**initkwargs)
 
