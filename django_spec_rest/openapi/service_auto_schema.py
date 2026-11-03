@@ -93,7 +93,10 @@ class ServiceAutoSchema(AutoSchema):
       sentence or a list answers with.
     - **A** ``422`` is documented on every service spec, since the service, a
       precondition or a provider can raise a plain ``ServiceError``, which the
-      edge answers 422 with or without a Validator.
+      edge answers 422 with or without a Validator; and on every selector spec,
+      whose selector, preconditions and providers can raise one too. A selector
+      spec taking a query parameter (a read, a shape or a filter that is no
+      route capture) documents the ``400`` its refusal is, with the same body.
     - **A FilterSet's query parameters** are the kernel's
       ``filter_set_parameters``, on a list operation only.
 
@@ -238,12 +241,37 @@ class ServiceAutoSchema(AutoSchema):
         if spec is not None:
             return self._kernel_responses(spec)
         selector = resolve_selector_spec(self.view)
-        # A selector spec with no presenter is rendered by the view's
-        # ``serializer_class``, which the base reads
-        # (test_no_presenter_is_the_view_s_serializer_class).
-        if selector is not None and selector.presenter is not None:
-            return self._kernel_rows(selector, selector.presenter)
+        if selector is not None:
+            return self._kernel_selector_responses(selector)
         return super().get_response_serializers()
+
+    def _kernel_selector_responses(self, spec: KernelSelectorSpec) -> dict[Any, Any]:
+        """A kernel selector spec's responses: its body, then the refusals the edge sends.
+
+        The body is the presenter's; a spec with no presenter is rendered by the
+        view's ``serializer_class``, which the base reads
+        (test_no_presenter_is_the_view_s_serializer_class). A ``400`` is documented
+        where the spec takes a query parameter (its reads, shapes and filters),
+        which the edge refuses with the field errors a Validator's refusal sends
+        (test_the_documented_400_describes_the_body_the_edge_sends); a route
+        capture is not one, being matched by the route before the kernel reads
+        it (test_a_route_capture_alone_is_no_query_parameter_to_refuse). A
+        ``422`` is documented on every selector spec, since the selector, a
+        precondition or a provider can raise a plain ``ServiceError``
+        (test_it_is_documented_whatever_the_selector_reads).
+        """
+        body = (
+            self._kernel_rows(spec, spec.presenter)
+            if spec.presenter is not None
+            else super().get_response_serializers()
+        )
+        # Always the ``200`` the base gives a read: it answers ``201`` only for
+        # a ``POST`` create operation, which no selector is.
+        responses: dict[Any, Any] = {200: body}
+        if spec.parameters().names() - frozenset(self._route_captures()):
+            responses[400] = self._validation_errors_response()
+        responses[422] = ServiceErrorSerializer
+        return responses
 
     def _kernel_responses(self, spec: KernelServiceSpec) -> dict[Any, Any]:
         """A kernel service spec's responses.

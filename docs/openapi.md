@@ -69,13 +69,23 @@ this call does.
 - **A 422** is documented on every service spec, whether or not it has a
   validator. It is not a validator's refusal: it is a plain `ServiceError`
   raised by the service, a precondition or a provider, which no spec can rule
-  out. Its body is `{"detail": ...}` (an `AdditionalInputRequired` carrying a
-  schema adds a `schema` key beside it).
+  out. Its body is `{"detail": ...}`, with the `schema` an
+  `AdditionalInputRequired` carries beside it when it carries one (an object,
+  not required).
+- **A selector spec** documents the same two refusals, since a selector is
+  refused the same way: a **422** on every selector spec (the selector, a
+  precondition or a provider can raise a plain `ServiceError`), and a **400**
+  where the spec takes a query parameter, that is a read, a shape or a filter
+  that is not a route capture (a capture is matched by the route before the
+  kernel reads it). The 400's body is the same as a validator's. A selector
+  taking no parameter is sent no 400, since an argument it declares nothing
+  for is dropped.
 - **A `filter_set`'s query parameters**, on a list operation, are the kernel's
   `filter_set_parameters`.
 
-`ServiceErrorSerializer`, a single `detail` field, is the body of that 422 and
-of the 400 for a body that is no object, under the `ServiceError` component.
+`ServiceErrorSerializer`, a `detail` field and the optional `schema` object, is
+the body of that 422 and of the 400's `{"detail": ...}` alternative, under the
+`ServiceError` component.
 
 User-supplied `@extend_schema` annotations always win, and
 `@extend_schema(parameters=...)` merges over the filter parameters as it does
