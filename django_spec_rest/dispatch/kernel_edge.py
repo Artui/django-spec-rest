@@ -361,7 +361,7 @@ def dispatch_kernel_spec(
     Every refusal leaves as its DRF answer (``KERNEL_REFUSALS``).
     """
     hooks = view_hooks if view_hooks is not None else ViewHooks()
-    with answering_refusals(request):
+    with answering_refusals():
         state = _edge_state(
             spec, view=view, request=request, hooks=hooks, call_context=call_context
         )

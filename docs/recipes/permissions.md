@@ -40,11 +40,14 @@ DRF's `get_permissions` does:
 Each refusal is the kernel's `NotPermitted` as well, so a caller of the
 kernel's `dispatch` catches it by the kernel's class.
 
-A kernel `PermissionCheck` on the spec is answered by the same rule over HTTP
-(`permission_denied`): its refusal of a caller nobody authenticated is DRF's
-`NotAuthenticated`, and its `message` reaches only the 403 a signed-in caller
-gets. So a client is asked to sign in the same way whichever kind of check
-refused it.
+A kernel `PermissionCheck` on the spec is not decided by that rule for now: its
+`NotPermitted` is the kernel's 403 with its `message`, even to a caller nobody
+authenticated. The kernel raises the same bare `NotPermitted` for a permission
+check's denial, for a service's own and for an inner `dispatch` its check
+refused, so the edge cannot tell the first apart; asking every one of them to
+sign in would answer an author's "Archived invoices are read-only." 401. Only
+an adapted DRF class refusing an anonymous caller is answered 401 with the
+challenge.
 
 ## Off HTTP
 
