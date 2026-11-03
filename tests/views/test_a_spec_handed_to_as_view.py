@@ -18,6 +18,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django_service_specs import (
     Parameter,
     Parameters,
+    PermissionCheck,
     SelectorKind,
     SelectorSpec,
     ServiceSpec,
@@ -56,6 +57,11 @@ _ONE = SelectorSpec(
     presenter=SerializerPresenter(AuthorSerializer),
 )
 _CREATE = ServiceSpec(service=lambda: Author.objects.create(name="Ada"), permissions=_OPEN)
+
+
+class _Deny(PermissionCheck):
+    def has_permission(self, *args: Any, **kwargs: Any) -> bool:
+        return False
 
 
 def _mount(base: type, how: str, **attrs: Any) -> Any:
@@ -180,3 +186,23 @@ class TestAKeywordSpecServed:
 
         view = ServiceCreateView.as_view(spec=_CREATE, response_finalizer=finalize)
         assert view(factory.post("/", {}, format="json"))["X-Finalized"] == "yes"
+
+    @pytest.mark.parametrize("base", [SelectorListView, SelectorRetrieveView])
+    def test_a_keyword_spec_s_permissions_are_asked_over_the_class_s_queryset(
+        self, base: type
+    ) -> None:
+        """A view also declaring DRF's ``queryset`` is served by the keyword's spec,
+        never by DRF's own lookup, so the spec's checks refuse the stranger."""
+        ada = Author.objects.create(name="Ada")
+        kind = SelectorKind.LIST if base is SelectorListView else SelectorKind.RETRIEVE
+        spec = SelectorSpec(
+            kind=kind,
+            selector=Author.objects.all if kind is SelectorKind.LIST else Author.objects.first,
+            permissions=(_Deny(),),
+            presenter=SerializerPresenter(AuthorSerializer),
+        )
+        attrs = {"queryset": Author.objects.all(), "serializer_class": AuthorSerializer}
+        view = type("_View", (base,), attrs).as_view(spec=spec)
+        response: Response = view(factory.get("/"), pk=ada.pk)
+        assert response.status_code == 403
+        assert "Ada" not in str(response.data)
