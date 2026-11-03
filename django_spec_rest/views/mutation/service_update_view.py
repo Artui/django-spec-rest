@@ -18,7 +18,7 @@ from django_spec_rest.views.mutation.mutation_flow_mixin import MutationFlowMixi
 from django_spec_rest.views.mutation.utils import resolve_mutation_instance
 from django_spec_rest.views.spec_options import spec_options
 from django_spec_rest.views.spec_validation import validate_mutation_view_spec
-from django_spec_rest.views.utils import view_pool_seeds
+from django_spec_rest.views.utils import mounted_view, view_pool_seeds
 
 
 class ServiceUpdateView(MutationFlowMixin, GenericAPIView):
@@ -38,9 +38,9 @@ class ServiceUpdateView(MutationFlowMixin, GenericAPIView):
 
     @classmethod
     def as_view(cls, **initkwargs: Any) -> Any:
-        validate_mutation_view_spec(
-            cls, has_instance=True, pool_seeds=view_pool_seeds(cls, initkwargs)
-        )
+        # Checked as the instances will be, keywords included (``mounted_view``).
+        mounted = mounted_view(cls, initkwargs)
+        validate_mutation_view_spec(mounted, has_instance=True, pool_seeds=view_pool_seeds(mounted))
         return super().as_view(**initkwargs)
 
     def get_serializer_class(self) -> type[BaseSerializer[Any]]:
