@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+
 from django.contrib.auth.models import AnonymousUser, User
 from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import DEFAULT_POOL_SEEDS, NotPermitted, dispatch
@@ -10,6 +12,10 @@ from rest_framework.test import APITestCase
 
 from invoices.models import Invoice
 from invoices.views import SEEDS, SEND_SPEC, UPDATE_SPEC, InvoiceViewSet
+
+
+def _basic(username: str, password: str) -> str:
+    return "Basic " + base64.b64encode(f"{username}:{password}".encode()).decode()
 
 
 def _invoice(**fields: object) -> Invoice:
@@ -236,6 +242,41 @@ class DRFPermissionCheckTests(APITestCase):
 
         self.invoice.refresh_from_db()
         self.assertEqual(self.invoice.status, Invoice.STATUS_DRAFT)
+
+
+class AnAnonymousCallerRefusedTests(APITestCase):
+    """An adapted DRF class refusing a caller nobody recognised asks them to sign in.
+
+    ``/staff-invoices/`` authenticates with ``BasicAuthentication`` and guards
+    its spec with a ``DRFPermissionCheck``. The project's own settings name no
+    authenticator, so ``/invoices/<pk>/send/`` answers an anonymous caller 403.
+    """
+
+    def test_an_anonymous_caller_is_a_401_carrying_the_challenge(self) -> None:
+        response = self.client.get("/staff-invoices/")
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(response["WWW-Authenticate"], 'Basic realm="api"')
+
+    def test_a_signed_in_caller_the_class_refuses_is_a_403_with_its_message(self) -> None:
+        User.objects.create_user("clerk", password="s3cret")
+        self.client.credentials(HTTP_AUTHORIZATION=_basic("clerk", "s3cret"))
+
+        response = self.client.get("/staff-invoices/")
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data["detail"], "Only staff can list every invoice.")
+        self.assertNotIn("WWW-Authenticate", response)
+
+    def test_a_signed_in_caller_the_class_admits_is_answered(self) -> None:
+        User.objects.create_user("boss", password="s3cret", is_staff=True)
+        _invoice()
+        self.client.credentials(HTTP_AUTHORIZATION=_basic("boss", "s3cret"))
+
+        response = self.client.get("/staff-invoices/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(len(response.data), 1)
 
 
 class SharedSerializerContextTests(APITestCase):
