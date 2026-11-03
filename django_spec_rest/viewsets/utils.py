@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Callable, Mapping
 from typing import Any, ClassVar, TypeVar
 
@@ -12,9 +13,11 @@ from django_service_specs.specs.service_spec import ServiceSpec as KernelService
 from django_service_specs.types.selector_kind import SelectorKind
 from rest_framework.exceptions import MethodNotAllowed
 
+from django_spec_rest.views.mutation.mutation_flow_mixin import MutationFlowMixin
 from django_spec_rest.views.mutation.utils import _ServesRaisedSchema
 from django_spec_rest.views.spec_options import spec_options
 from django_spec_rest.views.spec_validation import (
+    _check_kernel_seeds,
     validate_mutation_view_spec,
     validate_selector_view_spec,
 )
@@ -234,13 +237,70 @@ def _validate_action_spec(
     _validate_kernel_action_spec(view_cls, action, spec, label=label, pool_seeds=pool_seeds)
 
 
+def _is_decorated(member: object) -> bool:
+    """Whether ``member`` is a handler ``@service_action`` or ``@selector_action`` stamped."""
+    return hasattr(member, "_service_spec") or hasattr(member, "_selector_spec")
+
+
+def _fills_service_keywords(view_cls: type, action: str) -> bool:
+    """Whether ``view_cls`` has a service-kwargs hook that reaches ``action``'s service.
+
+    A hook's keys reach the service's pool through the edge's overlay, which
+    ``check_seeds`` cannot see, so a decorated service action on such a viewset
+    is not asked it, as a standalone view with one is not
+    (``validate_mutation_view_spec``). A viewset with no mutation mixin has no
+    catch-all hook at all, so it reads as unhooked, where
+    ``is_overridden`` would read it as hooked (test_a_decorated_action_s_seeds'
+    test_on_a_resolver_over_drf_s_viewset_it_is_refused_too). One arc to
+    coverage, so each disjunct is named: the catch-all hook by
+    test_a_catch_all_hook_filling_the_keyword_mounts_and_fills_it, the
+    per-action one by test_a_per_action_hook_filling_the_keyword_mounts_and_fills_it.
+    """
+    base = MutationFlowMixin.get_service_kwargs
+    return getattr(view_cls, "get_service_kwargs", base) is not base or hasattr(
+        view_cls, f"get_{action}_service_kwargs"
+    )
+
+
+def _validate_decorated_actions(view_cls: type, *, pool_seeds: PoolSeeds) -> None:
+    """Ask each decorated action's spec the kernel's ``check_seeds`` against ``pool_seeds``.
+
+    ``@service_action`` and ``@selector_action`` run before their viewset and
+    its ``pool_seeds`` exist, so the seed check of the spec each stamps on its
+    handler is the viewset's, at ``as_view()``: a seed the viewset registers
+    serves, and a keyword nothing fills, a seed it does not register among
+    them, is refused here, naming the action, rather than answering every
+    request with a ``TypeError`` (test_a_decorated_action_s_seeds). A service
+    action on a viewset whose hook may fill the keyword is not asked
+    (``_fills_service_keywords``); a selector action always is, since the edge
+    hands a kernel selector no view hook. Only the seed check is asked: the
+    decorator asks the rest of what it can know, and a list action is served
+    unfiltered, so the ``filter_set`` check of a list view does not apply.
+    """
+    for action, handler in inspect.getmembers(view_cls, _is_decorated):
+        spec: ActionSpec | None = getattr(handler, "_service_spec", None)
+        # One arc to coverage, so each conjunct is named: a selector action on
+        # a hooked viewset by test_a_service_kwargs_hook_does_not_excuse_it,
+        # the hook by test_a_catch_all_hook_filling_the_keyword_mounts_and_fills_it.
+        if spec is not None and _fills_service_keywords(view_cls, action):
+            continue
+        try:
+            _check_kernel_seeds(spec or handler._selector_spec, pool_seeds=pool_seeds)
+        except ImproperlyConfigured as refusal:
+            raise ImproperlyConfigured(f"{view_cls.__name__}.{action}: {refusal}") from refusal
+
+
 class _ActionSpecsMixin(_ServesRaisedSchema):
     """Declares the ``action_specs`` class attribute shared by all viewset mixins.
 
     All per-action mixins and
     [`ActionSerializerResolver`][django_spec_rest.viewsets.action_serializer_resolver.ActionSerializerResolver]
     inherit from this so the attribute is defined in exactly one place. ``as_view`` runs
-    fail-fast spec validation once per view at URL-wiring time.
+    fail-fast spec validation once per view at URL-wiring time: of every
+    ``action_specs`` entry, and the seed check of every ``@service_action`` and
+    ``@selector_action`` spec, against the viewset's ``pool_seeds``. A decorated
+    action on DRF's own ``GenericViewSet`` or ``ViewSet``, with no base of this
+    package's, has no such ``as_view``, so its seeds are its first request's.
 
     A kernel spec declares no ``permission_classes``: its checks are its
     ``permissions``, which the kernel's ``dispatch`` asks after DRF has asked the
@@ -273,6 +333,7 @@ class _ActionSpecsMixin(_ServesRaisedSchema):
         pool_seeds = view_pool_seeds(mounted)
         for action, spec in mounted.action_specs.items():
             _validate_action_spec(mounted, action, spec, pool_seeds=pool_seeds)
+        _validate_decorated_actions(mounted, pool_seeds=pool_seeds)
         return super().as_view(*args, **initkwargs)  # ty: ignore[unresolved-attribute]
 
     def options(self, request: Any, *args: Any, **kwargs: Any) -> Any:

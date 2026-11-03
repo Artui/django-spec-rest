@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from django.contrib.auth.models import AnonymousUser, User
-from django_service_specs import NotPermitted, dispatch
+from django.core.exceptions import ImproperlyConfigured
+from django_service_specs import DEFAULT_POOL_SEEDS, NotPermitted, dispatch
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from invoices.models import Invoice
-from invoices.views import SEEDS, SEND_SPEC, UPDATE_SPEC
+from invoices.views import SEEDS, SEND_SPEC, UPDATE_SPEC, InvoiceViewSet
 
 
 def _invoice(**fields: object) -> Invoice:
@@ -272,3 +273,10 @@ class ASeedTheViewSetRegistersTests(APITestCase):
         response = self.client.post(f"/invoices/{self.invoice.pk}/send/")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+
+    def test_a_viewset_not_registering_it_is_refused_at_as_view(self) -> None:
+        """The decorated action's seeds are the viewset's, checked at mount."""
+        with self.assertRaisesRegex(
+            ImproperlyConfigured, r"InvoiceViewSet\.send: .*sending_paused"
+        ):
+            InvoiceViewSet.as_view({"post": "send"}, pool_seeds=DEFAULT_POOL_SEEDS)

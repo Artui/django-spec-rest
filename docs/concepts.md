@@ -27,8 +27,10 @@ spec through `@service_action(spec)` or `@selector_action(spec)`. See
 kind the view does not serve, an update or delete with no target, a
 `filter_set` beside `DjangoFilterBackend`, and what the kernel's seed check
 refuses of the callables' signatures, against the seeds the view registers on
-`pool_seeds`, are each an `ImproperlyConfigured` at import. A `@service_action`
-spec is not seed-checked at `as_view()`: a missing seed is its first request's
+`pool_seeds`, are each an `ImproperlyConfigured` at import. The specs of
+`@service_action` and `@selector_action` are seed-checked by their viewset's
+`as_view()`; on DRF's own `GenericViewSet` or `ViewSet`, with no base of this
+package's, they are not, and a missing seed is the first request's
 `TypeError`. A nested selector declaring `permissions` is refused by the kernel
 when the `ServiceSpec` is built, not at `as_view()`. See
 [Registering a seed](recipes/extra-kwargs.md#registering-a-seed).
