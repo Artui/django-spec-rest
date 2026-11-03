@@ -54,9 +54,18 @@ this call does.
   the errors by name, as DRF sends them, each a list of messages, or an object
   for a nested field, or for a list its rows' errors keyed by the row's index
   (a `many` spec's rows sit under its `many_argument`); the whole call's
-  messages are under `non_field_errors`. A body that is no object is refused
-  with `{"detail": ...}`, so the 400 is either that component or the
-  `ServiceError` one.
+  messages are under `non_field_errors`. The 400 is any of three shapes,
+  because the edge sends all three: that component; `{"detail": ...}` (the
+  `ServiceError` component), for a body that is no object; and a bare list of
+  messages, which is what a service's `ServiceValidationError` over a sentence
+  or a list answers with. A `ServiceValidationError` over a mapping of
+  sentences gives a sentence where the component has a field's list, so a leaf
+  of the component is a list of messages or a message. The component's name is
+  this schema's: a serializer whose component would be named
+  `ValidationErrors` is refused with `ImproperlyConfigured` while the schema is
+  generated, since drf-spectacular would otherwise document it by the 400's
+  body (or the 400 by its fields); name its component another way with
+  `@extend_schema_serializer(component_name=...)`.
 - **A 422** is documented on every service spec, whether or not it has a
   validator. It is not a validator's refusal: it is a plain `ServiceError`
   raised by the service, a precondition or a provider, which no spec can rule

@@ -13,6 +13,20 @@ carries; releases up to 0.62.0 are in
 
 ### Fixed
 
+- **The documented 400 admits what the edge sends.** The `ValidationErrors`
+  component allowed a field's list of messages, a nested object or a row's
+  index, and `{"detail": ...}` stood beside it. A service raising
+  `ServiceValidationError` is answered with DRF's `ValidationError(detail)`, so
+  the body can also be a bare list (`["Bad."]`) or an object with a string
+  leaf (`{"name": "Bad."}`), which failed the schema and could be refused by a
+  strict generated client. The 400 now has the list as a third alternative, and
+  a leaf may be a string; the wire is unchanged.
+- **A serializer cannot take the `ValidationErrors` component's name.**
+  drf-spectacular only warns of two components of one name and keeps one for
+  both, so a serializer that resolved to that name had its own response
+  documented by the 400's body, or the 400 by its fields. Generating the schema
+  now raises `ImproperlyConfigured` naming the serializer and the
+  `component_name` that fixes it.
 - **Mounting a view makes no class.** Since 0.3.0, `as_view()` checked each
   view against a subclass named like the author's, made on every mount (a
   router mounts each viewset with keywords, so always), and one more per
