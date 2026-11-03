@@ -163,8 +163,9 @@ The query string is read by the kernel's flat reader:
   `filter_set_parameters`: its description wording, a `NumberFilter` as a
   decimal string, an `OrderingFilter` with no `explode` or `style`, in declared
   order, with `maxItems` 1000, a `MultipleChoiceFilter` with `maxItems`, and
-  an array as a repeated key. A 422 is documented where the spec has a
-  validator. A selector's reads are not documented as query parameters, nor
+  an array as a repeated key. A validator's refusal is documented as the 400 it
+  answers, and a 422 on every service spec, the status of a plain
+  `ServiceError`. A selector's reads are not documented as query parameters, nor
   the affordance envelope, nor the `null` body of an `allow_none` retrieve.
 
 ## Serializer context

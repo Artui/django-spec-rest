@@ -1,4 +1,4 @@
-"""Schema-only ``Serializer`` documenting the 422 ``ServiceError`` shape."""
+"""Schema-only ``Serializer`` documenting the ``{"detail": ...}`` body of a ``ServiceError``."""
 
 from __future__ import annotations
 
@@ -11,7 +11,8 @@ class ServiceErrorSerializer(serializers.Serializer):
     Used by
     [`ServiceAutoSchema`][django_spec_rest.openapi.service_auto_schema.ServiceAutoSchema]
     to attach a ``422`` response to every spec-driven mutation in the generated OpenAPI
-    document. It is *only* used for schema generation; runtime 422 bodies are produced
-    by DRF's exception handler from ``_ServiceAPIException``."""
+    document, and as the ``detail`` alternative of a Validator's ``400`` (a body that is
+    no object). It is *only* used for schema generation; runtime bodies are produced
+    by DRF's exception handler."""
 
     detail = serializers.CharField()
