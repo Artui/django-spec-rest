@@ -26,7 +26,6 @@ from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelec
 from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
 from drf_spectacular.openapi import AutoSchema
 from drf_spectacular.plumbing import (
-    ComponentIdentity,
     ResolvedComponent,
     build_array_type,
     build_parameter_type,
@@ -296,7 +295,7 @@ class ServiceAutoSchema(AutoSchema):
         component = ResolvedComponent(
             name=_VALIDATION_ERRORS,
             type=ResolvedComponent.SCHEMA,
-            object=ComponentIdentity(_VALIDATION_ERRORS),
+            object=_ValidationErrors,
             schema=_VALIDATION_ERRORS_SCHEMA,
         )
         self.registry.register_on_missing(component)
@@ -390,6 +389,16 @@ def _without(schema: dict[str, Any], names: Iterable[str]) -> dict[str, Any]:
 
 
 _VALIDATION_ERRORS = "ValidationErrors"
+
+
+class _ValidationErrors:
+    """The ``ValidationErrors`` component's identity in drf-spectacular's registry.
+
+    The registry tells components apart by the class handed as their
+    ``object``. ``ComponentIdentity`` would say this too, but it is new in
+    drf-spectacular 0.28 and the floor is 0.27.
+    """
+
 
 _VALIDATION_ERRORS_SCHEMA: dict[str, Any] = {
     "type": "object",
