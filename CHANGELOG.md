@@ -18,8 +18,8 @@ carries; releases up to 0.62.0 are in
 - **A spec handed to `as_view(spec=...)` meets every check the same class
   attribute meets at `as_view()`.** It was never checked, and a mutation view
   still dispatched it. So do the other keywords those checks read:
-  `pool_seeds`, `success_status`, `response_finalizer`, `filter_backends`, and
-  a viewset's `action_specs`. A selector view handed `as_view(spec=...)` no
+  `success_status`, `response_finalizer`, `filter_backends`, and a viewset's
+  `action_specs`. A selector view handed `as_view(spec=...)` no
   longer falls through to DRF's own `queryset`, which served every row without
   asking the spec's `permissions`.
 
