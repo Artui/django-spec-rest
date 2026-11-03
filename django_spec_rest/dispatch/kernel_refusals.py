@@ -29,6 +29,7 @@ from rest_framework.exceptions import APIException
 from django_spec_rest.service_specs.drf_invalid_arguments import DRFInvalidArguments
 from django_spec_rest.service_specs.drf_not_permitted import DRFNotPermitted
 from django_spec_rest.service_specs.drf_principal_unavailable import DRFPrincipalUnavailable
+from django_spec_rest.service_specs.permission_denied import permission_denied
 from django_spec_rest.service_specs.translate_drf_refusals import TRANSLATED_FROM
 from django_spec_rest.views.mutation.map_service_error import map_service_error
 
@@ -100,8 +101,29 @@ KERNEL_REFUSALS: tuple[tuple[type[BaseException], Callable[[Any], APIException]]
 The kernel's ``unanswered_refusals`` holds it total from the suite."""
 
 
-def answer_refusal(exc: DispatchError | ServiceError) -> APIException:
-    """The DRF exception ``KERNEL_REFUSALS`` answers ``exc`` with: its first matching row."""
+def answer_refusal(exc: DispatchError | ServiceError, request: Any = None) -> APIException:
+    """The DRF exception ``KERNEL_REFUSALS`` answers ``exc`` with: its first matching row.
+
+    But for the kernel's own denial of a caller on ``request``, which is
+    answered as DRF's view answers a permission refusing it
+    (``permission_denied``): ``NotAuthenticated`` where the request's
+    authenticators recognised nobody, else the ``NotPermitted`` row's 403 with
+    its message. A denial that is DRF's already, the dual-base classes
+    ``DRFPermissionCheck`` raises and an author's own translated refusal, is the
+    map's, as raised.
+    """
+    # One arc to coverage, so each condition is named: the class by
+    # test_a_refusal_that_is_no_denial_is_the_map_s_with_a_request, and the
+    # DRF exception by test_a_denial_that_is_drf_s_already_leaves_as_raised.
+    # The request's is a saving, so the map's row stays the answer with none:
+    # without it, ``permission_denied`` reads no request as no authenticator
+    # and answers that row's 403 (test_with_no_request_a_kernel_denial_is_the_map_s_403).
+    if (
+        request is not None
+        and isinstance(exc, KernelNotPermitted)
+        and not isinstance(exc, APIException)
+    ):
+        return permission_denied(request, exc.message)
     # ``next`` with no default: every refusal the block below catches is a
     # ``DispatchError`` or a ``ServiceError``, and both have a row.
     answer = next(answer for refusal, answer in KERNEL_REFUSALS if isinstance(exc, refusal))
@@ -109,8 +131,12 @@ def answer_refusal(exc: DispatchError | ServiceError) -> APIException:
 
 
 @contextmanager
-def answering_refusals() -> Generator[None]:
+def answering_refusals(request: Any = None) -> Generator[None]:
     """Re-raise a kernel refusal inside the block as the DRF exception the map answers it with.
+
+    ``request`` is the one the call was served on, so the kernel's denial of
+    a caller nobody authenticated asks it to authenticate, as DRF's view
+    would (``answer_refusal``); with none, a denial is the map's 403.
 
     Raised ``from`` the kernel's, so the traceback keeps where dispatch
     refused, and the exception left as it is when it is DRF's already. The
@@ -124,7 +150,7 @@ def answering_refusals() -> Generator[None]:
     try:
         yield
     except (DispatchError, ServiceError) as exc:
-        answer = answer_refusal(exc)
+        answer = answer_refusal(exc, request)
         if answer is exc:
             raise
         if answer is getattr(exc, TRANSLATED_FROM, None):

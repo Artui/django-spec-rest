@@ -183,6 +183,17 @@ The query string is read by the kernel's flat reader:
 - **`DRFPermissionCheck` takes `route_reads=`** for the arguments that go onto
   the offline view's `kwargs`; its `url_kwargs=` and `query_params=` are gone,
   and the offline request's query string is empty.
+- **A caller nobody authenticated is still asked to sign in.** Whether a DRF
+  class in `DRFPermissionCheck` or a kernel `PermissionCheck` refuses, a caller
+  the request's authenticators did not recognise is answered DRF's
+  `NotAuthenticated`, as drfs' view answered it: 401 with the first
+  authenticator's `WWW-Authenticate` (`Basic realm="api"` with
+  `BasicAuthentication` first), or 403 "Authentication credentials were not
+  provided." where that authenticator sends no challenge, as
+  `SessionAuthentication` does not. A signed-in caller, and any caller of a
+  view with no authenticator, is refused 403 with the check's own `message`.
+  Off HTTP there is no authenticator, so the refusal is the kernel's
+  `NotPermitted`.
 - **`UNAUTHENTICATED_USER = None` is passed as `None`**: the principal an
   anonymous request hands the kernel is `None` where the project sets it so,
   rather than an `AnonymousUser`.

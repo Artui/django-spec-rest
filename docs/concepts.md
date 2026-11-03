@@ -171,7 +171,7 @@ project's `EXCEPTION_HANDLER`, answers it as it answers DRF's own:
 | The kernel's `InvalidArguments` (a missing, mistyped or refused argument) | 400 | keyed by argument |
 | `ServiceValidationError` | 400 | its error tree |
 | A bare `DispatchError` | 400 | `{"detail": ...}` |
-| `NotPermitted` (a permission check refusing) | 403; 401 where a DRF permission class raised `NotAuthenticated` and DRF answers that with 401 | `{"detail": ...}` |
+| `NotPermitted` (a permission check refusing) | 403 with the check's message; for a caller the request's authenticators did not recognise, DRF's `NotAuthenticated`, as a DRF view answers it: 401 with the first authenticator's `WWW-Authenticate`, or 403 where it sends none | `{"detail": ...}` |
 | `PrincipalUnavailable` (a deactivated user) | 403 | `{"detail": ...}` |
 | `ServiceNotFound`, or a target selector's miss | 404 | `{"detail": ...}` |
 | `ActionUnavailable` | 409 | `{"detail": ..., "code": ...}` |
