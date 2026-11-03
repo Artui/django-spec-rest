@@ -19,14 +19,21 @@ from typing import Any
 
 import pytest
 from django.contrib.auth.models import User
-from django_service_specs import PermissionCheck, ServiceSpec
+from django_service_specs import PermissionCheck, SelectorKind, SelectorSpec, ServiceSpec
 from rest_framework.authentication import BasicAuthentication, SessionAuthentication
 from rest_framework.permissions import AllowAny, BasePermission
 from rest_framework.response import Response
 from rest_framework.test import APIRequestFactory, force_authenticate
 from rest_framework.views import APIView
 
-from django_spec_rest import ServiceCreateView, ServiceViewSet, service_action
+from django_spec_rest import (
+    SelectorListView,
+    SelectorViewSet,
+    ServiceCreateView,
+    ServiceViewSet,
+    selector_action,
+    service_action,
+)
 from django_spec_rest.service_specs.drf_permission_check import DRFPermissionCheck
 
 pytestmark = pytest.mark.django_db
@@ -52,29 +59,61 @@ class _DenyAll(PermissionCheck):
         return False
 
 
-def _spec(refusal: str) -> ServiceSpec:
-    check = DRFPermissionCheck([_Deny]) if refusal == "drf-class" else _DenyAll()
+def _check(refusal: str) -> PermissionCheck:
+    return DRFPermissionCheck([_Deny]) if refusal == "drf-class" else _DenyAll()
+
+
+def _write(check: PermissionCheck) -> ServiceSpec:
     return ServiceSpec(service=lambda: None, permissions=(check,))
 
 
-def _view(spec: ServiceSpec, authentication: list[type]) -> Any:
-    attrs = {"spec": spec, "permission_classes": [], "authentication_classes": authentication}
+def _read(check: PermissionCheck) -> SelectorSpec:
+    return SelectorSpec(kind=SelectorKind.LIST, selector=lambda: [], permissions=(check,))
+
+
+def _view(check: PermissionCheck, authentication: list[type]) -> Any:
+    attrs = {
+        "spec": _write(check),
+        "permission_classes": [],
+        "authentication_classes": authentication,
+    }
     return type("_View", (ServiceCreateView,), attrs).as_view()
 
 
-def _action(spec: ServiceSpec, authentication: list[type]) -> Any:
+def _list_view(check: PermissionCheck, authentication: list[type]) -> Any:
+    attrs = {
+        "spec": _read(check),
+        "permission_classes": [],
+        "authentication_classes": authentication,
+    }
+    return type("_View", (SelectorListView,), attrs).as_view()
+
+
+def _action(check: PermissionCheck, authentication: list[type]) -> Any:
     class _ViewSet(ServiceViewSet):
         permission_classes = [AllowAny]
         authentication_classes = authentication
 
-        @service_action(spec, detail=False, methods=["post"])
+        @service_action(_write(check), detail=False, methods=["post"])
         def ping(self, request: Any) -> None:
             """Stubbed."""
 
     return _ViewSet.as_view({"post": "ping"})
 
 
-def _drf_view(spec: ServiceSpec, authentication: list[type]) -> Any:
+def _read_action(check: PermissionCheck, authentication: list[type]) -> Any:
+    class _ViewSet(SelectorViewSet):
+        permission_classes = [AllowAny]
+        authentication_classes = authentication
+
+        @selector_action(_read(check))
+        def recent(self, request: Any) -> None:
+            """Stubbed."""
+
+    return _ViewSet.as_view({"get": "recent"})
+
+
+def _drf_view(authentication: list[type]) -> Any:
     """DRF's own answer: a plain view asking ``_Deny`` in ``initial()``."""
 
     class _Plain(APIView):
@@ -87,7 +126,12 @@ def _drf_view(spec: ServiceSpec, authentication: list[type]) -> Any:
     return _Plain.as_view()
 
 
-ROUTES = {"view": _view, "viewset-action": _action}
+ROUTES = {
+    "view": (_view, "post"),
+    "list-view": (_list_view, "get"),
+    "viewset-action": (_action, "post"),
+    "selector-action": (_read_action, "get"),
+}
 CALLERS = {
     # (authenticators, signed in, the answer)
     "anonymous, a challenge first": (
@@ -101,8 +145,8 @@ CALLERS = {
 }
 
 
-def _answer(view: Any, *, signed_in: bool) -> tuple[int, str, str | None]:
-    request = factory.post("/", {}, format="json")
+def _answer(view: Any, *, signed_in: bool, method: str = "post") -> tuple[int, str, str | None]:
+    request = getattr(factory, method)("/", {}, format="json")
     if signed_in:
         force_authenticate(request, User.objects.create(username="ada"))
     response = view(request)
@@ -114,7 +158,7 @@ def _answer(view: Any, *, signed_in: bool) -> tuple[int, str, str | None]:
 def test_drf_s_own_view_answers_each_caller_so(caller: str) -> None:
     """The table below is DRF's: its view, asking the same class, answers each row so."""
     authentication, signed_in, expected = CALLERS[caller]
-    assert _answer(_drf_view(_spec("drf-class"), authentication), signed_in=signed_in) == expected
+    assert _answer(_drf_view(authentication), signed_in=signed_in) == expected
 
 
 def _awaiting_the_edge(refusal: str, caller: str) -> list[Any]:
@@ -147,5 +191,6 @@ def test_a_refused_caller_is_answered_as_drf_answers_it(
     route: str, refusal: str, caller: str
 ) -> None:
     authentication, signed_in, expected = CALLERS[caller]
-    view = ROUTES[route](_spec(refusal), authentication)
-    assert _answer(view, signed_in=signed_in) == expected
+    build, method = ROUTES[route]
+    view = build(_check(refusal), authentication)
+    assert _answer(view, signed_in=signed_in, method=method) == expected
