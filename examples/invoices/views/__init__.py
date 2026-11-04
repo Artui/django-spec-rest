@@ -117,10 +117,7 @@ class IsStaff(BasePermission):
 
 # An adapted DRF class refusing a caller nobody authenticated is answered as a
 # DRF view answers it: 401 with the first authenticator's challenge. A signed-in
-# caller it refuses is a 403 carrying its ``message``. A kernel
-# ``PermissionCheck`` refusing a caller nobody authenticated is the same 401,
-# but only where the denial is the dispatched spec's own check; a signed-in
-# caller it refuses is still a 403.
+# caller it refuses is a 403 carrying its ``message``.
 STAFF_SPEC = SelectorSpec(
     kind=SelectorKind.LIST,
     selector=list_invoices,
@@ -139,7 +136,8 @@ class IsSuperuser(PermissionCheck):
 
 
 # The same refusals from a kernel check: nobody authenticated gets the 401 with
-# the challenge, a signed-in caller it refuses the 403 with its ``message``.
+# the challenge, but only where the denial is the dispatched spec's own check; a
+# signed-in caller it refuses is still a 403 carrying its ``message``.
 AUDIT_SPEC = SelectorSpec(
     kind=SelectorKind.LIST,
     selector=list_invoices,
@@ -192,10 +190,11 @@ class SentInvoiceListView(SelectorListView):
 
 
 class StaffInvoiceListView(SelectorListView):
-    """``GET /staff-invoices/``: the only route here with an authenticator.
+    """``GET /staff-invoices/``: ``BasicAuthentication`` and an adapted DRF class.
 
-    The project configures none, so every other route answers a refused
-    anonymous caller 403; this one's ``BasicAuthentication`` is the
+    The project configures no authenticator, so a route without one, such as
+    ``/invoices/<pk>/send/``, answers a refused anonymous caller 403; this
+    one's ``BasicAuthentication``, like ``AuditInvoiceListView``'s, is the
     ``WWW-Authenticate`` challenge of the 401.
     """
 
