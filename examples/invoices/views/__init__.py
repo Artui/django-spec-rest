@@ -22,10 +22,12 @@ from django_service_specs import (
     ServiceSpec,
     Unrestricted,
 )
+from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework.authentication import BasicAuthentication
 from rest_framework.permissions import BasePermission, IsAuthenticated
 
 from django_spec_rest import SelectorListView, ServiceViewSet, service_action
+from django_spec_rest.openapi import ServiceConflictSerializer
 from django_spec_rest.service_specs.drf_permission_check import DRFPermissionCheck
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
@@ -115,7 +117,9 @@ class IsStaff(BasePermission):
 # An adapted DRF class refusing a caller nobody authenticated is answered as a
 # DRF view answers it: 401 with the first authenticator's challenge. A signed-in
 # caller it refuses is a 403 carrying its ``message``. A kernel
-# ``PermissionCheck`` refusing is still a 403 for either.
+# ``PermissionCheck`` refusing a caller nobody authenticated is the same 401,
+# but only where the denial is the dispatched spec's own check; a signed-in
+# caller it refuses is still a 403.
 STAFF_SPEC = SelectorSpec(
     kind=SelectorKind.LIST,
     selector=list_invoices,
@@ -131,6 +135,14 @@ SENT_SPEC = SelectorSpec(
 )
 
 
+# ``update_invoice`` raises ``ServiceConflict`` for a sent invoice, a refusal the
+# spec cannot show, so it is declared here beside what the schema documents. It
+# is on the viewset's methods, not the class: a class decorated before
+# ``enable_openapi()`` runs would keep drf-spectacular's own ``AutoSchema``.
+@extend_schema_view(
+    update=extend_schema(responses={409: ServiceConflictSerializer}),
+    partial_update=extend_schema(responses={409: ServiceConflictSerializer}),
+)
 class InvoiceViewSet(ServiceViewSet):
     """``/invoices/`` and ``/invoices/<pk>/``, plus ``POST /invoices/<pk>/send/``.
 

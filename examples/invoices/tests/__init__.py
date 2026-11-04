@@ -7,6 +7,7 @@ import base64
 from django.contrib.auth.models import AnonymousUser, User
 from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import DEFAULT_POOL_SEEDS, NotPermitted, dispatch
+from drf_spectacular.generators import SchemaGenerator
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -277,6 +278,44 @@ class AnAnonymousCallerRefusedTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
         self.assertEqual(len(response.data), 1)
+
+
+class OpenAPISchemaTests(APITestCase):
+    """The project generates its schema the documented way.
+
+    drf-spectacular's ``AutoSchema`` is the project's default schema class and
+    ``InvoicesConfig.ready()`` calls ``enable_openapi()``. Each test names the
+    statuses it needs and asserts they are present, never the whole set: the
+    schema may document more as the package learns to.
+    """
+
+    def setUp(self) -> None:
+        self.schema = SchemaGenerator().get_schema(request=None, public=True)
+
+    def _body_component(self, path: str, method: str, code: str) -> str:
+        response = self.schema["paths"][path][method]["responses"][code]
+        return response["content"]["application/json"]["schema"]["$ref"].rsplit("/", 1)[-1]
+
+    def test_a_permission_checked_route_documents_its_403(self) -> None:
+        self.assertEqual(
+            self._body_component("/invoices/{id}/send/", "post", "403"), "PermissionDenied"
+        )
+
+    def test_a_route_with_a_challenging_authenticator_documents_its_401_and_403(self) -> None:
+        # ``BasicAuthentication`` sends a challenge, so the refusal of a caller
+        # nobody authenticated is the 401 the route answers (see
+        # ``AnAnonymousCallerRefusedTests``).
+        self.assertEqual(self._body_component("/staff-invoices/", "get", "401"), "NotAuthenticated")
+        self.assertEqual(self._body_component("/staff-invoices/", "get", "403"), "PermissionDenied")
+
+    def test_a_refusal_the_service_raises_is_documented_where_it_is_declared(self) -> None:
+        # ``update_invoice`` raises ``ServiceConflict``; only ``@extend_schema``
+        # on the viewset's update and partial update declares it.
+        for method in ("put", "patch"):
+            with self.subTest(method=method):
+                self.assertEqual(
+                    self._body_component("/invoices/{id}/", method, "409"), "ServiceConflict"
+                )
 
 
 class SharedSerializerContextTests(APITestCase):
