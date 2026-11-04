@@ -4,6 +4,8 @@
 
 ::: django_spec_rest.openapi.service_auto_schema.ServiceAutoSchema
 
+::: django_spec_rest.openapi.reserved_components_hook.reserved_components_hook
+
 ::: django_spec_rest.openapi.service_error_serializer.ServiceErrorSerializer
 
 ::: django_spec_rest.openapi.service_validation_error_serializer.ServiceValidationErrorSerializer

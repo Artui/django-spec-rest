@@ -10,9 +10,8 @@ from __future__ import annotations
 import inspect
 import re
 from collections.abc import Callable, Iterable
-from typing import Any, NamedTuple, cast
+from typing import Any, cast
 
-from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import (
     Presenter,
     SelectorKind,
@@ -38,9 +37,8 @@ from drf_spectacular.utils import (
     OpenApiParameter,
     OpenApiRequest,
     OpenApiResponse,
-    extend_schema_serializer,
 )
-from rest_framework.serializers import CharField, Serializer
+from rest_framework.serializers import Serializer
 
 from django_spec_rest.dispatch.kernel_edge import UNKNOWN_ARGUMENTS
 from django_spec_rest.openapi._caller_serializer_class import caller_serializer_class
@@ -54,7 +52,18 @@ from django_spec_rest.openapi.service_error_serializer import (
 from django_spec_rest.openapi.service_validation_error_serializer import (
     ServiceValidationErrorSerializer,
 )
-from django_spec_rest.openapi.utils import default_status
+from django_spec_rest.openapi.utils import (
+    RESERVED_COMPONENTS,
+    VALIDATION_ERRORS,
+    NotAuthenticatedBody,
+    PermissionDeniedBody,
+    ValidationErrorsIdentity,
+    default_status,
+    is_a,
+    name_taken,
+    place,
+    serializer_named,
+)
 from django_spec_rest.service_specs.kernel_spec_variant import kernel_spec_variant
 from django_spec_rest.service_specs.renderable_serializer_class import renderable_serializer_class
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
@@ -415,14 +424,14 @@ class ServiceAutoSchema(AutoSchema):
         if all(isinstance(check, Unrestricted) for check in checks):
             return {}
         refusals: dict[int, Any] = {
-            403: OpenApiResponse(
-                response=_PermissionDenied,
+            403: _PackageResponse(
+                response=PermissionDeniedBody,
                 description="The caller may not run this operation.",
             )
         }
         if self.view.get_authenticate_header(self.view.request):
-            refusals[401] = OpenApiResponse(
-                response=_NotAuthenticated,
+            refusals[401] = _PackageResponse(
+                response=NotAuthenticatedBody,
                 description=(
                     "No caller was authenticated. The WWW-Authenticate header names "
                     "the scheme to authenticate with."
@@ -447,14 +456,16 @@ class ServiceAutoSchema(AutoSchema):
         A component of this name that another object holds is refused rather
         than shared, since a ``$ref`` to the wrong schema documents a body the
         edge never sends (test_validation_errors_component_name's
-        test_is_refused_whichever_comes_first). Only where this package's schema
-        sees both: a view on drf-spectacular's own ``AutoSchema`` resolving the
-        serializer after the 400 gets drf-spectacular's warning alone.
+        test_is_refused_whichever_comes_first). A serializer resolved after the
+        400 is answered the component already registered, and is refused by
+        ``resolve_serializer`` where this schema resolves it, or by
+        ``reserved_components_hook`` where drf-spectacular's own ``AutoSchema``
+        does.
         """
         component = ResolvedComponent(
-            name=_VALIDATION_ERRORS,
+            name=VALIDATION_ERRORS,
             type=ResolvedComponent.SCHEMA,
-            object=_ValidationErrors,
+            object=ValidationErrorsIdentity,
             schema=_VALIDATION_ERRORS_SCHEMA,
         )
         try:
@@ -462,10 +473,10 @@ class ServiceAutoSchema(AutoSchema):
         except KeyError:
             self.registry.register_on_missing(component)
         else:
-            if holder is not _ValidationErrors:
-                raise _name_taken(holder, _VALIDATION_ERRORS, _VALIDATION_ERRORS_BODY)
+            if holder is not ValidationErrorsIdentity:
+                raise name_taken(serializer_named(holder), VALIDATION_ERRORS)
         detail = self.resolve_serializer(ServiceErrorSerializer, "response")
-        return OpenApiResponse(
+        return _PackageResponse(
             response={"anyOf": [component.ref, detail.ref, _MESSAGES]},
         )
 
@@ -473,23 +484,31 @@ class ServiceAutoSchema(AutoSchema):
         # Passed through whole: the base's later parameters differ by version
         # (``bypass_extensions`` is not in every release the floor admits).
         resolved = super().resolve_serializer(serializer, *args, **kwargs)
-        # No serializer is ``ValidationErrors``: the registry answered one for
-        # the name it was given, which this schema registered first.
-        if resolved.object is _ValidationErrors:
-            raise _name_taken(serializer, _VALIDATION_ERRORS, _VALIDATION_ERRORS_BODY)
-        # The two refusal serializers are named the same way, but the registry
-        # answers whichever registered first: a mismatch is a project serializer
-        # on either side of this schema's own
+        # The registry answers whichever object registered first under a name,
+        # so a mismatch between the object asked for and the one answered is a
+        # project serializer on either side of the package's own
         # (test_is_refused_when_the_serializer_comes_first,
-        # test_is_refused_when_the_refusal_comes_first).
-        reserved = _REFUSAL_COMPONENTS.get(resolved.name)
+        # test_is_refused_when_the_refusal_comes_first). No serializer is
+        # ``ValidationErrors``, which this schema registers without resolving.
+        reserved = RESERVED_COMPONENTS.get(resolved.name)
         if reserved is not None:
-            asked = _is_a(serializer, reserved.serializer)
-            if asked != _is_a(resolved.object, reserved.serializer):
-                raise _name_taken(
-                    resolved.object if asked else serializer, resolved.name, reserved.body
+            asked = is_a(serializer, reserved.owner)
+            if asked != is_a(resolved.object, reserved.owner):
+                raise name_taken(
+                    serializer_named(resolved.object if asked else serializer), resolved.name
                 )
         return resolved
+
+    def _get_response_for_code(self, serializer: Any, *args: Any, **kwargs: Any) -> Any:
+        # Passed through whole, as ``resolve_serializer`` is.
+        rendered = super()._get_response_for_code(serializer, *args, **kwargs)
+        # The package's own 400, 403 and 401, recorded as the places a
+        # reserved ``$ref`` may sit, which ``reserved_components_hook`` asks
+        # of the generated document (test_a_reserved_name_is_refused_on_drf_spectacular_s_schema).
+        if isinstance(serializer, _PackageResponse):
+            for media in rendered.get("content", {}).values():
+                place(self.registry, media["schema"])
+        return rendered
 
     def _kernel_rows(self, spec: KernelSelectorSpec, presenter: Presenter) -> Any:
         """A kernel selector spec's body: one row, or every row for a ``LIST``.
@@ -577,33 +596,8 @@ def _without(schema: dict[str, Any], names: Iterable[str]) -> dict[str, Any]:
     return kept
 
 
-_VALIDATION_ERRORS = "ValidationErrors"
-_VALIDATION_ERRORS_BODY = "the body of a Validator's refusal"
-
-
-def _name_taken(holder: Any, name: str, body: str) -> ImproperlyConfigured:
-    """The refusal for a serializer that components under a name this schema reserves.
-
-    drf-spectacular only warns of two components of one name and then keeps one
-    for both, so the serializer's own response, or this schema's ``body``, would
-    be documented by the other's.
-    """
-    owner = holder if isinstance(holder, type) else type(holder)
-    return ImproperlyConfigured(
-        f"{owner.__module__}.{owner.__qualname__} is documented as the component "
-        f"{name!r}, the name django_spec_rest gives {body}. "
-        "Name the serializer's component another way, with "
-        "@extend_schema_serializer(component_name=...)."
-    )
-
-
-class _ValidationErrors:
-    """The ``ValidationErrors`` component's identity in drf-spectacular's registry.
-
-    The registry tells components apart by the class handed as their
-    ``object``. ``ComponentIdentity`` would say this too, but it is new in
-    drf-spectacular 0.28 and the floor is 0.27.
-    """
+class _PackageResponse(OpenApiResponse):
+    """A response this schema documents a reserved component in, told apart from a project's."""
 
 
 _MESSAGES: dict[str, Any] = {"type": "array", "items": {"type": "string"}}
@@ -623,7 +617,7 @@ _VALIDATION_ERRORS_SCHEMA: dict[str, Any] = {
         "oneOf": [
             _MESSAGES,
             {"type": "string"},
-            {"$ref": f"#/components/schemas/{_VALIDATION_ERRORS}"},
+            {"$ref": f"#/components/schemas/{VALIDATION_ERRORS}"},
         ]
     },
 }
@@ -746,40 +740,6 @@ def _under_extend_schema(schema_type: type) -> type[AutoSchema] | None:
 def _status(code: Any) -> str:
     """The status a key of a ``responses`` mapping names, as drf-spectacular spells it."""
     return str(code[0] if isinstance(code, tuple) else code)
-
-
-@extend_schema_serializer(component_name="PermissionDenied")
-class _PermissionDenied(Serializer):
-    """The caller may not run this operation. Why is under `detail`."""
-
-    # The docstring is the component's description, so it is a client's.
-    detail = CharField()
-
-
-@extend_schema_serializer(component_name="NotAuthenticated")
-class _NotAuthenticated(Serializer):
-    """No caller was authenticated. Why is under `detail`."""
-
-    # The docstring is the component's description, so it is a client's.
-    detail = CharField()
-
-
-class _Reserved(NamedTuple):
-    """A component name this schema keeps for one of its serializers, and what it documents."""
-
-    serializer: type[Serializer]
-    body: str
-
-
-_REFUSAL_COMPONENTS: dict[str, _Reserved] = {
-    "PermissionDenied": _Reserved(_PermissionDenied, "the body of a refused permission check"),
-    "NotAuthenticated": _Reserved(_NotAuthenticated, "the body of a caller nobody authenticated"),
-}
-
-
-def _is_a(candidate: Any, serializer: type[Serializer]) -> bool:
-    """Whether ``candidate``, a serializer class or instance, is ``serializer``'s."""
-    return candidate is serializer or isinstance(candidate, serializer)
 
 
 class _ServiceValidationErrorExtension(OpenApiSerializerExtension):
