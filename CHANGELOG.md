@@ -35,6 +35,16 @@ carries; releases up to 0.62.0 are in
 - **The `django-service-specs` floor is 0.24.0**, the release carrying
   `validator_parameters` and `PermissionCheckDenied`.
 
+### Fixed
+
+- **The `ServiceError` component is described for a client.** Its
+  `description` in a generated schema was the serializer's docstring, written
+  for the API reference, so the published document carried mkdocs
+  cross-reference syntax and a private class name. It now says what the body
+  is: why the service could not complete the call, under `detail`, and the
+  values still needed, under `schema`. No other component the package
+  registers carried either.
+
 ## [0.4.0] — 2026-11-03
 
 ### Added
