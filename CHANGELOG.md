@@ -27,9 +27,9 @@ carries; releases up to 0.62.0 are in
   body, with only drf-spectacular's warning of two components of one name,
   rather than refused. The partial twin is now resolved as the
   `COMPONENT_SPLIT_REQUEST` twin is: the package registers nothing under its
-  reserved name for it, so the project's serializer is refused where a
-  package view documents the name and is the project's own component where
-  none does.
+  reserved name for it, so the project's serializer is refused wherever the
+  package's body is documented under the name (by a package view, or by a
+  response declaring it) and is the project's own component otherwise.
 
 ## [0.6.0] — 2026-11-04
 

@@ -209,7 +209,7 @@ class _ReservedBodyExtension(OpenApiSerializerExtension):
             # Its partial twin is ``Patched<name>``, nobody's reserved name
             # either, and drf-spectacular takes no ``$ref`` of ``<name>``, so
             # naming it would leave the component armed for the next class of
-            # the name (TestAPatchedRequestOfTheBody).
+            # the name (TestAPartialOfTheBody).
             return None
         registry = auto_schema.registry
         key = ResolvedComponent(name=name, type=ResolvedComponent.SCHEMA, object=self.target)

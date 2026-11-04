@@ -269,13 +269,13 @@ _THEIRS = {403: TheirPermissionDenied, 401: TheirNotAuthenticated}
 
 
 @pytest.mark.parametrize("code", [403, 401])
-class TestAPatchedRequestOfTheBody:
-    """The body as a ``PATCH`` request, under drf-spectacular's default ``COMPONENT_SPLIT_PATCH``.
+class TestAPartialOfTheBody:
+    """The body partial, a ``PATCH`` request or a partial response, under the default ``COMPONENT_SPLIT_PATCH``.
 
-    The partial request is ``Patched<name>``, a name nobody reserves, so it is
+    The partial body is ``Patched<name>``, a name nobody reserves, so it is
     resolved as ``<name>Request`` is under ``COMPONENT_SPLIT_REQUEST``: the
     package registers nothing under its reserved name for it. Each test fails
-    if the extension names the partial request: it registers the reserved
+    if the extension names the partial body: it registers the reserved
     component for it and arms it, and drf-spectacular takes no ``$ref`` of it,
     so the project's class of the name, resolved next, is taken for the
     package's.
@@ -291,6 +291,24 @@ class TestAPatchedRequestOfTheBody:
             self._generate(
                 ours("a-ours"),
                 _patching("b-patching", _BODIES[code]),
+                _declaring("c-declaring", {200: _THEIRS[code]}),
+            )
+        assert str(raised.value).startswith(
+            f"The operation POST /c-declaring/ is documented as the component {_COMPONENTS[code]!r}"
+        )
+
+    def test_a_project_s_serializer_of_the_name_after_a_partial_response_is_refused(
+        self, code: int
+    ) -> None:
+        """A partial instance declared as a response is ``Patched<name>`` too.
+
+        Fails if the extension steps aside only for a request: the partial
+        response arms the component and takes no ``$ref`` of it.
+        """
+        with pytest.raises(ImproperlyConfigured) as raised:
+            self._generate(
+                ours("a-ours"),
+                _declaring("b-declaring", {code: _BODIES[code](partial=True)}),
                 _declaring("c-declaring", {200: _THEIRS[code]}),
             )
         assert str(raised.value).startswith(
