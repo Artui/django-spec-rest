@@ -74,9 +74,9 @@ The refusal on a view of the project's is a postprocessing hook,
 `django_spec_rest.openapi.reserved_components_hook.reserved_components_hook`,
 which `enable_openapi()` inserts first in drf-spectacular's
 `POSTPROCESSING_HOOKS`, before your own, once however often it is called. It
-runs first because it knows the package's own references by identity; a hook of
-yours that copies the schema (a `deepcopy`, a JSON round trip, a rebuilt
-`dict`) then sees a document it has already checked. Anything that replaces that
+runs first because it knows the package's own references by the identity of
+their `$ref` strings; a hook of yours that rebuilds them (a JSON round trip)
+then sees a document it has already checked. Anything that replaces that
 list after `enable_openapi()` runs loses it, such as a `SpectacularAPIView`'s
 `custom_settings` setting `POSTPROCESSING_HOOKS`, or a reload of
 drf-spectacular's settings: name the hook in that list by its dotted path, or

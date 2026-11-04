@@ -41,9 +41,9 @@ def enable_openapi() -> None:
     first in drf-spectacular's ``POSTPROCESSING_HOOKS``, before the project's
     own hooks and once however often it is called, so a component of the
     project's under a name the package documents its refusals by is refused
-    on any view. It recognises the package's own references by identity, so a
-    project hook that copies the schema (``copy.deepcopy``, a JSON round
-    trip, a rebuilt ``dict``) must run after it, not before.
+    on any view. It recognises the package's own references by the identity
+    of their ``$ref`` strings, so a project hook that rebuilds those strings
+    (a JSON round trip) must run after it, not before.
     """
     # Local imports per CLAUDE.md "Lazy / function-local imports are
     # forbidden unless... a proven optional dependency": ``drf-spectacular``
@@ -102,8 +102,8 @@ def enable_openapi() -> None:
     # Inserted first, and only where absent, so a repeated call, or a project
     # listing the hook itself, runs it once (test_enable_openapi's
     # test_the_hook_is_installed_once). First because it tells the package's
-    # own references from a project's by identity: a project hook that copies
-    # the schema, run before it, would make every reference look foreign
+    # own references from a project's by identity: a project hook that
+    # rebuilds the strings, run before it, would make every reference look foreign
     # (test_reserved_components_hook's test_a_copying_hook_of_the_project_runs_after_it).
     if reserved_components_hook not in hooks:
         hooks.insert(0, reserved_components_hook)

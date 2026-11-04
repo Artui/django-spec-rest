@@ -193,6 +193,9 @@ class _ReservedBodyExtension(OpenApiSerializerExtension):
         name = get_class(self.target).__name__.removesuffix("Serializer")
         if direction == "request" and spectacular_settings.COMPONENT_SPLIT_REQUEST:
             # Its request twin is ``<name>Request``, a name nobody reserves.
+            # Without the direction, test_is_documented_as_a_request_body's
+            # split case fails; without the setting, its other case and
+            # test_are_documented_nested_in_a_project_s_serializer.
             return None
         registry = auto_schema.registry
         key = ResolvedComponent(name=name, type=ResolvedComponent.SCHEMA, object=self.target)

@@ -67,9 +67,9 @@ def _refuse_foreign(
     # Each conjunct below, dropped, fails test_reserved_components_hook's
     # test_the_package_s_own_responses_pass: the ``$ref`` match (its 201
     # refers to ``Author``), the skip of a component's reference to itself
-    # and the skip of what the package wrote. The last, dropped for a name
-    # the package holds, fails
-    # test_a_raw_reserved_reference_on_a_package_view_is_refused too.
+    # and the skip of what the package wrote. That skip answering every
+    # ``$ref`` to a name the package holds, rather than the strings it wrote,
+    # fails test_a_raw_reserved_reference_on_a_package_view_is_refused.
     if isinstance(node, dict):
         ref = node.get("$ref")
         for name in reserved:

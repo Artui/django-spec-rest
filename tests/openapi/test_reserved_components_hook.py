@@ -133,7 +133,7 @@ def _shallow_rebuild_hook(result: Any, **kwargs: Any) -> Any:
 
 
 class TestAProjectHookThatCopiesTheSchema:
-    """The hook knows the package's references by identity, so it must see them before a copy."""
+    """The hook knows the package's references by their strings' identity, so it must see them before a rebuild."""
 
     @pytest.mark.parametrize(
         "copying_hook", [_deep_copying_hook, _json_roundtrip_hook, _shallow_rebuild_hook]
@@ -143,8 +143,10 @@ class TestAProjectHookThatCopiesTheSchema:
     ) -> None:
         """A clash-free document still generates. Fails if ``enable_openapi`` appends the hook.
 
-        Appended, it runs on a copy whose references are no longer the objects
-        the package wrote, and refuses the package's own 400 as a clash.
+        Appended, it runs after the JSON round trip, whose ``$ref`` strings are
+        no longer the objects the package wrote, and refuses the package's own
+        400 as a clash. A deep copy and a rebuilt ``dict`` keep the strings,
+        and pass in either place.
         """
         monkeypatch.setattr(
             spectacular_settings, "POSTPROCESSING_HOOKS", [postprocess_schema_enums, copying_hook]
