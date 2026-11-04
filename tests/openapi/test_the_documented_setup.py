@@ -10,17 +10,33 @@ none of the library's classes.
 
 from __future__ import annotations
 
+import dataclasses
 from typing import Any
 
 import pytest
 from django.urls import URLPattern, path
-from django_service_specs import ServiceSpec, Unrestricted
+from django_service_specs import (
+    Parameter,
+    Parameters,
+    SelectorKind,
+    SelectorSpec,
+    ServiceSpec,
+    Unrestricted,
+)
 from drf_spectacular.generators import SchemaGenerator
 from drf_spectacular.utils import extend_schema
 from rest_framework.routers import SimpleRouter
 from rest_framework.viewsets import GenericViewSet
 
-from django_spec_rest import ServiceCreateMixin, ServiceCreateView, service_action
+from django_spec_rest import (
+    SelectorListMixin,
+    SelectorRetrieveMixin,
+    ServiceCreateMixin,
+    ServiceCreateView,
+    ServiceDestroyMixin,
+    ServiceUpdateMixin,
+    service_action,
+)
 from django_spec_rest.openapi import ServiceNotFoundSerializer, enable_openapi
 from django_spec_rest.openapi.service_auto_schema import ServiceAutoSchema
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
@@ -105,6 +121,13 @@ class _ComposedViewSet(ServiceCreateMixin, GenericViewSet):
     action_specs = {"create": _spec()}
 
 
+class _GenericFirstViewSet(GenericViewSet, ServiceCreateMixin):
+    """The same, with ``GenericViewSet`` listed before the mixin."""
+
+    queryset = Author.objects.all()
+    action_specs = {"create": _spec()}
+
+
 def _routed(viewset: type, **attrs: Any) -> list[Any]:
     router = SimpleRouter()
     router.register("r", type(viewset.__name__, (viewset,), attrs), basename="r")
@@ -113,18 +136,18 @@ def _routed(viewset: type, **attrs: Any) -> list[Any]:
 
 @pytest.mark.parametrize(
     ("viewset", "route", "success"),
-    [(_ActionViewSet, "/r/approve/", "200"), (_ComposedViewSet, "/r/", "201")],
-    ids=["a service_action on a plain viewset", "a viewset of the action mixins"],
+    [
+        (_ActionViewSet, "/r/approve/", "200"),
+        (_ComposedViewSet, "/r/", "201"),
+        (_GenericFirstViewSet, "/r/", "201"),
+    ],
+    ids=[
+        "a service_action on a plain viewset",
+        "a viewset of the action mixins",
+        "a viewset of the action mixins after GenericViewSet",
+    ],
 )
 class TestAViewSetOfTheProjectsOwn:
-    def test_documents_nothing_of_its_spec_on_drf_spectacular_s_schema(
-        self, viewset: type, route: str, success: str
-    ) -> None:
-        # ``enable_openapi()`` sets no schema on ``GenericViewSet`` or on the
-        # mixins, so the viewset keeps the default.
-        enable_openapi()
-        assert _responses(*_routed(viewset)) == {route: {success}}
-
     def test_documents_its_spec_on_the_package_s_schema(
         self, viewset: type, route: str, success: str
     ) -> None:
@@ -132,3 +155,83 @@ class TestAViewSetOfTheProjectsOwn:
         assert _responses(*_routed(viewset, schema=ServiceAutoSchema())) == {
             route: {success, "400", "422"}
         }
+
+
+@pytest.mark.parametrize(
+    ("viewset", "route", "success"),
+    [(_ActionViewSet, "/r/approve/", "200"), (_GenericFirstViewSet, "/r/", "201")],
+    ids=[
+        "a service_action on a plain viewset",
+        "a viewset of the action mixins after GenericViewSet",
+    ],
+)
+def test_a_viewset_with_no_mixin_before_generic_viewset_documents_nothing_of_its_spec(
+    viewset: type, route: str, success: str
+) -> None:
+    """``GenericViewSet``'s own ``schema``, DRF's default, comes first in its MRO."""
+    enable_openapi()
+    assert _responses(*_routed(viewset)) == {route: {success}}
+
+
+_BY_PK = Parameters.of(Parameter("pk", "integer", required=True))
+
+
+def _list() -> SelectorSpec:
+    return SelectorSpec(
+        kind=SelectorKind.LIST,
+        selector=lambda: Author.objects.all(),
+        permissions=(Unrestricted(),),
+        presenter=SerializerPresenter(AuthorSerializer),
+    )
+
+
+def _retrieve() -> SelectorSpec:
+    return SelectorSpec(
+        kind=SelectorKind.RETRIEVE,
+        selector=lambda *, pk: Author.objects.filter(pk=pk).first(),
+        reads=_BY_PK,
+        permissions=(Unrestricted(),),
+        presenter=SerializerPresenter(AuthorSerializer),
+    )
+
+
+def _on_a_row() -> ServiceSpec:
+    return dataclasses.replace(
+        _spec(),
+        instance_selector_spec=SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=lambda *, pk: Author.objects.filter(pk=pk).first(),
+            reads=_BY_PK,
+        ),
+    )
+
+
+@pytest.mark.parametrize(
+    ("mixin", "action", "spec"),
+    [
+        (ServiceCreateMixin, "create", _spec()),
+        (ServiceUpdateMixin, "update", _on_a_row()),
+        (ServiceDestroyMixin, "destroy", _on_a_row()),
+        (SelectorListMixin, "list", _list()),
+        (SelectorRetrieveMixin, "retrieve", _retrieve()),
+    ],
+    ids=lambda value: value.__name__ if isinstance(value, type) else None,
+)
+def test_a_mixin_listed_first_documents_its_spec_with_no_schema_of_its_own(
+    mixin: type, action: str, spec: Any
+) -> None:
+    """Documented as with ``schema = ServiceAutoSchema()``, and not as drf-spectacular reads it.
+
+    Fails if ``enable_openapi()`` leaves the mixin without the package's schema.
+    """
+    enable_openapi()
+    attrs = {"queryset": Author.objects.all(), "action_specs": {action: spec}}
+    composed = type("_Composed", (mixin, GenericViewSet), attrs)
+    generic_first = type("_GenericFirst", (GenericViewSet, mixin), attrs)
+    documented = _paths(*_routed(composed))
+    assert documented == _paths(*_routed(composed, schema=ServiceAutoSchema()))
+    assert documented != _paths(*_routed(generic_first))
+
+
+def _paths(*patterns: URLPattern) -> dict[str, Any]:
+    return SchemaGenerator(patterns=list(patterns)).get_schema(request=None, public=True)["paths"]

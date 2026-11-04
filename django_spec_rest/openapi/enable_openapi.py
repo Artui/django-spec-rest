@@ -4,6 +4,8 @@ onto every library view."""
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 
 def enable_openapi() -> None:
     """Set
@@ -18,6 +20,8 @@ def enable_openapi() -> None:
     - ``ServiceCreateView``, ``ServiceUpdateView``, ``ServiceDeleteView``
     - ``SelectorListView``, ``SelectorRetrieveView``
     - ``ServiceViewSet``, ``SelectorViewSet``
+    - ``ServiceCreateMixin``, ``ServiceUpdateMixin``, ``ServiceDestroyMixin``,
+      ``SelectorListMixin``, ``SelectorRetrieveMixin``
 
     The function-local imports keep ``drf-spectacular`` an optional
     dependency: importing
@@ -25,7 +29,12 @@ def enable_openapi() -> None:
     this call brings in the schema-generator code.
 
     User subclasses inherit ``schema = ServiceAutoSchema()`` automatically;
-    classes that set ``schema = ...`` explicitly keep their own choice.
+    classes that set ``schema = ...`` explicitly keep their own choice. A
+    project's ``GenericViewSet`` composed of the mixins inherits it only where
+    a mixin comes before ``GenericViewSet`` in its bases, since DRF's
+    ``APIView`` carries a ``schema`` of its own
+    (test_the_documented_setup's
+    test_a_mixin_listed_first_documents_its_spec_with_no_schema_of_its_own).
 
     It also inserts
     [`reserved_components_hook`][django_spec_rest.openapi.reserved_components_hook.reserved_components_hook]
@@ -58,18 +67,36 @@ def enable_openapi() -> None:
     from django_spec_rest.views.query.selector_retrieve_view import (
         SelectorRetrieveView,
     )
+    from django_spec_rest.viewsets.selector_list_mixin import SelectorListMixin
+    from django_spec_rest.viewsets.selector_retrieve_mixin import (
+        SelectorRetrieveMixin,
+    )
     from django_spec_rest.viewsets.selector_viewset import SelectorViewSet
+    from django_spec_rest.viewsets.service_create_mixin import ServiceCreateMixin
+    from django_spec_rest.viewsets.service_destroy_mixin import ServiceDestroyMixin
+    from django_spec_rest.viewsets.service_update_mixin import ServiceUpdateMixin
     from django_spec_rest.viewsets.service_viewset import ServiceViewSet
 
-    for view_cls in (
-        ServiceCreateView,
-        ServiceUpdateView,
-        ServiceDeleteView,
-        SelectorListView,
-        SelectorRetrieveView,
-        ServiceViewSet,
-        SelectorViewSet,
-    ):
+    # Declared loosely: the mixins carry no ``schema`` of their own, which
+    # arrives with ``APIView`` when a project composes them.
+    classes = cast(
+        "tuple[type[Any], ...]",
+        (
+            ServiceCreateView,
+            ServiceUpdateView,
+            ServiceDeleteView,
+            SelectorListView,
+            SelectorRetrieveView,
+            ServiceViewSet,
+            SelectorViewSet,
+            ServiceCreateMixin,
+            ServiceUpdateMixin,
+            ServiceDestroyMixin,
+            SelectorListMixin,
+            SelectorRetrieveMixin,
+        ),
+    )
+    for view_cls in classes:
         view_cls.schema = ServiceAutoSchema()
     hooks = spectacular_settings.POSTPROCESSING_HOOKS
     # Inserted first, and only where absent, so a repeated call, or a project

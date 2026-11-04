@@ -22,16 +22,21 @@ class ApiConfig(AppConfig):
 
 `enable_openapi()` sets `ServiceAutoSchema` as the schema of `ServiceCreateView`,
 `ServiceUpdateView`, `ServiceDeleteView`, `SelectorListView`,
-`SelectorRetrieveView`, `ServiceViewSet` and `SelectorViewSet`, so every
-subclass inherits it; a class setting `schema` itself keeps its own.
-Importing `django_spec_rest.openapi` does not import `drf-spectacular`; only
-this call does.
+`SelectorRetrieveView`, `ServiceViewSet` and `SelectorViewSet`, and of the
+action mixins `ServiceCreateMixin`, `ServiceUpdateMixin`, `ServiceDestroyMixin`,
+`SelectorListMixin` and `SelectorRetrieveMixin`, so every subclass inherits it;
+a class setting `schema` itself keeps its own. Importing
+`django_spec_rest.openapi` does not import `drf-spectacular`; only this call
+does.
 
-A viewset of your own over `GenericViewSet` inherits none of those classes,
-whether it is composed of the action mixins (`ServiceCreateMixin`,
-`SelectorListMixin` and the rest) or carries a `@service_action` or
-`@selector_action`. On drf-spectacular's `AutoSchema` it documents nothing of
-its specs. Set `schema = ServiceAutoSchema()` on it (from
+A viewset of your own over `GenericViewSet`, composed of the action mixins,
+inherits the schema only where a mixin comes before `GenericViewSet` in its
+bases, as in `class NoteViewSet(ServiceCreateMixin, GenericViewSet)`: DRF's
+`APIView` carries a `schema` of its own, so in
+`class NoteViewSet(GenericViewSet, ServiceCreateMixin)` that one wins. A
+`@service_action` or `@selector_action` on a bare `GenericViewSet` has no mixin
+to inherit it from. On drf-spectacular's `AutoSchema` either documents nothing
+of its specs. Set `schema = ServiceAutoSchema()` on it (from
 `django_spec_rest.openapi.service_auto_schema`), or point DRF's
 `DEFAULT_SCHEMA_CLASS` at
 `"django_spec_rest.openapi.service_auto_schema.ServiceAutoSchema"`, which

@@ -8,11 +8,16 @@ import pytest
 from django.test import override_settings
 
 from django_spec_rest import (
+    SelectorListMixin,
     SelectorListView,
+    SelectorRetrieveMixin,
     SelectorRetrieveView,
     SelectorViewSet,
+    ServiceCreateMixin,
     ServiceCreateView,
     ServiceDeleteView,
+    ServiceDestroyMixin,
+    ServiceUpdateMixin,
     ServiceUpdateView,
     ServiceViewSet,
 )
@@ -27,6 +32,11 @@ _ENABLED = (
     SelectorRetrieveView,
     ServiceViewSet,
     SelectorViewSet,
+    ServiceCreateMixin,
+    ServiceUpdateMixin,
+    ServiceDestroyMixin,
+    SelectorListMixin,
+    SelectorRetrieveMixin,
 )
 
 

@@ -26,6 +26,15 @@ carries; releases up to 0.62.0 are in
   first and the package's body is declared on drf-spectacular's own schema.
   The OpenAPI guide's "Refusals your project configures" declares them in
   place of a serializer of the project's.
+- **`enable_openapi()` sets the package's schema on the action mixins.**
+  `ServiceCreateMixin`, `ServiceUpdateMixin`, `ServiceDestroyMixin`,
+  `SelectorListMixin` and `SelectorRetrieveMixin` now carry
+  `ServiceAutoSchema` as the views and `ServiceViewSet` do, so a project's
+  `GenericViewSet` composed of them documents its specs with no `schema` of
+  its own, where a mixin comes before `GenericViewSet` in its bases. With
+  `GenericViewSet` first, DRF's own `schema` wins, and a `@service_action` on
+  a bare `GenericViewSet` has no mixin: both still set `schema` or
+  `DEFAULT_SCHEMA_CLASS`, as the OpenAPI guide says.
 
 ### Changed
 
