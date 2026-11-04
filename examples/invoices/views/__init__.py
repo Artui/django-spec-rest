@@ -17,6 +17,7 @@ from django_service_specs import (
     Affordance,
     Parameter,
     Parameters,
+    PermissionCheck,
     SelectorKind,
     SelectorSpec,
     ServiceSpec,
@@ -127,6 +128,25 @@ STAFF_SPEC = SelectorSpec(
     presenter=PRESENTER,
 )
 
+
+class IsSuperuser(PermissionCheck):
+    """The kernel's own seat: asked of a principal, with no DRF in it."""
+
+    message = "Only a superuser can list the audited invoices."
+
+    def has_permission(self, principal: Any, spec: Any) -> bool:
+        return bool(getattr(principal, "is_superuser", False))
+
+
+# The same refusals from a kernel check: nobody authenticated gets the 401 with
+# the challenge, a signed-in caller it refuses the 403 with its ``message``.
+AUDIT_SPEC = SelectorSpec(
+    kind=SelectorKind.LIST,
+    selector=list_invoices,
+    permissions=(IsSuperuser(),),
+    presenter=PRESENTER,
+)
+
 SENT_SPEC = SelectorSpec(
     kind=SelectorKind.LIST,
     selector=sent_invoices,
@@ -181,3 +201,15 @@ class StaffInvoiceListView(SelectorListView):
 
     authentication_classes = [BasicAuthentication]
     spec = STAFF_SPEC
+
+
+class AuditInvoiceListView(SelectorListView):
+    """``GET /audited-invoices/``: ``BasicAuthentication`` and a kernel check.
+
+    The kernel ``PermissionCheck`` ``IsSuperuser`` guards the spec; the view's
+    authenticator is what makes a refused anonymous caller a 401 with a
+    challenge, as ``StaffInvoiceListView`` does for the adapted DRF class.
+    """
+
+    authentication_classes = [BasicAuthentication]
+    spec = AUDIT_SPEC
