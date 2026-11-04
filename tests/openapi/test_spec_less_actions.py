@@ -9,7 +9,8 @@ which fall back to DRF's own queryset, a handler the view defines itself, a
 route serving no spec and a standalone view stay as they were.
 
 Each viewset here is asked for its ``Allow`` too, so a test also fails where
-the schema and the header part, not only where a method is missing.
+the schema and the header part, not only where a method is missing; the one
+that excludes a method with ``extend_schema`` is the exception.
 """
 
 from __future__ import annotations
@@ -206,25 +207,25 @@ class TestARouteServingASpec:
         assert _documented(schema, route) == _allow(viewset, actions)
 
 
-@extend_schema_view(update=extend_schema(exclude=True))
+@extend_schema_view(
+    update=extend_schema(exclude=True),
+    destroy=extend_schema(summary="Delete an author"),
+)
 class _UpdateExcluded(_NoDestroy):
     """``_NoDestroy`` with PUT left out by the decorator, DELETE by the missing spec."""
 
 
 class TestAnExcludeComposesWithTheSpecLessRule:
-    """``extend_schema(exclude=True)`` and the spec-less rule each leave their own method out.
+    """``extend_schema`` wraps a view's schema class, and the wrapper still asks ours.
 
-    This guards drf-spectacular's wrapper, not this package's code:
-    ``extend_schema`` subclasses the view's schema class, so its ``is_excluded``
-    sits above ``ServiceAutoSchema`` in the MRO, answers True for the marked
-    action and otherwise calls ``super()``. Only the ``super()`` call reaches
-    ``ServiceAutoSchema.is_excluded``, so the one mutant this test could fail
-    is that call going missing. Replacing ``super().is_excluded()`` in
-    ``ServiceAutoSchema.is_excluded`` with ``return False`` does not fail it
-    (run, 13 passed): the spec-less check runs before the ``super()`` call and
-    still leaves DELETE out, and drf-spectacular's own ``is_excluded`` answers
-    False for this view anyway. Dropping the spec-less check instead fails it.
-    The test pins that the two exclusions both hold on one route, no more.
+    The wrapper's ``is_excluded`` returns its ``exclude`` for a decorated
+    action and otherwise calls ``super()``. ``destroy`` is decorated without
+    excluding anything, so its DELETE is answered through that ``super()`` call
+    and only ``ServiceAutoSchema``'s spec-less rule leaves it out: the test
+    fails if the wrapper stops asking, or if our rule stops answering. It does
+    not fail if ``ServiceAutoSchema`` stops calling its own ``super()``, which
+    answers False for this view anyway. Unlike the viewsets above, this one's
+    schema and ``Allow`` differ on purpose: ``Allow`` still names PUT.
     """
 
     def test_update_excluded_by_the_decorator_leaves_get_and_patch(self) -> None:
