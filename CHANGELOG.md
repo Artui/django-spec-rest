@@ -38,6 +38,14 @@ carries; releases up to 0.62.0 are in
 
 ### Changed
 
+- **The action mixins' schema wins over a project's `DEFAULT_SCHEMA_CLASS`.**
+  A `GenericViewSet` composed of `ServiceCreateMixin`, `ServiceUpdateMixin`,
+  `ServiceDestroyMixin`, `SelectorListMixin` or `SelectorRetrieveMixin`, with
+  a mixin before `GenericViewSet`, took the project's `DEFAULT_SCHEMA_CLASS`
+  before; now that `enable_openapi()` sets `ServiceAutoSchema` on the mixins
+  it takes that, even where the default is a subclass of it. Setting
+  `schema = ProjectSchema()` on the viewset keeps the subclass.
+
 - **The OpenAPI guide says a `$ref` written to a reserved name is refused on
   any view.** `@extend_schema(responses={403: {"$ref":
   "#/components/schemas/PermissionDenied"}})` on a package view is refused
@@ -54,6 +62,15 @@ carries; releases up to 0.62.0 are in
   nothing answers differently.
 
 ### Fixed
+
+- **A paginated list's 403 and 401 stay the one refusal under
+  `ENABLE_LIST_MECHANICS_ON_NON_2XX`.** With that drf-spectacular setting on,
+  a paginated `SelectorListView` with checks documented its 403 as
+  `PaginatedPermissionDeniedList`, and the pagination naming left the
+  package's `PermissionDenied` or `NotAuthenticated` component armed, so a
+  project's serializer of that name resolved next was not refused.
+  `PermissionDeniedSerializer` and `NotAuthenticatedSerializer` now declare
+  they are never a list.
 
 - **The schema leaves out a viewset method answered 405 for want of a spec.**
   drf-spectacular documented every method a router maps, so a

@@ -12,6 +12,7 @@ from typing import Any, NamedTuple
 from weakref import WeakKeyDictionary
 
 from django.core.exceptions import ImproperlyConfigured
+from drf_spectacular.drainage import set_override
 from drf_spectacular.extensions import OpenApiSerializerExtension
 from drf_spectacular.plumbing import ResolvedComponent, get_class
 from drf_spectacular.settings import spectacular_settings
@@ -19,6 +20,12 @@ from rest_framework import status as drf_status
 
 from django_spec_rest.openapi.not_authenticated_serializer import NotAuthenticatedSerializer
 from django_spec_rest.openapi.permission_denied_serializer import PermissionDeniedSerializer
+
+# One body, never a list: under ENABLE_LIST_MECHANICS_ON_NON_2XX a paginated
+# view's 403 or 401 would be wrapped as ``Paginated<Name>List``, and the
+# pagination naming asks the extension for a name it takes no ``$ref`` of.
+for _body in (PermissionDeniedSerializer, NotAuthenticatedSerializer):
+    set_override(_body, "many", False)
 
 # Default success status by action / view kind. Mirrors the runtime defaults
 # in the standalone views and viewset mixins so the schema lines up with
@@ -193,9 +200,10 @@ class _ReservedBodyExtension(OpenApiSerializerExtension):
         name = get_class(self.target).__name__.removesuffix("Serializer")
         if direction == "request" and spectacular_settings.COMPONENT_SPLIT_REQUEST:
             # Its request twin is ``<name>Request``, a name nobody reserves.
-            # Without the direction, test_is_documented_as_a_request_body's
-            # split case fails; without the setting, its other case and
-            # test_are_documented_nested_in_a_project_s_serializer.
+            # Without the direction, test_are_documented_under_split_request_components
+            # and test_are_documented_as_a_project_s_response_under_split_request_components
+            # fail; without the setting, test_is_documented_as_a_request_body's
+            # other case and test_are_documented_nested_in_a_project_s_serializer.
             return None
         registry = auto_schema.registry
         key = ResolvedComponent(name=name, type=ResolvedComponent.SCHEMA, object=self.target)

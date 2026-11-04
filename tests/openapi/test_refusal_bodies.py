@@ -16,28 +16,35 @@ from typing import Any
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 from django.urls import URLPattern, path
+from django_service_specs import SelectorKind, SelectorSpec
 from drf_spectacular.generators import SchemaGenerator
 from drf_spectacular.openapi import AutoSchema
 from drf_spectacular.settings import patched_settings
 from drf_spectacular.utils import extend_schema
 from rest_framework import serializers
-from rest_framework.generics import GenericAPIView
+from rest_framework.generics import GenericAPIView, ListAPIView
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.request import Request
 from rest_framework.response import Response
 
+from django_spec_rest import SelectorListView
 from django_spec_rest.openapi import (
     NotAuthenticatedSerializer,
     PermissionDeniedSerializer,
     enable_openapi,
 )
 from django_spec_rest.openapi.service_auto_schema import ServiceAutoSchema
+from django_spec_rest.service_specs.drf_permission_check import DRFPermissionCheck
+from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from tests.openapi.reserved_names import (
     NotAuthenticatedSerializer as TheirNotAuthenticated,
 )
 from tests.openapi.reserved_names import (
     PermissionDeniedSerializer as TheirPermissionDenied,
 )
-from tests.openapi.reserved_names import ours, ours_refusing_nothing, theirs
+from tests.openapi.reserved_names import _Deny, ours, ours_refusing_nothing, theirs
+from tests.testapp.models import Author
+from tests.testapp.serializers import AuthorSerializer
 
 _BODIES = {403: PermissionDeniedSerializer, 401: NotAuthenticatedSerializer}
 _COMPONENTS = {403: "PermissionDenied", 401: "NotAuthenticated"}
@@ -66,6 +73,38 @@ def _declaring(prefix: str, responses: Any, request: Any = None) -> URLPattern:
     view = extend_schema(request=request, responses=responses)(_Declaring)
     assert not isinstance(view.schema, ServiceAutoSchema)
     return path(f"{prefix}/", view.as_view())
+
+
+def _checked_list(prefix: str) -> URLPattern:
+    """A paginated list whose spec carries a DRF check, so it documents the package's 403."""
+    spec = SelectorSpec(
+        kind=SelectorKind.LIST,
+        selector=lambda: Author.objects.all(),
+        permissions=(DRFPermissionCheck([_Deny]),),
+        presenter=SerializerPresenter(AuthorSerializer),
+    )
+    attrs = {
+        "queryset": Author.objects.all(),
+        "spec": spec,
+        "pagination_class": PageNumberPagination,
+        "permission_classes": [],
+        "authentication_classes": [],
+    }
+    return path(f"{prefix}/", type("_Listing", (SelectorListView,), attrs).as_view())
+
+
+def _paginated_listing_a_refusal(prefix: str) -> URLPattern:
+    """A project's paginated list view whose 2xx body is the package's 403 body."""
+
+    class _Listing(ListAPIView):
+        schema = AutoSchema()
+        queryset = Author.objects.all()
+        serializer_class = PermissionDeniedSerializer
+        pagination_class = PageNumberPagination
+        permission_classes = []
+        authentication_classes = []
+
+    return path(f"{prefix}/", _Listing.as_view())
 
 
 def _refusals(schema: dict[str, Any], route: str) -> dict[int, Any]:
@@ -164,4 +203,81 @@ class TestTheExportedBodies:
             )
         assert str(raised.value).startswith(
             "The operation POST /b-theirs/ is documented as the component 'PermissionDenied'"
+        )
+
+    def test_are_documented_under_split_request_components(self) -> None:
+        """The package's own view documents its 403 as the one component where requests split.
+
+        Fails if the extension steps aside for every direction under
+        ``COMPONENT_SPLIT_REQUEST``, not only the request one: the 403, a
+        response, would then be named by drf-spectacular's own serializer
+        reading, not the reserved component.
+        """
+        with patched_settings({"COMPONENT_SPLIT_REQUEST": True}):
+            schema = _generate(ours("a-ours"))
+        assert _refusals(schema, "/a-ours/")[403] == {
+            "$ref": "#/components/schemas/PermissionDenied"
+        }
+
+    def test_are_documented_as_a_project_s_response_under_split_request_components(self) -> None:
+        """A project's view declaring the body as its 403 gets the one component too.
+
+        Fails for the same mutant as the package's own view, on a schema that
+        is drf-spectacular's own.
+        """
+        with patched_settings({"COMPONENT_SPLIT_REQUEST": True}):
+            schema = _generate(_declaring("a-declaring", {403: PermissionDeniedSerializer}))
+        responses = schema["paths"]["/a-declaring/"]["post"]["responses"]
+        assert responses["403"]["content"]["application/json"]["schema"] == {
+            "$ref": "#/components/schemas/PermissionDenied"
+        }
+
+    def test_a_project_s_serializer_of_the_name_after_a_paginated_list_of_it_is_refused(
+        self,
+    ) -> None:
+        """The body as the 2xx of a paginated list view, then a project's class of its name.
+
+        Fails without the body declaring it is never a list: the pagination
+        naming asks the extension for the name and leaves the component armed,
+        so the project's class, resolved next, is taken for the package's.
+        """
+        with pytest.raises(ImproperlyConfigured) as raised:
+            _generate(
+                _paginated_listing_a_refusal("a-listing"),
+                _declaring("b-declaring", {200: TheirPermissionDenied}),
+            )
+        assert str(raised.value).startswith(
+            "The operation POST /b-declaring/ is documented as the component 'PermissionDenied'"
+        )
+
+
+class TestUnderListMechanicsOnARefusal:
+    """``ENABLE_LIST_MECHANICS_ON_NON_2XX`` wraps a list view's non-2xx bodies as lists and pages them."""
+
+    def _generate(self, *patterns: URLPattern) -> dict[str, Any]:
+        with patched_settings({"ENABLE_LIST_MECHANICS_ON_NON_2XX": True}):
+            return _generate(*patterns)
+
+    def test_the_403_of_a_checked_list_is_the_one_refusal(self) -> None:
+        """Fails without the bodies declaring they are never a list: the 403 is
+        ``PaginatedPermissionDeniedList``, an array of them."""
+        schema = self._generate(_checked_list("a-list"))
+        body = schema["paths"]["/a-list/"]["get"]["responses"]["403"]["content"]
+        assert body["application/json"]["schema"] == {
+            "$ref": "#/components/schemas/PermissionDenied"
+        }
+
+    def test_a_project_s_serializer_of_the_name_after_is_refused(self) -> None:
+        """Fails if paging the body arms the component for the next ``$ref`` taken.
+
+        The pagination naming asks the extension for the name and takes no
+        ``$ref`` of it, so the project's class of the name, resolved next,
+        would be taken for the package's.
+        """
+        with pytest.raises(ImproperlyConfigured) as raised:
+            self._generate(
+                _checked_list("a-list"), _declaring("b-declaring", {200: TheirPermissionDenied})
+            )
+        assert str(raised.value).startswith(
+            "The operation POST /b-declaring/ is documented as the component 'PermissionDenied'"
         )
