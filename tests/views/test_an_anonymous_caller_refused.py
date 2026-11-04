@@ -12,9 +12,9 @@ whose denial the kernel marks as ``PermissionCheckDenied``: at the class-level
 check, and at the object-level one asked of the row the spec's own lookup
 finds. Any other ``NotPermitted`` - a service's own, a refused inner
 dispatch's, a check's own raise rather than its ``False`` - is not the
-caller's to sign in for, and stays 403 with its message. Each route is served by a view and by a viewset action, and each
-answer is DRF's for a plain ``APIView`` guarded by a class carrying the same
-message.
+caller's to sign in for, and stays 403 with its message. Each route is served
+by a view and by a viewset action, and each answer is DRF's for a plain
+``APIView`` guarded by a class carrying the same message.
 """
 
 from __future__ import annotations

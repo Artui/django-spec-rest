@@ -411,11 +411,11 @@ class ServiceAutoSchema(AutoSchema):
 
         Any such check denying (answering ``False`` to) a caller the request's
         authenticators did not recognise is ``DRFNotAuthenticated``, whether it
-        is a kernel ``PermissionCheck`` or an adapted ``DRFPermissionCheck``, at any depth
-        of ``AllOf`` and ``AnyOf``. DRF answers that 401 where the view's first
-        authenticator gives a ``WWW-Authenticate`` and 403 where it gives none,
-        so the 401 is documented where the authenticator gives one, read from
-        the view by the method DRF's ``handle_exception`` asks
+        is a kernel ``PermissionCheck`` or an adapted ``DRFPermissionCheck``,
+        at any depth of ``AllOf`` and ``AnyOf``. DRF answers that 401 where the
+        view's first authenticator gives a ``WWW-Authenticate`` and 403 where
+        it gives none, so the 401 is documented where the authenticator gives
+        one, read from the view by the method DRF's ``handle_exception`` asks
         (test_a_check_behind_a_challenge_documents_a_401,
         test_a_check_behind_a_session_documents_no_401,
         test_a_check_behind_no_authenticator_documents_no_401). A check that

@@ -131,16 +131,16 @@ call `enable_openapi()` again after the reload.
   sends a `WWW-Authenticate` challenge, such as DRF's `BasicAuthentication` or
   `TokenAuthentication`. Any of those checks denying (answering `False` to) a
   caller nobody authenticated, a kernel `PermissionCheck` or a
-  `DRFPermissionCheck` alike, is answered 401 there, under `detail` (the `NotAuthenticated` component); behind
-  `SessionAuthentication`, which sends no challenge, or a view with no
-  authenticator, the same denial is the 403. A check that raises
-  `NotPermitted` itself is answered as raised, 403, with no challenge. The 403 and the 401
-  bodies are the `PermissionDenied` and `NotAuthenticated` components, names
-  this schema keeps as it does `ValidationErrors`: a serializer that would
-  component under either (a `PermissionDeniedSerializer`, say) is refused with
-  `ImproperlyConfigured`, on any view and whichever is resolved first, until
-  you name its component another way with
-  `@extend_schema_serializer(component_name=...)`.
+  `DRFPermissionCheck` alike, is answered 401 there, under `detail` (the
+  `NotAuthenticated` component); behind `SessionAuthentication`, which sends
+  no challenge, or a view with no authenticator, the same denial is the 403.
+  A check that raises `NotPermitted` itself is answered as raised, 403, with
+  no challenge. The 403 and the 401 bodies are the `PermissionDenied` and
+  `NotAuthenticated` components, names this schema keeps as it does
+  `ValidationErrors`: a serializer that would be the component under either (a
+  `PermissionDeniedSerializer`, say) is refused with `ImproperlyConfigured`,
+  on any view and whichever is resolved first, until you name its component
+  another way with `@extend_schema_serializer(component_name=...)`.
 - **A `filter_set`'s query parameters**, on a list operation, are the kernel's
   `filter_set_parameters`.
 
