@@ -27,6 +27,16 @@ subclass inherits it; a class setting `schema` itself keeps its own.
 Importing `django_spec_rest.openapi` does not import `drf-spectacular`; only
 this call does.
 
+A viewset of your own over `GenericViewSet` inherits none of those classes,
+whether it is composed of the action mixins (`ServiceCreateMixin`,
+`SelectorListMixin` and the rest) or carries a `@service_action` or
+`@selector_action`. On drf-spectacular's `AutoSchema` it documents nothing of
+its specs. Set `schema = ServiceAutoSchema()` on it (from
+`django_spec_rest.openapi.service_auto_schema`), or point DRF's
+`DEFAULT_SCHEMA_CLASS` at
+`"django_spec_rest.openapi.service_auto_schema.ServiceAutoSchema"`, which
+documents a view no spec drives as drf-spectacular does.
+
 ## What a route documents
 
 - **The request body** is a `SerializerValidator`'s serializer, under
@@ -89,14 +99,13 @@ this call does.
   deactivated account) are both answered 403, with the refusal's sentence under
   `detail` (the `PermissionDenied` component). A spec whose checks are all
   `Unrestricted` documents none.
-- **A 401** is documented beside it where one of the spec's checks is a
-  `DRFPermissionCheck` (directly, or inside `AllOf` or `AnyOf`) and the view's
-  first authenticator sends a `WWW-Authenticate` challenge, such as DRF's
-  `BasicAuthentication` or `TokenAuthentication`. Such a check refusing a
-  caller nobody authenticated is answered 401 there, under `detail` (the
-  `NotAuthenticated` component); behind `SessionAuthentication`, which sends no
-  challenge, or a view with no authenticator, the same refusal is the 403. A
-  kernel `PermissionCheck`'s denial is always the 403. The 403 and the 401
+- **A 401** is documented beside it where the view's first authenticator
+  sends a `WWW-Authenticate` challenge, such as DRF's `BasicAuthentication` or
+  `TokenAuthentication`. Any of those checks refusing a caller nobody
+  authenticated, a kernel `PermissionCheck` or a `DRFPermissionCheck` alike, is
+  answered 401 there, under `detail` (the `NotAuthenticated` component); behind
+  `SessionAuthentication`, which sends no challenge, or a view with no
+  authenticator, the same refusal is the 403. The 403 and the 401
   bodies are the `PermissionDenied` and `NotAuthenticated` components, names
   this schema keeps as it does `ValidationErrors`: a serializer that would
   component under either (a `PermissionDeniedSerializer`, say) is refused with
@@ -225,9 +234,53 @@ body of an `allow_none` retrieve. Add them with `@extend_schema` where a
 client needs them.
 
 A refusal a service raises is not documented unless you declare it (see
-above). Nor are the refusals DRF itself answers before the spec is asked: an
-authenticator refusing credentials, and the view's own `permission_classes`.
-A deactivated principal is refused 403 on every operation, a spec whose checks
-are all `Unrestricted` included, which documents no 403: DRF's own
-authenticators and Django's `ModelBackend` never sign one in, so only a backend
-of your own that does can be answered so.
+above), nor one your project configures (below).
+
+## Refusals your project configures
+
+The 403 and 401 the schema documents are the ones a spec's own checks answer.
+Two other sources refuse a caller, and are yours to declare as a service's
+refusals are:
+
+- **The view's own `permission_classes` and its authenticators**, which DRF
+  asks before the spec: a permission class's denial, and an authenticator
+  refusing credentials it cannot verify. Each is a 403, or a 401 with the
+  challenge where the view's first authenticator sends one.
+- **A principal who cannot act** (a deactivated account), refused 403 on every
+  operation, one whose checks are all `Unrestricted` included, which documents
+  no 403. Only an authentication backend of your own that signs such a
+  principal in can be answered so: DRF's own authenticators and Django's
+  `ModelBackend` never do.
+
+Each body is DRF's `{"detail": ...}`. Declare it with a serializer of your
+own, under any name but the `PermissionDenied`, `NotAuthenticated` and
+`ValidationErrors` this schema keeps:
+
+```python
+from drf_spectacular.utils import OpenApiResponse, extend_schema
+from rest_framework import serializers
+from rest_framework.permissions import IsAdminUser
+
+from django_spec_rest import ServiceCreateView
+
+
+class RefusalSerializer(serializers.Serializer):
+    """The caller was refused. Why is under `detail`."""
+
+    detail = serializers.CharField()
+
+
+@extend_schema(
+    responses={
+        401: OpenApiResponse(RefusalSerializer, description="No credentials were sent."),
+        403: OpenApiResponse(RefusalSerializer, description="The caller is not staff."),
+    }
+)
+class PublishReportView(ServiceCreateView):
+    spec = publish_report_spec
+    permission_classes = [IsAdminUser]
+```
+
+As with a service's refusals, the statuses are added to what the spec
+documents, and one the spec documents too is replaced by yours. The bodies
+are one shape, so a declared 403 still describes the spec's own.

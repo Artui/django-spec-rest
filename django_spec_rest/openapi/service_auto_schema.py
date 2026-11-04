@@ -14,9 +14,6 @@ from typing import Any, NamedTuple, cast
 
 from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import (
-    AllOf,
-    AnyOf,
-    PermissionCheck,
     Presenter,
     SelectorKind,
     Unrestricted,
@@ -58,7 +55,6 @@ from django_spec_rest.openapi.service_validation_error_serializer import (
     ServiceValidationErrorSerializer,
 )
 from django_spec_rest.openapi.utils import default_status
-from django_spec_rest.service_specs.drf_permission_check import DRFPermissionCheck
 from django_spec_rest.service_specs.kernel_spec_variant import kernel_spec_variant
 from django_spec_rest.service_specs.renderable_serializer_class import renderable_serializer_class
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
@@ -111,11 +107,9 @@ class ServiceAutoSchema(AutoSchema):
     - **A** ``403`` is documented wherever the spec declares a permission
       check, any check but ``Unrestricted``: a check's denial and a principal
       who cannot act are both answered 403 with a ``detail``. A ``401`` beside
-      it where one of those checks is a ``DRFPermissionCheck``, at any depth
-      of ``AllOf`` and ``AnyOf``, and the view's first
-      authenticator sends a ``WWW-Authenticate``: DRF answers such a check's
-      refusal of a caller nobody authenticated 401 there, and 403 where the
-      authenticator sends none (``_caller_refusals``).
+      it where the view's first authenticator sends a ``WWW-Authenticate``:
+      DRF answers such a check's refusal of a caller nobody authenticated 401
+      there, and 403 where the authenticator sends none (``_caller_refusals``).
     - **A FilterSet's query parameters** are the kernel's
       ``filter_set_parameters``, on a list operation only.
 
@@ -402,19 +396,20 @@ class ServiceAutoSchema(AutoSchema):
         A spec whose checks are all ``Unrestricted`` refuses nobody, and one
         declaring none is refused by the kernel as misconfigured, so neither
         documents a 403 (test_an_unrestricted_spec_documents_no_403). Any other
-        check's denial is ``DRFNotPermitted``, and a principal who cannot act
-        ``DRFPrincipalUnavailable``, both answered 403 with a ``detail``
-        (test_each_403_the_edge_sends_is_the_documented_body).
+        check's denial of a signed-in caller is ``DRFNotPermitted``, and a
+        principal who cannot act ``DRFPrincipalUnavailable``, both answered 403
+        with a ``detail`` (test_each_403_the_edge_sends_is_the_documented_body).
 
-        A ``DRFPermissionCheck`` refusing a caller the request's authenticators
-        did not recognise raises ``DRFNotAuthenticated``, which DRF answers 401
-        where the view's first authenticator gives a ``WWW-Authenticate`` and
-        403 where it gives none. So the 401 is documented where both hold,
-        read from the view by the method DRF's ``handle_exception`` asks. A
-        kernel check's denial is always the 403, so a spec with no adapted DRF
-        class documents none (test_a_kernel_check_behind_a_challenge_documents_no_401),
-        and an adapted class behind an authenticator sending no challenge
-        documents none either (test_a_drf_check_behind_a_session_documents_no_401).
+        Any such check refusing a caller the request's authenticators did not
+        recognise is ``DRFNotAuthenticated``, whether it is a kernel
+        ``PermissionCheck`` or an adapted ``DRFPermissionCheck``, at any depth
+        of ``AllOf`` and ``AnyOf``. DRF answers that 401 where the view's first
+        authenticator gives a ``WWW-Authenticate`` and 403 where it gives none,
+        so the 401 is documented where the authenticator gives one, read from
+        the view by the method DRF's ``handle_exception`` asks
+        (test_a_check_behind_a_challenge_documents_a_401,
+        test_a_check_behind_a_session_documents_no_401,
+        test_a_check_behind_no_authenticator_documents_no_401).
         """
         checks = spec.permissions or ()
         if all(isinstance(check, Unrestricted) for check in checks):
@@ -425,12 +420,7 @@ class ServiceAutoSchema(AutoSchema):
                 description="The caller may not run this operation.",
             )
         }
-        # Two conjuncts, one arc to coverage: the first is held by
-        # test_a_kernel_check_behind_a_challenge_documents_no_401, the second by
-        # test_a_drf_check_behind_a_session_documents_no_401.
-        if any(_adapts_drf(check) for check in checks) and self.view.get_authenticate_header(
-            self.view.request
-        ):
+        if self.view.get_authenticate_header(self.view.request):
             refusals[401] = OpenApiResponse(
                 response=_NotAuthenticated,
                 description=(
@@ -756,22 +746,6 @@ def _under_extend_schema(schema_type: type) -> type[AutoSchema] | None:
 def _status(code: Any) -> str:
     """The status a key of a ``responses`` mapping names, as drf-spectacular spells it."""
     return str(code[0] if isinstance(code, tuple) else code)
-
-
-def _adapts_drf(check: PermissionCheck) -> bool:
-    """Whether ``check`` is a ``DRFPermissionCheck``, or combines one at any depth.
-
-    A ``DRFNotAuthenticated`` is raised rather than answered ``False``, so it
-    leaves a combinator asking the adapted check
-    (test_a_drf_check_inside_a_combinator_documents_its_401). ``NoneOf`` is
-    not walked: the kernel refuses to build one over a check that judges rows,
-    which a ``DRFPermissionCheck`` does, at any depth.
-    """
-    if isinstance(check, DRFPermissionCheck):
-        return True
-    if isinstance(check, AllOf | AnyOf):
-        return any(_adapts_drf(child) for child in check.checks)
-    return False
 
 
 @extend_schema_serializer(component_name="PermissionDenied")
