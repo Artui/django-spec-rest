@@ -23,15 +23,21 @@ from django_service_specs import (
     ServiceSpec,
     Unrestricted,
 )
-from drf_spectacular.utils import extend_schema, extend_schema_view
+from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
 from rest_framework.authentication import BasicAuthentication
 from rest_framework.permissions import BasePermission, IsAuthenticated
+from rest_framework.viewsets import GenericViewSet
 
-from django_spec_rest import SelectorListView, ServiceViewSet, service_action
-from django_spec_rest.openapi import ServiceConflictSerializer
+from django_spec_rest import SelectorListView, ServiceCreateMixin, ServiceViewSet, service_action
+from django_spec_rest.openapi import (
+    NotAuthenticatedSerializer,
+    PermissionDeniedSerializer,
+    ServiceConflictSerializer,
+)
 from django_spec_rest.service_specs.drf_permission_check import DRFPermissionCheck
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
+from invoices.models import Invoice
 from invoices.selectors import InvoiceFilter, get_invoice, list_invoices, sent_invoices
 from invoices.serializers import InvoiceInput, InvoiceSerializer
 from invoices.services import create_invoice, send_invoice, sending_paused, update_invoice
@@ -212,3 +218,43 @@ class AuditInvoiceListView(SelectorListView):
 
     authentication_classes = [BasicAuthentication]
     spec = AUDIT_SPEC
+
+
+class IsStaffMember(BasePermission):
+    """The view's own DRF permission class: no spec check asks it."""
+
+    message = "Only staff can open the review queue."
+
+    def has_permission(self, request: Any, view: Any) -> bool:
+        return bool(request.user and request.user.is_staff)
+
+
+# The spec admits everyone, so the schema would document no 403 and no 401: the
+# refusals here are DRF's own, asked of the view before the spec. They are
+# declared with the package's exported bodies, the ``PermissionDenied`` and
+# ``NotAuthenticated`` components the spec's own refusals use.
+@extend_schema(
+    responses={
+        401: OpenApiResponse(NotAuthenticatedSerializer, description="No credentials were sent."),
+        403: OpenApiResponse(PermissionDeniedSerializer, description="The caller is not staff."),
+    }
+)
+class ReviewInvoiceListView(SelectorListView):
+    """``GET /review-invoices/``: a view-level permission class, not a spec check."""
+
+    authentication_classes = [BasicAuthentication]
+    permission_classes = [IsStaffMember]
+    spec = LIST_SPEC
+
+
+class DraftInvoiceViewSet(ServiceCreateMixin, GenericViewSet):
+    """``POST /drafts/``: the create mixin first, ``GenericViewSet`` after it.
+
+    No ``schema`` attribute: with the mixin before ``GenericViewSet``,
+    ``enable_openapi()``'s schema is the one this class inherits, so the
+    operation documents ``CREATE_SPEC``'s bodies. Listed the other way round,
+    ``GenericViewSet``'s own schema would come first and document none of it.
+    """
+
+    queryset = Invoice.objects.all()
+    action_specs = {"create": CREATE_SPEC}
