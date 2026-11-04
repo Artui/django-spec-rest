@@ -33,7 +33,10 @@ A viewset of your own over `GenericViewSet`, composed of the action mixins,
 inherits the schema only where a mixin comes before `GenericViewSet` in its
 bases, as in `class NoteViewSet(ServiceCreateMixin, GenericViewSet)`: DRF's
 `APIView` carries a `schema` of its own, so in
-`class NoteViewSet(GenericViewSet, ServiceCreateMixin)` that one wins. A
+`class NoteViewSet(GenericViewSet, ServiceCreateMixin)` that one wins. Where
+the mixin does come first, its `ServiceAutoSchema` also wins over a
+`DEFAULT_SCHEMA_CLASS` of your own, even a subclass of `ServiceAutoSchema`;
+set `schema = YourSchema()` on the viewset to keep the subclass. A
 `@service_action` or `@selector_action` on a bare `GenericViewSet` has no mixin
 to inherit it from. On drf-spectacular's `AutoSchema` either documents nothing
 of its specs. Set `schema = ServiceAutoSchema()` on it (from

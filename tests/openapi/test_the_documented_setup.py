@@ -14,6 +14,8 @@ import dataclasses
 from typing import Any
 
 import pytest
+from django.conf import settings
+from django.test import override_settings
 from django.urls import URLPattern, path
 from django_service_specs import (
     Parameter,
@@ -231,6 +233,28 @@ def test_a_mixin_listed_first_documents_its_spec_with_no_schema_of_its_own(
     documented = _paths(*_routed(composed))
     assert documented == _paths(*_routed(composed, schema=ServiceAutoSchema()))
     assert documented != _paths(*_routed(generic_first))
+
+
+class _ProjectSchema(ServiceAutoSchema):
+    """A project's own schema class, named as DRF's ``DEFAULT_SCHEMA_CLASS``."""
+
+
+def test_a_mixin_listed_first_overrides_a_project_s_default_schema_class() -> None:
+    """The mixin's ``ServiceAutoSchema`` wins over the default; a ``schema`` on the class keeps its own.
+
+    Fails if ``enable_openapi()`` leaves the mixin without a schema: the
+    composed viewset would then be documented by the project's default class.
+    """
+    enable_openapi()
+    attrs = {"queryset": Author.objects.all(), "action_specs": {"create": _spec()}}
+    default = {"DEFAULT_SCHEMA_CLASS": f"{__name__}._ProjectSchema"}
+    with override_settings(REST_FRAMEWORK={**settings.REST_FRAMEWORK, **default}):
+        composed = type("_Composed", (ServiceCreateMixin, GenericViewSet), attrs)
+        keeping = type(
+            "_Keeping", (ServiceCreateMixin, GenericViewSet), {**attrs, "schema": _ProjectSchema()}
+        )
+        assert type(composed.schema) is ServiceAutoSchema
+        assert type(keeping.schema) is _ProjectSchema
 
 
 def _paths(*patterns: URLPattern) -> dict[str, Any]:

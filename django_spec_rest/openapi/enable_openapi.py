@@ -36,6 +36,12 @@ def enable_openapi() -> None:
     (test_the_documented_setup's
     test_a_mixin_listed_first_documents_its_spec_with_no_schema_of_its_own).
 
+    Where a mixin does come first, its ``ServiceAutoSchema`` also wins over a
+    project's ``DEFAULT_SCHEMA_CLASS``, even a subclass of it; setting
+    ``schema = ProjectSchema()`` on the class keeps the subclass
+    (test_the_documented_setup's
+    test_a_mixin_listed_first_overrides_a_project_s_default_schema_class).
+
     It also inserts
     [`reserved_components_hook`][django_spec_rest.openapi.reserved_components_hook.reserved_components_hook]
     first in drf-spectacular's ``POSTPROCESSING_HOOKS``, before the project's
