@@ -27,7 +27,7 @@ from django_service_specs import (
     Unrestricted,
 )
 from drf_spectacular.generators import SchemaGenerator
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import serializers
 from rest_framework.decorators import action
 from rest_framework.routers import SimpleRouter
@@ -204,6 +204,36 @@ class TestARouteServingASpec:
         route: str,
     ) -> None:
         assert _documented(schema, route) == _allow(viewset, actions)
+
+
+@extend_schema_view(update=extend_schema(exclude=True))
+class _UpdateExcluded(_NoDestroy):
+    """``_NoDestroy`` with PUT left out by the decorator, DELETE by the missing spec."""
+
+
+class TestAnExcludeComposesWithTheSpecLessRule:
+    """``extend_schema(exclude=True)`` and the spec-less rule each leave their own method out.
+
+    This guards drf-spectacular's wrapper, not this package's code:
+    ``extend_schema`` subclasses the view's schema class, so its ``is_excluded``
+    sits above ``ServiceAutoSchema`` in the MRO, answers True for the marked
+    action and otherwise calls ``super()``. Only the ``super()`` call reaches
+    ``ServiceAutoSchema.is_excluded``, so the one mutant this test could fail
+    is that call going missing. Replacing ``super().is_excluded()`` in
+    ``ServiceAutoSchema.is_excluded`` with ``return False`` does not fail it
+    (run, 13 passed): the spec-less check runs before the ``super()`` call and
+    still leaves DELETE out, and drf-spectacular's own ``is_excluded`` answers
+    False for this view anyway. Dropping the spec-less check instead fails it.
+    The test pins that the two exclusions both hold on one route, no more.
+    """
+
+    def test_update_excluded_by_the_decorator_leaves_get_and_patch(self) -> None:
+        router = SimpleRouter()
+        router.register("x", _UpdateExcluded, basename="x")
+
+        schema = SchemaGenerator(patterns=router.urls).get_schema(request=None, public=True)
+
+        assert _documented(schema, "/x/{id}/") == {"GET", "PATCH"}
 
 
 class TestWhereNothingIsLeftOut:
