@@ -234,9 +234,53 @@ body of an `allow_none` retrieve. Add them with `@extend_schema` where a
 client needs them.
 
 A refusal a service raises is not documented unless you declare it (see
-above). Nor are the refusals DRF itself answers before the spec is asked: an
-authenticator refusing credentials, and the view's own `permission_classes`.
-A deactivated principal is refused 403 on every operation, a spec whose checks
-are all `Unrestricted` included, which documents no 403: DRF's own
-authenticators and Django's `ModelBackend` never sign one in, so only a backend
-of your own that does can be answered so.
+above), nor one your project configures (below).
+
+## Refusals your project configures
+
+The 403 and 401 the schema documents are the ones a spec's own checks answer.
+Two other sources refuse a caller, and are yours to declare as a service's
+refusals are:
+
+- **The view's own `permission_classes` and its authenticators**, which DRF
+  asks before the spec: a permission class's denial, and an authenticator
+  refusing credentials it cannot verify. Each is a 403, or a 401 with the
+  challenge where the view's first authenticator sends one.
+- **A principal who cannot act** (a deactivated account), refused 403 on every
+  operation, one whose checks are all `Unrestricted` included, which documents
+  no 403. Only an authentication backend of your own that signs such a
+  principal in can be answered so: DRF's own authenticators and Django's
+  `ModelBackend` never do.
+
+Each body is DRF's `{"detail": ...}`. Declare it with a serializer of your
+own, under any name but the `PermissionDenied`, `NotAuthenticated` and
+`ValidationErrors` this schema keeps:
+
+```python
+from drf_spectacular.utils import OpenApiResponse, extend_schema
+from rest_framework import serializers
+from rest_framework.permissions import IsAdminUser
+
+from django_spec_rest import ServiceCreateView
+
+
+class RefusalSerializer(serializers.Serializer):
+    """The caller was refused. Why is under `detail`."""
+
+    detail = serializers.CharField()
+
+
+@extend_schema(
+    responses={
+        401: OpenApiResponse(RefusalSerializer, description="No credentials were sent."),
+        403: OpenApiResponse(RefusalSerializer, description="The caller is not staff."),
+    }
+)
+class PublishReportView(ServiceCreateView):
+    spec = publish_report_spec
+    permission_classes = [IsAdminUser]
+```
+
+As with a service's refusals, the statuses are added to what the spec
+documents, and one the spec documents too is replaced by yours. The bodies
+are one shape, so a declared 403 still describes the spec's own.
