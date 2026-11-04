@@ -32,6 +32,14 @@ carries; releases up to 0.62.0 are in
   declares `call_context`, where only a `SerializerValidator` was handed it
   before. A Validator naming other fields for a call than outside one had the
   value left out of the rows.
+- **The schema documents a kernel check's 401.** Every operation whose spec
+  declares a check other than `Unrestricted` now documents the 401 (the
+  `NotAuthenticated` component) where the view's first authenticator sends a
+  `WWW-Authenticate` challenge, whatever kind of check it is. Before, only an
+  operation with a `DRFPermissionCheck` among its checks documented it, since
+  a kernel `PermissionCheck` refusing an anonymous caller was answered 403.
+  Behind an authenticator sending no challenge, or on a view with none, the
+  operation still documents the 403 alone.
 - **The `django-service-specs` floor is 0.24.0**, the release carrying
   `validator_parameters` and `PermissionCheckDenied`.
 

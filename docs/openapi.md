@@ -99,14 +99,13 @@ documents a view no spec drives as drf-spectacular does.
   deactivated account) are both answered 403, with the refusal's sentence under
   `detail` (the `PermissionDenied` component). A spec whose checks are all
   `Unrestricted` documents none.
-- **A 401** is documented beside it where one of the spec's checks is a
-  `DRFPermissionCheck` (directly, or inside `AllOf` or `AnyOf`) and the view's
-  first authenticator sends a `WWW-Authenticate` challenge, such as DRF's
-  `BasicAuthentication` or `TokenAuthentication`. Such a check refusing a
-  caller nobody authenticated is answered 401 there, under `detail` (the
-  `NotAuthenticated` component); behind `SessionAuthentication`, which sends no
-  challenge, or a view with no authenticator, the same refusal is the 403. A
-  kernel `PermissionCheck`'s denial is always the 403. The 403 and the 401
+- **A 401** is documented beside it where the view's first authenticator
+  sends a `WWW-Authenticate` challenge, such as DRF's `BasicAuthentication` or
+  `TokenAuthentication`. Any of those checks refusing a caller nobody
+  authenticated, a kernel `PermissionCheck` or a `DRFPermissionCheck` alike, is
+  answered 401 there, under `detail` (the `NotAuthenticated` component); behind
+  `SessionAuthentication`, which sends no challenge, or a view with no
+  authenticator, the same refusal is the 403. The 403 and the 401
   bodies are the `PermissionDenied` and `NotAuthenticated` components, names
   this schema keeps as it does `ValidationErrors`: a serializer that would
   component under either (a `PermissionDeniedSerializer`, say) is refused with
