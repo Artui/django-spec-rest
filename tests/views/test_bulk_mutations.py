@@ -7,6 +7,7 @@ and the query string is no argument of a write.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 import pytest
@@ -19,6 +20,8 @@ from django_service_specs import (
     ServiceError,
     ServiceSpec,
     Unrestricted,
+    ValidationContext,
+    Validator,
 )
 from django_service_specs.mutations.delete_collection import delete_collection
 from rest_framework import serializers
@@ -62,6 +65,21 @@ _MANY = ServiceSpec(
     many=True,
     atomic=False,
 )
+
+
+class _NamedByTheCall(Validator):
+    """Takes ``title`` when handed the call's dict, and ``subject`` when asked without it.
+
+    A Validator other than a serializer's that opted into ``call_context``, so
+    an ask that hands it nothing describes another row than the call's.
+    """
+
+    def parameters(self, *, call_context: dict[str, Any] | None = None) -> Parameters:
+        name = "subject" if call_context is None else "title"
+        return Parameters.of(Parameter(name, "string", required=True))
+
+    def validate(self, arguments: Mapping[str, Any], context: ValidationContext) -> dict[str, Any]:
+        return dict(arguments)
 
 
 def _view(base: type, spec: ServiceSpec, **attrs: Any) -> Any:
@@ -118,6 +136,24 @@ class TestBulkCreateMany:
         )
         view = _view(ServiceCreateView, spec, get_service_kwargs=lambda self: {"title": "x"})
         response = view(factory.post("/", [{"title": "a"}, {"title": "b"}], format="json"))
+        assert response.data == [{"title": "x"}, {"title": "x"}]
+
+    def test_a_get_service_kwargs_value_pins_the_row_an_opted_in_validator_names(self) -> None:
+        """The rows' names are asked of the Validator with the call's dict, as dispatch asks.
+
+        Asked without it, ``_NamedByTheCall`` names ``subject``, so ``title``
+        stays in the overlay rather than going over each row.
+        """
+
+        def create(*, data: list[dict[str, Any]]) -> list[dict[str, Any]]:
+            return [dict(row) for row in data]
+
+        spec = ServiceSpec(
+            service=create, permissions=_OPEN, validator=_NamedByTheCall(), many=True
+        )
+        view = _view(ServiceCreateView, spec, get_service_kwargs=lambda self: {"title": "x"})
+        response = view(factory.post("/", [{"title": "a"}, {"title": "b"}], format="json"))
+        assert response.status_code == 201
         assert response.data == [{"title": "x"}, {"title": "x"}]
 
     def test_an_update_view_takes_a_many_spec_s_list_body_as_its_rows(self) -> None:

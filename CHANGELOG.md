@@ -11,6 +11,66 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-11-04
+
+### Changed
+
+- **A kernel permission check asks a caller nobody authenticated to sign in.**
+  Where a `PermissionCheck` the dispatched spec declares denies (answers
+  `False` to) a caller the request's authenticators did not recognise, the
+  view answers DRF's
+  `NotAuthenticated`, as it already did for an adapted DRF class and as drfs
+  did: 401 with the first authenticator's `WWW-Authenticate` challenge, or 403
+  "Authentication credentials were not provided." where that authenticator
+  sends none. It was 403 with the check's message. A signed-in caller, and any
+  caller of a view with no authenticator, is still refused 403 with the
+  check's message. This holds at the class-level check and at the one asked of
+  the row the spec's own lookup finds. A service's own `NotPermitted`, an
+  inner `dispatch` a service makes whose check refused, and a check that
+  raises `NotPermitted` itself rather than answering `False`, are not the
+  caller's to sign in for and stay 403 with their message, as DRF answers a
+  permission class that raises `PermissionDenied`.
+- **A `many` spec's rows are named as dispatch names them.** A
+  `get_service_kwargs` value named like a row's field pins that field in every
+  row. The row's names are now asked of any Validator the way the kernel's
+  `dispatch` asks it, handing the call's context to one whose `parameters()`
+  declares `call_context`, where only a `SerializerValidator` was handed it
+  before. A Validator naming other fields for a call than outside one had the
+  value left out of the rows.
+- **The schema documents a kernel check's 401.** Every operation whose spec
+  declares a check other than `Unrestricted` now documents the 401 (the
+  `NotAuthenticated` component) where the view's first authenticator sends a
+  `WWW-Authenticate` challenge, whatever kind of check it is. Before, only an
+  operation with a `DRFPermissionCheck` among its checks documented it, since
+  a kernel `PermissionCheck` denying an anonymous caller was answered 403.
+  Behind an authenticator sending no challenge, or on a view with none, the
+  operation still documents the 403 alone.
+- **The `django-service-specs` floor is 0.24.0**, the release carrying
+  `validator_parameters` and `PermissionCheckDenied`.
+
+### Fixed
+
+- **A project's component under a name the package keeps is refused on any
+  view.** `ValidationErrors`, `PermissionDenied` and `NotAuthenticated` are the
+  bodies of a spec's 400, 403 and 401. A serializer of the project's under one
+  of them, on a view of the project's own on drf-spectacular's `AutoSchema`
+  resolved after the package's refusal, got drf-spectacular's warning alone,
+  and its request and response were documented by the refusal's body.
+  `enable_openapi()` now inserts a postprocessing hook,
+  `reserved_components_hook`, first in drf-spectacular's `POSTPROCESSING_HOOKS`
+  (before the project's own, once, so a project hook that copies the schema
+  cannot hide the package's references from it), which refuses any reference to these names
+  the package did not write with `ImproperlyConfigured`, naming the operation,
+  component or webhook that holds it. A document in which no spec uses one of
+  the names leaves it to the project. The generated schema is unchanged.
+- **The `ServiceError` component is described for a client.** Its
+  `description` in a generated schema was the serializer's docstring, written
+  for the API reference, so the published document carried mkdocs
+  cross-reference syntax and a private class name. It now says what the body
+  is: why the service could not complete the call, under `detail`, and the
+  values still needed, under `schema`. No other component the package
+  registers carried either.
+
 ## [0.4.0] — 2026-11-03
 
 ### Added
@@ -345,7 +405,8 @@ lists each with what a project rewrites.
 - **The package is no longer a Django app.** It has no models, migrations,
   templates, static files or URLs, so it needs no `INSTALLED_APPS` entry.
 
-[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/Artui/django-spec-rest/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Artui/django-spec-rest/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/Artui/django-spec-rest/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/Artui/django-spec-rest/compare/v0.2.1...v0.3.0

@@ -26,10 +26,24 @@ def enable_openapi() -> None:
 
     User subclasses inherit ``schema = ServiceAutoSchema()`` automatically;
     classes that set ``schema = ...`` explicitly keep their own choice.
+
+    It also inserts
+    [`reserved_components_hook`][django_spec_rest.openapi.reserved_components_hook.reserved_components_hook]
+    first in drf-spectacular's ``POSTPROCESSING_HOOKS``, before the project's
+    own hooks and once however often it is called, so a component of the
+    project's under a name the package documents its refusals by is refused
+    on any view. It recognises the package's own references by identity, so a
+    project hook that copies the schema (``copy.deepcopy``, a JSON round
+    trip, a rebuilt ``dict``) must run after it, not before.
     """
     # Local imports per CLAUDE.md "Lazy / function-local imports are
     # forbidden unless... a proven optional dependency": ``drf-spectacular``
     # is exactly that.
+    from drf_spectacular.settings import spectacular_settings
+
+    from django_spec_rest.openapi.reserved_components_hook import (
+        reserved_components_hook,
+    )
     from django_spec_rest.openapi.service_auto_schema import ServiceAutoSchema
     from django_spec_rest.views.mutation.service_create_view import (
         ServiceCreateView,
@@ -57,3 +71,12 @@ def enable_openapi() -> None:
         SelectorViewSet,
     ):
         view_cls.schema = ServiceAutoSchema()
+    hooks = spectacular_settings.POSTPROCESSING_HOOKS
+    # Inserted first, and only where absent, so a repeated call, or a project
+    # listing the hook itself, runs it once (test_enable_openapi's
+    # test_the_hook_is_installed_once). First because it tells the package's
+    # own references from a project's by identity: a project hook that copies
+    # the schema, run before it, would make every reference look foreign
+    # (test_reserved_components_hook's test_a_copying_hook_of_the_project_runs_after_it).
+    if reserved_components_hook not in hooks:
+        hooks.insert(0, reserved_components_hook)

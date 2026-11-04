@@ -11,6 +11,9 @@ row out fails a named test even where the map stays total:
   (``tests/views/test_drf_refusals_restored_on_the_edge.py``);
 - ``DRFInvalidArguments`` (falls to ``DispatchError``, a ``detail`` sentence):
   ``test_a_missing_argument_is_drf_s_400_by_field``;
+- ``PermissionCheckDenied`` (falls to ``NotPermitted``, a ``403`` whoever the
+  caller is): ``test_a_check_s_denial_of_an_anonymous_caller_is_a_challenge``,
+  and every route in ``tests/views/test_an_anonymous_caller_refused.py``;
 - ``NotPermitted`` / ``PrincipalUnavailable`` (fall to ``DispatchError``, a
   ``400``): ``test_a_denied_principal_is_403``,
   ``test_a_deactivated_principal_is_403``;
@@ -36,6 +39,7 @@ from django_service_specs import (
     DispatchError,
     Output,
     PermissionCheck,
+    PermissionCheckDenied,
     Presenter,
     ServiceConflict,
     ServiceError,
@@ -47,11 +51,19 @@ from django_service_specs import (
 )
 from django_service_specs import InvalidArguments as KernelInvalidArguments
 from rest_framework import serializers
+from rest_framework.authentication import BasicAuthentication
+from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.test import APIRequestFactory, force_authenticate
 
-from django_spec_rest.dispatch.kernel_refusals import KERNEL_REFUSALS, answer_refusal
+from django_spec_rest.dispatch.kernel_refusals import (
+    KERNEL_REFUSALS,
+    RefusedCall,
+    answer_refusal,
+)
 from django_spec_rest.service_specs.drf_invalid_arguments import DRFInvalidArguments
+from django_spec_rest.service_specs.drf_not_authenticated import DRFNotAuthenticated
+from django_spec_rest.service_specs.drf_not_permitted import DRFNotPermitted
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from tests.views.test_kernel_views import _CreateView
 
@@ -119,6 +131,35 @@ def test_a_denied_principal_is_403() -> None:
     response = _call(ServiceSpec(service=lambda: None, permissions=(_Deny(),)))
     assert response.status_code == 403
     assert response.data == {"detail": "Not for you."}
+
+
+def _anonymous_request() -> Request:
+    """A request ``BasicAuthentication`` read and recognised nobody on."""
+    request = Request(factory.post("/"), authenticators=[BasicAuthentication()])
+    assert request.successful_authenticator is None
+    return request
+
+
+def test_a_check_s_denial_of_an_anonymous_caller_is_a_challenge() -> None:
+    """The dispatched spec's own check denying a caller nobody authenticated asks them to.
+
+    With the row deleted the denial falls to ``NotPermitted``'s, the check's
+    message as a 403 whoever the caller is.
+    """
+    check = _Deny()
+    spec = ServiceSpec(service=lambda: None, permissions=(check,))
+    denied = PermissionCheckDenied(check=check, spec=spec)
+    answer = answer_refusal(denied, RefusedCall(_anonymous_request(), spec))
+    assert isinstance(answer, DRFNotAuthenticated)
+
+
+def test_a_check_s_denial_out_of_no_dispatch_is_403() -> None:
+    """With no spec dispatched, as around presenting a result, a check's denial is any other ``NotPermitted``."""
+    check = _Deny()
+    spec = ServiceSpec(service=lambda: None, permissions=(check,))
+    answer = answer_refusal(PermissionCheckDenied(check=check, spec=spec))
+    assert type(answer) is DRFNotPermitted
+    assert answer.message == "Not for you."
 
 
 def test_a_deactivated_principal_is_403() -> None:

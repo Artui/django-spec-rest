@@ -100,6 +100,7 @@ from django_service_specs.specs.service_spec import ServiceSpec as KernelService
 from django_service_specs.types.dispatch_error import DispatchError
 from django_service_specs.types.unknown_arguments import UnknownArguments
 from django_service_specs.types.unset import UNSET
+from django_service_specs.validation.validator_parameters import validator_parameters
 from rest_framework.request import Request
 
 from django_spec_rest.dispatch.kernel_refusals import answering_refusals
@@ -358,10 +359,12 @@ def dispatch_kernel_spec(
     permissions, which ``get_object()`` asks of a row it finds and the kernel's
     lookup never would (``_resolved``).
 
-    Every refusal leaves as its DRF answer (``KERNEL_REFUSALS``).
+    Every refusal leaves as its DRF answer (``KERNEL_REFUSALS``), a check
+    the dispatched spec declares denying a caller nobody authenticated as a
+    request to authenticate, as DRF's ``permission_denied`` answers it.
     """
     hooks = view_hooks if view_hooks is not None else ViewHooks()
-    with answering_refusals():
+    with answering_refusals(request) as refused:
         state = _edge_state(
             spec, view=view, request=request, hooks=hooks, call_context=call_context
         )
@@ -370,6 +373,10 @@ def dispatch_kernel_spec(
             dispatched, extra_kwargs, arguments, state.validator_input = _read_call(
                 spec, view=view, request=request, hooks=hooks, query=query
             )
+            # The spec whose checks' denials are this call's own, which the
+            # map answers as DRF's ``permission_denied``: the twin dispatched,
+            # since that is the spec the kernel names on the denial.
+            refused.spec = dispatched
             found = _resolved(
                 dispatched,
                 principal=request.user,
@@ -545,14 +552,11 @@ def _overlay(
     call_context = edge_call_state().call_context
     names = spec.parameters(call_context=call_context).names()
     if isinstance(spec, KernelServiceSpec) and spec.validator is not None:
-        # Only a SerializerValidator is known to take the call's dict: another
-        # Validator declares its fields itself and is asked as it always was.
+        # Asked as dispatch asks it, so a Validator that opted into the call's
+        # dict names the rows dispatch will check (test_bulk_mutations'
+        # test_a_get_service_kwargs_value_pins_the_row_an_opted_in_validator_names).
         validator = spec.validator
-        rows = (
-            validator.parameters(call_context=call_context)
-            if isinstance(validator, SerializerValidator)
-            else validator.parameters()
-        )
+        rows = validator_parameters(validator, call_context=call_context)
         names = names | rows.names() | seed_named_fields(validator, call_context=call_context)
     pinned = {key: overlay.pop(key) for key in names.intersection(overlay)}
     return overlay, frozenset(pinned), {**pinned, **(hooks.input_data or {})}

@@ -1,0 +1,157 @@
+"""``reserved_components_hook``: what it leaves to a project, where else it looks, and its place among the hooks.
+
+The refusal itself, on a project's view in either order, is
+``test_reserved_names_on_any_view``.
+"""
+
+from __future__ import annotations
+
+import copy
+import json
+from types import SimpleNamespace
+from typing import Any
+
+import pytest
+from django.core.exceptions import ImproperlyConfigured
+from django.urls import URLPattern
+from drf_spectacular.generators import SchemaGenerator
+from drf_spectacular.hooks import postprocess_schema_enums
+from drf_spectacular.plumbing import ComponentRegistry, ResolvedComponent
+from drf_spectacular.settings import patched_settings, spectacular_settings
+
+from django_spec_rest.openapi import enable_openapi
+from django_spec_rest.openapi.reserved_components_hook import reserved_components_hook
+from django_spec_rest.openapi.utils import PermissionDeniedBody
+from tests.openapi.reserved_names import (
+    SERIALIZERS,
+    ValidationErrorsSerializer,
+    ours,
+    ours_refusing_nothing,
+    theirs,
+)
+
+
+def _generate(*patterns: URLPattern) -> dict[str, Any]:
+    enable_openapi()
+    # Not vacuous when this module runs alone: the hook is what is under test.
+    assert reserved_components_hook in spectacular_settings.POSTPROCESSING_HOOKS
+    return SchemaGenerator(patterns=list(patterns)).get_schema(request=None, public=True)
+
+
+class TestTheHook:
+    def test_is_refused_in_a_webhook(self) -> None:
+        registry = ComponentRegistry()
+        registry.register_on_missing(
+            ResolvedComponent(
+                name="PermissionDenied",
+                type=ResolvedComponent.SCHEMA,
+                object=PermissionDeniedBody,
+                schema={},
+            )
+        )
+        result = {
+            "webhooks": {
+                "refused": {
+                    "post": {"requestBody": {"$ref": "#/components/schemas/PermissionDenied"}}
+                }
+            }
+        }
+        with pytest.raises(ImproperlyConfigured) as raised:
+            reserved_components_hook(
+                result=result,
+                generator=SimpleNamespace(registry=registry),
+                request=None,
+                public=True,
+            )
+        assert str(raised.value).startswith(
+            "The webhook 'refused' is documented as the component 'PermissionDenied'"
+        )
+
+    def test_the_package_s_own_responses_pass(self) -> None:
+        """The package's 400, 403 and 401, and ``ValidationErrors`` nesting itself, are its own.
+
+        Fails without the hook's skip of what the package rendered, or of a
+        component's reference to itself.
+        """
+        schema = _generate(ours("ours"))
+        responses = schema["paths"]["/ours/"]["post"]["responses"]
+        assert {"400", "401", "403"} <= set(responses)
+        assert {"ValidationErrors", "PermissionDenied", "NotAuthenticated"} <= set(
+            schema["components"]["schemas"]
+        )
+
+    def test_a_project_s_own_reserved_name_is_documented_without_the_package_s(self) -> None:
+        """A name the package registered nothing under in this document is the project's.
+
+        Fails without the hook's ``held_by_package`` filter.
+        """
+        schema = _generate(
+            ours_refusing_nothing("a-ours"),
+            *(theirs(f"b-theirs-{index}", cls) for index, cls in enumerate(SERIALIZERS)),
+        )
+        schemas = schema["components"]["schemas"]
+        for serializer in SERIALIZERS:
+            name = serializer.__name__.removesuffix("Serializer")
+            assert schemas[name]["properties"] == {"mine": {"type": "string"}}
+
+
+def _deep_copying_hook(result: Any, **kwargs: Any) -> Any:
+    return copy.deepcopy(result)
+
+
+def _json_roundtrip_hook(result: Any, **kwargs: Any) -> Any:
+    return json.loads(json.dumps(result))
+
+
+def _shallow_rebuild_hook(result: Any, **kwargs: Any) -> Any:
+    for operations in result["paths"].values():
+        for operation in operations.values():
+            for response in operation.get("responses", {}).values():
+                for media in response.get("content", {}).values():
+                    media["schema"] = dict(media["schema"])
+    return result
+
+
+class TestAProjectHookThatCopiesTheSchema:
+    """The hook knows the package's references by identity, so it must see them before a copy."""
+
+    @pytest.mark.parametrize(
+        "copying_hook", [_deep_copying_hook, _json_roundtrip_hook, _shallow_rebuild_hook]
+    )
+    def test_a_copying_hook_of_the_project_runs_after_it(
+        self, copying_hook: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A clash-free document still generates. Fails if ``enable_openapi`` appends the hook.
+
+        Appended, it runs on a copy whose references are no longer the objects
+        the package wrote, and refuses the package's own 400 as a clash.
+        """
+        monkeypatch.setattr(
+            spectacular_settings, "POSTPROCESSING_HOOKS", [postprocess_schema_enums, copying_hook]
+        )
+        schema = _generate(ours("ours"))
+        assert {"400", "401", "403"} <= set(schema["paths"]["/ours/"]["post"]["responses"])
+
+
+class TestTheHooksAProjectSets:
+    """A list of hooks that replaces drf-spectacular's own, as ``custom_settings`` does, drops the hook."""
+
+    def test_a_list_without_the_hook_loses_the_guard(self) -> None:
+        enable_openapi()
+        with patched_settings({"POSTPROCESSING_HOOKS": []}):
+            schema = SchemaGenerator(
+                patterns=[ours("a-ours"), theirs("b-theirs", ValidationErrorsSerializer)]
+            ).get_schema(request=None, public=True)
+        body = schema["paths"]["/b-theirs/"]["post"]["requestBody"]["content"]["application/json"]
+        assert body["schema"] == {"$ref": "#/components/schemas/ValidationErrors"}
+
+    def test_a_list_naming_the_hook_keeps_it(self) -> None:
+        enable_openapi()
+        hook = "django_spec_rest.openapi.reserved_components_hook.reserved_components_hook"
+        with (
+            patched_settings({"POSTPROCESSING_HOOKS": [hook]}),
+            pytest.raises(ImproperlyConfigured, match="POST /b-theirs/"),
+        ):
+            SchemaGenerator(
+                patterns=[ours("a-ours"), theirs("b-theirs", ValidationErrorsSerializer)]
+            ).get_schema(request=None, public=True)

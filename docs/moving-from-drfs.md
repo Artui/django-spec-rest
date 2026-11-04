@@ -185,7 +185,7 @@ The query string is read by the kernel's flat reader:
   the offline view's `kwargs`; its `url_kwargs=` and `query_params=` are gone,
   and the offline request's query string is empty.
 - **An adapted DRF class still asks a caller nobody authenticated to sign in.**
-  A DRF class in `DRFPermissionCheck` refusing a caller the request's
+  A DRF class in `DRFPermissionCheck` denying a caller the request's
   authenticators did not recognise is answered DRF's `NotAuthenticated`, as
   drfs' view answered it: 401 with the first authenticator's
   `WWW-Authenticate` (`Basic realm="api"` with `BasicAuthentication` first),
@@ -194,12 +194,11 @@ The query string is read by the kernel's flat reader:
   signed-in caller, and any caller of a view with no authenticator, is refused
   403 with the class's own `message`. Off HTTP there is no authenticator, so
   the refusal is the kernel's `NotPermitted`.
-- **A kernel `PermissionCheck`'s refusal is the kernel's 403 for now**, with
-  its message, even for an anonymous caller where drfs answered 401. The
-  kernel raises the same bare `NotPermitted` for a permission check's denial,
-  a service's own and a refused inner dispatch's, so the edge cannot ask only
-  the first to sign in; a later release will, once the kernel marks the
-  denial.
+- **A kernel `PermissionCheck` asks a caller nobody authenticated to sign in**
+  too, as drfs answered it: 401 with the challenge, or 403 where the first
+  authenticator sends none, and 403 with its message to anyone else. A
+  service's own `NotPermitted`, and an inner dispatch its check refused, stay
+  403 with their message for every caller.
 - **`DRFPermissionCheck` can raise `DRFNotAuthenticated`**, not only
   `DRFNotPermitted`, when the call carries a real DRF request with
   authenticators and nobody was recognised. `DRFNotAuthenticated` is DRF's

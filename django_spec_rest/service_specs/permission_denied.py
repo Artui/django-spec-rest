@@ -22,13 +22,13 @@ def permission_denied(
     with ``message`` and ``code``, 403. So a permission's ``message`` reaches
     only a caller who is signed in or could not have been, as in DRF.
 
-    The rule an adapted DRF class is answered by:
+    The rule every permission check the spec declares is answered by:
     [`DRFPermissionCheck`][django_spec_rest.service_specs.drf_permission_check.DRFPermissionCheck]
-    raises it for a class answering ``False``. A kernel ``PermissionCheck``'s
-    ``NotPermitted`` is not decided by it for now: the kernel raises the same
-    bare class for a permission check's denial, a service's own and a refused
-    inner dispatch's, so the kernel route answers all of them 403 with their
-    message, and a caller nobody authenticated is not asked to sign in by one
+    raises it for a class answering ``False``, and the kernel route answers
+    with it a kernel ``PermissionCheck``'s denial, which the kernel marks as
+    ``PermissionCheckDenied``, where the denied spec is the one the route
+    dispatched. A service's own ``NotPermitted``, and a refused inner
+    dispatch's, are not decided by it: they stay 403 with their message
     (``tests/views/test_an_anonymous_caller_refused.py``). An offline request
     has no authenticator, so off HTTP a refusal is always the denial.
 

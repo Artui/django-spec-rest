@@ -2,9 +2,9 @@
 
 A spec declaring any check but ``Unrestricted`` documents a 403: a check's
 denial and a principal who cannot act are both answered 403 with a ``detail``.
-A ``DRFPermissionCheck`` refusing a caller nobody authenticated is answered 401
-where the view's first authenticator sends a challenge, so such an operation
-documents the 401 too. Each test that drives a view validates the wire body
+Any such check refusing a caller nobody authenticated, a kernel check or a
+``DRFPermissionCheck``, is answered 401 where the view's first authenticator
+sends a challenge, so such an operation documents the 401 too. Each test that drives a view validates the wire body
 against the schema the operation documents for the status it was answered.
 """
 
@@ -75,6 +75,8 @@ _ROUTES: dict[str, tuple[type, Any, list[type]]] = {
     "kernel": (ServiceCreateView, _write(_DenyAll()), []),
     "kernel-challenged": (ServiceCreateView, _write(_DenyAll()), _BASIC),
     "kernel-read": (SelectorListView, _read(_DenyAll()), []),
+    "kernel-read-challenged": (SelectorListView, _read(_DenyAll()), _BASIC),
+    "kernel-session": (ServiceCreateView, _write(_DenyAll()), _SESSION_FIRST),
     "admitting": (ServiceCreateView, _write(_Admit()), []),
     "drf-session": (ServiceCreateView, _write(DRFPermissionCheck([_Deny])), _SESSION_FIRST),
     "drf-basic": (ServiceCreateView, _write(DRFPermissionCheck([_Deny])), _BASIC),
@@ -163,23 +165,24 @@ class TestTheSchema:
         }
         assert schema["components"]["schemas"]["PermissionDenied"]["required"] == ["detail"]
 
-    @pytest.mark.parametrize("key", ["kernel-challenged", "kernel-combined"])
-    def test_a_kernel_check_behind_a_challenge_documents_no_401(
+    @pytest.mark.parametrize("key", ["drf-session", "kernel-session"])
+    def test_a_check_behind_a_session_documents_no_401(
         self, schema: dict[str, Any], key: str
     ) -> None:
         assert "401" not in _responses(schema, key)
         assert "403" in _responses(schema, key)
 
-    def test_a_drf_check_behind_a_session_documents_no_401(self, schema: dict[str, Any]) -> None:
-        assert "401" not in _responses(schema, "drf-session")
-
-    def test_a_drf_check_behind_no_authenticator_documents_no_401(
-        self, schema: dict[str, Any]
+    @pytest.mark.parametrize("key", ["drf-none", "kernel"])
+    def test_a_check_behind_no_authenticator_documents_no_401(
+        self, schema: dict[str, Any], key: str
     ) -> None:
-        assert "401" not in _responses(schema, "drf-none")
+        assert "401" not in _responses(schema, key)
 
-    @pytest.mark.parametrize("key", ["drf-basic", "drf-basic-read"])
-    def test_a_drf_check_behind_a_challenge_documents_a_401(
+    @pytest.mark.parametrize(
+        "key",
+        ["drf-basic", "drf-basic-read", "kernel-challenged", "kernel-read-challenged"],
+    )
+    def test_a_check_behind_a_challenge_documents_a_401(
         self, schema: dict[str, Any], key: str
     ) -> None:
         response = _responses(schema, key)["401"]
@@ -187,8 +190,8 @@ class TestTheSchema:
             "$ref": "#/components/schemas/NotAuthenticated"
         }
 
-    @pytest.mark.parametrize("key", ["drf-all-of", "drf-any-of", "drf-nested"])
-    def test_a_drf_check_inside_a_combinator_documents_its_401(
+    @pytest.mark.parametrize("key", ["drf-all-of", "drf-any-of", "drf-nested", "kernel-combined"])
+    def test_a_check_inside_a_combinator_documents_its_401(
         self, schema: dict[str, Any], key: str
     ) -> None:
         assert "401" in _responses(schema, key)
@@ -201,11 +204,9 @@ class TestTheWire:
     @pytest.mark.parametrize(
         ("key", "signed_in"),
         [
-            # A kernel check's denial, whoever asks.
+            # A kernel check's denial on a view with no authenticator.
             ("kernel", False),
             ("kernel-read", False),
-            # A kernel check behind a challenge is still the 403.
-            ("kernel-challenged", False),
             # An adapted DRF class refusing a signed-in caller.
             ("drf-basic", True),
             ("drf-basic-read", True),
@@ -214,6 +215,12 @@ class TestTheWire:
             ("drf-session", False),
             # An adapted DRF class on a view with no authenticator.
             ("drf-none", False),
+            # A kernel check refusing a caller nobody authenticated, behind an
+            # authenticator sending no challenge.
+            ("kernel-session", False),
+            # A kernel check refusing a signed-in caller behind a challenge.
+            ("kernel-challenged", True),
+            ("kernel-read-challenged", True),
         ],
     )
     def test_each_403_the_edge_sends_is_the_documented_body(
@@ -233,7 +240,16 @@ class TestTheWire:
         assert body == {"detail": "The acting principal is unavailable."}
         jsonschema.validate(body, _documented(schema, key, 403))
 
-    @pytest.mark.parametrize("key", ["drf-basic", "drf-basic-read", "drf-any-of"])
+    @pytest.mark.parametrize(
+        "key",
+        [
+            "drf-basic",
+            "drf-basic-read",
+            "drf-any-of",
+            "kernel-challenged",
+            "kernel-read-challenged",
+        ],
+    )
     def test_the_401_the_edge_sends_is_the_documented_body(
         self, schema: dict[str, Any], key: str
     ) -> None:

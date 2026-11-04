@@ -6,14 +6,16 @@ from rest_framework import serializers
 
 
 class ServiceErrorSerializer(serializers.Serializer):
-    """``detail`` and the optional ``schema`` serializer that mirrors ``_ServiceAPIException``.
+    """The service could not complete the call. Why is under `detail`, and the values still needed under `schema` where it asks for more input."""
 
-    Used by
-    [`ServiceAutoSchema`][django_spec_rest.openapi.service_auto_schema.ServiceAutoSchema]
-    to attach a ``422`` response to every spec-driven mutation and selector in the generated OpenAPI
-    document, and as the ``detail`` alternative of a Validator's ``400`` (a body that is
-    no object). It is *only* used for schema generation; runtime bodies are produced
-    by DRF's exception handler."""
+    # The docstring above is the component's description in the generated
+    # document, so it is written for a client; the reference is
+    # docs/openapi.md. ``ServiceAutoSchema`` documents it as the ``422`` of
+    # every spec-driven operation and as the ``detail`` alternative of a
+    # Validator's ``400`` (a body that is no object). It is only used for
+    # schema generation: ``map_service_error`` answers a ``ServiceError``
+    # with ``{"detail": ...}``, and an ``AdditionalInputRequired`` carrying
+    # a schema with that schema beside it.
 
     detail = serializers.CharField()
     schema = serializers.DictField(

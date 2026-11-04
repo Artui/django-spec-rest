@@ -40,14 +40,23 @@ DRF's `get_permissions` does:
 Each refusal is the kernel's `NotPermitted` as well, so a caller of the
 kernel's `dispatch` catches it by the kernel's class.
 
-A kernel `PermissionCheck` on the spec is not decided by that rule for now: its
-`NotPermitted` is the kernel's 403 with its `message`, even to a caller nobody
-authenticated. The kernel raises the same bare `NotPermitted` for a permission
-check's denial, for a service's own and for an inner `dispatch` its check
-refused, so the edge cannot tell the first apart; asking every one of them to
-sign in would answer an author's "Archived invoices are read-only." 401. Only
-an adapted DRF class refusing an anonymous caller is answered 401 with the
-challenge.
+A kernel `PermissionCheck` on the spec is decided by the same rule over HTTP.
+The kernel marks a declared check's denial as `PermissionCheckDenied`, at the
+class-level check and at the one asked of the row the spec's lookup finds, so
+a caller nobody authenticated is asked to (401 with the challenge, or 403
+"Authentication credentials were not provided." where the first authenticator
+sends none), and anyone else is refused 403 with the check's `message`. The
+rule is for a check that answers `False`. A check that raises `NotPermitted`
+itself is answered as raised: 403 with that message and no
+`WWW-Authenticate`, as DRF answers a permission class that raises
+`PermissionDenied`.
+
+Only the spec the view dispatched is decided so. A service's own
+`NotPermitted`, such as an author's "Archived invoices are read-only.", is
+never a request to sign in, and nor is an inner `dispatch` a service makes
+whose check refused: the caller reached the view's spec, so that refusal is
+the service's, 403 with its message, though the kernel marks it as it marks
+the outer check's denial.
 
 ## Off HTTP
 
