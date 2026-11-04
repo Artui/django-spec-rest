@@ -280,6 +280,41 @@ class AnAnonymousCallerRefusedTests(APITestCase):
         self.assertEqual(len(response.data), 1)
 
 
+class AKernelCheckRefusedTests(APITestCase):
+    """A kernel ``PermissionCheck`` refusing a caller nobody recognised asks them to sign in.
+
+    ``/audited-invoices/`` is ``/staff-invoices/`` with the guard written as the
+    kernel's own ``PermissionCheck`` (``IsSuperuser``) rather than an adapted DRF
+    class, and the answers are the same.
+    """
+
+    def test_an_anonymous_caller_is_a_401_carrying_the_challenge(self) -> None:
+        response = self.client.get("/audited-invoices/")
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(response["WWW-Authenticate"], 'Basic realm="api"')
+
+    def test_a_signed_in_caller_the_check_refuses_is_a_403_with_its_message(self) -> None:
+        User.objects.create_user("clerk", password="s3cret", is_staff=True)
+        self.client.credentials(HTTP_AUTHORIZATION=_basic("clerk", "s3cret"))
+
+        response = self.client.get("/audited-invoices/")
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data["detail"], "Only a superuser can list the audited invoices.")
+        self.assertNotIn("WWW-Authenticate", response)
+
+    def test_a_signed_in_caller_the_check_admits_is_answered(self) -> None:
+        User.objects.create_superuser("root", password="s3cret")
+        _invoice()
+        self.client.credentials(HTTP_AUTHORIZATION=_basic("root", "s3cret"))
+
+        response = self.client.get("/audited-invoices/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(len(response.data), 1)
+
+
 class OpenAPISchemaTests(APITestCase):
     """The project generates its schema the documented way.
 
@@ -307,6 +342,16 @@ class OpenAPISchemaTests(APITestCase):
         # ``AnAnonymousCallerRefusedTests``).
         self.assertEqual(self._body_component("/staff-invoices/", "get", "401"), "NotAuthenticated")
         self.assertEqual(self._body_component("/staff-invoices/", "get", "403"), "PermissionDenied")
+
+    def test_a_route_guarded_by_a_kernel_check_documents_its_401_and_403(self) -> None:
+        # The kernel's ``PermissionCheck`` is answered as the adapted DRF class
+        # is (see ``AKernelCheckRefusedTests``), so the schema says so.
+        self.assertEqual(
+            self._body_component("/audited-invoices/", "get", "401"), "NotAuthenticated"
+        )
+        self.assertEqual(
+            self._body_component("/audited-invoices/", "get", "403"), "PermissionDenied"
+        )
 
     def test_a_refusal_the_service_raises_is_documented_where_it_is_declared(self) -> None:
         # ``update_invoice`` raises ``ServiceConflict``; only ``@extend_schema``

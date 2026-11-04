@@ -17,6 +17,7 @@ from django_service_specs import (
     Affordance,
     Parameter,
     Parameters,
+    PermissionCheck,
     SelectorKind,
     SelectorSpec,
     ServiceSpec,
@@ -116,14 +117,31 @@ class IsStaff(BasePermission):
 
 # An adapted DRF class refusing a caller nobody authenticated is answered as a
 # DRF view answers it: 401 with the first authenticator's challenge. A signed-in
-# caller it refuses is a 403 carrying its ``message``. A kernel
-# ``PermissionCheck`` refusing a caller nobody authenticated is the same 401,
-# but only where the denial is the dispatched spec's own check; a signed-in
-# caller it refuses is still a 403.
+# caller it refuses is a 403 carrying its ``message``.
 STAFF_SPEC = SelectorSpec(
     kind=SelectorKind.LIST,
     selector=list_invoices,
     permissions=(DRFPermissionCheck([IsStaff]),),
+    presenter=PRESENTER,
+)
+
+
+class IsSuperuser(PermissionCheck):
+    """The kernel's own seat: asked of a principal, with no DRF in it."""
+
+    message = "Only a superuser can list the audited invoices."
+
+    def has_permission(self, principal: Any, spec: Any) -> bool:
+        return bool(getattr(principal, "is_superuser", False))
+
+
+# The same refusals from a kernel check: nobody authenticated gets the 401 with
+# the challenge, but only where the denial is the dispatched spec's own check; a
+# signed-in caller it refuses is still a 403 carrying its ``message``.
+AUDIT_SPEC = SelectorSpec(
+    kind=SelectorKind.LIST,
+    selector=list_invoices,
+    permissions=(IsSuperuser(),),
     presenter=PRESENTER,
 )
 
@@ -172,12 +190,25 @@ class SentInvoiceListView(SelectorListView):
 
 
 class StaffInvoiceListView(SelectorListView):
-    """``GET /staff-invoices/``: the only route here with an authenticator.
+    """``GET /staff-invoices/``: ``BasicAuthentication`` and an adapted DRF class.
 
-    The project configures none, so every other route answers a refused
-    anonymous caller 403; this one's ``BasicAuthentication`` is the
+    The project configures no authenticator, so a route without one, such as
+    ``/invoices/<pk>/send/``, answers a refused anonymous caller 403; this
+    one's ``BasicAuthentication``, like ``AuditInvoiceListView``'s, is the
     ``WWW-Authenticate`` challenge of the 401.
     """
 
     authentication_classes = [BasicAuthentication]
     spec = STAFF_SPEC
+
+
+class AuditInvoiceListView(SelectorListView):
+    """``GET /audited-invoices/``: ``BasicAuthentication`` and a kernel check.
+
+    The kernel ``PermissionCheck`` ``IsSuperuser`` guards the spec; the view's
+    authenticator is what makes a refused anonymous caller a 401 with a
+    challenge, as ``StaffInvoiceListView`` does for the adapted DRF class.
+    """
+
+    authentication_classes = [BasicAuthentication]
+    spec = AUDIT_SPEC
