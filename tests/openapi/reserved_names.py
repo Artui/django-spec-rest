@@ -12,6 +12,7 @@ from typing import Any
 from django.urls import URLPattern, path
 from django_service_specs import ServiceSpec, Unrestricted
 from drf_spectacular.openapi import AutoSchema
+from drf_spectacular.utils import extend_schema
 from rest_framework import serializers
 from rest_framework.authentication import BasicAuthentication
 from rest_framework.generics import GenericAPIView
@@ -51,10 +52,13 @@ class _Deny(BasePermission):
         return False
 
 
-def ours(prefix: str) -> URLPattern:
+def ours(prefix: str, responses: Any = None) -> URLPattern:
     """A spec documenting all three: a Validator, a DRF check, an authenticator with a challenge.
 
     Its 201 is the ``Author`` component, a ``$ref`` to a name no one reserves.
+    ``responses``, given, is the project's ``@extend_schema(responses=...)`` on
+    the view, laid over what the spec documents; ``enable_openapi()`` must run
+    first, since ``extend_schema`` subclasses the schema the view has.
     """
     spec = ServiceSpec(
         service=lambda: None,
@@ -72,6 +76,8 @@ def ours(prefix: str) -> URLPattern:
             "authentication_classes": [BasicAuthentication],
         },
     )
+    if responses is not None:
+        view = extend_schema(responses=responses)(view)
     return path(f"{prefix}/", view.as_view())
 
 

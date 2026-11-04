@@ -95,6 +95,27 @@ class TestTheHook:
             assert schemas[name]["properties"] == {"mine": {"type": "string"}}
 
 
+class TestARawReferenceOnAPackageView:
+    """A ``$ref`` to a reserved name the project writes itself is the project's, on any view."""
+
+    def test_a_raw_reserved_reference_on_a_package_view_is_refused(self) -> None:
+        """A package view declaring ``{"$ref": ".../PermissionDenied"}`` over its 403 is refused.
+
+        The project asserts the name without owning the body behind it, so the
+        package does not vouch for it, as it would not on drf-spectacular's own
+        schema. The package's own 403 elsewhere holds the name. Fails if the
+        package records every response it renders as its own, rather than only
+        the ones it wrote.
+        """
+        enable_openapi()
+        reference = {"$ref": "#/components/schemas/PermissionDenied"}
+        with pytest.raises(ImproperlyConfigured) as raised:
+            _generate(ours("a-ours"), ours("b-declared", responses={403: reference}))
+        assert str(raised.value).startswith(
+            "The operation POST /b-declared/ is documented as the component 'PermissionDenied'"
+        )
+
+
 def _deep_copying_hook(result: Any, **kwargs: Any) -> Any:
     return copy.deepcopy(result)
 

@@ -529,6 +529,9 @@ class ServiceAutoSchema(AutoSchema):
         # The package's own 400, 403 and 401, recorded as the places a
         # reserved ``$ref`` may sit, which ``reserved_components_hook`` asks
         # of the generated document (test_a_reserved_name_is_refused_on_drf_spectacular_s_schema).
+        # Only those: a reserved ``$ref`` a project declares over a package
+        # view's response is the project's, and refused
+        # (test_a_raw_reserved_reference_on_a_package_view_is_refused).
         if isinstance(serializer, _PackageResponse):
             for media in rendered.get("content", {}).values():
                 place(self.registry, media["schema"])
