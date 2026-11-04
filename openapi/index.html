@@ -1127,15 +1127,23 @@ integration documents each route from its spec.</p>
 </span></code></pre></div>
 <p><code>enable_openapi()</code> sets <code>ServiceAutoSchema</code> as the schema of <code>ServiceCreateView</code>,
 <code>ServiceUpdateView</code>, <code>ServiceDeleteView</code>, <code>SelectorListView</code>,
-<code>SelectorRetrieveView</code>, <code>ServiceViewSet</code> and <code>SelectorViewSet</code>, so every
-subclass inherits it; a class setting <code>schema</code> itself keeps its own.
-Importing <code>django_spec_rest.openapi</code> does not import <code>drf-spectacular</code>; only
-this call does.</p>
-<p>A viewset of your own over <code>GenericViewSet</code> inherits none of those classes,
-whether it is composed of the action mixins (<code>ServiceCreateMixin</code>,
-<code>SelectorListMixin</code> and the rest) or carries a <code>@service_action</code> or
-<code>@selector_action</code>. On drf-spectacular's <code>AutoSchema</code> it documents nothing of
-its specs. Set <code>schema = ServiceAutoSchema()</code> on it (from
+<code>SelectorRetrieveView</code>, <code>ServiceViewSet</code> and <code>SelectorViewSet</code>, and of the
+action mixins <code>ServiceCreateMixin</code>, <code>ServiceUpdateMixin</code>, <code>ServiceDestroyMixin</code>,
+<code>SelectorListMixin</code> and <code>SelectorRetrieveMixin</code>, so every subclass inherits it;
+a class setting <code>schema</code> itself keeps its own. Importing
+<code>django_spec_rest.openapi</code> does not import <code>drf-spectacular</code>; only this call
+does.</p>
+<p>A viewset of your own over <code>GenericViewSet</code>, composed of the action mixins,
+inherits the schema only where a mixin comes before <code>GenericViewSet</code> in its
+bases, as in <code>class NoteViewSet(ServiceCreateMixin, GenericViewSet)</code>: DRF's
+<code>APIView</code> carries a <code>schema</code> of its own, so in
+<code>class NoteViewSet(GenericViewSet, ServiceCreateMixin)</code> that one wins. Where
+the mixin does come first, its <code>ServiceAutoSchema</code> also wins over a
+<code>DEFAULT_SCHEMA_CLASS</code> of your own, even a subclass of <code>ServiceAutoSchema</code>;
+set <code>schema = YourSchema()</code> on the viewset to keep the subclass. A
+<code>@service_action</code> or <code>@selector_action</code> on a bare <code>GenericViewSet</code> has no mixin
+to inherit it from. On drf-spectacular's <code>AutoSchema</code> either documents nothing
+of its specs. Set <code>schema = ServiceAutoSchema()</code> on it (from
 <code>django_spec_rest.openapi.service_auto_schema</code>), or point DRF's
 <code>DEFAULT_SCHEMA_CLASS</code> at
 <code>"django_spec_rest.openapi.service_auto_schema.ServiceAutoSchema"</code>, which
@@ -1152,6 +1160,15 @@ the project's on drf-spectacular's own <code>AutoSchema</code>, whichever comes 
 the message names the serializer, or the operation (<code>The operation POST
 /notes/</code>), component or webhook that refers to it. Name the serializer's
 component another way with <code>@extend_schema_serializer(component_name=...)</code>.</p>
+<p>The package's own 403 and 401 bodies are exported, as <code>PermissionDeniedSerializer</code>
+and <code>NotAuthenticatedSerializer</code> from <code>django_spec_rest.openapi</code>, for a response
+of yours to declare (see <a href="#refusals-your-project-configures">Refusals your project configures</a>).
+Declared on any view, a view of the package's or one on drf-spectacular's own
+<code>AutoSchema</code>, either is the package's component, in whichever order the views
+are resolved. A <code>$ref</code> you write yourself to one of these names, such as
+<code>@extend_schema(responses={403: {"$ref": "#/components/schemas/PermissionDenied"}})</code>,
+is refused on any view, a view of the package's included: declare the
+serializer instead.</p>
 <p>A document in which no spec uses one of these names leaves it to the project:
 a <code>ValidationErrors</code> component of your own, beside specs that declare no
 validator, is documented as yours.</p>
@@ -1159,9 +1176,9 @@ validator, is documented as yours.</p>
 <code>django_spec_rest.openapi.reserved_components_hook.reserved_components_hook</code>,
 which <code>enable_openapi()</code> inserts first in drf-spectacular's
 <code>POSTPROCESSING_HOOKS</code>, before your own, once however often it is called. It
-runs first because it knows the package's own references by identity; a hook of
-yours that copies the schema (a <code>deepcopy</code>, a JSON round trip, a rebuilt
-<code>dict</code>) then sees a document it has already checked. Anything that replaces that
+runs first because it knows the package's own references by the identity of
+their <code>$ref</code> strings; a hook of yours that rebuilds them (a JSON round trip)
+then sees a document it has already checked. Anything that replaces that
 list after <code>enable_openapi()</code> runs loses it, such as a <code>SpectacularAPIView</code>'s
 <code>custom_settings</code> setting <code>POSTPROCESSING_HOOKS</code>, or a reload of
 drf-spectacular's settings: name the hook in that list by its dotted path, or
@@ -1230,18 +1247,29 @@ call <code>enable_openapi()</code> again after the reload.</p>
   sends a <code>WWW-Authenticate</code> challenge, such as DRF's <code>BasicAuthentication</code> or
   <code>TokenAuthentication</code>. Any of those checks denying (answering <code>False</code> to) a
   caller nobody authenticated, a kernel <code>PermissionCheck</code> or a
-  <code>DRFPermissionCheck</code> alike, is answered 401 there, under <code>detail</code> (the <code>NotAuthenticated</code> component); behind
-  <code>SessionAuthentication</code>, which sends no challenge, or a view with no
-  authenticator, the same denial is the 403. A check that raises
-  <code>NotPermitted</code> itself is answered as raised, 403, with no challenge. The 403 and the 401
-  bodies are the <code>PermissionDenied</code> and <code>NotAuthenticated</code> components, names
-  this schema keeps as it does <code>ValidationErrors</code>: a serializer that would
-  component under either (a <code>PermissionDeniedSerializer</code>, say) is refused with
+  <code>DRFPermissionCheck</code> alike, is answered 401 there, under <code>detail</code> (the
+  <code>NotAuthenticated</code> component); behind <code>SessionAuthentication</code>, which sends
+  no challenge, or a view with no authenticator, the same denial is the 403.
+  A check that raises <code>NotPermitted</code> itself is answered as raised, 403, with
+  no challenge. The 403 and the 401 bodies are the <code>PermissionDenied</code> and
+  <code>NotAuthenticated</code> components, names this schema keeps as it does
+  <code>ValidationErrors</code>: a serializer of yours that would be the component under
+  either (a <code>PermissionDeniedSerializer</code> of your own, say) is refused with
   <code>ImproperlyConfigured</code>, on any view and whichever is resolved first, until
   you name its component another way with
-  <code>@extend_schema_serializer(component_name=...)</code>.</li>
+  <code>@extend_schema_serializer(component_name=...)</code>. The package's own
+  <code>PermissionDeniedSerializer</code> and <code>NotAuthenticatedSerializer</code> are the
+  components, and yours to declare.</li>
 <li><strong>A <code>filter_set</code>'s query parameters</strong>, on a list operation, are the kernel's
   <code>filter_set_parameters</code>.</li>
+<li><strong>A viewset method with no spec behind it</strong> is left out where <code>Allow</code> leaves
+  it out: on a route serving some spec, a <code>create</code>, <code>update</code>,
+  <code>partial_update</code> or <code>destroy</code> the router maps but the viewset declares no
+  spec for answers 405, so it is no operation. A <code>ServiceViewSet</code> with no
+  <code>destroy</code> spec documents no <code>DELETE</code>, and one with a <code>partial_update</code> spec
+  alone documents <code>PATCH</code> and no <code>PUT</code>. The <code>list</code> and <code>retrieve</code> handlers,
+  which fall back to DRF's queryset, and a handler the viewset defines itself,
+  stay documented.</li>
 </ul>
 <p><code>ServiceErrorSerializer</code>, a <code>detail</code> field and the optional <code>schema</code> object, is
 the body of that 422 and of the 400's <code>{"detail": ...}</code> alternative, under the
@@ -1421,35 +1449,30 @@ refusals are:</p>
   principal in can be answered so: DRF's own authenticators and Django's
   <code>ModelBackend</code> never do.</li>
 </ul>
-<p>Each body is DRF's <code>{"detail": ...}</code>. Declare it with a serializer of your
-own, under any name but the <code>PermissionDenied</code>, <code>NotAuthenticated</code> and
-<code>ValidationErrors</code> this schema keeps:</p>
+<p>Each body is DRF's <code>{"detail": ...}</code>, the body of the spec's own 403 and 401.
+Declare it with the package's <code>PermissionDeniedSerializer</code> and
+<code>NotAuthenticatedSerializer</code>, which are the <code>PermissionDenied</code> and
+<code>NotAuthenticated</code> components, on a view of the package's or one of your own:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">drf_spectacular.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">OpenApiResponse</span><span class="p">,</span> <span class="n">extend_schema</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rest_framework</span><span class="w"> </span><span class="kn">import</span> <span class="n">serializers</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rest_framework.permissions</span><span class="w"> </span><span class="kn">import</span> <span class="n">IsAdminUser</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_spec_rest</span><span class="w"> </span><span class="kn">import</span> <span class="n">ServiceCreateView</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rest_framework.permissions</span><span class="w"> </span><span class="kn">import</span> <span class="n">IsAdminUser</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_spec_rest</span><span class="w"> </span><span class="kn">import</span> <span class="n">ServiceCreateView</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_spec_rest.openapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">NotAuthenticatedSerializer</span><span class="p">,</span> <span class="n">PermissionDeniedSerializer</span>
 </span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
 </span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>
-</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="k">class</span><span class="w"> </span><span class="nc">RefusalSerializer</span><span class="p">(</span><span class="n">serializers</span><span class="o">.</span><span class="n">Serializer</span><span class="p">):</span>
-</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;The caller was refused. Why is under `detail`.&quot;&quot;&quot;</span>
-</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>
-</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>    <span class="n">detail</span> <span class="o">=</span> <span class="n">serializers</span><span class="o">.</span><span class="n">CharField</span><span class="p">()</span>
-</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>
-</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>
-</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="nd">@extend_schema</span><span class="p">(</span>
-</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>    <span class="n">responses</span><span class="o">=</span><span class="p">{</span>
-</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>        <span class="mi">401</span><span class="p">:</span> <span class="n">OpenApiResponse</span><span class="p">(</span><span class="n">RefusalSerializer</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;No credentials were sent.&quot;</span><span class="p">),</span>
-</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>        <span class="mi">403</span><span class="p">:</span> <span class="n">OpenApiResponse</span><span class="p">(</span><span class="n">RefusalSerializer</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;The caller is not staff.&quot;</span><span class="p">),</span>
-</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>    <span class="p">}</span>
-</span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a><span class="p">)</span>
-</span><span id="__span-3-20"><a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a><span class="k">class</span><span class="w"> </span><span class="nc">PublishReportView</span><span class="p">(</span><span class="n">ServiceCreateView</span><span class="p">):</span>
-</span><span id="__span-3-21"><a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a>    <span class="n">spec</span> <span class="o">=</span> <span class="n">publish_report_spec</span>
-</span><span id="__span-3-22"><a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a>    <span class="n">permission_classes</span> <span class="o">=</span> <span class="p">[</span><span class="n">IsAdminUser</span><span class="p">]</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="nd">@extend_schema</span><span class="p">(</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>    <span class="n">responses</span><span class="o">=</span><span class="p">{</span>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>        <span class="mi">401</span><span class="p">:</span> <span class="n">OpenApiResponse</span><span class="p">(</span><span class="n">NotAuthenticatedSerializer</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;No credentials were sent.&quot;</span><span class="p">),</span>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>        <span class="mi">403</span><span class="p">:</span> <span class="n">OpenApiResponse</span><span class="p">(</span><span class="n">PermissionDeniedSerializer</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;The caller is not staff.&quot;</span><span class="p">),</span>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>    <span class="p">}</span>
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="p">)</span>
+</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="k">class</span><span class="w"> </span><span class="nc">PublishReportView</span><span class="p">(</span><span class="n">ServiceCreateView</span><span class="p">):</span>
+</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>    <span class="n">spec</span> <span class="o">=</span> <span class="n">publish_report_spec</span>
+</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>    <span class="n">permission_classes</span> <span class="o">=</span> <span class="p">[</span><span class="n">IsAdminUser</span><span class="p">]</span>
 </span></code></pre></div>
 <p>As with a service's refusals, the statuses are added to what the spec
 documents, and one the spec documents too is replaced by yours. The bodies
-are one shape, so a declared 403 still describes the spec's own.</p>
+are the spec's own, so a declared 403 still describes the spec's.</p>
 
 
 

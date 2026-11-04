@@ -928,6 +928,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="ServiceAutoSchema">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_rest.openapi.service_auto_schema.ServiceAutoSchema.is_excluded" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        is_excluded
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -990,6 +1007,28 @@
     <span class="md-ellipsis">
       
         ActionUnavailableSerializer
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_rest.openapi.permission_denied_serializer.PermissionDeniedSerializer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PermissionDeniedSerializer
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_rest.openapi.not_authenticated_serializer.NotAuthenticatedSerializer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NotAuthenticatedSerializer
       
     </span>
   </a>
@@ -1058,6 +1097,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="ServiceAutoSchema">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_rest.openapi.service_auto_schema.ServiceAutoSchema.is_excluded" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        is_excluded
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1126,6 +1182,28 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#django_spec_rest.openapi.permission_denied_serializer.PermissionDeniedSerializer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PermissionDeniedSerializer
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_rest.openapi.not_authenticated_serializer.NotAuthenticatedSerializer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NotAuthenticatedSerializer
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1178,21 +1256,33 @@ bodies, success statuses, and 422 contracts, a kernel <code>ServiceSpec</code> o
 <li><code>ServiceCreateView</code>, <code>ServiceUpdateView</code>, <code>ServiceDeleteView</code></li>
 <li><code>SelectorListView</code>, <code>SelectorRetrieveView</code></li>
 <li><code>ServiceViewSet</code>, <code>SelectorViewSet</code></li>
+<li><code>ServiceCreateMixin</code>, <code>ServiceUpdateMixin</code>, <code>ServiceDestroyMixin</code>,
+  <code>SelectorListMixin</code>, <code>SelectorRetrieveMixin</code></li>
 </ul>
 <p>The function-local imports keep <code>drf-spectacular</code> an optional
 dependency: importing
 <code>django_spec_rest.openapi</code> does not require it, and only
 this call brings in the schema-generator code.</p>
 <p>User subclasses inherit <code>schema = ServiceAutoSchema()</code> automatically;
-classes that set <code>schema = ...</code> explicitly keep their own choice.</p>
+classes that set <code>schema = ...</code> explicitly keep their own choice. A
+project's <code>GenericViewSet</code> composed of the mixins inherits it only where
+a mixin comes before <code>GenericViewSet</code> in its bases, since DRF's
+<code>APIView</code> carries a <code>schema</code> of its own
+(test_the_documented_setup's
+test_a_mixin_listed_first_documents_its_spec_with_no_schema_of_its_own).</p>
+<p>Where a mixin does come first, its <code>ServiceAutoSchema</code> also wins over a
+project's <code>DEFAULT_SCHEMA_CLASS</code>, even a subclass of it; setting
+<code>schema = ProjectSchema()</code> on the class keeps the subclass
+(test_the_documented_setup's
+test_a_mixin_listed_first_overrides_a_project_s_default_schema_class).</p>
 <p>It also inserts
 <a class="autorefs autorefs-internal" title="reserved_components_hook" href="#django_spec_rest.openapi.reserved_components_hook.reserved_components_hook"><code>reserved_components_hook</code></a>
 first in drf-spectacular's <code>POSTPROCESSING_HOOKS</code>, before the project's
 own hooks and once however often it is called, so a component of the
 project's under a name the package documents its refusals by is refused
-on any view. It recognises the package's own references by identity, so a
-project hook that copies the schema (<code>copy.deepcopy</code>, a JSON round
-trip, a rebuilt <code>dict</code>) must run after it, not before.</p>
+on any view. It recognises the package's own references by the identity
+of their <code>$ref</code> strings, so a project hook that rebuilds those strings
+(a JSON round trip) must run after it, not before.</p>
 
 
     </div>
@@ -1263,6 +1353,8 @@ action mixins, and <code>@service_action</code> / <code>@selector_action</code>:
   there, and 403 where the authenticator sends none (<code>_caller_refusals</code>).</li>
 <li><strong>A FilterSet's query parameters</strong> are the kernel's
   <code>filter_set_parameters</code>, on a list operation only.</li>
+<li><strong>A viewset method answered 405 for want of a spec</strong> is no operation:
+  the schema leaves out what <code>Allow</code> leaves out (<code>is_excluded</code>).</li>
 </ul>
 <p>A refusal a service raises is the project's to declare, with
 <code>@extend_schema(responses={404: ServiceNotFoundSerializer})</code> and the
@@ -1295,6 +1387,35 @@ exactly as it does for a view-level FilterSet.</p>
 
 
 
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="django_spec_rest.openapi.service_auto_schema.ServiceAutoSchema.is_excluded" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">is_excluded</span>
+
+
+<a href="#django_spec_rest.openapi.service_auto_schema.ServiceAutoSchema.is_excluded" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">is_excluded</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">bool</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Whether this method is left out, as <code>Allow</code> leaves it out, or as drf-spectacular does.</p>
+<p>drf-spectacular documents every method the router's action map binds,
+so a <code>ServiceViewSet</code> route serving some spec documented a create,
+update, partial update or destroy whose handler answers 405 with no
+spec behind it. Such a method is asked of the view's own
+<code>_refuses_without_a_spec</code>, the predicate its <code>allowed_methods</code>
+reads, never of <code>allowed_methods</code> itself: the generator binds no
+handler to the view it builds, so DRF's half of that list is empty
+there (test_spec_less_actions). A view with no such predicate, a
+standalone view or one of DRF's, is not asked.</p>
+
+
+    </div>
+
+</div>
 
 
 
@@ -1554,6 +1675,102 @@ project's.</p>
 
 
         <p>The action is unavailable in the state of what it acts on. Why is under <code>detail</code>, and the action's stable code under <code>code</code>.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_rest.openapi.permission_denied_serializer.PermissionDeniedSerializer" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">PermissionDeniedSerializer</span>
+
+
+<a href="#django_spec_rest.openapi.permission_denied_serializer.PermissionDeniedSerializer" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="rest_framework.serializers.Serializer">Serializer</span></code></p>
+
+
+
+        <p>The caller may not run this operation. Why is under <code>detail</code>.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_rest.openapi.not_authenticated_serializer.NotAuthenticatedSerializer" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">NotAuthenticatedSerializer</span>
+
+
+<a href="#django_spec_rest.openapi.not_authenticated_serializer.NotAuthenticatedSerializer" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="rest_framework.serializers.Serializer">Serializer</span></code></p>
+
+
+
+        <p>No caller was authenticated. Why is under <code>detail</code>.</p>
 
 
 
