@@ -11,6 +11,8 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-11-04
+
 ### Added
 
 - **The 403 and 401 bodies are exported, for a project to declare.**
@@ -478,7 +480,8 @@ lists each with what a project rewrites.
 - **The package is no longer a Django app.** It has no models, migrations,
   templates, static files or URLs, so it needs no `INSTALLED_APPS` entry.
 
-[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/Artui/django-spec-rest/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Artui/django-spec-rest/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Artui/django-spec-rest/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/Artui/django-spec-rest/compare/v0.3.0...v0.3.1
