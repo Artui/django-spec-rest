@@ -11,6 +11,24 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+### Fixed
+
+- **A `PATCH` request of the package's 403 or 401 body no longer lets a
+  project's serializer of the same name pass.** Under drf-spectacular's
+  default `COMPONENT_SPLIT_PATCH`, `PermissionDeniedSerializer` or
+  `NotAuthenticatedSerializer` declared as a `PATCH` request is documented as
+  its partial twin, `PatchedPermissionDenied` or `PatchedNotAuthenticated`,
+  but it also registered the reserved `PermissionDenied` or
+  `NotAuthenticated` component, unreferenced, and left it marked as the
+  package's for the next class resolved under that name. A project's
+  serializer of the name resolved after it was documented by the package's
+  body, with only drf-spectacular's warning of two components of one name,
+  rather than refused. The partial twin is now resolved as the
+  `COMPONENT_SPLIT_REQUEST` twin is: the package registers nothing under its
+  reserved name for it, so the project's serializer is refused where a
+  package view documents the name and is the project's own component where
+  none does.
+
 ## [0.6.0] — 2026-11-04
 
 ### Added

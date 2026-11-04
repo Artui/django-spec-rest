@@ -14,7 +14,7 @@ from weakref import WeakKeyDictionary
 from django.core.exceptions import ImproperlyConfigured
 from drf_spectacular.drainage import set_override
 from drf_spectacular.extensions import OpenApiSerializerExtension
-from drf_spectacular.plumbing import ResolvedComponent, get_class
+from drf_spectacular.plumbing import ResolvedComponent, get_class, is_patched_serializer
 from drf_spectacular.settings import spectacular_settings
 from rest_framework import status as drf_status
 
@@ -204,6 +204,12 @@ class _ReservedBodyExtension(OpenApiSerializerExtension):
             # and test_are_documented_as_a_project_s_response_under_split_request_components
             # fail; without the setting, test_is_documented_as_a_request_body's
             # other case and test_are_documented_nested_in_a_project_s_serializer.
+            return None
+        if is_patched_serializer(self.target, direction):
+            # Its partial twin is ``Patched<name>``, nobody's reserved name
+            # either, and drf-spectacular takes no ``$ref`` of ``<name>``, so
+            # naming it would leave the component armed for the next class of
+            # the name (TestAPatchedRequestOfTheBody).
             return None
         registry = auto_schema.registry
         key = ResolvedComponent(name=name, type=ResolvedComponent.SCHEMA, object=self.target)

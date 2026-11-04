@@ -75,6 +75,20 @@ def _declaring(prefix: str, responses: Any, request: Any = None) -> URLPattern:
     return path(f"{prefix}/", view.as_view())
 
 
+def _patching(prefix: str, request: Any) -> URLPattern:
+    """A project's own view on drf-spectacular's ``AutoSchema``, taking ``request`` on a ``PATCH``."""
+
+    class _Patching(GenericAPIView):
+        schema = AutoSchema()
+        permission_classes = []
+        authentication_classes = []
+
+        def patch(self, request: Request) -> Response: ...
+
+    view = extend_schema(request=request, responses={204: None})(_Patching)
+    return path(f"{prefix}/", view.as_view())
+
+
 def _checked_list(prefix: str) -> URLPattern:
     """A paginated list whose spec carries a DRF check, so it documents the package's 403."""
     spec = SelectorSpec(
@@ -249,6 +263,52 @@ class TestTheExportedBodies:
         assert str(raised.value).startswith(
             "The operation POST /b-declaring/ is documented as the component 'PermissionDenied'"
         )
+
+
+_THEIRS = {403: TheirPermissionDenied, 401: TheirNotAuthenticated}
+
+
+@pytest.mark.parametrize("code", [403, 401])
+class TestAPatchedRequestOfTheBody:
+    """The body as a ``PATCH`` request, under drf-spectacular's default ``COMPONENT_SPLIT_PATCH``.
+
+    The partial request is ``Patched<name>``, a name nobody reserves, so it is
+    resolved as ``<name>Request`` is under ``COMPONENT_SPLIT_REQUEST``: the
+    package registers nothing under its reserved name for it. Each test fails
+    if the extension names the partial request: it registers the reserved
+    component for it and arms it, and drf-spectacular takes no ``$ref`` of it,
+    so the project's class of the name, resolved next, is taken for the
+    package's.
+    """
+
+    def _generate(self, *patterns: URLPattern) -> dict[str, Any]:
+        with patched_settings({"COMPONENT_SPLIT_PATCH": True, "COMPONENT_SPLIT_REQUEST": False}):
+            return _generate(*patterns)
+
+    def test_a_project_s_serializer_of_the_name_after_is_refused(self, code: int) -> None:
+        """A package view documents the reserved name, so the project's class of it is refused."""
+        with pytest.raises(ImproperlyConfigured) as raised:
+            self._generate(
+                ours("a-ours"),
+                _patching("b-patching", _BODIES[code]),
+                _declaring("c-declaring", {200: _THEIRS[code]}),
+            )
+        assert str(raised.value).startswith(
+            f"The operation POST /c-declaring/ is documented as the component {_COMPONENTS[code]!r}"
+        )
+
+    def test_is_documented_as_its_partial_twin_alone(self, code: int) -> None:
+        """No package view holds the name, so the project's class of it is the project's."""
+        name = _COMPONENTS[code]
+        schema = self._generate(
+            _patching("a-patching", _BODIES[code]),
+            _declaring("b-declaring", {200: _THEIRS[code]}),
+        )
+        body = schema["paths"]["/a-patching/"]["patch"]["requestBody"]["content"]
+        assert body["application/json"]["schema"] == {"$ref": f"#/components/schemas/Patched{name}"}
+        schemas = schema["components"]["schemas"]
+        assert schemas[f"Patched{name}"]["properties"] == {"detail": {"type": "string"}}
+        assert schemas[name]["properties"] == {"mine": {"type": "string"}}
 
 
 class TestUnderListMechanicsOnARefusal:
