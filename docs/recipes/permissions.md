@@ -45,7 +45,11 @@ The kernel marks a declared check's denial as `PermissionCheckDenied`, at the
 class-level check and at the one asked of the row the spec's lookup finds, so
 a caller nobody authenticated is asked to (401 with the challenge, or 403
 "Authentication credentials were not provided." where the first authenticator
-sends none), and anyone else is refused 403 with the check's `message`.
+sends none), and anyone else is refused 403 with the check's `message`. The
+rule is for a check that answers `False`. A check that raises `NotPermitted`
+itself is answered as raised: 403 with that message and no
+`WWW-Authenticate`, as DRF answers a permission class that raises
+`PermissionDenied`.
 
 Only the spec the view dispatched is decided so. A service's own
 `NotPermitted`, such as an author's "Archived invoices are read-only.", is

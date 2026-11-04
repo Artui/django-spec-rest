@@ -185,7 +185,7 @@ The query string is read by the kernel's flat reader:
   the offline view's `kwargs`; its `url_kwargs=` and `query_params=` are gone,
   and the offline request's query string is empty.
 - **An adapted DRF class still asks a caller nobody authenticated to sign in.**
-  A DRF class in `DRFPermissionCheck` refusing a caller the request's
+  A DRF class in `DRFPermissionCheck` denying a caller the request's
   authenticators did not recognise is answered DRF's `NotAuthenticated`, as
   drfs' view answered it: 401 with the first authenticator's
   `WWW-Authenticate` (`Basic realm="api"` with `BasicAuthentication` first),

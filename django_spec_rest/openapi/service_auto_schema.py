@@ -117,7 +117,7 @@ class ServiceAutoSchema(AutoSchema):
       check, any check but ``Unrestricted``: a check's denial and a principal
       who cannot act are both answered 403 with a ``detail``. A ``401`` beside
       it where the view's first authenticator sends a ``WWW-Authenticate``:
-      DRF answers such a check's refusal of a caller nobody authenticated 401
+      DRF answers such a check's denial of a caller nobody authenticated 401
       there, and 403 where the authenticator sends none (``_caller_refusals``).
     - **A FilterSet's query parameters** are the kernel's
       ``filter_set_parameters``, on a list operation only.
@@ -409,16 +409,20 @@ class ServiceAutoSchema(AutoSchema):
         principal who cannot act ``DRFPrincipalUnavailable``, both answered 403
         with a ``detail`` (test_each_403_the_edge_sends_is_the_documented_body).
 
-        Any such check refusing a caller the request's authenticators did not
-        recognise is ``DRFNotAuthenticated``, whether it is a kernel
-        ``PermissionCheck`` or an adapted ``DRFPermissionCheck``, at any depth
+        Any such check denying (answering ``False`` to) a caller the request's
+        authenticators did not recognise is ``DRFNotAuthenticated``, whether it
+        is a kernel ``PermissionCheck`` or an adapted ``DRFPermissionCheck``, at any depth
         of ``AllOf`` and ``AnyOf``. DRF answers that 401 where the view's first
         authenticator gives a ``WWW-Authenticate`` and 403 where it gives none,
         so the 401 is documented where the authenticator gives one, read from
         the view by the method DRF's ``handle_exception`` asks
         (test_a_check_behind_a_challenge_documents_a_401,
         test_a_check_behind_a_session_documents_no_401,
-        test_a_check_behind_no_authenticator_documents_no_401).
+        test_a_check_behind_no_authenticator_documents_no_401). A check that
+        raises ``NotPermitted`` itself is answered as raised, 403 with no
+        challenge, so the 401 is the document's claim for the denials it can
+        send, not for a raise
+        (test_a_check_raising_not_permitted_is_answered_as_raised).
         """
         checks = spec.permissions or ()
         if all(isinstance(check, Unrestricted) for check in checks):

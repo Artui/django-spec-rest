@@ -6,6 +6,8 @@ The refusal itself, on a project's view in either order, is
 
 from __future__ import annotations
 
+import copy
+import json
 from types import SimpleNamespace
 from typing import Any
 
@@ -13,6 +15,7 @@ import pytest
 from django.core.exceptions import ImproperlyConfigured
 from django.urls import URLPattern
 from drf_spectacular.generators import SchemaGenerator
+from drf_spectacular.hooks import postprocess_schema_enums
 from drf_spectacular.plumbing import ComponentRegistry, ResolvedComponent
 from drf_spectacular.settings import patched_settings, spectacular_settings
 
@@ -90,6 +93,44 @@ class TestTheHook:
         for serializer in SERIALIZERS:
             name = serializer.__name__.removesuffix("Serializer")
             assert schemas[name]["properties"] == {"mine": {"type": "string"}}
+
+
+def _deep_copying_hook(result: Any, **kwargs: Any) -> Any:
+    return copy.deepcopy(result)
+
+
+def _json_roundtrip_hook(result: Any, **kwargs: Any) -> Any:
+    return json.loads(json.dumps(result))
+
+
+def _shallow_rebuild_hook(result: Any, **kwargs: Any) -> Any:
+    for operations in result["paths"].values():
+        for operation in operations.values():
+            for response in operation.get("responses", {}).values():
+                for media in response.get("content", {}).values():
+                    media["schema"] = dict(media["schema"])
+    return result
+
+
+class TestAProjectHookThatCopiesTheSchema:
+    """The hook knows the package's references by identity, so it must see them before a copy."""
+
+    @pytest.mark.parametrize(
+        "copying_hook", [_deep_copying_hook, _json_roundtrip_hook, _shallow_rebuild_hook]
+    )
+    def test_a_copying_hook_of_the_project_runs_after_it(
+        self, copying_hook: Any, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A clash-free document still generates. Fails if ``enable_openapi`` appends the hook.
+
+        Appended, it runs on a copy whose references are no longer the objects
+        the package wrote, and refuses the package's own 400 as a clash.
+        """
+        monkeypatch.setattr(
+            spectacular_settings, "POSTPROCESSING_HOOKS", [postprocess_schema_enums, copying_hook]
+        )
+        schema = _generate(ours("ours"))
+        assert {"400", "401", "403"} <= set(schema["paths"]["/ours/"]["post"]["responses"])
 
 
 class TestTheHooksAProjectSets:

@@ -89,14 +89,14 @@ def _projects_hook(result: Any, **kwargs: Any) -> Any:
 
 
 def test_the_hook_is_installed_once(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Appended after the project's own hooks, and only once however often it is called.
+    """Inserted before the project's own hooks, and only once however often it is called.
 
     Fails without the install's check that the hook is absent.
     """
     monkeypatch.setattr(spectacular_settings, "POSTPROCESSING_HOOKS", [_projects_hook])
     enable_openapi()
     enable_openapi()
-    assert [_projects_hook, reserved_components_hook] == spectacular_settings.POSTPROCESSING_HOOKS
+    assert [reserved_components_hook, _projects_hook] == spectacular_settings.POSTPROCESSING_HOOKS
 
 
 def test_a_hook_the_project_lists_is_not_added_again(monkeypatch: pytest.MonkeyPatch) -> None:

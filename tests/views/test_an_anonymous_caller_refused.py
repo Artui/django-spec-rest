@@ -11,8 +11,8 @@ The rule holds for a DRF class adapted by ``DRFPermissionCheck`` answering
 whose denial the kernel marks as ``PermissionCheckDenied``: at the class-level
 check, and at the object-level one asked of the row the spec's own lookup
 finds. Any other ``NotPermitted`` - a service's own, a refused inner
-dispatch's - is not the caller's to sign in for, and stays 403 with its
-message. Each route is served by a view and by a viewset action, and each
+dispatch's, a check's own raise rather than its ``False`` - is not the
+caller's to sign in for, and stays 403 with its message. Each route is served by a view and by a viewset action, and each
 answer is DRF's for a plain ``APIView`` guarded by a class carrying the same
 message.
 """
@@ -342,4 +342,29 @@ def test_a_refused_inner_dispatch_is_not_asked_to_sign_in() -> None:
     response = _anonymous_post(ServiceSpec(service=outer, permissions=(_Open(),)))
     assert response.status_code == 403
     assert response.data == {"detail": "Inner refused."}
+    assert response.get("WWW-Authenticate") is None
+
+
+class _RaisesNotPermitted(PermissionCheck):
+    """A check that refuses by raising, rather than by answering ``False``."""
+
+    def has_permission(self, principal: Any, spec: Any) -> bool:
+        raise NotPermitted("Members only, raised.")
+
+
+def test_a_check_raising_not_permitted_is_answered_as_raised() -> None:
+    """The kernel marks only a check answering ``False`` as its denial, so a raise is the check's own word.
+
+    An anonymous caller behind a challenge is answered 403 with the raised
+    message and no challenge, as DRF answers a permission class that raises
+    ``PermissionDenied``. Fails when the map's row for a bare kernel
+    ``NotPermitted`` is routed through ``permission_denied``: the raise is then
+    read as a denial and answered 401 with the challenge.
+    """
+    response = _anonymous_post(
+        ServiceSpec(service=lambda: None, permissions=(_RaisesNotPermitted(),))
+    )
+    response.render()
+    assert response.status_code == 403
+    assert response.data == {"detail": "Members only, raised."}
     assert response.get("WWW-Authenticate") is None

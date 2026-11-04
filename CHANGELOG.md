@@ -14,17 +14,20 @@ carries; releases up to 0.62.0 are in
 ### Changed
 
 - **A kernel permission check asks a caller nobody authenticated to sign in.**
-  Where a `PermissionCheck` the dispatched spec declares refuses a caller the
-  request's authenticators did not recognise, the view answers DRF's
+  Where a `PermissionCheck` the dispatched spec declares denies (answers
+  `False` to) a caller the request's authenticators did not recognise, the
+  view answers DRF's
   `NotAuthenticated`, as it already did for an adapted DRF class and as drfs
   did: 401 with the first authenticator's `WWW-Authenticate` challenge, or 403
   "Authentication credentials were not provided." where that authenticator
   sends none. It was 403 with the check's message. A signed-in caller, and any
   caller of a view with no authenticator, is still refused 403 with the
   check's message. This holds at the class-level check and at the one asked of
-  the row the spec's own lookup finds. A service's own `NotPermitted`, and an
-  inner `dispatch` a service makes whose check refused, are not the caller's
-  to sign in for and stay 403 with their message.
+  the row the spec's own lookup finds. A service's own `NotPermitted`, an
+  inner `dispatch` a service makes whose check refused, and a check that
+  raises `NotPermitted` itself rather than answering `False`, are not the
+  caller's to sign in for and stay 403 with their message, as DRF answers a
+  permission class that raises `PermissionDenied`.
 - **A `many` spec's rows are named as dispatch names them.** A
   `get_service_kwargs` value named like a row's field pins that field in every
   row. The row's names are now asked of any Validator the way the kernel's
@@ -37,7 +40,7 @@ carries; releases up to 0.62.0 are in
   `NotAuthenticated` component) where the view's first authenticator sends a
   `WWW-Authenticate` challenge, whatever kind of check it is. Before, only an
   operation with a `DRFPermissionCheck` among its checks documented it, since
-  a kernel `PermissionCheck` refusing an anonymous caller was answered 403.
+  a kernel `PermissionCheck` denying an anonymous caller was answered 403.
   Behind an authenticator sending no challenge, or on a view with none, the
   operation still documents the 403 alone.
 - **The `django-service-specs` floor is 0.24.0**, the release carrying
@@ -51,9 +54,10 @@ carries; releases up to 0.62.0 are in
   of them, on a view of the project's own on drf-spectacular's `AutoSchema`
   resolved after the package's refusal, got drf-spectacular's warning alone,
   and its request and response were documented by the refusal's body.
-  `enable_openapi()` now appends a postprocessing hook,
-  `reserved_components_hook`, to drf-spectacular's `POSTPROCESSING_HOOKS`
-  (after the project's own, once), which refuses any reference to these names
+  `enable_openapi()` now inserts a postprocessing hook,
+  `reserved_components_hook`, first in drf-spectacular's `POSTPROCESSING_HOOKS`
+  (before the project's own, once, so a project hook that copies the schema
+  cannot hide the package's references from it), which refuses any reference to these names
   the package did not write with `ImproperlyConfigured`, naming the operation,
   component or webhook that holds it. A document in which no spec uses one of
   the names leaves it to the project. The generated schema is unchanged.

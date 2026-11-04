@@ -57,8 +57,11 @@ validator, is documented as yours.
 
 The refusal on a view of the project's is a postprocessing hook,
 `django_spec_rest.openapi.reserved_components_hook.reserved_components_hook`,
-which `enable_openapi()` appends to drf-spectacular's `POSTPROCESSING_HOOKS`
-after your own, once however often it is called. Anything that replaces that
+which `enable_openapi()` inserts first in drf-spectacular's
+`POSTPROCESSING_HOOKS`, before your own, once however often it is called. It
+runs first because it knows the package's own references by identity; a hook of
+yours that copies the schema (a `deepcopy`, a JSON round trip, a rebuilt
+`dict`) then sees a document it has already checked. Anything that replaces that
 list after `enable_openapi()` runs loses it, such as a `SpectacularAPIView`'s
 `custom_settings` setting `POSTPROCESSING_HOOKS`, or a reload of
 drf-spectacular's settings: name the hook in that list by its dotted path, or
@@ -126,11 +129,12 @@ call `enable_openapi()` again after the reload.
   `Unrestricted` documents none.
 - **A 401** is documented beside it where the view's first authenticator
   sends a `WWW-Authenticate` challenge, such as DRF's `BasicAuthentication` or
-  `TokenAuthentication`. Any of those checks refusing a caller nobody
-  authenticated, a kernel `PermissionCheck` or a `DRFPermissionCheck` alike, is
-  answered 401 there, under `detail` (the `NotAuthenticated` component); behind
+  `TokenAuthentication`. Any of those checks denying (answering `False` to) a
+  caller nobody authenticated, a kernel `PermissionCheck` or a
+  `DRFPermissionCheck` alike, is answered 401 there, under `detail` (the `NotAuthenticated` component); behind
   `SessionAuthentication`, which sends no challenge, or a view with no
-  authenticator, the same refusal is the 403. The 403 and the 401
+  authenticator, the same denial is the 403. A check that raises
+  `NotPermitted` itself is answered as raised, 403, with no challenge. The 403 and the 401
   bodies are the `PermissionDenied` and `NotAuthenticated` components, names
   this schema keeps as it does `ValidationErrors`: a serializer that would
   component under either (a `PermissionDeniedSerializer`, say) is refused with
