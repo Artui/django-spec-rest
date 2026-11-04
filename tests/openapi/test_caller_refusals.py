@@ -201,11 +201,9 @@ class TestTheWire:
     @pytest.mark.parametrize(
         ("key", "signed_in"),
         [
-            # A kernel check's denial, whoever asks.
+            # A kernel check's denial on a view with no authenticator.
             ("kernel", False),
             ("kernel-read", False),
-            # A kernel check behind a challenge is still the 403.
-            ("kernel-challenged", False),
             # An adapted DRF class refusing a signed-in caller.
             ("drf-basic", True),
             ("drf-basic-read", True),

@@ -11,6 +11,30 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+### Changed
+
+- **A kernel permission check asks a caller nobody authenticated to sign in.**
+  Where a `PermissionCheck` the dispatched spec declares refuses a caller the
+  request's authenticators did not recognise, the view answers DRF's
+  `NotAuthenticated`, as it already did for an adapted DRF class and as drfs
+  did: 401 with the first authenticator's `WWW-Authenticate` challenge, or 403
+  "Authentication credentials were not provided." where that authenticator
+  sends none. It was 403 with the check's message. A signed-in caller, and any
+  caller of a view with no authenticator, is still refused 403 with the
+  check's message. This holds at the class-level check and at the one asked of
+  the row the spec's own lookup finds. A service's own `NotPermitted`, and an
+  inner `dispatch` a service makes whose check refused, are not the caller's
+  to sign in for and stay 403 with their message.
+- **A `many` spec's rows are named as dispatch names them.** A
+  `get_service_kwargs` value named like a row's field pins that field in every
+  row. The row's names are now asked of any Validator the way the kernel's
+  `dispatch` asks it, handing the call's context to one whose `parameters()`
+  declares `call_context`, where only a `SerializerValidator` was handed it
+  before. A Validator naming other fields for a call than outside one had the
+  value left out of the rows.
+- **The `django-service-specs` floor is 0.24.0**, the release carrying
+  `validator_parameters` and `PermissionCheckDenied`.
+
 ## [0.4.0] — 2026-11-03
 
 ### Added

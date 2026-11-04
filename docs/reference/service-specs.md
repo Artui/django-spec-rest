@@ -40,10 +40,11 @@ handler answers it with DRF's status.
 
 ## Translating refusals
 
-An adapted DRF permission class refusing a caller nobody authenticated is
-answered as DRF's view answers it, `permission_denied` below: 401 with the first
-authenticator's challenge, or 403 where it sends none. A kernel
-`PermissionCheck`'s refusal is still the kernel's 403 with its message for now.
+A permission check the spec declares refusing a caller nobody authenticated,
+an adapted DRF class or a kernel `PermissionCheck`, is answered as DRF's view
+answers it, `permission_denied` below: 401 with the first authenticator's
+challenge, or 403 where it sends none. A service's own `NotPermitted`, and an
+inner dispatch its check refused, stay 403 with their message.
 
 ::: django_spec_rest.service_specs.permission_denied.permission_denied
 
