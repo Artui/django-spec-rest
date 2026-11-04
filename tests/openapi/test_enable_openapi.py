@@ -6,6 +6,15 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
+
+import pytest
+from drf_spectacular.settings import (
+    IMPORT_STRINGS,
+    SPECTACULAR_DEFAULTS,
+    SpectacularSettings,
+    spectacular_settings,
+)
 
 from django_spec_rest import (
     SelectorListView,
@@ -17,6 +26,7 @@ from django_spec_rest import (
     ServiceViewSet,
 )
 from django_spec_rest.openapi import enable_openapi
+from django_spec_rest.openapi.reserved_components_hook import reserved_components_hook
 
 _PROBE = """
 import sys
@@ -72,3 +82,34 @@ def test_enable_openapi_attaches_service_auto_schema_to_views() -> None:
 def test_enable_openapi_is_idempotent() -> None:
     enable_openapi()
     enable_openapi()  # second call must not raise
+
+
+def _projects_hook(result: Any, **kwargs: Any) -> Any:
+    return result
+
+
+def test_the_hook_is_installed_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Appended after the project's own hooks, and only once however often it is called.
+
+    Fails without the install's check that the hook is absent.
+    """
+    monkeypatch.setattr(spectacular_settings, "POSTPROCESSING_HOOKS", [_projects_hook])
+    enable_openapi()
+    enable_openapi()
+    assert [_projects_hook, reserved_components_hook] == spectacular_settings.POSTPROCESSING_HOOKS
+
+
+def test_a_hook_the_project_lists_is_not_added_again(monkeypatch: pytest.MonkeyPatch) -> None:
+    """drf-spectacular imports a dotted path to the very function the install compares."""
+    listed = SpectacularSettings(
+        user_settings={
+            "POSTPROCESSING_HOOKS": [
+                "django_spec_rest.openapi.reserved_components_hook.reserved_components_hook"
+            ]
+        },
+        defaults=SPECTACULAR_DEFAULTS,
+        import_strings=IMPORT_STRINGS,
+    ).POSTPROCESSING_HOOKS
+    monkeypatch.setattr(spectacular_settings, "POSTPROCESSING_HOOKS", listed)
+    enable_openapi()
+    assert [reserved_components_hook] == spectacular_settings.POSTPROCESSING_HOOKS

@@ -45,6 +45,18 @@ carries; releases up to 0.62.0 are in
 
 ### Fixed
 
+- **A project's component under a name the package keeps is refused on any
+  view.** `ValidationErrors`, `PermissionDenied` and `NotAuthenticated` are the
+  bodies of a spec's 400, 403 and 401. A serializer of the project's under one
+  of them, on a view of the project's own on drf-spectacular's `AutoSchema`
+  resolved after the package's refusal, got drf-spectacular's warning alone,
+  and its request and response were documented by the refusal's body.
+  `enable_openapi()` now appends a postprocessing hook,
+  `reserved_components_hook`, to drf-spectacular's `POSTPROCESSING_HOOKS`
+  (after the project's own, once), which refuses any reference to these names
+  the package did not write with `ImproperlyConfigured`, naming the operation,
+  component or webhook that holds it. A document in which no spec uses one of
+  the names leaves it to the project. The generated schema is unchanged.
 - **The `ServiceError` component is described for a client.** Its
   `description` in a generated schema was the serializer's docstring, written
   for the API reference, so the published document carried mkdocs

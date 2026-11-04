@@ -37,6 +37,33 @@ its specs. Set `schema = ServiceAutoSchema()` on it (from
 `"django_spec_rest.openapi.service_auto_schema.ServiceAutoSchema"`, which
 documents a view no spec drives as drf-spectacular does.
 
+## The component names this schema keeps
+
+`ValidationErrors`, `PermissionDenied` and `NotAuthenticated` are the bodies of
+a spec's 400, 403 and 401. drf-spectacular keeps the first component it
+registers under a name and answers it for every later one, with a warning only,
+so a serializer of the project's under one of these names (a
+`ValidationErrorsSerializer`, say) would be documented by the refusal's body,
+or the refusal by the serializer's fields. Generating the schema refuses it
+with `ImproperlyConfigured` instead, on a view of this package's or a view of
+the project's on drf-spectacular's own `AutoSchema`, whichever comes first:
+the message names the serializer, or the operation (`The operation POST
+/notes/`), component or webhook that refers to it. Name the serializer's
+component another way with `@extend_schema_serializer(component_name=...)`.
+
+A document in which no spec uses one of these names leaves it to the project:
+a `ValidationErrors` component of your own, beside specs that declare no
+validator, is documented as yours.
+
+The refusal on a view of the project's is a postprocessing hook,
+`django_spec_rest.openapi.reserved_components_hook.reserved_components_hook`,
+which `enable_openapi()` appends to drf-spectacular's `POSTPROCESSING_HOOKS`
+after your own, once however often it is called. Anything that replaces that
+list after `enable_openapi()` runs loses it, such as a `SpectacularAPIView`'s
+`custom_settings` setting `POSTPROCESSING_HOOKS`, or a reload of
+drf-spectacular's settings: name the hook in that list by its dotted path, or
+call `enable_openapi()` again after the reload.
+
 ## What a route documents
 
 - **The request body** is a `SerializerValidator`'s serializer, under
@@ -75,11 +102,9 @@ documents a view no spec drives as drf-spectacular does.
   `@extend_schema_serializer(component_name=...)` if it would be named
   `ValidationErrors`, since drf-spectacular keeps one schema for both and
   documents it by the 400's body (or the 400 by its fields). Generating the
-  schema refuses such a serializer with `ImproperlyConfigured` where it is
-  resolved through this package's schema, or before the 400 is. On a view of
-  the project's own, resolved through drf-spectacular's `AutoSchema` after the
-  400, drf-spectacular's warning of two components of one name is all there
-  is.
+  schema refuses such a serializer with `ImproperlyConfigured`, on any view and
+  whichever is resolved first (see
+  [the names this schema keeps](#the-component-names-this-schema-keeps)).
 - **A 422** is documented on every service spec, whether or not it has a
   validator. It is not a validator's refusal: it is a plain `ServiceError`
   raised by the service, a precondition or a provider, which no spec can rule
@@ -109,8 +134,9 @@ documents a view no spec drives as drf-spectacular does.
   bodies are the `PermissionDenied` and `NotAuthenticated` components, names
   this schema keeps as it does `ValidationErrors`: a serializer that would
   component under either (a `PermissionDeniedSerializer`, say) is refused with
-  `ImproperlyConfigured`, whichever is resolved first, until you name its
-  component another way with `@extend_schema_serializer(component_name=...)`.
+  `ImproperlyConfigured`, on any view and whichever is resolved first, until
+  you name its component another way with
+  `@extend_schema_serializer(component_name=...)`.
 - **A `filter_set`'s query parameters**, on a list operation, are the kernel's
   `filter_set_parameters`.
 
