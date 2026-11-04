@@ -121,6 +121,8 @@ class ServiceAutoSchema(AutoSchema):
       there, and 403 where the authenticator sends none (``_caller_refusals``).
     - **A FilterSet's query parameters** are the kernel's
       ``filter_set_parameters``, on a list operation only.
+    - **A viewset method answered 405 for want of a spec** is no operation:
+      the schema leaves out what ``Allow`` leaves out (``is_excluded``).
 
     A refusal a service raises is the project's to declare, with
     ``@extend_schema(responses={404: ServiceNotFoundSerializer})`` and the
@@ -133,6 +135,24 @@ class ServiceAutoSchema(AutoSchema):
     ``@extend_schema(parameters=...)`` merges over the filter parameters
     exactly as it does for a view-level FilterSet.
     """
+
+    def is_excluded(self) -> bool:
+        """Whether this method is left out, as ``Allow`` leaves it out, or as drf-spectacular does.
+
+        drf-spectacular documents every method the router's action map binds,
+        so a ``ServiceViewSet`` route serving some spec documented a create,
+        update, partial update or destroy whose handler answers 405 with no
+        spec behind it. Such a method is asked of the view's own
+        ``_refuses_without_a_spec``, the predicate its ``allowed_methods``
+        reads, never of ``allowed_methods`` itself: the generator binds no
+        handler to the view it builds, so DRF's half of that list is empty
+        there (test_spec_less_actions). A view with no such predicate, a
+        standalone view or one of DRF's, is not asked.
+        """
+        refuses = getattr(self.view, "_refuses_without_a_spec", None)
+        if refuses is not None and refuses(self.method):
+            return True
+        return super().is_excluded()
 
     def get_request_serializer(self) -> Any:
         spec = resolve_service_spec(self.view)

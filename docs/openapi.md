@@ -143,6 +143,14 @@ call `enable_openapi()` again after the reload.
   another way with `@extend_schema_serializer(component_name=...)`.
 - **A `filter_set`'s query parameters**, on a list operation, are the kernel's
   `filter_set_parameters`.
+- **A viewset method with no spec behind it** is left out where `Allow` leaves
+  it out: on a route serving some spec, a `create`, `update`,
+  `partial_update` or `destroy` the router maps but the viewset declares no
+  spec for answers 405, so it is no operation. A `ServiceViewSet` with no
+  `destroy` spec documents no `DELETE`, and one with a `partial_update` spec
+  alone documents `PATCH` and no `PUT`. The `list` and `retrieve` handlers,
+  which fall back to DRF's queryset, and a handler the viewset defines itself,
+  stay documented.
 
 `ServiceErrorSerializer`, a `detail` field and the optional `schema` object, is
 the body of that 422 and of the 400's `{"detail": ...}` alternative, under the

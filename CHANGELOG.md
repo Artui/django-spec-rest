@@ -11,6 +11,20 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+### Fixed
+
+- **The schema leaves out a viewset method answered 405 for want of a spec.**
+  drf-spectacular documented every method a router maps, so a
+  `ServiceViewSet` route serving some spec documented a `create`, `update`,
+  `partial_update` or `destroy` with no spec behind it, which answers 405 and
+  which `Allow` and OPTIONS already left out; generation also printed
+  `exception raised while getting serializer` for it. `ServiceAutoSchema`
+  now excludes such a method by the rule `Allow` reads: a viewset with no
+  `destroy` spec documents no `DELETE`, one with a `partial_update` spec alone
+  no `PUT`. The `list` and `retrieve` fallbacks, a handler the viewset defines
+  itself, a route serving no spec and the standalone views are documented as
+  before.
+
 ### Changed
 
 - **The 401 for a caller nobody authenticated is described as a check's

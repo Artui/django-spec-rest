@@ -384,9 +384,18 @@ class _ActionSpecsMixin(_ServesRaisedSchema):
         which fall back to DRF's own queryset, stay.
         """
         methods: list[str] = super().allowed_methods  # ty: ignore[unresolved-attribute]
-        if not self._kernel_specs_served():
-            return methods
-        return [method for method in methods if not self._refuses(method.lower())]
+        return [method for method in methods if not self._refuses_without_a_spec(method)]
+
+    def _refuses_without_a_spec(self, method: str) -> bool:
+        """Whether ``method`` is left out of ``Allow``: one rule, read by the schema too.
+
+        True on a route serving a spec, for a method reaching one of this
+        package's dispatchers with no spec behind it. ``ServiceAutoSchema``
+        leaves such a method out of the schema by this same predicate, because
+        drf-spectacular reads the router's action map and never ``Allow``
+        (test_spec_less_actions).
+        """
+        return bool(self._kernel_specs_served()) and self._refuses(method.lower())
 
     def _refuses(self, method: str) -> bool:
         """Whether ``method`` reaches one of this package's dispatchers with no spec to serve it."""
