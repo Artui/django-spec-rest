@@ -12,7 +12,14 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from invoices.models import Invoice
-from invoices.views import SEEDS, SEND_SPEC, UPDATE_SPEC, InvoiceViewSet
+from invoices.views import (
+    LIST_SPEC,
+    SEEDS,
+    SEND_SPEC,
+    UPDATE_SPEC,
+    InvoiceViewSet,
+    ReviewInvoiceListView,
+)
 
 
 def _basic(username: str, password: str) -> str:
@@ -372,13 +379,13 @@ class OpenAPISchemaTests(APITestCase):
         self.assertEqual(
             self._body_component("/review-invoices/", "get", "403"), "PermissionDenied"
         )
-        components = self.schema["components"]["schemas"]
-        self.assertEqual(
-            {n for n in components if n.startswith("PermissionDenied")}, {"PermissionDenied"}
-        )
-        self.assertEqual(
-            {n for n in components if n.startswith("NotAuthenticated")}, {"NotAuthenticated"}
-        )
+        # Those statuses are the view's declaration, not the spec's: the spec
+        # admits everyone, and the declared descriptions win over a spec's own.
+        responses = self.schema["paths"]["/review-invoices/"]["get"]["responses"]
+        self.assertEqual(responses["401"]["description"], "No credentials were sent.")
+        self.assertEqual(responses["403"]["description"], "The caller is not staff.")
+        self.assertNotIn("403", self.schema["paths"]["/invoices/"]["get"]["responses"])
+        self.assertIs(ReviewInvoiceListView.spec, LIST_SPEC)
 
     def test_a_viewset_of_a_mixin_before_generic_viewset_documents_its_spec_s_bodies(self) -> None:
         # ``DraftInvoiceViewSet`` sets no ``schema``: it inherits the mixin's.
@@ -471,4 +478,9 @@ class AMixinViewSetTests(APITestCase):
     def test_only_the_actions_it_composes_are_routed(self) -> None:
         self.assertEqual(
             self.client.get("/drafts/").status_code, status.HTTP_405_METHOD_NOT_ALLOWED
+        )
+        # A row that exists, so a 404 is the absent route and not a missing row.
+        row = _invoice()
+        self.assertEqual(
+            self.client.get(f"/drafts/{row.pk}/").status_code, status.HTTP_404_NOT_FOUND
         )
