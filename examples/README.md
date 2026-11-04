@@ -12,7 +12,7 @@ Django REST Framework with `django-spec-rest`, on a single resource.
 | [`invoices/services/__init__.py`](invoices/services/__init__.py) | Plain-callable services refusing with the kernel's `ServiceConflict` (409) and `ServiceError` (422), and `sending_paused`, the resolver of a registered seed |
 | [`invoices/selectors/__init__.py`](invoices/selectors/__init__.py) | Plain-callable selectors, and `InvoiceFilter`, the `django-filter` `FilterSet` the list spec reads off the query string |
 | [`invoices/serializers/__init__.py`](invoices/serializers/__init__.py) | `InvoiceInput`, whose `validate()` writes a warning into its `context`, and `InvoiceSerializer`, which renders the warning from the same dict |
-| [`invoices/views/__init__.py`](invoices/views/__init__.py) | Kernel `ServiceSpec`s and `SelectorSpec`s with a `SerializerValidator`, a `SerializerPresenter` and a `DRFPermissionCheck`; `InvoiceViewSet`, a `ServiceViewSet` serving list, retrieve, create and update from `action_specs` plus `POST /invoices/<pk>/send/` through `@service_action`, registering `SEEDS` on `pool_seeds` for the send spec's affordance condition; `SentInvoiceListView`, one selector spec on a standalone `SelectorListView`, `StaffInvoiceListView`, a standalone view with `BasicAuthentication` whose spec adapts the DRF class `IsStaff`, and `AuditInvoiceListView`, the same with a kernel `PermissionCheck`, `IsSuperuser` |
+| [`invoices/views/__init__.py`](invoices/views/__init__.py) | Kernel `ServiceSpec`s and `SelectorSpec`s with a `SerializerValidator`, a `SerializerPresenter` and a `DRFPermissionCheck`; `InvoiceViewSet`, a `ServiceViewSet` serving list, retrieve, create and update from `action_specs` plus `POST /invoices/<pk>/send/` through `@service_action`, registering `SEEDS` on `pool_seeds` for the send spec's affordance condition; `SentInvoiceListView`, one selector spec on a standalone `SelectorListView`, `StaffInvoiceListView`, a standalone view with `BasicAuthentication` whose spec adapts the DRF class `IsStaff`, `AuditInvoiceListView`, the same with a kernel `PermissionCheck`, `IsSuperuser`, `ReviewInvoiceListView`, a view whose own DRF `permission_classes` (`IsStaffMember`, no spec check) refuse the caller, its 401 and 403 declared with `@extend_schema` and the exported `NotAuthenticatedSerializer` and `PermissionDeniedSerializer`, and `DraftInvoiceViewSet`, `ServiceCreateMixin` listed before `GenericViewSet` with no `schema` of its own |
 | [`invoices/urls.py`](invoices/urls.py) | The router, and the standalone views' routes |
 | [`invoices/tests/__init__.py`](invoices/tests/__init__.py) | One test class per behaviour below |
 
@@ -29,7 +29,9 @@ The tests assert, one class each:
 | `DRFPermissionCheckTests` | One `DRFPermissionCheck([IsAuthenticated])` admitting an authenticated client over HTTP, and admitting a user and refusing an anonymous principal with the kernel's `NotPermitted` through the kernel's plain `dispatch` |
 | `AnAnonymousCallerRefusedTests` | An adapted DRF class refusing a caller nobody authenticated answering 401 with the first authenticator's `WWW-Authenticate`, and refusing a signed-in one with 403 and the class's own message |
 | `AKernelCheckRefusedTests` | A kernel `PermissionCheck` refusing a caller nobody authenticated answering 401 with the first authenticator's `WWW-Authenticate`, refusing a signed-in one with 403 and the check's `message`, and admitting a superuser |
-| `OpenAPISchemaTests` | The project generating its schema with drf-spectacular's `AutoSchema` and `enable_openapi()`: the 403 of a permission-checked route, the 401 and 403 of the routes whose authenticator sends a challenge (an adapted DRF class and a kernel check), and the 409 `update_invoice` raises, declared with `@extend_schema` and the exported `ServiceConflictSerializer`; each asserted present, never the whole response set |
+| `OpenAPISchemaTests` | The project generating its schema with drf-spectacular's `AutoSchema` and `enable_openapi()`: the 403 of a permission-checked route, the 401 and 403 of the routes whose authenticator sends a challenge (an adapted DRF class and a kernel check), and the 409 `update_invoice` raises, declared with `@extend_schema` and the exported `ServiceConflictSerializer`; each asserted present, never the whole response set; the view-level 401 and 403 of `ReviewInvoiceListView` the `PermissionDenied` and `NotAuthenticated` components with no component beside them; and `POST /drafts/` documenting `CREATE_SPEC`'s request and response bodies as the viewset's create does |
+| `AViewLevelPermissionClassRefusedTests` | `ReviewInvoiceListView` answering what it declares: 401 with the challenge for an anonymous caller, 403 with the class's `message` for a signed-in non-staff one, the rows for staff |
+| `AMixinViewSetTests` | `DraftInvoiceViewSet` serving its `create` spec over HTTP, and routing no action it does not compose |
 | `SharedSerializerContextTests` | A key the input serializer's `validate()` writes, rendered by the output serializer |
 | `ASeedTheViewSetRegistersTests` | The send spec's condition reading `sending_paused`, the seed `InvoiceViewSet.pool_seeds` registers: a 409 carrying its `code` while sending is paused, the invoice sent otherwise; the viewset mounted without it refused at `as_view()`, naming the seed |
 
@@ -74,6 +76,14 @@ curl -i http://localhost:8000/staff-invoices/
 
 # The same 401 from a kernel PermissionCheck (superuser only)
 curl -i http://localhost:8000/audited-invoices/
+
+# The same 401 from the view's own permission class (staff only)
+curl -i http://localhost:8000/review-invoices/
+
+# A create served by a mixin viewset
+curl -X POST http://localhost:8000/drafts/ \
+  -H "Content-Type: application/json" \
+  -d '{"customer": "Acme", "amount_cents": 4200}'
 ```
 
 ## Run the tests

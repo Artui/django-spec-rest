@@ -12,7 +12,14 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from invoices.models import Invoice
-from invoices.views import SEEDS, SEND_SPEC, UPDATE_SPEC, InvoiceViewSet
+from invoices.views import (
+    LIST_SPEC,
+    SEEDS,
+    SEND_SPEC,
+    UPDATE_SPEC,
+    InvoiceViewSet,
+    ReviewInvoiceListView,
+)
 
 
 def _basic(username: str, password: str) -> str:
@@ -362,6 +369,36 @@ class OpenAPISchemaTests(APITestCase):
                     self._body_component("/invoices/{id}/", method, "409"), "ServiceConflict"
                 )
 
+    def test_a_view_level_permission_class_declares_the_exported_bodies(self) -> None:
+        # The spec admits everyone, so these are the project's own declaration
+        # (``@extend_schema`` with the exported serializers), and each is the
+        # package's component rather than a new one beside it.
+        self.assertEqual(
+            self._body_component("/review-invoices/", "get", "401"), "NotAuthenticated"
+        )
+        self.assertEqual(
+            self._body_component("/review-invoices/", "get", "403"), "PermissionDenied"
+        )
+        # Those statuses are the view's declaration, not the spec's: the spec
+        # admits everyone, and the declared descriptions win over a spec's own.
+        responses = self.schema["paths"]["/review-invoices/"]["get"]["responses"]
+        self.assertEqual(responses["401"]["description"], "No credentials were sent.")
+        self.assertEqual(responses["403"]["description"], "The caller is not staff.")
+        self.assertNotIn("403", self.schema["paths"]["/invoices/"]["get"]["responses"])
+        self.assertIs(ReviewInvoiceListView.spec, LIST_SPEC)
+
+    def test_a_viewset_of_a_mixin_before_generic_viewset_documents_its_spec_s_bodies(self) -> None:
+        # ``DraftInvoiceViewSet`` sets no ``schema``: it inherits the mixin's.
+        operation = self.schema["paths"]["/drafts/"]["post"]
+        body = operation["requestBody"]["content"]["application/json"]["schema"]["$ref"]
+        self.assertEqual(body.rsplit("/", 1)[-1], "InvoiceInput")
+        self.assertEqual(self._body_component("/drafts/", "post", "201"), "Invoice")
+        self.assertIn("400", operation["responses"])
+        # The same bodies the full viewset's create documents from the same spec.
+        created = self.schema["paths"]["/invoices/"]["post"]
+        self.assertEqual(operation["requestBody"], created["requestBody"])
+        self.assertEqual(operation["responses"]["201"], created["responses"]["201"])
+
 
 class SharedSerializerContextTests(APITestCase):
     """The input serializer writes a key the output serializer reads."""
@@ -405,3 +442,45 @@ class ASeedTheViewSetRegistersTests(APITestCase):
             ImproperlyConfigured, r"InvoiceViewSet\.send: .*sending_paused"
         ):
             InvoiceViewSet.as_view({"post": "send"}, pool_seeds=DEFAULT_POOL_SEEDS)
+
+
+class AViewLevelPermissionClassRefusedTests(APITestCase):
+    """The refusals ``ReviewInvoiceListView`` declares are the ones it answers."""
+
+    def test_an_anonymous_caller_is_a_401_carrying_the_challenge(self) -> None:
+        response = self.client.get("/review-invoices/")
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(response.headers["WWW-Authenticate"], 'Basic realm="api"')
+
+    def test_a_signed_in_caller_who_is_not_staff_is_a_403_with_the_class_s_message(self) -> None:
+        User.objects.create_user("member", password="pw")
+        response = self.client.get("/review-invoices/", HTTP_AUTHORIZATION=_basic("member", "pw"))
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.data["detail"], "Only staff can open the review queue.")
+
+    def test_a_staff_caller_is_answered(self) -> None:
+        User.objects.create_user("clerk", password="pw", is_staff=True)
+        _invoice()
+        response = self.client.get("/review-invoices/", HTTP_AUTHORIZATION=_basic("clerk", "pw"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(len(response.data), 1)
+
+
+class AMixinViewSetTests(APITestCase):
+    """``DraftInvoiceViewSet``: the create mixin over ``GenericViewSet`` serves its spec."""
+
+    def test_a_create_is_validated_and_presented_by_the_spec(self) -> None:
+        response = self.client.post("/drafts/", {"customer": "Acme", "amount_cents": 4200})
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(response.data["customer"], "Acme")
+        self.assertEqual(Invoice.objects.count(), 1)
+
+    def test_only_the_actions_it_composes_are_routed(self) -> None:
+        self.assertEqual(
+            self.client.get("/drafts/").status_code, status.HTTP_405_METHOD_NOT_ALLOWED
+        )
+        # A row that exists, so a 404 is the absent route and not a missing row.
+        row = _invoice()
+        self.assertEqual(
+            self.client.get(f"/drafts/{row.pk}/").status_code, status.HTTP_404_NOT_FOUND
+        )
