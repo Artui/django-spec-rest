@@ -130,8 +130,13 @@ on to retrieve, update, OPTIONS and a call off HTTP.
 [`examples/`](examples/) is a runnable Django project on one resource, with a
 test per behaviour: a spec on a viewset and on a standalone view, a filter read
 off the query string, OPTIONS on a detail route, a refusal of each status, a
-`DRFPermissionCheck` over HTTP and through the kernel's plain `dispatch`, and a
-key one serializer writes into the shared context that another renders.
+`DRFPermissionCheck` over HTTP and through the kernel's plain `dispatch`, a
+caller nobody authenticated refused 401 with the first authenticator's
+`WWW-Authenticate` (by an adapted DRF class and by a kernel `PermissionCheck`,
+each answering a signed-in caller 403), the generated OpenAPI schema carrying
+those 401 and 403 responses and the 409 a service raises, and a key one
+serializer writes into the shared context that another renders. `make examples`
+runs the whole suite, schema tests included.
 
 ```bash
 cd examples

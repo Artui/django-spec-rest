@@ -11,6 +11,26 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+## [0.6.1] — 2026-11-04
+
+### Fixed
+
+- **A `PATCH` request of the package's 403 or 401 body no longer lets a
+  project's serializer of the same name pass.** Under drf-spectacular's
+  default `COMPONENT_SPLIT_PATCH`, `PermissionDeniedSerializer` or
+  `NotAuthenticatedSerializer` declared as a `PATCH` request is documented as
+  its partial twin, `PatchedPermissionDenied` or `PatchedNotAuthenticated`,
+  but it also registered the reserved `PermissionDenied` or
+  `NotAuthenticated` component, unreferenced, and left it marked as the
+  package's for the next class resolved under that name. A project's
+  serializer of the name resolved after it was documented by the package's
+  body, with only drf-spectacular's warning of two components of one name,
+  rather than refused. The partial twin is now resolved as the
+  `COMPONENT_SPLIT_REQUEST` twin is: the package registers nothing under its
+  reserved name for it, so the project's serializer is refused wherever the
+  package's body is documented under the name (by a package view, or by a
+  response declaring it) and is the project's own component otherwise.
+
 ## [0.6.0] — 2026-11-04
 
 ### Added
@@ -480,7 +500,8 @@ lists each with what a project rewrites.
 - **The package is no longer a Django app.** It has no models, migrations,
   templates, static files or URLs, so it needs no `INSTALLED_APPS` entry.
 
-[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/Artui/django-spec-rest/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/Artui/django-spec-rest/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Artui/django-spec-rest/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Artui/django-spec-rest/compare/v0.3.1...v0.4.0
