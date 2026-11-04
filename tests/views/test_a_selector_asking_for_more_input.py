@@ -8,9 +8,10 @@ back as raised. The standalone selector views and ``@selector_action`` on DRF's
 own viewsets reached no restore and served ``"default": "False"``; each case reads
 the rendered bytes, so a string leaf fails it.
 
-The mutation side, and the handler contract the restore keeps, are
-``tests/views/test_additional_input_required_over_http.py`` and
-``tests/viewsets/decorators/test_service_action.py``.
+The mutation side is ``tests/views/test_additional_input_required_over_http.py``.
+The handler contract the restore keeps (a declining handler, a ``handle_exception``
+override, the viewset's own ``get_exception_handler``) runs through both decorators
+in ``tests/viewsets/decorators/test_service_action.py``.
 """
 
 from __future__ import annotations

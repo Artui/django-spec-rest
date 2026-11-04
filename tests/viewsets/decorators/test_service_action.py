@@ -33,7 +33,13 @@ from rest_framework.test import APIRequestFactory
 from rest_framework.views import exception_handler
 from rest_framework.viewsets import GenericViewSet, ViewSet
 
-from django_spec_rest import ActionSerializerResolver, ServiceViewSet, service_action
+from django_spec_rest import (
+    ActionSerializerResolver,
+    SelectorViewSet,
+    ServiceViewSet,
+    selector_action,
+    service_action,
+)
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from django_spec_rest.viewsets.utils import resolve_action_spec
@@ -317,16 +323,44 @@ def _purging(*bases: type) -> type:
     return type("_Purging", bases, {"queryset": Author.objects.all(), "purge": purge})
 
 
-# Every way a ``@service_action`` can sit on a viewset, keyed by its bases: DRF's
-# own two, and this package's bases on either side of ``GenericViewSet``, where
-# ``APIView.handle_exception`` shadows the package's restore.
-_BASES: dict[str, tuple[type, ...]] = {
-    "GenericViewSet": (GenericViewSet,),
-    "ViewSet": (ViewSet,),
-    "ServiceViewSet": (ServiceViewSet,),
-    "ActionSerializerResolver, GenericViewSet": (ActionSerializerResolver, GenericViewSet),
-    "GenericViewSet, ActionSerializerResolver": (GenericViewSet, ActionSerializerResolver),
+def _picking(*bases: type) -> type:
+    @selector_action(SelectorSpec(kind=SelectorKind.LIST, selector=_purge, permissions=_OPEN))
+    def purge(self: Any, request: Any) -> None:
+        """Stubbed: the decorator serves the spec."""
+
+    return type("_Picking", bases, {"queryset": Author.objects.all(), "purge": purge})
+
+
+# Every way each decorator can sit on a viewset, keyed by its bases: DRF's own
+# two, and this package's bases on either side of ``GenericViewSet``, where
+# ``APIView.handle_exception`` shadows the package's restore. The handler
+# contract below is the same for both, because ``restore_schema_when_handled``
+# serves both.
+_BASES: dict[str, dict[str, tuple[type, ...]]] = {
+    "service_action": {
+        "GenericViewSet": (GenericViewSet,),
+        "ViewSet": (ViewSet,),
+        "ServiceViewSet": (ServiceViewSet,),
+        "ActionSerializerResolver, GenericViewSet": (ActionSerializerResolver, GenericViewSet),
+        "GenericViewSet, ActionSerializerResolver": (GenericViewSet, ActionSerializerResolver),
+    },
+    "selector_action": {
+        "GenericViewSet": (GenericViewSet,),
+        "ViewSet": (ViewSet,),
+        "SelectorViewSet": (SelectorViewSet,),
+        "ActionSerializerResolver, GenericViewSet": (ActionSerializerResolver, GenericViewSet),
+        "GenericViewSet, ActionSerializerResolver": (GenericViewSet, ActionSerializerResolver),
+    },
 }
+_BUILDERS = {"service_action": _purging, "selector_action": _picking}
+_VERBS = {"service_action": "post", "selector_action": "get"}
+
+# One id per (decorator, bases) pair, so a failure names both.
+_ROUTES = [
+    pytest.param(decorator, bases, id=f"{decorator}-{bases}")
+    for decorator, by_bases in _BASES.items()
+    for bases in by_bases
+]
 
 _seen: list[Exception] = []
 
@@ -348,22 +382,28 @@ def _handled_by(name: str) -> Any:
     )
 
 
-def _purge_through(viewset: type) -> Any:
-    response = viewset.as_view({"post": "purge"})(factory.post("/", {}, format="json"))
+def _purging_through(decorator: str, bases: str, *mixins: type) -> Any:
+    """The rendered answer of the decorator's action asking for more input."""
+    viewset = _BUILDERS[decorator](*mixins, *_BASES[decorator][bases])
+    verb = _VERBS[decorator]
+    request = factory.post("/", {}, format="json") if verb == "post" else factory.get("/")
+    response = viewset.as_view({verb: "purge"})(request)
     response.render()
     return response
 
 
-@pytest.mark.parametrize("bases", list(_BASES))
+@pytest.mark.parametrize("bases", list(_BASES["service_action"]))
 def test_service_action_serves_the_schema_as_raised_on_any_viewset(bases: str) -> None:
     """Read off the rendered bytes: the boolean default arrives as ``false`` and
     the bound as ``3``. The configured handler runs once and sees DRF's
     ``ErrorDetail`` leaves. ``GenericViewSet``, ``ViewSet`` and
     ``GenericViewSet, ActionSerializerResolver`` reach no restore of the
-    package's bases, so they serve the strings without the decorator's own."""
+    package's bases, so they serve the strings without the decorator's own.
+    ``@selector_action``'s twin is in
+    ``tests/views/test_a_selector_asking_for_more_input.py``."""
     _seen.clear()
     with _handled_by("_recording"):
-        response = _purge_through(_purging(*_BASES[bases]))
+        response = _purging_through("service_action", bases)
 
     assert response.status_code == 422
     assert json.loads(response.content) == {"detail": "Confirm the purge.", "schema": _PURGE_SCHEMA}
@@ -373,12 +413,12 @@ def test_service_action_serves_the_schema_as_raised_on_any_viewset(bases: str) -
     assert leaf == "False"
 
 
-@pytest.mark.parametrize("bases", list(_BASES))
-def test_a_handler_declining_the_error_runs_once_on_any_viewset(bases: str) -> None:
+@pytest.mark.parametrize(("decorator", "bases"), _ROUTES)
+def test_a_handler_declining_the_error_runs_once_on_any_viewset(decorator: str, bases: str) -> None:
     """A handler answering ``None`` declines the error, so DRF raises it, once."""
     _seen.clear()
     with _handled_by("_declining"), pytest.raises(Exception, match="Confirm the purge."):
-        _purge_through(_purging(*_BASES[bases]))
+        _purging_through(decorator, bases)
 
     assert len(_seen) == 1
 
@@ -392,11 +432,13 @@ class _Redacting:
         return response
 
 
-@pytest.mark.parametrize("bases", list(_BASES))
-def test_an_overriding_handle_exception_has_the_last_word_on_every_route(bases: str) -> None:
+@pytest.mark.parametrize(("decorator", "bases"), _ROUTES)
+def test_an_overriding_handle_exception_has_the_last_word_on_every_route(
+    decorator: str, bases: str
+) -> None:
     """The restore runs inside the handler, beneath any ``handle_exception``
     override, so what the override writes is what the client gets."""
-    response = _purge_through(_purging(_Redacting, *_BASES[bases]))
+    response = _purging_through(decorator, bases, _Redacting)
 
     assert response.status_code == 422
     assert json.loads(response.content) == {
@@ -420,11 +462,13 @@ class _OwnHandler:
         return _signing
 
 
-@pytest.mark.parametrize("bases", list(_BASES))
-def test_a_viewsets_own_exception_handler_still_answers_on_any_viewset(bases: str) -> None:
+@pytest.mark.parametrize(("decorator", "bases"), _ROUTES)
+def test_a_viewsets_own_exception_handler_still_answers_on_any_viewset(
+    decorator: str, bases: str
+) -> None:
     """The handler is asked through the view's own ``get_exception_handler``, as
     DRF asks it, and the schema is restored on what that handler built."""
-    response = _purge_through(_purging(_OwnHandler, *_BASES[bases]))
+    response = _purging_through(decorator, bases, _OwnHandler)
 
     assert response.status_code == 422
     assert json.loads(response.content) == {
