@@ -1079,14 +1079,22 @@ DRF's <code>get_permissions</code> does:</p>
 </ul>
 <p>Each refusal is the kernel's <code>NotPermitted</code> as well, so a caller of the
 kernel's <code>dispatch</code> catches it by the kernel's class.</p>
-<p>A kernel <code>PermissionCheck</code> on the spec is not decided by that rule for now: its
-<code>NotPermitted</code> is the kernel's 403 with its <code>message</code>, even to a caller nobody
-authenticated. The kernel raises the same bare <code>NotPermitted</code> for a permission
-check's denial, for a service's own and for an inner <code>dispatch</code> its check
-refused, so the edge cannot tell the first apart; asking every one of them to
-sign in would answer an author's "Archived invoices are read-only." 401. Only
-an adapted DRF class refusing an anonymous caller is answered 401 with the
-challenge.</p>
+<p>A kernel <code>PermissionCheck</code> on the spec is decided by the same rule over HTTP.
+The kernel marks a declared check's denial as <code>PermissionCheckDenied</code>, at the
+class-level check and at the one asked of the row the spec's lookup finds, so
+a caller nobody authenticated is asked to (401 with the challenge, or 403
+"Authentication credentials were not provided." where the first authenticator
+sends none), and anyone else is refused 403 with the check's <code>message</code>. The
+rule is for a check that answers <code>False</code>. A check that raises <code>NotPermitted</code>
+itself is answered as raised: 403 with that message and no
+<code>WWW-Authenticate</code>, as DRF answers a permission class that raises
+<code>PermissionDenied</code>.</p>
+<p>Only the spec the view dispatched is decided so. A service's own
+<code>NotPermitted</code>, such as an author's "Archived invoices are read-only.", is
+never a request to sign in, and nor is an inner <code>dispatch</code> a service makes
+whose check refused: the caller reached the view's spec, so that refusal is
+the service's, 403 with its message, though the kernel marks it as it marks
+the outer check's denial.</p>
 <h2 id="off-http">Off HTTP<a class="headerlink" href="#off-http" title="Permanent link">&para;</a></h2>
 <p>The same check runs when the spec is dispatched with no request. It builds an
 offline request and view for the principal (<code>build_offline_context</code>), so a

@@ -931,6 +931,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#django_spec_rest.openapi.reserved_components_hook.reserved_components_hook" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        reserved_components_hook
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#django_spec_rest.openapi.service_error_serializer.ServiceErrorSerializer" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1043,6 +1054,17 @@
     <span class="md-ellipsis">
       
         ServiceAutoSchema
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_rest.openapi.reserved_components_hook.reserved_components_hook" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        reserved_components_hook
       
     </span>
   </a>
@@ -1163,6 +1185,14 @@ dependency: importing
 this call brings in the schema-generator code.</p>
 <p>User subclasses inherit <code>schema = ServiceAutoSchema()</code> automatically;
 classes that set <code>schema = ...</code> explicitly keep their own choice.</p>
+<p>It also inserts
+<a class="autorefs autorefs-internal" title="reserved_components_hook" href="#django_spec_rest.openapi.reserved_components_hook.reserved_components_hook"><code>reserved_components_hook</code></a>
+first in drf-spectacular's <code>POSTPROCESSING_HOOKS</code>, before the project's
+own hooks and once however often it is called, so a component of the
+project's under a name the package documents its refusals by is refused
+on any view. It recognises the package's own references by identity, so a
+project hook that copies the schema (<code>copy.deepcopy</code>, a JSON round
+trip, a rebuilt <code>dict</code>) must run after it, not before.</p>
 
 
     </div>
@@ -1228,11 +1258,9 @@ action mixins, and <code>@service_action</code> / <code>@selector_action</code>:
 <li><strong>A</strong> <code>403</code> is documented wherever the spec declares a permission
   check, any check but <code>Unrestricted</code>: a check's denial and a principal
   who cannot act are both answered 403 with a <code>detail</code>. A <code>401</code> beside
-  it where one of those checks is a <code>DRFPermissionCheck</code>, at any depth
-  of <code>AllOf</code> and <code>AnyOf</code>, and the view's first
-  authenticator sends a <code>WWW-Authenticate</code>: DRF answers such a check's
-  refusal of a caller nobody authenticated 401 there, and 403 where the
-  authenticator sends none (<code>_caller_refusals</code>).</li>
+  it where the view's first authenticator sends a <code>WWW-Authenticate</code>:
+  DRF answers such a check's denial of a caller nobody authenticated 401
+  there, and 403 where the authenticator sends none (<code>_caller_refusals</code>).</li>
 <li><strong>A FilterSet's query parameters</strong> are the kernel's
   <code>filter_set_parameters</code>, on a list operation only.</li>
 </ul>
@@ -1276,6 +1304,63 @@ exactly as it does for a view-level FilterSet.</p>
 
 </div>
 
+<div class="doc doc-object doc-function">
+
+
+<h2 id="django_spec_rest.openapi.reserved_components_hook.reserved_components_hook" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">reserved_components_hook</span>
+
+
+<a href="#django_spec_rest.openapi.reserved_components_hook.reserved_components_hook" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">reserved_components_hook</span><span class="p">(</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">result</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="n">generator</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">request</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">public</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Refuse a <code>$ref</code> to a component name the package reserves that the package did not write.</p>
+<p><code>ValidationErrors</code>, <code>PermissionDenied</code> and <code>NotAuthenticated</code> document
+the bodies of a spec's 400, 403 and 401. drf-spectacular keeps the first
+component registered under a name and answers it for every later one, with
+a warning only, so a project's serializer of the same name on a view this
+package does not document (drf-spectacular's own <code>AutoSchema</code>) would be
+documented by the package's body. Where the package registered one of these
+names, every <code>$ref</code> to it outside the places the package rendered it raises
+<code>ImproperlyConfigured</code>, naming the operation, component or webhook that
+holds it.</p>
+<p>A name the package never registered is a project's to use
+(test_a_project_s_own_reserved_name_is_documented_without_the_package_s).</p>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="ImproperlyConfigured">ImproperlyConfigured</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>a reserved name documents something of the
+project's.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+    </div>
+
+</div>
+
 <div class="doc doc-object doc-class">
 
 
@@ -1293,13 +1378,7 @@ exactly as it does for a view-level FilterSet.</p>
 
 
 
-        <p><code>detail</code> and the optional <code>schema</code> serializer that mirrors <code>_ServiceAPIException</code>.</p>
-<p>Used by
-<a class="autorefs autorefs-internal" title="ServiceAutoSchema" href="#django_spec_rest.openapi.service_auto_schema.ServiceAutoSchema"><code>ServiceAutoSchema</code></a>
-to attach a <code>422</code> response to every spec-driven mutation and selector in the generated OpenAPI
-document, and as the <code>detail</code> alternative of a Validator's <code>400</code> (a body that is
-no object). It is <em>only</em> used for schema generation; runtime bodies are produced
-by DRF's exception handler.</p>
+        <p>The service could not complete the call. Why is under <code>detail</code>, and the values still needed under <code>schema</code> where it asks for more input.</p>
 
 
 

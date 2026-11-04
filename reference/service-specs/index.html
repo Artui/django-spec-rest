@@ -2952,10 +2952,12 @@ without it.</p>
     </div>
 
 </div><h2 id="translating-refusals">Translating refusals<a class="headerlink" href="#translating-refusals" title="Permanent link">&para;</a></h2>
-<p>An adapted DRF permission class refusing a caller nobody authenticated is
-answered as DRF's view answers it, <code>permission_denied</code> below: 401 with the first
-authenticator's challenge, or 403 where it sends none. A kernel
-<code>PermissionCheck</code>'s refusal is still the kernel's 403 with its message for now.</p>
+<p>A permission check the spec declares denying a caller nobody authenticated,
+an adapted DRF class or a kernel <code>PermissionCheck</code> answering <code>False</code>, is
+answered as DRF's view answers it, <code>permission_denied</code> below: 401 with the
+first authenticator's challenge, or 403 where it sends none. A service's own
+<code>NotPermitted</code>, an inner dispatch its check refused, and a check that raises
+<code>NotPermitted</code> itself, stay 403 with their message and no challenge.</p>
 
 
 <div class="doc doc-object doc-function">
@@ -2982,13 +2984,13 @@ no header. Any other, a request with no authenticator at all among them, is
 <a class="autorefs autorefs-internal" title="DRFNotPermitted" href="#django_spec_rest.service_specs.drf_not_permitted.DRFNotPermitted"><code>DRFNotPermitted</code></a>
 with <code>message</code> and <code>code</code>, 403. So a permission's <code>message</code> reaches
 only a caller who is signed in or could not have been, as in DRF.</p>
-<p>The rule an adapted DRF class is answered by:
+<p>The rule every permission check the spec declares is answered by:
 <a class="autorefs autorefs-internal" title="DRFPermissionCheck" href="#django_spec_rest.service_specs.drf_permission_check.DRFPermissionCheck"><code>DRFPermissionCheck</code></a>
-raises it for a class answering <code>False</code>. A kernel <code>PermissionCheck</code>'s
-<code>NotPermitted</code> is not decided by it for now: the kernel raises the same
-bare class for a permission check's denial, a service's own and a refused
-inner dispatch's, so the kernel route answers all of them 403 with their
-message, and a caller nobody authenticated is not asked to sign in by one
+raises it for a class answering <code>False</code>, and the kernel route answers
+with it a kernel <code>PermissionCheck</code>'s denial, which the kernel marks as
+<code>PermissionCheckDenied</code>, where the denied spec is the one the route
+dispatched. A service's own <code>NotPermitted</code>, and a refused inner
+dispatch's, are not decided by it: they stay 403 with their message
 (<code>tests/views/test_an_anonymous_caller_refused.py</code>). An offline request
 has no authenticator, so off HTTP a refusal is always the denial.</p>
 <p>A request that is not DRF's has no <code>authenticators</code> and is read as having

@@ -1437,7 +1437,7 @@ project's <code>EXCEPTION_HANDLER</code>, answers it as it answers DRF's own:</p
 </tr>
 <tr>
 <td><code>NotPermitted</code> (a permission check refusing)</td>
-<td>403 with the check's message. An adapted DRF permission class refusing a caller the request's authenticators did not recognise is DRF's <code>NotAuthenticated</code> instead, as a DRF view answers it: 401 with the first authenticator's <code>WWW-Authenticate</code>, or 403 where it sends none. A kernel <code>PermissionCheck</code>'s refusal is still the kernel's 403 for now</td>
+<td>403 with the check's message. A permission check the spec declares, a kernel <code>PermissionCheck</code> or an adapted DRF class, answering <code>False</code> to a caller the request's authenticators did not recognise is DRF's <code>NotAuthenticated</code> instead, as a DRF view answers it: 401 with the first authenticator's <code>WWW-Authenticate</code>, or 403 where it sends none. A service's own <code>NotPermitted</code>, an inner <code>dispatch</code> its check refused, and a check that raises <code>NotPermitted</code> itself rather than answering <code>False</code>, stay 403 with their message</td>
 <td><code>{"detail": ...}</code></td>
 </tr>
 <tr>
