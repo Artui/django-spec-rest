@@ -19,24 +19,20 @@ from django.urls import path
 from django_service_specs import ServiceSpec, Unrestricted
 from drf_spectacular.generators import SchemaGenerator
 from drf_spectacular.utils import OpenApiResponse, extend_schema
-from rest_framework import serializers
 from rest_framework.authentication import BasicAuthentication
 from rest_framework.permissions import IsAdminUser
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from django_spec_rest import ServiceCreateView
-from django_spec_rest.openapi import enable_openapi
-
-
-class RefusalSerializer(serializers.Serializer):
-    """The caller was refused. Why is under `detail`."""
-
-    detail = serializers.CharField()
-
+from django_spec_rest.openapi import (
+    NotAuthenticatedSerializer,
+    PermissionDeniedSerializer,
+    enable_openapi,
+)
 
 _DECLARED = {
-    401: OpenApiResponse(RefusalSerializer, description="No credentials were sent."),
-    403: OpenApiResponse(RefusalSerializer, description="The caller is not staff."),
+    401: OpenApiResponse(NotAuthenticatedSerializer, description="No credentials were sent."),
+    403: OpenApiResponse(PermissionDeniedSerializer, description="The caller is not staff."),
 }
 
 
@@ -90,6 +86,9 @@ def test_the_declared_refusals_document_what_the_view_sends(user: Any, status: i
     response.render()
     assert response.status_code == status
     documented = responses[str(status)]["content"]["application/json"]["schema"]
+    # The package's own components, which the recipe declares.
+    component = "NotAuthenticated" if status == 401 else "PermissionDenied"
+    assert documented == {"$ref": f"#/components/schemas/{component}"}
     jsonschema.validate(
         json.loads(response.content), {**documented, "components": schema["components"]}
     )

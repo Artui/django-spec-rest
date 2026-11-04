@@ -40,9 +40,9 @@ def reserved_components_hook(
             project's.
     """
     registry = generator.registry
-    # Held for the walk, so no other dict can take the id of one of these.
-    rendered = placed(registry)
-    skip = {id(schema) for schema in rendered}
+    # Held for the walk, so no other string can take the id of one of these.
+    written = placed(registry)
+    skip = {id(ref) for ref in written}
     reserved = [name for name in RESERVED_COMPONENTS if held_by_package(registry, name)]
     for path, operations in result.get("paths", {}).items():
         for method, operation in operations.items():
@@ -58,20 +58,22 @@ def reserved_components_hook(
 def _refuse_foreign(
     node: Any, where: str, reserved: Collection[str], skip: set[int], own: str | None = None
 ) -> None:
-    """Raise for a ``$ref`` under ``node`` to a ``reserved`` name, except under a schema in ``skip``.
+    """Raise for a ``$ref`` under ``node`` to a ``reserved`` name, unless its string is in ``skip``.
 
-    ``own`` is the component ``node`` is, whose ``$ref`` to itself is its own
+    ``skip`` holds the ids of the ``$ref`` strings the package wrote. ``own``
+    is the component ``node`` is, whose ``$ref`` to itself is its own
     recursion (``ValidationErrors`` nests itself).
     """
     # Each conjunct below, dropped, fails test_reserved_components_hook's
-    # test_the_package_s_own_responses_pass: the skip of what the package
-    # rendered, the ``$ref`` match (its 201 refers to ``Author``) and the
-    # skip of a component's reference to itself.
-    if id(node) in skip:
-        return
+    # test_the_package_s_own_responses_pass: the ``$ref`` match (its 201
+    # refers to ``Author``), the skip of a component's reference to itself
+    # and the skip of what the package wrote. That skip answering every
+    # ``$ref`` to a name the package holds, rather than the strings it wrote,
+    # fails test_a_raw_reserved_reference_on_a_package_view_is_refused.
     if isinstance(node, dict):
+        ref = node.get("$ref")
         for name in reserved:
-            if node.get("$ref") == f"#/components/schemas/{name}" and name != own:
+            if ref == f"#/components/schemas/{name}" and name != own and id(ref) not in skip:
                 raise name_taken(where, name)
         children = node.values()
     elif isinstance(node, list):

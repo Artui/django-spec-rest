@@ -46,6 +46,8 @@ from django_spec_rest.openapi._resolve import (
     resolve_selector_spec,
     resolve_service_spec,
 )
+from django_spec_rest.openapi.not_authenticated_serializer import NotAuthenticatedSerializer
+from django_spec_rest.openapi.permission_denied_serializer import PermissionDeniedSerializer
 from django_spec_rest.openapi.service_error_serializer import (
     ServiceErrorSerializer,
 )
@@ -55,8 +57,6 @@ from django_spec_rest.openapi.service_validation_error_serializer import (
 from django_spec_rest.openapi.utils import (
     RESERVED_COMPONENTS,
     VALIDATION_ERRORS,
-    NotAuthenticatedBody,
-    PermissionDeniedBody,
     ValidationErrorsIdentity,
     default_status,
     is_a,
@@ -121,6 +121,8 @@ class ServiceAutoSchema(AutoSchema):
       there, and 403 where the authenticator sends none (``_caller_refusals``).
     - **A FilterSet's query parameters** are the kernel's
       ``filter_set_parameters``, on a list operation only.
+    - **A viewset method answered 405 for want of a spec** is no operation:
+      the schema leaves out what ``Allow`` leaves out (``is_excluded``).
 
     A refusal a service raises is the project's to declare, with
     ``@extend_schema(responses={404: ServiceNotFoundSerializer})`` and the
@@ -133,6 +135,24 @@ class ServiceAutoSchema(AutoSchema):
     ``@extend_schema(parameters=...)`` merges over the filter parameters
     exactly as it does for a view-level FilterSet.
     """
+
+    def is_excluded(self) -> bool:
+        """Whether this method is left out, as ``Allow`` leaves it out, or as drf-spectacular does.
+
+        drf-spectacular documents every method the router's action map binds,
+        so a ``ServiceViewSet`` route serving some spec documented a create,
+        update, partial update or destroy whose handler answers 405 with no
+        spec behind it. Such a method is asked of the view's own
+        ``_refuses_without_a_spec``, the predicate its ``allowed_methods``
+        reads, never of ``allowed_methods`` itself: the generator binds no
+        handler to the view it builds, so DRF's half of that list is empty
+        there (test_spec_less_actions). A view with no such predicate, a
+        standalone view or one of DRF's, is not asked.
+        """
+        refuses = getattr(self.view, "_refuses_without_a_spec", None)
+        if refuses is not None and refuses(self.method):
+            return True
+        return super().is_excluded()
 
     def get_request_serializer(self) -> Any:
         spec = resolve_service_spec(self.view)
@@ -400,7 +420,7 @@ class ServiceAutoSchema(AutoSchema):
         return responses
 
     def _caller_refusals(self, spec: KernelServiceSpec | KernelSelectorSpec) -> dict[int, Any]:
-        """The ``403`` a spec's permission checks are refused with, and the ``401`` where DRF asks the caller to sign in.
+        """The ``403`` a spec's checks are refused with, and the ``401`` where DRF asks to sign in.
 
         A spec whose checks are all ``Unrestricted`` refuses nobody, and one
         declaring none is refused by the kernel as misconfigured, so neither
@@ -411,11 +431,11 @@ class ServiceAutoSchema(AutoSchema):
 
         Any such check denying (answering ``False`` to) a caller the request's
         authenticators did not recognise is ``DRFNotAuthenticated``, whether it
-        is a kernel ``PermissionCheck`` or an adapted ``DRFPermissionCheck``, at any depth
-        of ``AllOf`` and ``AnyOf``. DRF answers that 401 where the view's first
-        authenticator gives a ``WWW-Authenticate`` and 403 where it gives none,
-        so the 401 is documented where the authenticator gives one, read from
-        the view by the method DRF's ``handle_exception`` asks
+        is a kernel ``PermissionCheck`` or an adapted ``DRFPermissionCheck``,
+        at any depth of ``AllOf`` and ``AnyOf``. DRF answers that 401 where the
+        view's first authenticator gives a ``WWW-Authenticate`` and 403 where
+        it gives none, so the 401 is documented where the authenticator gives
+        one, read from the view by the method DRF's ``handle_exception`` asks
         (test_a_check_behind_a_challenge_documents_a_401,
         test_a_check_behind_a_session_documents_no_401,
         test_a_check_behind_no_authenticator_documents_no_401). A check that
@@ -428,14 +448,14 @@ class ServiceAutoSchema(AutoSchema):
         if all(isinstance(check, Unrestricted) for check in checks):
             return {}
         refusals: dict[int, Any] = {
-            403: _PackageResponse(
-                response=PermissionDeniedBody,
+            403: OpenApiResponse(
+                response=PermissionDeniedSerializer,
                 description="The caller may not run this operation.",
             )
         }
         if self.view.get_authenticate_header(self.view.request):
-            refusals[401] = _PackageResponse(
-                response=NotAuthenticatedBody,
+            refusals[401] = OpenApiResponse(
+                response=NotAuthenticatedSerializer,
                 description=(
                     "No caller was authenticated. The WWW-Authenticate header names "
                     "the scheme to authenticate with."
@@ -480,8 +500,12 @@ class ServiceAutoSchema(AutoSchema):
             if holder is not ValidationErrorsIdentity:
                 raise name_taken(serializer_named(holder), VALIDATION_ERRORS)
         detail = self.resolve_serializer(ServiceErrorSerializer, "response")
-        return _PackageResponse(
-            response={"anyOf": [component.ref, detail.ref, _MESSAGES]},
+        # Recorded as the package's, so ``reserved_components_hook`` lets it
+        # stand; a ``$ref`` of the name a project writes itself, even on a
+        # package view, is refused
+        # (test_a_raw_reserved_reference_on_a_package_view_is_refused).
+        return OpenApiResponse(
+            response={"anyOf": [place(self.registry, component.ref), detail.ref, _MESSAGES]},
         )
 
     def resolve_serializer(self, serializer: Any, *args: Any, **kwargs: Any) -> Any:
@@ -502,17 +526,6 @@ class ServiceAutoSchema(AutoSchema):
                     serializer_named(resolved.object if asked else serializer), resolved.name
                 )
         return resolved
-
-    def _get_response_for_code(self, serializer: Any, *args: Any, **kwargs: Any) -> Any:
-        # Passed through whole, as ``resolve_serializer`` is.
-        rendered = super()._get_response_for_code(serializer, *args, **kwargs)
-        # The package's own 400, 403 and 401, recorded as the places a
-        # reserved ``$ref`` may sit, which ``reserved_components_hook`` asks
-        # of the generated document (test_a_reserved_name_is_refused_on_drf_spectacular_s_schema).
-        if isinstance(serializer, _PackageResponse):
-            for media in rendered.get("content", {}).values():
-                place(self.registry, media["schema"])
-        return rendered
 
     def _kernel_rows(self, spec: KernelSelectorSpec, presenter: Presenter) -> Any:
         """A kernel selector spec's body: one row, or every row for a ``LIST``.
@@ -598,10 +611,6 @@ def _without(schema: dict[str, Any], names: Iterable[str]) -> dict[str, Any]:
     if required:
         kept["required"] = required
     return kept
-
-
-class _PackageResponse(OpenApiResponse):
-    """A response this schema documents a reserved component in, told apart from a project's."""
 
 
 _MESSAGES: dict[str, Any] = {"type": "array", "items": {"type": "string"}}

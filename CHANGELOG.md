@@ -11,6 +11,81 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-11-04
+
+### Added
+
+- **The 403 and 401 bodies are exported, for a project to declare.**
+  `PermissionDeniedSerializer` and `NotAuthenticatedSerializer`, from
+  `django_spec_rest.openapi`, are the `PermissionDenied` and
+  `NotAuthenticated` components a spec's own refusals document. Declared with
+  `@extend_schema(responses=...)` on any view, one of the package's or a
+  project's own on drf-spectacular's `AutoSchema`, either is the package's
+  component, in whichever order the views are resolved; before, the only
+  bodies were private, and declaring one on a project's view beside a package
+  view failed generation with `ImproperlyConfigured`. A project's serializer
+  under either name is still refused, now also where the project's comes
+  first and the package's body is declared on drf-spectacular's own schema.
+  The OpenAPI guide's "Refusals your project configures" declares them in
+  place of a serializer of the project's.
+- **`enable_openapi()` sets the package's schema on the action mixins.**
+  `ServiceCreateMixin`, `ServiceUpdateMixin`, `ServiceDestroyMixin`,
+  `SelectorListMixin` and `SelectorRetrieveMixin` now carry
+  `ServiceAutoSchema` as the views and `ServiceViewSet` do, so a project's
+  `GenericViewSet` composed of them documents its specs with no `schema` of
+  its own, where a mixin comes before `GenericViewSet` in its bases. With
+  `GenericViewSet` first, DRF's own `schema` wins, and a `@service_action` on
+  a bare `GenericViewSet` has no mixin: both still set `schema` or
+  `DEFAULT_SCHEMA_CLASS`, as the OpenAPI guide says.
+
+### Changed
+
+- **The action mixins' schema wins over a project's `DEFAULT_SCHEMA_CLASS`.**
+  A `GenericViewSet` composed of `ServiceCreateMixin`, `ServiceUpdateMixin`,
+  `ServiceDestroyMixin`, `SelectorListMixin` or `SelectorRetrieveMixin`, with
+  a mixin before `GenericViewSet`, took the project's `DEFAULT_SCHEMA_CLASS`
+  before; now that `enable_openapi()` sets `ServiceAutoSchema` on the mixins
+  it takes that, even where the default is a subclass of it. Setting
+  `schema = ProjectSchema()` on the viewset keeps the subclass.
+
+- **The OpenAPI guide says a `$ref` written to a reserved name is refused on
+  any view.** `@extend_schema(responses={403: {"$ref":
+  "#/components/schemas/PermissionDenied"}})` on a package view is refused
+  with `ImproperlyConfigured`, as on a project's view: the project asserts a
+  name whose body it does not own. Generation answered so before; a test now
+  holds it.
+
+- **The anonymous caller's 401 is described as a check's denial
+  throughout.** The test docstrings and comments that said a check
+  *refusing* a caller nobody authenticated now say *denying* (answering
+  `False` to) it, where a check raising `NotPermitted` itself is answered as
+  raised, 403; the OpenAPI guide's 401 bullet and the docstrings beside it
+  are reflowed, and a garbled clause in that bullet repaired. Wording only;
+  nothing answers differently.
+
+### Fixed
+
+- **A paginated list's 403 and 401 stay the one refusal under
+  `ENABLE_LIST_MECHANICS_ON_NON_2XX`.** With that drf-spectacular setting on,
+  a paginated `SelectorListView` with checks documented its 403 as
+  `PaginatedPermissionDeniedList`, and the pagination naming left the
+  package's `PermissionDenied` or `NotAuthenticated` component armed, so a
+  project's serializer of that name resolved next was not refused.
+  `PermissionDeniedSerializer` and `NotAuthenticatedSerializer` now declare
+  they are never a list.
+
+- **The schema leaves out a viewset method answered 405 for want of a spec.**
+  drf-spectacular documented every method a router maps, so a
+  `ServiceViewSet` route serving some spec documented a `create`, `update`,
+  `partial_update` or `destroy` with no spec behind it, which answers 405 and
+  which `Allow` and OPTIONS already left out; generation also printed
+  `exception raised while getting serializer` for it. `ServiceAutoSchema`
+  now excludes such a method by the rule `Allow` reads: a viewset with no
+  `destroy` spec documents no `DELETE`, one with a `partial_update` spec alone
+  no `PUT`. The `list` and `retrieve` fallbacks, a handler the viewset defines
+  itself, a route serving no spec and the standalone views are documented as
+  before.
+
 ## [0.5.0] — 2026-11-04
 
 ### Changed
@@ -405,7 +480,8 @@ lists each with what a project rewrites.
 - **The package is no longer a Django app.** It has no models, migrations,
   templates, static files or URLs, so it needs no `INSTALLED_APPS` entry.
 
-[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/Artui/django-spec-rest/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Artui/django-spec-rest/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Artui/django-spec-rest/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/Artui/django-spec-rest/compare/v0.3.0...v0.3.1

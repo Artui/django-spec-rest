@@ -19,9 +19,8 @@ from drf_spectacular.hooks import postprocess_schema_enums
 from drf_spectacular.plumbing import ComponentRegistry, ResolvedComponent
 from drf_spectacular.settings import patched_settings, spectacular_settings
 
-from django_spec_rest.openapi import enable_openapi
+from django_spec_rest.openapi import PermissionDeniedSerializer, enable_openapi
 from django_spec_rest.openapi.reserved_components_hook import reserved_components_hook
-from django_spec_rest.openapi.utils import PermissionDeniedBody
 from tests.openapi.reserved_names import (
     SERIALIZERS,
     ValidationErrorsSerializer,
@@ -45,7 +44,7 @@ class TestTheHook:
             ResolvedComponent(
                 name="PermissionDenied",
                 type=ResolvedComponent.SCHEMA,
-                object=PermissionDeniedBody,
+                object=PermissionDeniedSerializer,
                 schema={},
             )
         )
@@ -95,6 +94,27 @@ class TestTheHook:
             assert schemas[name]["properties"] == {"mine": {"type": "string"}}
 
 
+class TestARawReferenceOnAPackageView:
+    """A ``$ref`` to a reserved name the project writes itself is the project's, on any view."""
+
+    def test_a_raw_reserved_reference_on_a_package_view_is_refused(self) -> None:
+        """A package view declaring ``{"$ref": ".../PermissionDenied"}`` over its 403 is refused.
+
+        The project asserts the name without owning the body behind it, so the
+        package does not vouch for it, as it would not on drf-spectacular's own
+        schema. The package's own 403 elsewhere holds the name. Fails if the
+        package records every response it renders as its own, rather than only
+        the ones it wrote.
+        """
+        enable_openapi()
+        reference = {"$ref": "#/components/schemas/PermissionDenied"}
+        with pytest.raises(ImproperlyConfigured) as raised:
+            _generate(ours("a-ours"), ours("b-declared", responses={403: reference}))
+        assert str(raised.value).startswith(
+            "The operation POST /b-declared/ is documented as the component 'PermissionDenied'"
+        )
+
+
 def _deep_copying_hook(result: Any, **kwargs: Any) -> Any:
     return copy.deepcopy(result)
 
@@ -113,7 +133,7 @@ def _shallow_rebuild_hook(result: Any, **kwargs: Any) -> Any:
 
 
 class TestAProjectHookThatCopiesTheSchema:
-    """The hook knows the package's references by identity, so it must see them before a copy."""
+    """The hook knows the package's references by their strings' identity, so it must see them before a rebuild."""
 
     @pytest.mark.parametrize(
         "copying_hook", [_deep_copying_hook, _json_roundtrip_hook, _shallow_rebuild_hook]
@@ -123,8 +143,10 @@ class TestAProjectHookThatCopiesTheSchema:
     ) -> None:
         """A clash-free document still generates. Fails if ``enable_openapi`` appends the hook.
 
-        Appended, it runs on a copy whose references are no longer the objects
-        the package wrote, and refuses the package's own 400 as a clash.
+        Appended, it runs after the JSON round trip, whose ``$ref`` strings are
+        no longer the objects the package wrote, and refuses the package's own
+        400 as a clash. A deep copy and a rebuilt ``dict`` keep the strings,
+        and pass in either place.
         """
         monkeypatch.setattr(
             spectacular_settings, "POSTPROCESSING_HOOKS", [postprocess_schema_enums, copying_hook]

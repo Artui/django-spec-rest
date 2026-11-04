@@ -22,16 +22,24 @@ class ApiConfig(AppConfig):
 
 `enable_openapi()` sets `ServiceAutoSchema` as the schema of `ServiceCreateView`,
 `ServiceUpdateView`, `ServiceDeleteView`, `SelectorListView`,
-`SelectorRetrieveView`, `ServiceViewSet` and `SelectorViewSet`, so every
-subclass inherits it; a class setting `schema` itself keeps its own.
-Importing `django_spec_rest.openapi` does not import `drf-spectacular`; only
-this call does.
+`SelectorRetrieveView`, `ServiceViewSet` and `SelectorViewSet`, and of the
+action mixins `ServiceCreateMixin`, `ServiceUpdateMixin`, `ServiceDestroyMixin`,
+`SelectorListMixin` and `SelectorRetrieveMixin`, so every subclass inherits it;
+a class setting `schema` itself keeps its own. Importing
+`django_spec_rest.openapi` does not import `drf-spectacular`; only this call
+does.
 
-A viewset of your own over `GenericViewSet` inherits none of those classes,
-whether it is composed of the action mixins (`ServiceCreateMixin`,
-`SelectorListMixin` and the rest) or carries a `@service_action` or
-`@selector_action`. On drf-spectacular's `AutoSchema` it documents nothing of
-its specs. Set `schema = ServiceAutoSchema()` on it (from
+A viewset of your own over `GenericViewSet`, composed of the action mixins,
+inherits the schema only where a mixin comes before `GenericViewSet` in its
+bases, as in `class NoteViewSet(ServiceCreateMixin, GenericViewSet)`: DRF's
+`APIView` carries a `schema` of its own, so in
+`class NoteViewSet(GenericViewSet, ServiceCreateMixin)` that one wins. Where
+the mixin does come first, its `ServiceAutoSchema` also wins over a
+`DEFAULT_SCHEMA_CLASS` of your own, even a subclass of `ServiceAutoSchema`;
+set `schema = YourSchema()` on the viewset to keep the subclass. A
+`@service_action` or `@selector_action` on a bare `GenericViewSet` has no mixin
+to inherit it from. On drf-spectacular's `AutoSchema` either documents nothing
+of its specs. Set `schema = ServiceAutoSchema()` on it (from
 `django_spec_rest.openapi.service_auto_schema`), or point DRF's
 `DEFAULT_SCHEMA_CLASS` at
 `"django_spec_rest.openapi.service_auto_schema.ServiceAutoSchema"`, which
@@ -51,6 +59,16 @@ the message names the serializer, or the operation (`The operation POST
 /notes/`), component or webhook that refers to it. Name the serializer's
 component another way with `@extend_schema_serializer(component_name=...)`.
 
+The package's own 403 and 401 bodies are exported, as `PermissionDeniedSerializer`
+and `NotAuthenticatedSerializer` from `django_spec_rest.openapi`, for a response
+of yours to declare (see [Refusals your project configures](#refusals-your-project-configures)).
+Declared on any view, a view of the package's or one on drf-spectacular's own
+`AutoSchema`, either is the package's component, in whichever order the views
+are resolved. A `$ref` you write yourself to one of these names, such as
+`@extend_schema(responses={403: {"$ref": "#/components/schemas/PermissionDenied"}})`,
+is refused on any view, a view of the package's included: declare the
+serializer instead.
+
 A document in which no spec uses one of these names leaves it to the project:
 a `ValidationErrors` component of your own, beside specs that declare no
 validator, is documented as yours.
@@ -59,9 +77,9 @@ The refusal on a view of the project's is a postprocessing hook,
 `django_spec_rest.openapi.reserved_components_hook.reserved_components_hook`,
 which `enable_openapi()` inserts first in drf-spectacular's
 `POSTPROCESSING_HOOKS`, before your own, once however often it is called. It
-runs first because it knows the package's own references by identity; a hook of
-yours that copies the schema (a `deepcopy`, a JSON round trip, a rebuilt
-`dict`) then sees a document it has already checked. Anything that replaces that
+runs first because it knows the package's own references by the identity of
+their `$ref` strings; a hook of yours that rebuilds them (a JSON round trip)
+then sees a document it has already checked. Anything that replaces that
 list after `enable_openapi()` runs loses it, such as a `SpectacularAPIView`'s
 `custom_settings` setting `POSTPROCESSING_HOOKS`, or a reload of
 drf-spectacular's settings: name the hook in that list by its dotted path, or
@@ -131,18 +149,29 @@ call `enable_openapi()` again after the reload.
   sends a `WWW-Authenticate` challenge, such as DRF's `BasicAuthentication` or
   `TokenAuthentication`. Any of those checks denying (answering `False` to) a
   caller nobody authenticated, a kernel `PermissionCheck` or a
-  `DRFPermissionCheck` alike, is answered 401 there, under `detail` (the `NotAuthenticated` component); behind
-  `SessionAuthentication`, which sends no challenge, or a view with no
-  authenticator, the same denial is the 403. A check that raises
-  `NotPermitted` itself is answered as raised, 403, with no challenge. The 403 and the 401
-  bodies are the `PermissionDenied` and `NotAuthenticated` components, names
-  this schema keeps as it does `ValidationErrors`: a serializer that would
-  component under either (a `PermissionDeniedSerializer`, say) is refused with
+  `DRFPermissionCheck` alike, is answered 401 there, under `detail` (the
+  `NotAuthenticated` component); behind `SessionAuthentication`, which sends
+  no challenge, or a view with no authenticator, the same denial is the 403.
+  A check that raises `NotPermitted` itself is answered as raised, 403, with
+  no challenge. The 403 and the 401 bodies are the `PermissionDenied` and
+  `NotAuthenticated` components, names this schema keeps as it does
+  `ValidationErrors`: a serializer of yours that would be the component under
+  either (a `PermissionDeniedSerializer` of your own, say) is refused with
   `ImproperlyConfigured`, on any view and whichever is resolved first, until
   you name its component another way with
-  `@extend_schema_serializer(component_name=...)`.
+  `@extend_schema_serializer(component_name=...)`. The package's own
+  `PermissionDeniedSerializer` and `NotAuthenticatedSerializer` are the
+  components, and yours to declare.
 - **A `filter_set`'s query parameters**, on a list operation, are the kernel's
   `filter_set_parameters`.
+- **A viewset method with no spec behind it** is left out where `Allow` leaves
+  it out: on a route serving some spec, a `create`, `update`,
+  `partial_update` or `destroy` the router maps but the viewset declares no
+  spec for answers 405, so it is no operation. A `ServiceViewSet` with no
+  `destroy` spec documents no `DELETE`, and one with a `partial_update` spec
+  alone documents `PATCH` and no `PUT`. The `list` and `retrieve` handlers,
+  which fall back to DRF's queryset, and a handler the viewset defines itself,
+  stay documented.
 
 `ServiceErrorSerializer`, a `detail` field and the optional `schema` object, is
 the body of that 422 and of the 400's `{"detail": ...}` alternative, under the
@@ -282,28 +311,23 @@ refusals are:
   principal in can be answered so: DRF's own authenticators and Django's
   `ModelBackend` never do.
 
-Each body is DRF's `{"detail": ...}`. Declare it with a serializer of your
-own, under any name but the `PermissionDenied`, `NotAuthenticated` and
-`ValidationErrors` this schema keeps:
+Each body is DRF's `{"detail": ...}`, the body of the spec's own 403 and 401.
+Declare it with the package's `PermissionDeniedSerializer` and
+`NotAuthenticatedSerializer`, which are the `PermissionDenied` and
+`NotAuthenticated` components, on a view of the package's or one of your own:
 
 ```python
 from drf_spectacular.utils import OpenApiResponse, extend_schema
-from rest_framework import serializers
 from rest_framework.permissions import IsAdminUser
 
 from django_spec_rest import ServiceCreateView
-
-
-class RefusalSerializer(serializers.Serializer):
-    """The caller was refused. Why is under `detail`."""
-
-    detail = serializers.CharField()
+from django_spec_rest.openapi import NotAuthenticatedSerializer, PermissionDeniedSerializer
 
 
 @extend_schema(
     responses={
-        401: OpenApiResponse(RefusalSerializer, description="No credentials were sent."),
-        403: OpenApiResponse(RefusalSerializer, description="The caller is not staff."),
+        401: OpenApiResponse(NotAuthenticatedSerializer, description="No credentials were sent."),
+        403: OpenApiResponse(PermissionDeniedSerializer, description="The caller is not staff."),
     }
 )
 class PublishReportView(ServiceCreateView):
@@ -313,4 +337,4 @@ class PublishReportView(ServiceCreateView):
 
 As with a service's refusals, the statuses are added to what the spec
 documents, and one the spec documents too is replaced by yours. The bodies
-are one shape, so a declared 403 still describes the spec's own.
+are the spec's own, so a declared 403 still describes the spec's.
