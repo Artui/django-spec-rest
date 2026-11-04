@@ -46,6 +46,8 @@ from django_spec_rest.openapi._resolve import (
     resolve_selector_spec,
     resolve_service_spec,
 )
+from django_spec_rest.openapi.not_authenticated_serializer import NotAuthenticatedSerializer
+from django_spec_rest.openapi.permission_denied_serializer import PermissionDeniedSerializer
 from django_spec_rest.openapi.service_error_serializer import (
     ServiceErrorSerializer,
 )
@@ -55,8 +57,6 @@ from django_spec_rest.openapi.service_validation_error_serializer import (
 from django_spec_rest.openapi.utils import (
     RESERVED_COMPONENTS,
     VALIDATION_ERRORS,
-    NotAuthenticatedBody,
-    PermissionDeniedBody,
     ValidationErrorsIdentity,
     default_status,
     is_a,
@@ -448,14 +448,14 @@ class ServiceAutoSchema(AutoSchema):
         if all(isinstance(check, Unrestricted) for check in checks):
             return {}
         refusals: dict[int, Any] = {
-            403: _PackageResponse(
-                response=PermissionDeniedBody,
+            403: OpenApiResponse(
+                response=PermissionDeniedSerializer,
                 description="The caller may not run this operation.",
             )
         }
         if self.view.get_authenticate_header(self.view.request):
-            refusals[401] = _PackageResponse(
-                response=NotAuthenticatedBody,
+            refusals[401] = OpenApiResponse(
+                response=NotAuthenticatedSerializer,
                 description=(
                     "No caller was authenticated. The WWW-Authenticate header names "
                     "the scheme to authenticate with."
@@ -500,8 +500,12 @@ class ServiceAutoSchema(AutoSchema):
             if holder is not ValidationErrorsIdentity:
                 raise name_taken(serializer_named(holder), VALIDATION_ERRORS)
         detail = self.resolve_serializer(ServiceErrorSerializer, "response")
-        return _PackageResponse(
-            response={"anyOf": [component.ref, detail.ref, _MESSAGES]},
+        # Recorded as the package's, so ``reserved_components_hook`` lets it
+        # stand; a ``$ref`` of the name a project writes itself, even on a
+        # package view, is refused
+        # (test_a_raw_reserved_reference_on_a_package_view_is_refused).
+        return OpenApiResponse(
+            response={"anyOf": [place(self.registry, component.ref), detail.ref, _MESSAGES]},
         )
 
     def resolve_serializer(self, serializer: Any, *args: Any, **kwargs: Any) -> Any:
@@ -522,20 +526,6 @@ class ServiceAutoSchema(AutoSchema):
                     serializer_named(resolved.object if asked else serializer), resolved.name
                 )
         return resolved
-
-    def _get_response_for_code(self, serializer: Any, *args: Any, **kwargs: Any) -> Any:
-        # Passed through whole, as ``resolve_serializer`` is.
-        rendered = super()._get_response_for_code(serializer, *args, **kwargs)
-        # The package's own 400, 403 and 401, recorded as the places a
-        # reserved ``$ref`` may sit, which ``reserved_components_hook`` asks
-        # of the generated document (test_a_reserved_name_is_refused_on_drf_spectacular_s_schema).
-        # Only those: a reserved ``$ref`` a project declares over a package
-        # view's response is the project's, and refused
-        # (test_a_raw_reserved_reference_on_a_package_view_is_refused).
-        if isinstance(serializer, _PackageResponse):
-            for media in rendered.get("content", {}).values():
-                place(self.registry, media["schema"])
-        return rendered
 
     def _kernel_rows(self, spec: KernelSelectorSpec, presenter: Presenter) -> Any:
         """A kernel selector spec's body: one row, or every row for a ``LIST``.
@@ -621,10 +611,6 @@ def _without(schema: dict[str, Any], names: Iterable[str]) -> dict[str, Any]:
     if required:
         kept["required"] = required
     return kept
-
-
-class _PackageResponse(OpenApiResponse):
-    """A response this schema documents a reserved component in, told apart from a project's."""
 
 
 _MESSAGES: dict[str, Any] = {"type": "array", "items": {"type": "string"}}

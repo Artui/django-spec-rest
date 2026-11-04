@@ -11,7 +11,30 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+### Added
+
+- **The 403 and 401 bodies are exported, for a project to declare.**
+  `PermissionDeniedSerializer` and `NotAuthenticatedSerializer`, from
+  `django_spec_rest.openapi`, are the `PermissionDenied` and
+  `NotAuthenticated` components a spec's own refusals document. Declared with
+  `@extend_schema(responses=...)` on any view, one of the package's or a
+  project's own on drf-spectacular's `AutoSchema`, either is the package's
+  component, in whichever order the views are resolved; before, the only
+  bodies were private, and declaring one on a project's view beside a package
+  view failed generation with `ImproperlyConfigured`. A project's serializer
+  under either name is still refused, now also where the project's comes
+  first and the package's body is declared on drf-spectacular's own schema.
+  The OpenAPI guide's "Refusals your project configures" declares them in
+  place of a serializer of the project's.
+
 ### Changed
+
+- **The OpenAPI guide says a `$ref` written to a reserved name is refused on
+  any view.** `@extend_schema(responses={403: {"$ref":
+  "#/components/schemas/PermissionDenied"}})` on a package view is refused
+  with `ImproperlyConfigured`, as on a project's view: the project asserts a
+  name whose body it does not own. Generation answered so before; a test now
+  holds it.
 
 - **The anonymous caller's 401 is described as a check's denial
   throughout.** The test docstrings and comments that said a check

@@ -8,9 +8,11 @@ answered with, which a project declares with
 [`ServiceErrorSerializer`][django_spec_rest.openapi.service_error_serializer.ServiceErrorSerializer],
 [`ServiceValidationErrorSerializer`][django_spec_rest.openapi.service_validation_error_serializer.ServiceValidationErrorSerializer],
 [`ServiceNotFoundSerializer`][django_spec_rest.openapi.service_not_found_serializer.ServiceNotFoundSerializer],
-[`ServiceConflictSerializer`][django_spec_rest.openapi.service_conflict_serializer.ServiceConflictSerializer]
+[`ServiceConflictSerializer`][django_spec_rest.openapi.service_conflict_serializer.ServiceConflictSerializer],
+[`ActionUnavailableSerializer`][django_spec_rest.openapi.action_unavailable_serializer.ActionUnavailableSerializer],
+[`PermissionDeniedSerializer`][django_spec_rest.openapi.permission_denied_serializer.PermissionDeniedSerializer]
 and
-[`ActionUnavailableSerializer`][django_spec_rest.openapi.action_unavailable_serializer.ActionUnavailableSerializer]. Importing this module is safe even without ``drf-spectacular`` installed; it does
+[`NotAuthenticatedSerializer`][django_spec_rest.openapi.not_authenticated_serializer.NotAuthenticatedSerializer]. Importing this module is safe even without ``drf-spectacular`` installed; it does
 not pull in the schema-generator code itself.
 
 The actual ``drf-spectacular`` integration lives in
@@ -30,6 +32,12 @@ from django_spec_rest.openapi.action_unavailable_serializer import (
     ActionUnavailableSerializer,
 )
 from django_spec_rest.openapi.enable_openapi import enable_openapi
+from django_spec_rest.openapi.not_authenticated_serializer import (
+    NotAuthenticatedSerializer,
+)
+from django_spec_rest.openapi.permission_denied_serializer import (
+    PermissionDeniedSerializer,
+)
 from django_spec_rest.openapi.service_conflict_serializer import (
     ServiceConflictSerializer,
 )
@@ -45,6 +53,8 @@ from django_spec_rest.openapi.service_validation_error_serializer import (
 
 __all__ = [
     "ActionUnavailableSerializer",
+    "NotAuthenticatedSerializer",
+    "PermissionDeniedSerializer",
     "ServiceConflictSerializer",
     "ServiceErrorSerializer",
     "ServiceNotFoundSerializer",

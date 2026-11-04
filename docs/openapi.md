@@ -51,6 +51,16 @@ the message names the serializer, or the operation (`The operation POST
 /notes/`), component or webhook that refers to it. Name the serializer's
 component another way with `@extend_schema_serializer(component_name=...)`.
 
+The package's own 403 and 401 bodies are exported, as `PermissionDeniedSerializer`
+and `NotAuthenticatedSerializer` from `django_spec_rest.openapi`, for a response
+of yours to declare (see [Refusals your project configures](#refusals-your-project-configures)).
+Declared on any view, a view of the package's or one on drf-spectacular's own
+`AutoSchema`, either is the package's component, in whichever order the views
+are resolved. A `$ref` you write yourself to one of these names, such as
+`@extend_schema(responses={403: {"$ref": "#/components/schemas/PermissionDenied"}})`,
+is refused on any view, a view of the package's included: declare the
+serializer instead.
+
 A document in which no spec uses one of these names leaves it to the project:
 a `ValidationErrors` component of your own, beside specs that declare no
 validator, is documented as yours.
@@ -137,10 +147,13 @@ call `enable_openapi()` again after the reload.
   A check that raises `NotPermitted` itself is answered as raised, 403, with
   no challenge. The 403 and the 401 bodies are the `PermissionDenied` and
   `NotAuthenticated` components, names this schema keeps as it does
-  `ValidationErrors`: a serializer that would be the component under either (a
-  `PermissionDeniedSerializer`, say) is refused with `ImproperlyConfigured`,
-  on any view and whichever is resolved first, until you name its component
-  another way with `@extend_schema_serializer(component_name=...)`.
+  `ValidationErrors`: a serializer of yours that would be the component under
+  either (a `PermissionDeniedSerializer` of your own, say) is refused with
+  `ImproperlyConfigured`, on any view and whichever is resolved first, until
+  you name its component another way with
+  `@extend_schema_serializer(component_name=...)`. The package's own
+  `PermissionDeniedSerializer` and `NotAuthenticatedSerializer` are the
+  components, and yours to declare.
 - **A `filter_set`'s query parameters**, on a list operation, are the kernel's
   `filter_set_parameters`.
 - **A viewset method with no spec behind it** is left out where `Allow` leaves
@@ -290,28 +303,23 @@ refusals are:
   principal in can be answered so: DRF's own authenticators and Django's
   `ModelBackend` never do.
 
-Each body is DRF's `{"detail": ...}`. Declare it with a serializer of your
-own, under any name but the `PermissionDenied`, `NotAuthenticated` and
-`ValidationErrors` this schema keeps:
+Each body is DRF's `{"detail": ...}`, the body of the spec's own 403 and 401.
+Declare it with the package's `PermissionDeniedSerializer` and
+`NotAuthenticatedSerializer`, which are the `PermissionDenied` and
+`NotAuthenticated` components, on a view of the package's or one of your own:
 
 ```python
 from drf_spectacular.utils import OpenApiResponse, extend_schema
-from rest_framework import serializers
 from rest_framework.permissions import IsAdminUser
 
 from django_spec_rest import ServiceCreateView
-
-
-class RefusalSerializer(serializers.Serializer):
-    """The caller was refused. Why is under `detail`."""
-
-    detail = serializers.CharField()
+from django_spec_rest.openapi import NotAuthenticatedSerializer, PermissionDeniedSerializer
 
 
 @extend_schema(
     responses={
-        401: OpenApiResponse(RefusalSerializer, description="No credentials were sent."),
-        403: OpenApiResponse(RefusalSerializer, description="The caller is not staff."),
+        401: OpenApiResponse(NotAuthenticatedSerializer, description="No credentials were sent."),
+        403: OpenApiResponse(PermissionDeniedSerializer, description="The caller is not staff."),
     }
 )
 class PublishReportView(ServiceCreateView):
@@ -321,4 +329,4 @@ class PublishReportView(ServiceCreateView):
 
 As with a service's refusals, the statuses are added to what the spec
 documents, and one the spec documents too is replaced by yours. The bodies
-are one shape, so a declared 403 still describes the spec's own.
+are the spec's own, so a declared 403 still describes the spec's.

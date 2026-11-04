@@ -19,9 +19,8 @@ from drf_spectacular.hooks import postprocess_schema_enums
 from drf_spectacular.plumbing import ComponentRegistry, ResolvedComponent
 from drf_spectacular.settings import patched_settings, spectacular_settings
 
-from django_spec_rest.openapi import enable_openapi
+from django_spec_rest.openapi import PermissionDeniedSerializer, enable_openapi
 from django_spec_rest.openapi.reserved_components_hook import reserved_components_hook
-from django_spec_rest.openapi.utils import PermissionDeniedBody
 from tests.openapi.reserved_names import (
     SERIALIZERS,
     ValidationErrorsSerializer,
@@ -45,7 +44,7 @@ class TestTheHook:
             ResolvedComponent(
                 name="PermissionDenied",
                 type=ResolvedComponent.SCHEMA,
-                object=PermissionDeniedBody,
+                object=PermissionDeniedSerializer,
                 schema={},
             )
         )

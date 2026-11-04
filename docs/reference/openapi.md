@@ -15,3 +15,7 @@
 ::: django_spec_rest.openapi.service_conflict_serializer.ServiceConflictSerializer
 
 ::: django_spec_rest.openapi.action_unavailable_serializer.ActionUnavailableSerializer
+
+::: django_spec_rest.openapi.permission_denied_serializer.PermissionDeniedSerializer
+
+::: django_spec_rest.openapi.not_authenticated_serializer.NotAuthenticatedSerializer

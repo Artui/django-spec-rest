@@ -54,8 +54,10 @@ class TestAReservedName:
         The registry holds the project's serializer by then, so the package
         meets it while it documents its refusal, before the hook runs.
         """
-        with pytest.raises(ImproperlyConfigured, match=serializer.__name__) as raised:
+        with pytest.raises(ImproperlyConfigured) as raised:
             _generate(theirs("a-theirs", serializer), ours("b-ours"))
+        # Module and all: the package exports serializers of these class names.
+        assert str(raised.value).startswith(f"{serializer.__module__}.{serializer.__qualname__} ")
         assert "component_name" in str(raised.value)
 
     def test_is_refused_in_a_component_of_the_project_s(self) -> None:
