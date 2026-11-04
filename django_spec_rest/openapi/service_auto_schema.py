@@ -420,7 +420,7 @@ class ServiceAutoSchema(AutoSchema):
         return responses
 
     def _caller_refusals(self, spec: KernelServiceSpec | KernelSelectorSpec) -> dict[int, Any]:
-        """The ``403`` a spec's permission checks are refused with, and the ``401`` where DRF asks the caller to sign in.
+        """The ``403`` a spec's checks are refused with, and the ``401`` where DRF asks to sign in.
 
         A spec whose checks are all ``Unrestricted`` refuses nobody, and one
         declaring none is refused by the kernel as misconfigured, so neither

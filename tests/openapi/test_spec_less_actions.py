@@ -102,6 +102,16 @@ class _NoDestroy(ServiceViewSet):
     def ping(self, request: Any, pk: str) -> Any: ...
 
 
+class _OwnDestroy(ServiceViewSet):
+    """Read specs beside a ``destroy`` the viewset defines itself, unmarked and so its own."""
+
+    queryset = Author.objects.all()
+    serializer_class = AuthorSerializer
+    action_specs = {"list": _list(), "retrieve": _retrieve()}
+
+    def destroy(self, request: Any, *args: Any, **kwargs: Any) -> Any: ...
+
+
 class _PatchOnly(ServiceViewSet):
     """A ``partial_update`` spec alone: PUT reaches ``update``, which has none."""
 
@@ -113,6 +123,7 @@ class _PatchOnly(ServiceViewSet):
 _router = SimpleRouter()
 _router.register("no-destroy", _NoDestroy, basename="no-destroy")
 _router.register("patch-only", _PatchOnly, basename="patch-only")
+_router.register("own-destroy", _OwnDestroy, basename="own-destroy")
 
 urlpatterns = [
     *_router.urls,
@@ -164,7 +175,10 @@ class TestARouteServingASpec:
         assert _documented(schema, "/no-destroy/") == {"GET"}
 
     def test_a_handler_the_view_defines_itself_stays(self, schema: dict[str, Any]) -> None:
-        assert _documented(schema, "/no-destroy/{id}/ping/") == {"POST"}
+        # The route serves the retrieve spec, so PUT and PATCH, with no update
+        # spec, are left out; DELETE reaches the view's own handler, which
+        # needs no spec.
+        assert _documented(schema, "/own-destroy/{id}/") == {"GET", "DELETE"}
 
     def test_a_put_with_only_a_partial_update_spec_is_left_out(
         self, schema: dict[str, Any]
@@ -179,6 +193,7 @@ class TestARouteServingASpec:
             (_NoDestroy, _LIST, "/no-destroy/"),
             (_NoDestroy, _DETAIL, "/no-destroy/{id}/"),
             (_PatchOnly, _DETAIL, "/patch-only/{id}/"),
+            (_OwnDestroy, _DETAIL, "/own-destroy/{id}/"),
         ],
     )
     def test_the_schema_documents_what_allow_names(
@@ -204,6 +219,10 @@ class TestWhereNothingIsLeftOut:
         self, schema: dict[str, Any]
     ) -> None:
         assert _documented(schema, "/patch-only/") == _allow(_PatchOnly, _LIST)
+
+    def test_an_extra_action_s_own_route_is_documented(self, schema: dict[str, Any]) -> None:
+        # ``@action`` routes ``ping`` alone, a route serving no spec.
+        assert _documented(schema, "/no-destroy/{id}/ping/") == {"POST"}
 
     def test_a_standalone_view_is_documented_whole(self, schema: dict[str, Any]) -> None:
         assert _documented(schema, "/standalone/{id}/") == {"PUT", "PATCH"}

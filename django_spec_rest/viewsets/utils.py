@@ -395,7 +395,8 @@ class _ActionSpecsMixin(_ServesRaisedSchema):
         drf-spectacular reads the router's action map and never ``Allow``
         (test_spec_less_actions).
         """
-        return bool(self._kernel_specs_served()) and self._refuses(method.lower())
+        # The cheap per-method question first: ``Allow`` asks this on every response.
+        return self._refuses(method.lower()) and bool(self._kernel_specs_served())
 
     def _refuses(self, method: str) -> bool:
         """Whether ``method`` reaches one of this package's dispatchers with no spec to serve it."""

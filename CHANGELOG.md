@@ -11,6 +11,16 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+### Changed
+
+- **The anonymous caller's 401 is described as a check's denial
+  throughout.** The test docstrings and comments that said a check
+  *refusing* a caller nobody authenticated now say *denying* (answering
+  `False` to) it, where a check raising `NotPermitted` itself is answered as
+  raised, 403; the OpenAPI guide's 401 bullet and the docstrings beside it
+  are reflowed, and a garbled clause in that bullet repaired. Wording only;
+  nothing answers differently.
+
 ### Fixed
 
 - **The schema leaves out a viewset method answered 405 for want of a spec.**
@@ -24,14 +34,6 @@ carries; releases up to 0.62.0 are in
   no `PUT`. The `list` and `retrieve` fallbacks, a handler the viewset defines
   itself, a route serving no spec and the standalone views are documented as
   before.
-
-### Changed
-
-- **The 401 for a caller nobody authenticated is described as a check's
-  denial throughout.** The OpenAPI guide's 401 bullet and the docstrings
-  beside it say a check *denying* (answering `False` to) such a caller is
-  answered 401, where a check raising `NotPermitted` itself is answered as
-  raised, 403. Wording only; nothing answers differently.
 
 ## [0.5.0] — 2026-11-04
 
