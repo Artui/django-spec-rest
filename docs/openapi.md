@@ -27,6 +27,16 @@ subclass inherits it; a class setting `schema` itself keeps its own.
 Importing `django_spec_rest.openapi` does not import `drf-spectacular`; only
 this call does.
 
+A viewset of your own over `GenericViewSet` inherits none of those classes,
+whether it is composed of the action mixins (`ServiceCreateMixin`,
+`SelectorListMixin` and the rest) or carries a `@service_action` or
+`@selector_action`. On drf-spectacular's `AutoSchema` it documents nothing of
+its specs. Set `schema = ServiceAutoSchema()` on it (from
+`django_spec_rest.openapi.service_auto_schema`), or point DRF's
+`DEFAULT_SCHEMA_CLASS` at
+`"django_spec_rest.openapi.service_auto_schema.ServiceAutoSchema"`, which
+documents a view no spec drives as drf-spectacular does.
+
 ## What a route documents
 
 - **The request body** is a `SerializerValidator`'s serializer, under
