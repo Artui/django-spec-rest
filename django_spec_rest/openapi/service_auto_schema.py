@@ -12,6 +12,7 @@ import re
 from collections.abc import Callable, Iterable
 from typing import Any, cast
 
+from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import (
     Presenter,
     SelectorKind,
@@ -48,6 +49,7 @@ from django_spec_rest.openapi._resolve import (
 )
 from django_spec_rest.openapi.not_authenticated_serializer import NotAuthenticatedSerializer
 from django_spec_rest.openapi.permission_denied_serializer import PermissionDeniedSerializer
+from django_spec_rest.openapi.service_error_metadata_key import SERVICE_ERROR_METADATA_KEY
 from django_spec_rest.openapi.service_error_serializer import (
     ServiceErrorSerializer,
 )
@@ -107,12 +109,13 @@ class ServiceAutoSchema(AutoSchema):
       sends as a 400: a ``detail`` sentence (the body is no object), and the
       bare list of messages a service's ``ServiceValidationError`` over a
       sentence or a list answers with.
-    - **A** ``422`` is documented on every service spec, since the service, a
-      precondition or a provider can raise a plain ``ServiceError``, which the
-      edge answers 422 with or without a Validator; and on every selector spec,
-      whose selector, preconditions and providers can raise one too. A selector
-      spec taking a parameter (a read, a shape or a filter) documents the
-      ``400`` its refusal is, with the same body.
+    - **A** ``422`` is documented where the spec declares that it can answer
+      one, ``metadata={"document_service_error": True}``
+      (``documents_service_error``): the edge answers a plain ``ServiceError``
+      422, from the service, the selector, a precondition or a provider, with
+      or without a Validator, and which specs raise one the schema cannot see.
+      A selector spec taking a parameter (a read, a shape or a filter)
+      documents the ``400`` its refusal is, with the body of a Validator's.
     - **A** ``403`` is documented wherever the spec declares a permission
       check, any check but ``Unrestricted``: a check's denial and a principal
       who cannot act are both answered 403 with a ``detail``. A ``401`` beside
@@ -358,9 +361,8 @@ class ServiceAutoSchema(AutoSchema):
         (test_the_documented_400_describes_the_body_the_edge_sends). A route
         capture is one too: only its converter guarantees its type, and a
         router's default lookup regex or a ``str`` converter guarantees none
-        (test_a_route_capture_is_refused_under_its_name). A ``422`` is documented on every selector spec, since the selector, a
-        precondition or a provider can raise a plain ``ServiceError``
-        (test_it_is_documented_whatever_the_selector_reads).
+        (test_a_route_capture_is_refused_under_its_name). A ``422`` is
+        documented where the spec declares one (``documents_service_error``).
         """
         body = (
             self._kernel_rows(spec, spec.presenter)
@@ -373,7 +375,8 @@ class ServiceAutoSchema(AutoSchema):
         if spec.parameters():
             responses[400] = self._validation_errors_response()
         responses.update(self._caller_refusals(spec))
-        responses[422] = ServiceErrorSerializer
+        if self.documents_service_error(spec):
+            responses[422] = ServiceErrorSerializer
         return responses
 
     def _kernel_responses(self, spec: KernelServiceSpec) -> dict[Any, Any]:
@@ -408,16 +411,43 @@ class ServiceAutoSchema(AutoSchema):
             responses[204] = OpenApiResponse(description="")
         # A Validator's refusal is a 400 of DRF's field errors, whichever kind
         # of Validator refused
-        # (test_the_documented_400_describes_the_body_the_edge_sends); a plain
-        # ``ServiceError`` from the service, a precondition or a provider is a
-        # 422 whether or not the spec has a Validator
-        # (test_it_is_documented_on_a_spec_with_a_service_whether_or_not_it_has_a_validator,
-        # test_a_spec_with_no_validator_documents_no_400).
+        # (test_the_documented_400_describes_the_body_the_edge_sends,
+        # test_a_spec_with_no_validator_documents_no_400); a plain
+        # ``ServiceError`` is a 422 whether or not the spec has a Validator,
+        # documented where the spec declares it.
         if spec.validator is not None:
             responses[400] = self._validation_errors_response()
         responses.update(self._caller_refusals(spec))
-        responses[422] = ServiceErrorSerializer
+        if self.documents_service_error(spec):
+            responses[422] = ServiceErrorSerializer
         return responses
+
+    def documents_service_error(self, spec: KernelServiceSpec | KernelSelectorSpec) -> bool:
+        """Whether this operation documents the ``422`` a plain ``ServiceError`` is answered with.
+
+        Where ``spec``, the one the route serves, declares it:
+        ``metadata={"document_service_error": True}``
+        (``SERVICE_ERROR_METADATA_KEY``), on a service spec and on a selector
+        spec alike (test_service_error_declared). A spec declaring nothing, or
+        ``False``, documents none: the edge answers 422 for a plain
+        ``ServiceError`` from the service, the selector, a precondition or a
+        provider, and nothing the schema can read says which specs raise one.
+        Only the served spec's ``metadata`` is read, never that of its target
+        or re-read selector. A value other than ``True`` or ``False`` is
+        refused, naming the view, rather than read as either.
+
+        A project's subclass may override it to answer for many operations at
+        once (every spec, or a predicate over ``spec``, ``self.view`` and
+        ``self.method``), and an ``@extend_schema(responses={422: ...})``
+        documents it on one view whatever this answers.
+        """
+        declared = (spec.metadata or {}).get(SERVICE_ERROR_METADATA_KEY, False)
+        if not isinstance(declared, bool):
+            raise ImproperlyConfigured(
+                f"{type(self.view).__name__}'s spec metadata[{SERVICE_ERROR_METADATA_KEY!r}] "
+                f"must be True or False; got {type(declared).__name__}."
+            )
+        return declared
 
     def _caller_refusals(self, spec: KernelServiceSpec | KernelSelectorSpec) -> dict[int, Any]:
         """The ``403`` a spec's checks are refused with, and the ``401`` where DRF asks to sign in.

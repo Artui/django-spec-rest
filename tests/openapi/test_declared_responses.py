@@ -1,7 +1,7 @@
 """A project's ``@extend_schema(responses=...)`` is added to what the spec documents.
 
 drf-spectacular answers a declared ``responses`` as it is, which would drop the
-body, the 400, the 403 and the 422 the spec documents for the refusals a project
+body, the 400, the 403 and any 422 the spec documents for the refusals a project
 declares. A mapping of statuses is laid over the spec's instead: a status
 declared replaces the spec's at that status, and a declared success replaces
 every success the spec documents. Held on each surface a project decorates: a
@@ -41,6 +41,7 @@ from django_spec_rest import (
     service_action,
 )
 from django_spec_rest.openapi import (
+    SERVICE_ERROR_METADATA_KEY,
     ServiceConflictSerializer,
     ServiceNotFoundSerializer,
     enable_openapi,
@@ -124,16 +125,17 @@ class _Plain(APIView):
 
 
 def _open() -> ServiceSpec:
-    """A spec documenting a 201 and a 422 only: no Validator, no check to refuse."""
+    """A spec documenting a 201 and its declared 422 only: no Validator, no check to refuse."""
     return ServiceSpec(
         service=lambda **_: None,
         permissions=(Unrestricted(),),
         presenter=SerializerPresenter(AuthorSerializer),
+        metadata={SERVICE_ERROR_METADATA_KEY: True},
     )
 
 
 class _WithoutUnprocessable(ServiceAutoSchema):
-    """A project's schema that stops documenting the 422 every service spec has."""
+    """A project's schema that stops documenting the 422 a spec declares."""
 
     def get_response_serializers(self) -> Any:
         responses = super().get_response_serializers()
@@ -184,7 +186,7 @@ urlpatterns = [
     path("bare/", _view(ServiceCreateView, ServiceNotFoundSerializer).as_view()),
     path(
         "string/",
-        _view(ServiceCreateView, {"422": OpenApiResponse(description="Declared.")}).as_view(),
+        _view(ServiceCreateView, {"403": OpenApiResponse(description="Declared.")}).as_view(),
     ),
     path("success/", _view(ServiceCreateView, {200: ServiceNotFoundSerializer}).as_view()),
     path(
@@ -233,8 +235,8 @@ urlpatterns = [
 ]
 
 # What ``_write()`` documents with nothing declared: the create's body, the
-# Validator's 400, the check's 403 and the 422.
-_OWN = {"201", "400", "403", "422"}
+# Validator's 400 and the check's 403. It declares no 422.
+_OWN = {"201", "400", "403"}
 
 
 @pytest.fixture(scope="module")
@@ -259,7 +261,7 @@ class TestADeclaredRefusalIsAddedToTheSpecSResponses:
         self, schema: dict[str, Any], route: str, success: str
     ) -> None:
         responses = _responses(schema, route)
-        assert set(responses) == {success, "400", "403", "404", "422"}
+        assert set(responses) == {success, "400", "403", "404"}
         assert _ref(responses["404"]) == "#/components/schemas/ServiceNotFound"
         assert _ref(responses[success]) == "#/components/schemas/Author"
 
@@ -269,7 +271,7 @@ class TestADeclaredRefusalIsAddedToTheSpecSResponses:
         assert _ref(responses["409"]) == "#/components/schemas/ServiceConflict"
 
     def test_on_a_selector(self, schema: dict[str, Any]) -> None:
-        assert set(_responses(schema, "/read/", "get")) == {"200", "403", "404", "422"}
+        assert set(_responses(schema, "/read/", "get")) == {"200", "403", "404"}
 
     def test_a_tuple_of_status_and_media_type_replaces_the_spec_s(
         self, schema: dict[str, Any]
@@ -293,11 +295,11 @@ class TestADeclaredStatusReplacesTheSpecS:
     ) -> None:
         responses = _responses(schema, "/string/")
         assert set(responses) == _OWN
-        assert responses["422"] == {"description": "Declared."}
+        assert responses["403"] == {"description": "Declared."}
 
     def test_a_declared_success_replaces_the_spec_s_successes(self, schema: dict[str, Any]) -> None:
         responses = _responses(schema, "/success/")
-        assert set(responses) == {"200", "400", "403", "422"}
+        assert set(responses) == {"200", "400", "403"}
         assert _ref(responses["200"]) == "#/components/schemas/ServiceNotFound"
 
 

@@ -8,6 +8,8 @@
 
 ::: django_spec_rest.openapi.service_error_serializer.ServiceErrorSerializer
 
+::: django_spec_rest.openapi.service_error_metadata_key.SERVICE_ERROR_METADATA_KEY
+
 ::: django_spec_rest.openapi.service_validation_error_serializer.ServiceValidationErrorSerializer
 
 ::: django_spec_rest.openapi.service_not_found_serializer.ServiceNotFoundSerializer

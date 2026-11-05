@@ -369,6 +369,15 @@ class OpenAPISchemaTests(APITestCase):
                     self._body_component("/invoices/{id}/", method, "409"), "ServiceConflict"
                 )
 
+    def test_the_422_is_documented_where_the_spec_declares_it(self) -> None:
+        # ``SEND_SPEC`` declares it in its ``metadata``: ``send_invoice`` raises
+        # a plain ``ServiceError`` (see ``test_any_other_service_error_is_a_422``).
+        self.assertEqual(
+            self._body_component("/invoices/{id}/send/", "post", "422"), "ServiceError"
+        )
+        # The create declares none, so none is documented.
+        self.assertNotIn("422", self.schema["paths"]["/invoices/"]["post"]["responses"])
+
     def test_a_view_level_permission_class_declares_the_exported_bodies(self) -> None:
         # The spec admits everyone, so these are the project's own declaration
         # (``@extend_schema`` with the exported serializers), and each is the

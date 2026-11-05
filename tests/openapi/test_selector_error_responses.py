@@ -3,9 +3,10 @@
 A selector's parameters (its ``reads`` and ``shapes``, filters included) are
 read off the query string and refused with DRF's field errors under a ``400``,
 the same body a service spec's Validator answers; and a selector, a
-precondition or a provider can raise a plain ``ServiceError``, a ``422``. Each
-test drives the view, then validates the wire body against the schema the
-operation documents for that status.
+precondition or a provider can raise a plain ``ServiceError``, a ``422``,
+documented where the spec declares it (``document_service_error`` in its
+``metadata``). Each test drives the view, then validates the wire body against
+the schema the operation documents for that status.
 """
 
 from __future__ import annotations
@@ -31,7 +32,7 @@ from rest_framework import serializers
 from rest_framework.test import APIRequestFactory
 
 from django_spec_rest import SelectorListView, SelectorRetrieveView
-from django_spec_rest.openapi import enable_openapi
+from django_spec_rest.openapi import SERVICE_ERROR_METADATA_KEY, enable_openapi
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from tests.testapp.models import Post
 
@@ -81,17 +82,20 @@ def _spec(selector: Any, *, kind: SelectorKind = SelectorKind.LIST, **fields: An
 
 _PUBLISHED = Parameters.of(Parameter("published", "boolean", required=True))
 _ROWS = Parameters.of(Parameter("pk", "integer", required=True))
+# The specs whose selector raises, which declare the 422 they are answered with.
+_DECLARED = {SERVICE_ERROR_METADATA_KEY: True}
+_RAISING = ("unprocessable", "asking", "captured")
 
 # Each route: its view, its spec, and the URL it is mounted at.
 _SPECS: dict[str, tuple[type, SelectorSpec]] = {
     "read": (SelectorListView, _spec(_posts, reads=_PUBLISHED)),
-    "unprocessable": (SelectorListView, _spec(_unprocessable)),
-    "asking": (SelectorListView, _spec(_asking)),
+    "unprocessable": (SelectorListView, _spec(_unprocessable, metadata=_DECLARED)),
+    "asking": (SelectorListView, _spec(_asking, metadata=_DECLARED)),
     "filtered": (SelectorListView, _spec(_every_post, filter_set=_PostFilter)),
     "no-reads": (SelectorListView, _spec(_posts)),
     "captured": (
         SelectorRetrieveView,
-        _spec(_unprocessable, kind=SelectorKind.RETRIEVE, reads=_ROWS),
+        _spec(_unprocessable, kind=SelectorKind.RETRIEVE, reads=_ROWS, metadata=_DECLARED),
     ),
 }
 
@@ -177,10 +181,11 @@ class TestARefusedReadIsA400:
 @pytest.mark.django_db
 class TestA422IsASelectorRefusal:
     @pytest.mark.parametrize("key", list(_SPECS))
-    def test_it_is_documented_whatever_the_selector_reads(
+    def test_it_is_documented_where_the_spec_declares_it(
         self, schema: dict[str, Any], key: str
     ) -> None:
-        assert "422" in _responses(schema, key)
+        # Whatever the selector reads: a read, a filter, a capture or none.
+        assert ("422" in _responses(schema, key)) is (key in _RAISING)
 
     @pytest.mark.parametrize("key", ["unprocessable", "captured"])
     def test_the_documented_422_describes_the_body_the_edge_sends(

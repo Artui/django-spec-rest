@@ -13,6 +13,24 @@ carries; releases up to 0.62.0 are in
 
 ### Changed
 
+- **The OpenAPI schema documents the 422 only where a spec declares it, so
+  every project's schema changes on upgrade.** `ServiceAutoSchema` documented
+  the 422 of a plain `ServiceError` (`ServiceErrorSerializer`) on every
+  service spec and every selector spec, though nothing in a spec says whether
+  its service, selector, preconditions or providers raise one; a project whose
+  code raises none published a status no route answers. Now an operation
+  documents it only where the spec it serves declares it, with
+  `metadata={"document_service_error": True}` (the key is exported as
+  `django_spec_rest.openapi.SERVICE_ERROR_METADATA_KEY`); a value other than
+  `True` or `False` is refused with `ImproperlyConfigured` when the schema is
+  generated. Upgrading, a schema loses its 422s: declare the key on each spec
+  that raises a plain `ServiceError` or an `AdditionalInputRequired`, declare
+  `@extend_schema(responses={422: ServiceErrorSerializer})` on one view, or
+  override the new public `ServiceAutoSchema.documents_service_error(spec)` in
+  your schema class to return `True` and keep the 422 everywhere. A drfs
+  spec's `document_service_error=True` moves into `metadata` under the same
+  name. The runtime is unchanged: the edge still answers a plain
+  `ServiceError` 422.
 - **A viewset refuses at `as_view()` a detail action whose row lookup does not
   read the lookup capture.** The capture a router builds (`lookup_url_kwarg`,
   else `lookup_field`) reaches a spec only as a parameter it declares, so a

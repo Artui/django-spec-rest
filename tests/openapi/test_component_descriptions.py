@@ -21,6 +21,7 @@ from rest_framework.permissions import AllowAny
 
 from django_spec_rest import ServiceCreateView
 from django_spec_rest.openapi import (
+    SERVICE_ERROR_METADATA_KEY,
     ActionUnavailableSerializer,
     ServiceConflictSerializer,
     ServiceNotFoundSerializer,
@@ -66,6 +67,7 @@ def _view(responses: dict[int, Any] | None = None) -> type:
         validator=SerializerValidator(TaskSerializer),
         presenter=SerializerPresenter(TaskSerializer),
         input_data=_owner,
+        metadata={SERVICE_ERROR_METADATA_KEY: True},
     )
     view = type(
         "_View",

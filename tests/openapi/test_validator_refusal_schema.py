@@ -7,8 +7,9 @@ view, then validates the wire body against the schema the operation documents
 for that status, so a documented shape that disagrees with the edge fails.
 
 A ``422`` is a service's (or a precondition's, or a provider's) plain
-``ServiceError``, which a spec with a service can always raise whether or not
-it has a Validator.
+``ServiceError``, which a spec with a service can raise whether or not it has
+a Validator; it is documented where the spec declares it
+(``document_service_error`` in its ``metadata``).
 """
 
 from __future__ import annotations
@@ -36,7 +37,7 @@ from rest_framework import serializers
 from rest_framework.test import APIRequestFactory
 
 from django_spec_rest import ServiceCreateView
-from django_spec_rest.openapi import enable_openapi
+from django_spec_rest.openapi import SERVICE_ERROR_METADATA_KEY, enable_openapi
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from tests.testapp.models import Author
@@ -100,14 +101,19 @@ def _spec(validator: Validator | None, **fields: Any) -> ServiceSpec:
     )
 
 
+# The specs whose service raises a plain ``ServiceError`` declare its 422.
+_DECLARED = {SERVICE_ERROR_METADATA_KEY: True}
+
 _SPECS: dict[str, ServiceSpec] = {
     "serializer": _spec(SerializerValidator(_Person)),
     "serializer-many": _spec(SerializerValidator(_Person), many=True),
     "dataclass": _spec(DataclassValidator(_Row)),
     "dataclass-many": _spec(DataclassValidator(_Row), many=True),
     "custom": _spec(_Refusing()),
-    "unprocessable": _spec(SerializerValidator(_Person), service=_unprocessable),
-    "unprocessable-bare": _spec(None, service=_unprocessable),
+    "unprocessable": _spec(
+        SerializerValidator(_Person), service=_unprocessable, metadata=_DECLARED
+    ),
+    "unprocessable-bare": _spec(None, service=_unprocessable, metadata=_DECLARED),
     # A service's own ``ServiceValidationError`` is answered as DRF answers
     # ``ValidationError(detail)``: a sentence or a list of them is a bare list,
     # a mapping's string is a string leaf.
@@ -257,8 +263,8 @@ class TestA422IsAServiceRefusal:
         assert (status, sent) == (422, {"detail": "Could not."})
         jsonschema.validate(sent, _documented(schema, key, "422"))
 
-    def test_it_is_documented_on_a_spec_with_a_service_whether_or_not_it_has_a_validator(
+    def test_it_is_documented_where_declared_whether_or_not_the_spec_has_a_validator(
         self, schema: dict[str, Any]
     ) -> None:
-        for key in _SPECS:
-            assert "422" in _responses(schema, key)
+        for key, spec in _SPECS.items():
+            assert ("422" in _responses(schema, key)) is (spec.metadata is not None)

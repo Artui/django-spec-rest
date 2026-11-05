@@ -12,7 +12,10 @@ answered with, which a project declares with
 [`ActionUnavailableSerializer`][django_spec_rest.openapi.action_unavailable_serializer.ActionUnavailableSerializer],
 [`PermissionDeniedSerializer`][django_spec_rest.openapi.permission_denied_serializer.PermissionDeniedSerializer]
 and
-[`NotAuthenticatedSerializer`][django_spec_rest.openapi.not_authenticated_serializer.NotAuthenticatedSerializer]. Importing this module is safe even without ``drf-spectacular`` installed; it does
+[`NotAuthenticatedSerializer`][django_spec_rest.openapi.not_authenticated_serializer.NotAuthenticatedSerializer];
+and the spec ``metadata`` key
+[`SERVICE_ERROR_METADATA_KEY`][django_spec_rest.openapi.service_error_metadata_key.SERVICE_ERROR_METADATA_KEY]
+by which a spec declares the ``422`` of a plain ``ServiceError``. Importing this module is safe even without ``drf-spectacular`` installed; it does
 not pull in the schema-generator code itself.
 
 The actual ``drf-spectacular`` integration lives in
@@ -41,6 +44,9 @@ from django_spec_rest.openapi.permission_denied_serializer import (
 from django_spec_rest.openapi.service_conflict_serializer import (
     ServiceConflictSerializer,
 )
+from django_spec_rest.openapi.service_error_metadata_key import (
+    SERVICE_ERROR_METADATA_KEY,
+)
 from django_spec_rest.openapi.service_error_serializer import (
     ServiceErrorSerializer,
 )
@@ -52,6 +58,7 @@ from django_spec_rest.openapi.service_validation_error_serializer import (
 )
 
 __all__ = [
+    "SERVICE_ERROR_METADATA_KEY",
     "ActionUnavailableSerializer",
     "NotAuthenticatedSerializer",
     "PermissionDeniedSerializer",

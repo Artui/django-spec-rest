@@ -194,9 +194,20 @@ The query string is read by the kernel's flat reader:
   decimal string, an `OrderingFilter` with no `explode` or `style`, in declared
   order, with `maxItems` 1000, a `MultipleChoiceFilter` with `maxItems`, and
   an array as a repeated key. A validator's refusal is documented as the 400 it
-  answers, and a 422 on every service spec, the status of a plain
-  `ServiceError`. A selector's reads are not documented as query parameters, nor
+  answers. A selector's reads are not documented as query parameters, nor
   the affordance envelope, nor the `null` body of an `allow_none` retrieve.
+- **The 422 is documented only where a spec declares it.** drfs documented the
+  422 of a plain `ServiceError` on every spec with an `input_serializer`,
+  unless `document_service_error=False`; spec-rest documents it on no spec, a
+  service's or a selector's, unless the spec's `metadata` says
+  `{"document_service_error": True}` (`SERVICE_ERROR_METADATA_KEY` in
+  `django_spec_rest.openapi`). So a drfs `document_service_error=True` moves
+  into `metadata`, `False` and `None` are dropped, and a schema generated
+  from the same views loses its 422s until the specs that raise one declare
+  it. A schema subclass that popped the 422 through drfs' private
+  `resolve_service_spec` has nothing left to pop; one that wants the 422
+  everywhere overrides `ServiceAutoSchema.documents_service_error` to return
+  `True` ([Declaring the 422](openapi.md#declaring-the-422)).
 
 ## Serializer context
 
