@@ -210,7 +210,10 @@ over:
   delete reaches. A project that scoped rows to a tenant through either moves
   that scoping into each selector's own queryset (a selector may declare
   `user`): left where it was, a `PATCH` or `DELETE` reaches another tenant's
-  row with no error.
+  row with no error. The reverse holds for an action with no spec: DRF's
+  fallback `retrieve` and a custom `@action` reading `self.get_queryset()`
+  take their rows from the view's `queryset`, never from the list selector,
+  so scoping kept in the list selector alone does not reach them.
 - **A route capture is read only where a spec declares it.** drfs handed a
   selector the captures its signature took (`InputRequired`,
   `Unpack[...UrlExtras]`); the kernel hands a spec only its declared

@@ -23,7 +23,13 @@ carries; releases up to 0.62.0 are in
   `SelectorListView` answers its spec's set to a `GET` or `HEAD` alone. So a
   view under DRF's `DjangoModelPermissions` with no `queryset` attribute now
   raises DRF's own assertion off the list, where it used to read the model
-  off the list spec's set: set `queryset` on it, as DRF asks.
+  off the list spec's set: set `queryset` on it, as DRF asks. And the rows an
+  action with no spec of its own reaches now come from `queryset`, no longer
+  from the list selector: DRF's fallback `retrieve` (its `get_object()`) and a
+  custom `@action` reading `self.get_queryset()` reach a row the list selector
+  leaves out. A project that scoped a tenant in its list selector alone and
+  relied on it for those actions scopes `queryset` too, or serves them with a
+  spec.
 
 ### Fixed
 

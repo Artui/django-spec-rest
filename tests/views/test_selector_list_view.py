@@ -206,7 +206,7 @@ class TestUnderDjangoModelPermissions:
 
     def test_off_the_list_with_no_queryset_is_drf_s_own_assertion(self) -> None:
         view = _guarded(_NEEDS_A_NAME, queryset=None)
-        with pytest.raises(AssertionError, match="queryset"):
+        with pytest.raises(AssertionError, match="should either include a `queryset` attribute"):
             _as_admin(view, "options")
 
 
