@@ -115,6 +115,7 @@ spec is the kernel's, and each drfs field maps onto one of its seats:
 | `reads=[UrlKwarg("pk")]`, `reads=[QueryParam("status")]` | `reads=Parameters.of(Parameter("pk", "integer", required=True))`: the edge reads a declared read from the route first, then the query string |
 | a `QueryParam` no callable names | `shapes=Parameters.of(...)` |
 | `NotClientInput`, a hidden lookup key | a typed `kwargs` provider filling the key, which the kernel then keeps out of the caller's arguments (`server_owned_keys`) |
+| `InputRequired`, `InputDescription("...")` on a key the selector reads | `reads=Parameters.of(Parameter(..., required=True, help="..."))`, as [worked below](#a-nested-routes-captures) |
 | `PolymorphicServiceSpec` | one kernel spec per route or action; the polymorphic request body and its `{View}_{action}_Request` OpenAPI component are gone |
 | `TargetGuard` | the kernel's preconditions and object permission, which see the row |
 
@@ -125,6 +126,66 @@ so a project passing either to `extend()` or the constructor drops it.
 
 The example project's [views](https://github.com/Artui/django-spec-rest/blob/main/examples/invoices/views/__init__.py)
 declare every seat above.
+
+### A nested route's captures
+
+A drfs selector on a nested route such as
+`projects/<project_pk>/tasks/<pk>/` took its captures from an
+`Unpack[TypedDict]` signature, marked so a schema-driven caller was told it
+must send them:
+
+```python
+class TaskRoute(HttpExtras[User], total=False):
+    project_pk: Annotated[int, InputRequired, InputDescription("The project the task belongs to.")]
+    pk: Annotated[int, InputRequired, InputDescription("The task to read.")]
+
+
+def get_task(**route: Unpack[TaskRoute]) -> Task:
+    return Task.objects.get(project_id=route["project_pk"], pk=route["pk"])
+```
+
+On the kernel each capture is a declared read, its marker a keyword of its
+`Parameter` (`required=True`, and `help=` for the description), and the
+selector takes them by name:
+
+```python
+from django_service_specs import Parameter, Parameters, SelectorKind, SelectorSpec, Unrestricted
+from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
+
+
+def get_task(*, project_pk: int, pk: int) -> Task:
+    return Task.objects.get(project_id=project_pk, pk=pk)
+
+
+task_detail = SelectorSpec(
+    kind=SelectorKind.RETRIEVE,
+    selector=get_task,
+    permissions=(Unrestricted(),),
+    reads=Parameters.of(
+        Parameter("project_pk", "integer", required=True, help="The project the task belongs to."),
+        Parameter("pk", "integer", required=True, help="The task to read."),
+    ),
+    presenter=SerializerPresenter(TaskSerializer),
+)
+```
+
+The edge reads each from the route. The same declaration is what an agent is
+told: the kernel's `spec_caller_input_schema`, which describes a spec's tool to
+an agent, gives both keys as required and carries each `help` as its
+`description`, so the job the markers did for a schema-driven caller carries
+over:
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "project_pk": {"type": "integer", "description": "The project the task belongs to."},
+    "pk": {"type": "integer", "description": "The task to read."}
+  },
+  "additionalProperties": false,
+  "required": ["project_pk", "pk"]
+}
+```
 
 ## Views and viewsets
 
@@ -137,6 +198,15 @@ declare every seat above.
   `collection_selector_spec` (a set) or `many=True`, and `as_view()` refuses one
   that declares none. A `get_object()` override no longer chooses a write's
   row.
+- **A spec's rows are scoped by its selector alone.** No action a spec serves
+  asks the view's `get_queryset()`: not `list`, `retrieve`, a
+  `@selector_action`, nor a write's target lookup. The view's `filter_backends`
+  narrow a spec's `list` (a viewset's, and `SelectorListView`'s) and nothing
+  else, so not `retrieve`, a `@selector_action`'s rows, or the row an update or
+  delete reaches. A project that scoped rows to a tenant through either moves
+  that scoping into each selector's own queryset (a selector may declare
+  `user`): left where it was, a `PATCH` or `DELETE` reaches another tenant's
+  row with no error.
 - **A route capture is read only where a spec declares it.** drfs handed a
   selector the captures its signature took (`InputRequired`,
   `Unpack[...UrlExtras]`); the kernel hands a spec only its declared
@@ -157,8 +227,14 @@ declare every seat above.
   at `as_view()`, with the per-action `get_<action>_selector_kwargs`: return
   those keys from the spec's own `kwargs` provider, which may declare
   `request` and `view`.
-- **A viewset's `list` with a spec never goes through `get_queryset()`**; the
-  view's filter backends and paginator still apply to the set the spec read.
+- **A viewset's `list` with a spec never goes through `get_queryset()`**, nor
+  does its `retrieve`; the view's filter backends and paginator still apply to
+  the set the spec read. So an eager-loading mixin that adds `select_related`
+  or `prefetch_related` in a `get_queryset()` override no longer runs, and the
+  list goes N+1 with no error. Declare the loading on the selector spec:
+  `SelectorSpec(select_related=..., prefetch_related=...)`, or an
+  `extend_queryset` callable, which is handed the selector's declared reads
+  but never its `shapes`.
 - **`success_status` and `response_finalizer` are the view's or the action's**,
   since a kernel spec declares no HTTP answer. A drfs spec's value moves to the
   route that served it: on a standalone view or a viewset whose actions all
@@ -342,6 +418,15 @@ The query string is read by the kernel's flat reader:
 
 ## Known limits
 
+- Code reading a drfs spec's attributes gets `None` from a kernel spec, with
+  no error, where it reads them through `getattr(spec, "<name>", None)`. The
+  kernel's spellings: `output_serializer` is `spec.presenter`, and its
+  `serializer_class` where it is a `SerializerPresenter` (a dataclass
+  declaration's generated `DataclassSerializer`, not the dataclass);
+  `input_serializer` is `spec.validator`, and its `serializer` where it is a
+  `SerializerValidator` (a `SelectorSpec` has no `validator`);
+  `permission_classes` is `spec.permissions`, a tuple of kernel checks, whose
+  DRF classes are a `DRFPermissionCheck`'s `permission_classes`.
 - A kernel spec under `@selector_action` does not read the view's
   `get_selector_kwargs`, and nothing refuses the override there.
 - A `@service_action` or `@selector_action` spec is seed-checked by its

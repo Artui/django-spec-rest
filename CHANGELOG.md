@@ -11,6 +11,22 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+### Fixed
+
+- **The page on moving from drfs names four changes that pass without an
+  error.** A project scoping rows to a tenant in `get_queryset()` or through
+  `filter_backends` loses it on every action a spec serves, except that the
+  backends still narrow a `list`, so an update or delete reaches any row its
+  selector finds: the scoping moves into the selector. An eager-loading mixin overriding
+  `get_queryset()` no longer runs on `list` or `retrieve`, so the loading moves
+  to the selector spec's `select_related`, `prefetch_related` or
+  `extend_queryset`. Code reading a drfs spec's `output_serializer`,
+  `input_serializer` or `permission_classes` through `getattr(..., None)` gets
+  `None`; the page names the kernel's spellings. And a worked example takes a
+  nested route's captures, marked `InputRequired` and `InputDescription` on an
+  `Unpack[TypedDict]` signature, to `reads=` with `required=True` and `help=`,
+  and shows the schema an agent is described by.
+
 ## [0.8.0] — 2026-11-05
 
 ### Added
