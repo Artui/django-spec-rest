@@ -221,6 +221,12 @@ class ApiSchema(ServiceAutoSchema):
         return True
 ```
 
+Your class documents the views it is the schema of: set `schema = ApiSchema()`
+on your views, or on a base class they share. `enable_openapi()` sets the
+package's own `ServiceAutoSchema` on the package's view classes, which
+outranks a `DEFAULT_SCHEMA_CLASS` naming yours, as the top of this page
+says.
+
 Every other `@extend_schema` argument a project supplies wins, and
 `@extend_schema(parameters=...)` merges over the filter parameters as it does
 for a view-level `FilterSet`. `responses=` is added to what the spec documents,
