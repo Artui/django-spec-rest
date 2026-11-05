@@ -185,6 +185,20 @@ class TestNoOtherActionIsNarrowedOrFedByTheView:
         assert Author.objects.get(pk=authors["b"].pk).name == "z"
         assert _ASKED == []
 
+    def test_a_partial_update_reaches_the_row_the_backend_hides(
+        self, authors: dict[str, Author]
+    ) -> None:
+        response = _call(
+            "patch", "partial_update", {"name": "z"}, viewset=_WriteViewSet, pk=authors["b"].pk
+        )
+        assert response.status_code == 200
+        assert Author.objects.get(pk=authors["b"].pk).name == "z"
+        assert _ASKED == []
+
+    def test_the_write_viewset_wires_no_retrieve_spec(self) -> None:
+        """Else ``get_object()`` finds the row for a write and the tests above prove nothing."""
+        assert "retrieve" not in _WriteViewSet.action_specs
+
     def test_a_destroy_reaches_the_row_the_backend_hides(self, authors: dict[str, Author]) -> None:
         response = _call("delete", "destroy", viewset=_WriteViewSet, pk=authors["b"].pk)
         assert response.status_code == 204
