@@ -646,6 +646,20 @@ def test_an_offline_pair_is_built_for_its_own_shapes_within_one_edge_call() -> N
     assert (first["fields_asked"], second["fields_asked"]) == (["a"], ["b"])
 
 
+def test_an_offline_pair_is_reused_within_one_edge_call() -> None:
+    """Two values of one call, presented apart, render under the one request built for it."""
+    context = PresentationContext(object())
+    presenter = SerializerPresenter(_Who)
+    token = EDGE_CALL.set(EdgeCallState())
+    try:
+        first = presenter.presented(_row(), context)
+        second = presenter.presented(_row(), context)
+    finally:
+        EDGE_CALL.reset(token)
+
+    assert first["request_seen"] is second["request_seen"]
+
+
 def test_a_registered_request_is_left_as_it_is_under_a_shape() -> None:
     offline = build_offline_context(object(), {})
     context = PresentationContext(
