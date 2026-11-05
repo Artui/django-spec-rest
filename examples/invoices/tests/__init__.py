@@ -369,6 +369,13 @@ class OpenAPISchemaTests(APITestCase):
                     self._body_component("/invoices/{id}/", method, "409"), "ServiceConflict"
                 )
 
+    def test_the_send_documents_the_status_its_decorator_declares(self) -> None:
+        # ``success_status=202`` on ``send``: the schema follows the keyword.
+        responses = self.schema["paths"]["/invoices/{id}/send/"]["post"]["responses"]
+
+        self.assertIn("202", responses)
+        self.assertNotIn("200", responses)
+
     def test_the_422_is_documented_where_the_spec_declares_it(self) -> None:
         # ``SEND_SPEC`` declares it in its ``metadata``: ``send_invoice`` raises
         # a plain ``ServiceError`` (see ``test_any_other_service_error_is_a_422``).
