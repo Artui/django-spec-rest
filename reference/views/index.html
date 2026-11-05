@@ -1891,7 +1891,10 @@ overlapping keys:</p>
 <p>The per-action layer reads <code>self.action</code>, so it applies to viewsets only.</p>
 <p>A kernel spec declares neither HTTP answer, so the response's two HTTP hooks
 are the view's: <code>success_status</code> and <code>response_finalizer</code> below, read
-off the class unbound.</p>
+off the class unbound. On a viewset an action may declare its own, which
+outranks these: <code>@service_action</code>'s keywords, or a
+<code>get_&lt;action&gt;_success_status</code> / <code>get_&lt;action&gt;_response_finalizer</code> hook
+(<code>action_answer</code>, test_per_action_answers).</p>
 
 
 

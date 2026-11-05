@@ -1373,7 +1373,8 @@ action mixins, and <code>@service_action</code> / <code>@selector_action</code>:
   presents rows (<code>_presents_rows</code>). A spec with no presenter documents
   the no-content response, and a selector spec with none keeps the base's
   reading of the view's <code>serializer_class</code>, which renders it.</li>
-<li><strong>The status</strong> is the view's <code>success_status</code> where it is an <code>int</code>,
+<li><strong>The status</strong> is the view's <code>success_status</code> for the action, per
+  action where one is declared, where it is an <code>int</code>,
   since a kernel spec declares none, over the action's default; a body is
   documented as the <code>200</code> it is served as where that is <code>204</code>, and the
   <code>204</code> beside it where <code>can_present_nothing</code>.</li>

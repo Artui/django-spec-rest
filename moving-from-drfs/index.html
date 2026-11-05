@@ -448,6 +448,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#the-codemod" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The codemod
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-import-map" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1113,6 +1124,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#the-codemod" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The codemod
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#the-import-map" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1319,6 +1341,53 @@ clients see change. drfs' history is in its
 </table>
 <p>The package reads no setting of its own. <code>SPEC_REST</code> is reserved as the name
 of the first one.</p>
+<h2 id="the-codemod">The codemod<a class="headerlink" href="#the-codemod" title="Permanent link">&para;</a></h2>
+<p>The repository carries a codemod,
+<a href="https://github.com/Artui/django-spec-rest/blob/main/tools/drfs_codemod/README.md"><code>tools/drfs_codemod</code></a>,
+that does the mechanical part of this page in place. It is not in the wheel:
+run it from a clone, with <code>libcst</code> installed, over the project's own modules.</p>
+<p>It rewrites each drfs import by the module it names, following the
+<a href="#the-import-map">import map</a>, so a kernel name spelled like a drfs one is never
+taken for it. It turns each drfs <code>ServiceSpec</code> and <code>SelectorSpec</code> into the
+kernel's, moving each field onto its seat as <a href="#declaring-a-spec">below</a>: the
+serializers and their contexts, <code>permission_classes</code>, an output selector's
+serializer and context, <code>document_service_error</code> and <code>field_audiences</code>. A
+spec's <code>success_status</code> and <code>response_finalizer</code> move to the views in the same
+module that serve it, as <a href="#views-and-viewsets">Views and viewsets</a> places them,
+for a spec bound to a module-level name; one built inline in a view is marked.
+A second run changes nothing.</p>
+<p>Every site it leaves gets a comment beginning <code># drfs-codemod:</code> above its
+statement, giving the reason, and a line of its report, <code>path:line: reason</code>.
+A site stays in the report until its comment is deleted. <code>--check</code> writes
+nothing and exits 1 while a file would still change.</p>
+<p>What it does not do:</p>
+<ul>
+<li><strong>Declare reads.</strong> drfs handed a selector the route captures and query
+  values its signature named; the kernel hands it only the <code>reads=</code> its spec
+  declares. The codemod reads the selector's <code>def</code> and writes the
+  <code>reads=Parameters.of(...)</code> it would take into the marker, but applies none,
+  since a key a provider or the server filled would become the caller's to
+  send.</li>
+<li><strong>Translate a <code>UrlKwarg</code> or <code>QueryParam</code> list.</strong> A drfs <code>reads=</code> is marked
+  and kept as it was, for a <code>Parameter</code> declaring its type to replace it.</li>
+<li><strong>Split a <code>PolymorphicServiceSpec</code></strong> into one kernel spec per route or
+  action, nor replace <code>OfflineContract</code>, <code>TargetGuard</code>, <code>ArgumentBinding</code> or
+  an input marker (<code>InputRequired</code>, <code>NotClientInput</code>, <code>InputDescription</code>). A
+  use of one is marked, and its import kept.</li>
+<li><strong>Answer from another module.</strong> A <code>success_status</code> or <code>response_finalizer</code>
+  whose view is in another module, or that no view serves, is marked on the
+  spec: set it on that view.</li>
+<li><strong>Follow a module import of drfs.</strong> <code>import rest_framework_services</code> (or a
+  submodule) is marked, and a spec built through it, such as
+  <code>drfs.ServiceSpec(...)</code>, is left whole.</li>
+<li><strong>Change what a serializer accepts.</strong> It translates the serializer the
+  project declared, so an empty PATCH answers as that serializer did: a
+  partial serializer lets it through to the service and the model, not the
+  kernel's 400.</li>
+<li><strong>Format.</strong> What it writes keeps the layout of what it replaced, and a
+  keyword it adds may make a line long; run the project's formatter after
+  it.</li>
+</ul>
 <h2 id="the-import-map">The import map<a class="headerlink" href="#the-import-map" title="Permanent link">&para;</a></h2>
 <p>The package root exports <a href="../reference/#public-surface">29 names</a>, none of
 them the kernel's. A name drfs re-exported from the kernel is imported from
@@ -1479,8 +1548,14 @@ declare every seat above.</p>
   <code>request</code> and <code>view</code>.</li>
 <li><strong>A viewset's <code>list</code> with a spec never goes through <code>get_queryset()</code></strong>; the
   view's filter backends and paginator still apply to the set the spec read.</li>
-<li><strong><code>success_status</code> and <code>response_finalizer</code> are the view's</strong>, read off the
-  class for every action, since a kernel spec declares no HTTP answer.</li>
+<li><strong><code>success_status</code> and <code>response_finalizer</code> are the view's or the action's</strong>,
+  since a kernel spec declares no HTTP answer. A drfs spec's value moves to the
+  route that served it: on a standalone view or a viewset whose actions all
+  answer alike, the class attribute; on a <code>@service_action</code>, the decorator's
+  <code>success_status=</code> and <code>response_finalizer=</code>; on an <code>action_specs</code> entry, a
+  <code>get_&lt;action&gt;_success_status</code> or <code>get_&lt;action&gt;_response_finalizer</code> hook,
+  a method declaring what the callable did, or an <code>int</code> for a status
+  (<a href="../reference/viewsets/#per-action-answers">Per-action answers</a>).</li>
 </ul>
 <h2 id="what-a-client-sees">What a client sees<a class="headerlink" href="#what-a-client-sees" title="Permanent link">&para;</a></h2>
 <h3 id="the-query-string">The query string<a class="headerlink" href="#the-query-string" title="Permanent link">&para;</a></h3>

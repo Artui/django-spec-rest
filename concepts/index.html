@@ -1405,7 +1405,8 @@ neither a presenter nor affordances is rendered by the view's
 goes out under 204: a value to present answers 200. <code>success_status</code> on the
 view overrides the default, with an <code>int</code> or a callable declaring any of
 <code>result</code>, <code>instance</code>, <code>request</code>, <code>view</code>; <code>response_finalizer</code> may replace the
-response built. <code>as_view()</code> refuses a callable
+response built. On a viewset an action may declare its own
+(<a href="../reference/viewsets/#per-action-answers">Per-action answers</a>). <code>as_view()</code> refuses a callable
 requiring a name the view cannot supply, whether or not it also takes
 <code>**kwargs</code>, which is handed the names the view has and no others.</p>
 <h2 id="refusals">Refusals<a class="headerlink" href="#refusals" title="Permanent link">&para;</a></h2>

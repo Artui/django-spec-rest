@@ -1129,8 +1129,11 @@ spec through a decorator.</p>
 method gives DRF's <code>@action</code> its name. <code>detail</code>, <code>methods</code>, <code>url_path</code>,
 <code>url_name</code> and any other keyword go to DRF's <code>@action</code>. On a detail route the
 row is the spec's own target selector's, read from the route's <code>pk</code>, never
-<code>get_object()</code>'s. The answer is the spec's presenter's, under the viewset's
-<code>success_status</code> (200 by default).</p>
+<code>get_object()</code>'s. The answer is the spec's presenter's, under the action's
+<code>success_status</code> and through its <code>response_finalizer</code> where the decorator
+declares them, else the viewset's (200 by default):
+<code>@service_action(SEND_SPEC, detail=True, methods=["post"], success_status=202)</code>.
+See <a href="../../reference/viewsets/#per-action-answers">Per-action answers</a>.</p>
 <h2 id="a-custom-read-selector_action">A custom read: <code>@selector_action</code><a class="headerlink" href="#a-custom-read-selector_action" title="Permanent link">&para;</a></h2>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_spec_rest</span><span class="w"> </span><span class="kn">import</span> <span class="n">SelectorViewSet</span><span class="p">,</span> <span class="n">selector_action</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
