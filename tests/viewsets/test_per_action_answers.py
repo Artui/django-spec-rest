@@ -229,21 +229,25 @@ class TestAnActionSpecsEntryAnswersThroughItsHook:
 
 
 class TestTheMountedChecksReadThePerActionValue:
-    @pytest.mark.parametrize("action", ["create", "update", "destroy"])
+    # ``partial_update`` has no entry of its own: a PATCH dispatches the
+    # ``update`` spec, and reads the hook named for its own action.
+    @pytest.mark.parametrize("action", ["create", "update", "partial_update", "destroy"])
     def test_a_status_hook_the_view_cannot_resolve_is_refused(self, action: str) -> None:
         def hook(self: Any, *, tenant: Any) -> int:
             return 200
 
         viewset = _hooked_viewset(**{f"get_{action}_success_status": hook})
-        with pytest.raises(ImproperlyConfigured, match=rf"\[{action!r}\].*success_status"):
+        with pytest.raises(ImproperlyConfigured, match=rf"\b{action}\b.*success_status"):
             viewset.as_view({"post": action})
 
-    @pytest.mark.parametrize("action", ["create", "update", "destroy"])
+    # ``partial_update`` has no entry of its own: a PATCH dispatches the
+    # ``update`` spec, and reads the hook named for its own action.
+    @pytest.mark.parametrize("action", ["create", "update", "partial_update", "destroy"])
     def test_a_finalizer_hook_the_view_cannot_call_is_refused(self, action: str) -> None:
         def hook(self: Any, response: Response, /) -> None: ...
 
         viewset = _hooked_viewset(**{f"get_{action}_response_finalizer": hook})
-        with pytest.raises(ImproperlyConfigured, match=rf"\[{action!r}\].*response_finalizer"):
+        with pytest.raises(ImproperlyConfigured, match=rf"\b{action}\b.*response_finalizer"):
             viewset.as_view({"post": action})
 
     def test_a_hook_s_own_self_is_not_a_key_it_requires(self) -> None:
@@ -279,7 +283,7 @@ class TestTheMountedChecksReadThePerActionValue:
     @pytest.mark.parametrize("name", ["success_status", "response_finalizer"])
     def test_a_decorator_value_beside_a_hook_is_refused(self, name: str) -> None:
         # Two values for one action, and no reading of which one answers.
-        viewset = _decorated_viewset(**{f"get_enrol_{name}": _header("hook")})
+        viewset = _decorated_viewset(**{f"get_enrol_{name}": staticmethod(_header("hook"))})
         with pytest.raises(ImproperlyConfigured, match=rf"enrol.*get_enrol_{name}"):
             viewset.as_view({"post": "enrol"})
 
@@ -332,3 +336,15 @@ class TestAStaticHookIsReadAsTheInstanceReadsIt:
         view = viewset.as_view({"post": "create"}, get_create_success_status=lambda: 203)
         response = view(factory.post("/", {"name": "Ada"}, format="json"))
         assert response.status_code == 203
+
+
+class TestAHookThatIsNoMethod:
+    def test_a_plain_function_hook_is_refused_by_name(self) -> None:
+        # Read off an instance a function is bound, so one with no ``self``
+        # cannot be called; ``staticmethod`` keeps it unbound.
+        def accepted(*, result: Author) -> int:
+            return 203
+
+        viewset = _hooked_viewset(get_create_success_status=accepted)
+        with pytest.raises(ImproperlyConfigured, match=r"get_create_success_status.*staticmethod"):
+            viewset.as_view({"post": "create"})

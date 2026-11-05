@@ -191,12 +191,29 @@ def _as_the_instance_reads(view_cls: type | MountedView, name: str) -> Any:
 
 
 def _action_hooks(view_cls: type | MountedView, action: str) -> dict[str, Any]:
-    """Each ``get_<action>_<answer>`` hook ``view_cls`` defines, as an instance reads it."""
+    """Each ``get_<action>_<answer>`` hook ``view_cls`` defines, as an instance reads it.
+
+    A plain function stored as one is bound as a method, so one declaring no
+    ``self`` has no signature to read, and is refused by name rather than as
+    ``inspect``'s ``ValueError`` (test_per_action_answers'
+    test_a_plain_function_hook_is_refused_by_name).
+    """
     hooks: dict[str, Any] = {}
     for name in _ANSWERS:
-        hook = _as_the_instance_reads(view_cls, f"get_{action}_{name}")
-        if hook is not None:
-            hooks[name] = hook
+        hook_name = f"get_{action}_{name}"
+        hook = _as_the_instance_reads(view_cls, hook_name)
+        if hook is None:
+            continue
+        if callable(hook):
+            try:
+                inspect.signature(hook)
+            except ValueError as error:
+                raise ImproperlyConfigured(
+                    f"{view_cls.__name__}: {hook_name} is read as a method, so its first "
+                    "parameter is the view, and it declares none. Declare `self`, or wrap "
+                    "a plain function in staticmethod()."
+                ) from error
+        hooks[name] = hook
     return hooks
 
 
@@ -311,7 +328,9 @@ def _fills_service_keywords(view_cls: type | MountedView, action: str) -> bool:
     )
 
 
-def _validate_action_answers(view_cls: type | MountedView, action: str, handler: Any) -> None:
+def _validate_action_answers(
+    view_cls: type | MountedView, action: str, handler: Any = None
+) -> None:
     """Ask a decorated action's per-action hooks what a standalone view's answers are asked.
 
     Only a service action dispatches with them, and a selector action's are
@@ -485,6 +504,15 @@ class _ActionSpecsMixin(_ServesRaisedSchema):
         pool_seeds = view_pool_seeds(mounted)
         for action, spec in mounted.action_specs.items():
             _validate_action_spec(mounted, action, spec, pool_seeds=pool_seeds)
+        # A ``PATCH`` with no entry of its own dispatches the ``update`` entry
+        # but reads the answers named for ``partial_update``, so they are
+        # asked here; the spec itself was asked as ``update``'s. With an
+        # entry of its own they were asked under its key, and asking them
+        # twice costs nothing (test_per_action_answers'
+        # test_a_status_hook_the_view_cannot_resolve_is_refused[partial_update]).
+        for action, fallback in _ACTION_SPEC_FALLBACKS.items():
+            if fallback in mounted.action_specs:
+                _validate_action_answers(mounted, action)
         _validate_decorated_actions(mounted, pool_seeds=pool_seeds)
         actions = args[0] if args else initkwargs.get("actions")
         _validate_lookup_captures(mounted, actions, initkwargs)
