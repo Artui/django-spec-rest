@@ -229,7 +229,7 @@ class DRFPermissionCheckTests(APITestCase):
 
         response = self.client.post(f"/invoices/{self.invoice.pk}/send/")
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED, response.data)
         self.assertEqual(response.data["status"], Invoice.STATUS_SENT)
 
     def test_off_http_the_same_check_admits_a_user(self) -> None:
@@ -443,7 +443,7 @@ class ASeedTheViewSetRegistersTests(APITestCase):
     def test_otherwise_the_invoice_is_sent(self) -> None:
         response = self.client.post(f"/invoices/{self.invoice.pk}/send/")
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED, response.data)
 
     def test_a_viewset_not_registering_it_is_refused_at_as_view(self) -> None:
         """The decorated action's seeds are the viewset's, checked at mount."""
