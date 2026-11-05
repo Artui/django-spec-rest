@@ -478,6 +478,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Declaring a spec">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#a-nested-routes-captures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A nested route's captures
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1154,6 +1171,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Declaring a spec">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#a-nested-routes-captures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A nested route's captures
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1383,7 +1417,7 @@ nothing and exits 1 while a file would still change.</p>
 <li><strong>Change what a serializer accepts.</strong> It translates the serializer the
   project declared, so an empty PATCH answers as that serializer did: a
   partial serializer lets it through to the service and the model, not the
-  kernel's 400.</li>
+  kernel's 400 (<a href="#bodies-and-arguments">a PATCH hands the service the keys sent</a>).</li>
 <li><strong>Format.</strong> What it writes keeps the layout of what it replaced, and a
   keyword it adds may make a line long; run the project's formatter after
   it.</li>
@@ -1500,6 +1534,10 @@ spec is the kernel's, and each drfs field maps onto one of its seats:</p>
 <td>a typed <code>kwargs</code> provider filling the key, which the kernel then keeps out of the caller's arguments (<code>server_owned_keys</code>)</td>
 </tr>
 <tr>
+<td><code>InputRequired</code>, <code>InputDescription("...")</code> on a key the selector reads</td>
+<td><code>reads=Parameters.of(Parameter(..., required=True, help="..."))</code>, as <a href="#a-nested-routes-captures">worked below</a></td>
+</tr>
+<tr>
 <td><code>PolymorphicServiceSpec</code></td>
 <td>one kernel spec per route or action; the polymorphic request body and its <code>{View}_{action}_Request</code> OpenAPI component are gone</td>
 </tr>
@@ -1515,6 +1553,56 @@ spec is the kernel's, and each drfs field maps onto one of its seats:</p>
 so a project passing either to <code>extend()</code> or the constructor drops it.</p>
 <p>The example project's <a href="https://github.com/Artui/django-spec-rest/blob/main/examples/invoices/views/__init__.py">views</a>
 declare every seat above.</p>
+<h3 id="a-nested-routes-captures">A nested route's captures<a class="headerlink" href="#a-nested-routes-captures" title="Permanent link">&para;</a></h3>
+<p>A drfs selector on a nested route such as
+<code>projects/&lt;project_pk&gt;/tasks/&lt;pk&gt;/</code> took its captures from an
+<code>Unpack[TypedDict]</code> signature, marked so a schema-driven caller was told it
+must send them:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">TaskRoute</span><span class="p">(</span><span class="n">HttpExtras</span><span class="p">[</span><span class="n">User</span><span class="p">],</span> <span class="n">total</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">project_pk</span><span class="p">:</span> <span class="n">Annotated</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">InputRequired</span><span class="p">,</span> <span class="n">InputDescription</span><span class="p">(</span><span class="s2">&quot;The project the task belongs to.&quot;</span><span class="p">)]</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">pk</span><span class="p">:</span> <span class="n">Annotated</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">InputRequired</span><span class="p">,</span> <span class="n">InputDescription</span><span class="p">(</span><span class="s2">&quot;The task to read.&quot;</span><span class="p">)]</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="k">def</span><span class="w"> </span><span class="nf">get_task</span><span class="p">(</span><span class="o">**</span><span class="n">route</span><span class="p">:</span> <span class="n">Unpack</span><span class="p">[</span><span class="n">TaskRoute</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Task</span><span class="p">:</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="k">return</span> <span class="n">Task</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">project_id</span><span class="o">=</span><span class="n">route</span><span class="p">[</span><span class="s2">&quot;project_pk&quot;</span><span class="p">],</span> <span class="n">pk</span><span class="o">=</span><span class="n">route</span><span class="p">[</span><span class="s2">&quot;pk&quot;</span><span class="p">])</span>
+</span></code></pre></div>
+<p>On the kernel each capture is a declared read, its marker a keyword of its
+<code>Parameter</code> (<code>required=True</code>, and <code>help=</code> for the description), and the
+selector takes them by name:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_service_specs</span><span class="w"> </span><span class="kn">import</span> <span class="n">Parameter</span><span class="p">,</span> <span class="n">Parameters</span><span class="p">,</span> <span class="n">SelectorKind</span><span class="p">,</span> <span class="n">SelectorSpec</span><span class="p">,</span> <span class="n">Unrestricted</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_spec_rest.service_specs.serializer_presenter</span><span class="w"> </span><span class="kn">import</span> <span class="n">SerializerPresenter</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="k">def</span><span class="w"> </span><span class="nf">get_task</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">project_pk</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">pk</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Task</span><span class="p">:</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="k">return</span> <span class="n">Task</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">project_id</span><span class="o">=</span><span class="n">project_pk</span><span class="p">,</span> <span class="n">pk</span><span class="o">=</span><span class="n">pk</span><span class="p">)</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="n">task_detail</span> <span class="o">=</span> <span class="n">SelectorSpec</span><span class="p">(</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>    <span class="n">kind</span><span class="o">=</span><span class="n">SelectorKind</span><span class="o">.</span><span class="n">RETRIEVE</span><span class="p">,</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>    <span class="n">selector</span><span class="o">=</span><span class="n">get_task</span><span class="p">,</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>    <span class="n">permissions</span><span class="o">=</span><span class="p">(</span><span class="n">Unrestricted</span><span class="p">(),),</span>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>    <span class="n">reads</span><span class="o">=</span><span class="n">Parameters</span><span class="o">.</span><span class="n">of</span><span class="p">(</span>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>        <span class="n">Parameter</span><span class="p">(</span><span class="s2">&quot;project_pk&quot;</span><span class="p">,</span> <span class="s2">&quot;integer&quot;</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;The project the task belongs to.&quot;</span><span class="p">),</span>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>        <span class="n">Parameter</span><span class="p">(</span><span class="s2">&quot;pk&quot;</span><span class="p">,</span> <span class="s2">&quot;integer&quot;</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">help</span><span class="o">=</span><span class="s2">&quot;The task to read.&quot;</span><span class="p">),</span>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>    <span class="p">),</span>
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>    <span class="n">presenter</span><span class="o">=</span><span class="n">SerializerPresenter</span><span class="p">(</span><span class="n">TaskSerializer</span><span class="p">),</span>
+</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="p">)</span>
+</span></code></pre></div>
+<p>The edge reads each from the route. The same declaration is what an agent is
+told: the kernel's <code>spec_caller_input_schema</code>, which describes a spec's tool to
+an agent, gives both keys as required and carries each <code>help</code> as its
+<code>description</code>, so the job the markers did for a schema-driven caller carries
+over:</p>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="p">{</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;object&quot;</span><span class="p">,</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">  </span><span class="nt">&quot;properties&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">    </span><span class="nt">&quot;project_pk&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;integer&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;description&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;The project the task belongs to.&quot;</span><span class="p">},</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">    </span><span class="nt">&quot;pk&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;integer&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;description&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;The task to read.&quot;</span><span class="p">}</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">  </span><span class="p">},</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">  </span><span class="nt">&quot;additionalProperties&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w">  </span><span class="nt">&quot;required&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;project_pk&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;pk&quot;</span><span class="p">]</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="p">}</span>
+</span></code></pre></div>
 <h2 id="views-and-viewsets">Views and viewsets<a class="headerlink" href="#views-and-viewsets" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong><code>spec</code> and <code>action_specs</code> take kernel specs.</strong> <code>@service_action(spec)</code> and
@@ -1526,6 +1614,17 @@ declare every seat above.</p>
   <code>collection_selector_spec</code> (a set) or <code>many=True</code>, and <code>as_view()</code> refuses one
   that declares none. A <code>get_object()</code> override no longer chooses a write's
   row.</li>
+<li><strong>A spec's rows are scoped by its selector alone.</strong> No action a spec serves
+  takes its rows from the view's <code>get_queryset()</code>: not <code>list</code>, <code>retrieve</code>, a
+  <code>@selector_action</code>, nor a write's target lookup (a permission class that
+  calls it, as DRF's <code>DjangoModelPermissions</code> does, reads its model and
+  narrows nothing). The view's <code>filter_backends</code>
+  narrow a spec's <code>list</code> (a viewset's, and <code>SelectorListView</code>'s) and nothing
+  else, so not <code>retrieve</code>, a <code>@selector_action</code>'s rows, or the row an update or
+  delete reaches. A project that scoped rows to a tenant through either moves
+  that scoping into each selector's own queryset (a selector may declare
+  <code>user</code>): left where it was, a <code>PATCH</code> or <code>DELETE</code> reaches another tenant's
+  row with no error.</li>
 <li><strong>A route capture is read only where a spec declares it.</strong> drfs handed a
   selector the captures its signature took (<code>InputRequired</code>,
   <code>Unpack[...UrlExtras]</code>); the kernel hands a spec only its declared
@@ -1546,8 +1645,15 @@ declare every seat above.</p>
   at <code>as_view()</code>, with the per-action <code>get_&lt;action&gt;_selector_kwargs</code>: return
   those keys from the spec's own <code>kwargs</code> provider, which may declare
   <code>request</code> and <code>view</code>.</li>
-<li><strong>A viewset's <code>list</code> with a spec never goes through <code>get_queryset()</code></strong>; the
-  view's filter backends and paginator still apply to the set the spec read.</li>
+<li><strong>A viewset's <code>list</code> with a spec never takes its rows from
+  <code>get_queryset()</code></strong>, nor does its <code>retrieve</code>; the view's filter backends and
+  paginator still apply to the set the spec read. So an eager-loading mixin
+  that adds <code>select_related</code> or <code>prefetch_related</code> in a <code>get_queryset()</code>
+  override no longer loads the rows the list serves, and the list goes N+1
+  with no error. Declare the loading on the selector spec:
+  <code>SelectorSpec(select_related=..., prefetch_related=...)</code>, or an
+  <code>extend_queryset</code> callable, which is handed the selector's declared reads
+  but never its <code>shapes</code>.</li>
 <li><strong><code>success_status</code> and <code>response_finalizer</code> are the view's or the action's</strong>,
   since a kernel spec declares no HTTP answer. A drfs spec's value moves to the
   route that served it: on a standalone view or a viewset whose actions all
@@ -1589,6 +1695,18 @@ declare every seat above.</p>
   field may not be null.</code> is <code>This field cannot be null.</code>. A client matching
   on a message must match the new one; the keys and the 400 are unchanged.
   A form body keeps DRF's wording, since the serializer answers it.</li>
+<li><strong>A PATCH behind a <code>SerializerValidator</code> hands the service only the keys
+  the client sent.</strong> The serializer is partial on a PATCH, as DRF's is, so
+  <code>{}</code>, or a body naming one field of several, validates and reaches the
+  service with only those keys. A service behind it writes only what was
+  sent (<code>serializer.save()</code>, or <code>if key in data</code>). One written for a whole
+  body reads an unsent key as <code>None</code> and writes it: a 500 where the column is
+  <code>NOT NULL</code>, and a silent null under a 200 where it is not. Serve such a
+  service on PUT alone, or behind a validator that is not partial: a
+  dataclass declaration, a <code>DataclassSerializer</code> or the kernel's
+  <code>DataclassValidator</code> is validated whole on a PATCH and answers 400 for a
+  missing field. Plain DRF answers a PATCH of <code>{}</code> to a <code>ModelSerializer</code> with
+  200 and leaves the row as it was, so the 500 is the service's, not DRF's.</li>
 <li><strong>A body that is no object answers <code>{"detail": "The body must be an object;
   got list."}</code></strong>, where drfs answered <code>{"non_field_errors": ["Invalid data.
   Expected a dictionary, but got list."]}</code>. Both are a 400.</li>
@@ -1729,6 +1847,15 @@ declare every seat above.</p>
 </ul>
 <h2 id="known-limits">Known limits<a class="headerlink" href="#known-limits" title="Permanent link">&para;</a></h2>
 <ul>
+<li>Code reading a drfs spec's attributes gets <code>None</code> from a kernel spec, with
+  no error, where it reads them through <code>getattr(spec, "&lt;name&gt;", None)</code>. The
+  kernel's spellings: <code>output_serializer</code> is <code>spec.presenter</code>, and its
+  <code>serializer_class</code> where it is a <code>SerializerPresenter</code> (a dataclass
+  declaration's generated <code>DataclassSerializer</code>, not the dataclass);
+  <code>input_serializer</code> is <code>spec.validator</code>, and its <code>serializer</code> where it is a
+  <code>SerializerValidator</code> (a <code>SelectorSpec</code> has no <code>validator</code>);
+  <code>permission_classes</code> is <code>spec.permissions</code>, a tuple of kernel checks, whose
+  DRF classes are a <code>DRFPermissionCheck</code>'s <code>permission_classes</code>.</li>
 <li>A kernel spec under <code>@selector_action</code> does not read the view's
   <code>get_selector_kwargs</code>, and nothing refuses the override there.</li>
 <li>A <code>@service_action</code> or <code>@selector_action</code> spec is seed-checked by its
@@ -1773,43 +1900,43 @@ authentication and the MCP transport; a project that wants its DRF
 authentication classes to admit MCP calls writes a backend of its own. The
 transport calls <code>authenticate(request)</code> with the Django request and expects a
 <code>TokenInfo</code>, or <code>None</code> for a 401:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django.http</span><span class="w"> </span><span class="kn">import</span> <span class="n">HttpRequest</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_spec_mcp</span><span class="w"> </span><span class="kn">import</span> <span class="n">TokenInfo</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_spec_mcp.auth</span><span class="w"> </span><span class="kn">import</span> <span class="n">bearer_challenge</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_spec_mcp.auth.types.protected_resource_metadata</span><span class="w"> </span><span class="kn">import</span> <span class="n">ProtectedResourceMetadata</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rest_framework.authentication</span><span class="w"> </span><span class="kn">import</span> <span class="n">TokenAuthentication</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rest_framework.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">APIException</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rest_framework.request</span><span class="w"> </span><span class="kn">import</span> <span class="n">Request</span>
-</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>
-</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a><span class="k">class</span><span class="w"> </span><span class="nc">DRFAuthBackend</span><span class="p">:</span>
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Admits an MCP call that the project&#39;s DRF authentication classes admit.&quot;&quot;&quot;</span>
-</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="n">authentication_classes</span> <span class="o">=</span> <span class="p">(</span><span class="n">TokenAuthentication</span><span class="p">,)</span>
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="n">resource_url</span> <span class="o">=</span> <span class="s2">&quot;https://example.com/mcp/&quot;</span>
-</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>
-</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">authenticate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">:</span> <span class="n">HttpRequest</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TokenInfo</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>        <span class="n">drf_request</span> <span class="o">=</span> <span class="n">Request</span><span class="p">(</span>
-</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>            <span class="n">request</span><span class="p">,</span> <span class="n">authenticators</span><span class="o">=</span><span class="p">[</span><span class="bp">cls</span><span class="p">()</span> <span class="k">for</span> <span class="bp">cls</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">authentication_classes</span><span class="p">]</span>
-</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>        <span class="p">)</span>
-</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>        <span class="k">try</span><span class="p">:</span>
-</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>            <span class="n">user</span> <span class="o">=</span> <span class="n">drf_request</span><span class="o">.</span><span class="n">user</span>
-</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>        <span class="k">except</span> <span class="n">APIException</span><span class="p">:</span>
-</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>            <span class="c1"># An invalid credential: DRF raises AuthenticationFailed.</span>
-</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>            <span class="k">return</span> <span class="kc">None</span>
-</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>        <span class="k">if</span> <span class="n">drf_request</span><span class="o">.</span><span class="n">successful_authenticator</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>            <span class="k">return</span> <span class="kc">None</span>
-</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>        <span class="k">return</span> <span class="n">TokenInfo</span><span class="p">(</span><span class="n">user</span><span class="o">=</span><span class="n">user</span><span class="p">,</span> <span class="n">raw</span><span class="o">=</span><span class="n">drf_request</span><span class="o">.</span><span class="n">auth</span><span class="p">)</span>
-</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a>
-</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">protected_resource_metadata</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ProtectedResourceMetadata</span><span class="p">:</span>
-</span><span id="__span-0-30"><a id="__codelineno-0-30" name="__codelineno-0-30" href="#__codelineno-0-30"></a>        <span class="k">return</span> <span class="n">ProtectedResourceMetadata</span><span class="p">(</span><span class="n">resource</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">resource_url</span><span class="p">,</span> <span class="n">authorization_servers</span><span class="o">=</span><span class="p">[])</span>
-</span><span id="__span-0-31"><a id="__codelineno-0-31" name="__codelineno-0-31" href="#__codelineno-0-31"></a>
-</span><span id="__span-0-32"><a id="__codelineno-0-32" name="__codelineno-0-32" href="#__codelineno-0-32"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">www_authenticate_challenge</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">scopes</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">error</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-</span><span id="__span-0-33"><a id="__codelineno-0-33" name="__codelineno-0-33" href="#__codelineno-0-33"></a>        <span class="k">return</span> <span class="n">bearer_challenge</span><span class="p">(</span>
-</span><span id="__span-0-34"><a id="__codelineno-0-34" name="__codelineno-0-34" href="#__codelineno-0-34"></a>            <span class="n">resource_metadata_url</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">resource_url</span><span class="si">}</span><span class="s2">.well-known/oauth-protected-resource&quot;</span><span class="p">,</span>
-</span><span id="__span-0-35"><a id="__codelineno-0-35" name="__codelineno-0-35" href="#__codelineno-0-35"></a>            <span class="n">scopes</span><span class="o">=</span><span class="n">scopes</span><span class="p">,</span>
-</span><span id="__span-0-36"><a id="__codelineno-0-36" name="__codelineno-0-36" href="#__codelineno-0-36"></a>            <span class="n">error</span><span class="o">=</span><span class="n">error</span><span class="p">,</span>
-</span><span id="__span-0-37"><a id="__codelineno-0-37" name="__codelineno-0-37" href="#__codelineno-0-37"></a>        <span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django.http</span><span class="w"> </span><span class="kn">import</span> <span class="n">HttpRequest</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_spec_mcp</span><span class="w"> </span><span class="kn">import</span> <span class="n">TokenInfo</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_spec_mcp.auth</span><span class="w"> </span><span class="kn">import</span> <span class="n">bearer_challenge</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_spec_mcp.auth.types.protected_resource_metadata</span><span class="w"> </span><span class="kn">import</span> <span class="n">ProtectedResourceMetadata</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rest_framework.authentication</span><span class="w"> </span><span class="kn">import</span> <span class="n">TokenAuthentication</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rest_framework.exceptions</span><span class="w"> </span><span class="kn">import</span> <span class="n">APIException</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rest_framework.request</span><span class="w"> </span><span class="kn">import</span> <span class="n">Request</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="k">class</span><span class="w"> </span><span class="nc">DRFAuthBackend</span><span class="p">:</span>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Admits an MCP call that the project&#39;s DRF authentication classes admit.&quot;&quot;&quot;</span>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>    <span class="n">authentication_classes</span> <span class="o">=</span> <span class="p">(</span><span class="n">TokenAuthentication</span><span class="p">,)</span>
+</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>    <span class="n">resource_url</span> <span class="o">=</span> <span class="s2">&quot;https://example.com/mcp/&quot;</span>
+</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>
+</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">authenticate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">:</span> <span class="n">HttpRequest</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TokenInfo</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>        <span class="n">drf_request</span> <span class="o">=</span> <span class="n">Request</span><span class="p">(</span>
+</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a>            <span class="n">request</span><span class="p">,</span> <span class="n">authenticators</span><span class="o">=</span><span class="p">[</span><span class="bp">cls</span><span class="p">()</span> <span class="k">for</span> <span class="bp">cls</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">authentication_classes</span><span class="p">]</span>
+</span><span id="__span-3-19"><a id="__codelineno-3-19" name="__codelineno-3-19" href="#__codelineno-3-19"></a>        <span class="p">)</span>
+</span><span id="__span-3-20"><a id="__codelineno-3-20" name="__codelineno-3-20" href="#__codelineno-3-20"></a>        <span class="k">try</span><span class="p">:</span>
+</span><span id="__span-3-21"><a id="__codelineno-3-21" name="__codelineno-3-21" href="#__codelineno-3-21"></a>            <span class="n">user</span> <span class="o">=</span> <span class="n">drf_request</span><span class="o">.</span><span class="n">user</span>
+</span><span id="__span-3-22"><a id="__codelineno-3-22" name="__codelineno-3-22" href="#__codelineno-3-22"></a>        <span class="k">except</span> <span class="n">APIException</span><span class="p">:</span>
+</span><span id="__span-3-23"><a id="__codelineno-3-23" name="__codelineno-3-23" href="#__codelineno-3-23"></a>            <span class="c1"># An invalid credential: DRF raises AuthenticationFailed.</span>
+</span><span id="__span-3-24"><a id="__codelineno-3-24" name="__codelineno-3-24" href="#__codelineno-3-24"></a>            <span class="k">return</span> <span class="kc">None</span>
+</span><span id="__span-3-25"><a id="__codelineno-3-25" name="__codelineno-3-25" href="#__codelineno-3-25"></a>        <span class="k">if</span> <span class="n">drf_request</span><span class="o">.</span><span class="n">successful_authenticator</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-3-26"><a id="__codelineno-3-26" name="__codelineno-3-26" href="#__codelineno-3-26"></a>            <span class="k">return</span> <span class="kc">None</span>
+</span><span id="__span-3-27"><a id="__codelineno-3-27" name="__codelineno-3-27" href="#__codelineno-3-27"></a>        <span class="k">return</span> <span class="n">TokenInfo</span><span class="p">(</span><span class="n">user</span><span class="o">=</span><span class="n">user</span><span class="p">,</span> <span class="n">raw</span><span class="o">=</span><span class="n">drf_request</span><span class="o">.</span><span class="n">auth</span><span class="p">)</span>
+</span><span id="__span-3-28"><a id="__codelineno-3-28" name="__codelineno-3-28" href="#__codelineno-3-28"></a>
+</span><span id="__span-3-29"><a id="__codelineno-3-29" name="__codelineno-3-29" href="#__codelineno-3-29"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">protected_resource_metadata</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ProtectedResourceMetadata</span><span class="p">:</span>
+</span><span id="__span-3-30"><a id="__codelineno-3-30" name="__codelineno-3-30" href="#__codelineno-3-30"></a>        <span class="k">return</span> <span class="n">ProtectedResourceMetadata</span><span class="p">(</span><span class="n">resource</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">resource_url</span><span class="p">,</span> <span class="n">authorization_servers</span><span class="o">=</span><span class="p">[])</span>
+</span><span id="__span-3-31"><a id="__codelineno-3-31" name="__codelineno-3-31" href="#__codelineno-3-31"></a>
+</span><span id="__span-3-32"><a id="__codelineno-3-32" name="__codelineno-3-32" href="#__codelineno-3-32"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">www_authenticate_challenge</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">scopes</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">error</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+</span><span id="__span-3-33"><a id="__codelineno-3-33" name="__codelineno-3-33" href="#__codelineno-3-33"></a>        <span class="k">return</span> <span class="n">bearer_challenge</span><span class="p">(</span>
+</span><span id="__span-3-34"><a id="__codelineno-3-34" name="__codelineno-3-34" href="#__codelineno-3-34"></a>            <span class="n">resource_metadata_url</span><span class="o">=</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">resource_url</span><span class="si">}</span><span class="s2">.well-known/oauth-protected-resource&quot;</span><span class="p">,</span>
+</span><span id="__span-3-35"><a id="__codelineno-3-35" name="__codelineno-3-35" href="#__codelineno-3-35"></a>            <span class="n">scopes</span><span class="o">=</span><span class="n">scopes</span><span class="p">,</span>
+</span><span id="__span-3-36"><a id="__codelineno-3-36" name="__codelineno-3-36" href="#__codelineno-3-36"></a>            <span class="n">error</span><span class="o">=</span><span class="n">error</span><span class="p">,</span>
+</span><span id="__span-3-37"><a id="__codelineno-3-37" name="__codelineno-3-37" href="#__codelineno-3-37"></a>        <span class="p">)</span>
 </span></code></pre></div>
 <p>Prefer a header-borne credential class (<code>TokenAuthentication</code>, a JWT class):
 <code>SessionAuthentication</code> enforces CSRF on the transport's <code>POST</code>. Scopes are the
