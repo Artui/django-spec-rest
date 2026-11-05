@@ -327,6 +327,37 @@ class TestAPageOfRowsAndNones:
             )
 
 
+class TestAPageWithNoNone:
+    def test_a_list_serializer_answering_another_count_is_refused_by_the_kernel(self) -> None:
+        class _Dropping(serializers.ListSerializer):
+            def to_representation(self, data: Any) -> list[Any]:
+                return super().to_representation(data)[1:]
+
+        class _Out(serializers.ModelSerializer):
+            class Meta:
+                model = Post
+                fields = ("id",)
+                list_serializer_class = _Dropping
+
+        _posts(2)
+        spec = SelectorSpec(
+            kind=SelectorKind.LIST,
+            selector=lambda: Post.objects.order_by("id"),
+            permissions=_OPEN,
+            presenter=SerializerPresenter(_Out),
+        )
+        view = type("_View", (SelectorListView,), {"spec": spec})
+
+        # With no ``None`` on the page the presenter hands the render back as it
+        # is, so the check that answers is the kernel's, on the rows it handed
+        # over, and not the presenter's own ("its list serializer answered").
+        with pytest.raises(
+            ImproperlyConfigured,
+            match=r"^SerializerPresenter\.presented_rows answered with a list of 1 for 2 rows\.",
+        ):
+            view.as_view()(factory.get("/"))
+
+
 UNPUBLISHED = Affordance(
     code="already_published", reason="This post is already published.", when=Q(published=False)
 )

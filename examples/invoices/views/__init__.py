@@ -172,7 +172,7 @@ SENT_SPEC = SelectorSpec(
     partial_update=extend_schema(responses={409: ServiceConflictSerializer}),
 )
 class InvoiceViewSet(ServiceViewSet):
-    """``/invoices/`` and ``/invoices/<pk>/``, plus ``POST /invoices/<pk>/send/``.
+    """``/invoices/`` and ``/invoices/<pk>/``, plus ``POST /invoices/<pk>/send/``, which answers 202.
 
     No ``"destroy"`` spec: ``DELETE`` answers 405 and the detail route's
     ``Allow`` header leaves it out. ``PATCH`` falls back to the ``"update"``
@@ -188,9 +188,11 @@ class InvoiceViewSet(ServiceViewSet):
         "update": UPDATE_SPEC,
     }
 
-    @service_action(SEND_SPEC, detail=True, methods=["post"])
+    # 202: the invoice is marked sent now, its delivery is not promised. The
+    # keyword answers for this action only; the rest keep their defaults.
+    @service_action(SEND_SPEC, detail=True, methods=["post"], success_status=202)
     def send(self, request: Any, pk: Any = None) -> None:
-        """Mark a draft as sent."""
+        """Mark a draft as sent, answered 202."""
 
 
 class SentInvoiceListView(SelectorListView):

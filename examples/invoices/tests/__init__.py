@@ -229,7 +229,7 @@ class DRFPermissionCheckTests(APITestCase):
 
         response = self.client.post(f"/invoices/{self.invoice.pk}/send/")
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED, response.data)
         self.assertEqual(response.data["status"], Invoice.STATUS_SENT)
 
     def test_off_http_the_same_check_admits_a_user(self) -> None:
@@ -369,6 +369,13 @@ class OpenAPISchemaTests(APITestCase):
                     self._body_component("/invoices/{id}/", method, "409"), "ServiceConflict"
                 )
 
+    def test_the_send_documents_the_status_its_decorator_declares(self) -> None:
+        # ``success_status=202`` on ``send``: the schema follows the keyword.
+        responses = self.schema["paths"]["/invoices/{id}/send/"]["post"]["responses"]
+
+        self.assertIn("202", responses)
+        self.assertNotIn("200", responses)
+
     def test_the_422_is_documented_where_the_spec_declares_it(self) -> None:
         # ``SEND_SPEC`` declares it in its ``metadata``: ``send_invoice`` raises
         # a plain ``ServiceError`` (see ``test_any_other_service_error_is_a_422``).
@@ -443,7 +450,7 @@ class ASeedTheViewSetRegistersTests(APITestCase):
     def test_otherwise_the_invoice_is_sent(self) -> None:
         response = self.client.post(f"/invoices/{self.invoice.pk}/send/")
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED, response.data)
 
     def test_a_viewset_not_registering_it_is_refused_at_as_view(self) -> None:
         """The decorated action's seeds are the viewset's, checked at mount."""
