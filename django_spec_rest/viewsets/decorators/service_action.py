@@ -97,7 +97,9 @@ def service_action(
     a standalone view's are, and a viewset defining a
     ``get_<action>_success_status`` or ``get_<action>_response_finalizer``
     hook beside one is refused at ``as_view()``: one action, one answer
-    (test_per_action_answers).
+    (test_per_action_answers). The refusal is this package's viewsets'
+    ``as_view()``; on a viewset of DRF's alone the decorator's value answers
+    and the hook is never read.
 
     An [`AdditionalInputRequired`][django_service_specs.services.additional_input_required.AdditionalInputRequired]
     answers ``422`` with its ``schema`` as raised on any viewset, DRF's own

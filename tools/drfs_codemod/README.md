@@ -54,8 +54,9 @@ until its comment is deleted. Delete each once it is dealt with.
 - **A name with no counterpart** (`PolymorphicServiceSpec`, `OfflineContract`,
   `TargetGuard`, an input marker). Its import is kept so the module still
   imports; the comment says what replaces it.
-- **A `success_status` or `response_finalizer` with no view here.** Set it on
-  the view serving the spec, as the comment says where.
+- **A `success_status` or `response_finalizer` with no view here**, or on a
+  spec built inline in a view rather than bound to a module-level name. Set it
+  on the view serving the spec, as the comment says where.
 
 An input serializer is carried over as declared, in a `SerializerValidator`, so
 it accepts what it accepted under drfs. An empty PATCH answers as the
@@ -75,6 +76,7 @@ python tools/drfs_codemod/generate_import_map.py \
     --drfs <site-packages>/rest_framework_services \
     --kernel <site-packages>/django_service_specs \
     --rest django_spec_rest
+ruff format tools/drfs_codemod/import_map.py
 ```
 
 ## Tests

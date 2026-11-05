@@ -128,6 +128,9 @@ class _UseSite:
     anchor: cst.CSTNode
     statement: cst.BaseStatement
     action: str | None = None
+    # The other keys of an ``action_specs`` dict, so an ``update`` entry's
+    # answer is not written for a ``partial_update`` that has an entry of its own.
+    entries: frozenset[str] = frozenset()
 
 
 def _source(node: cst.CSTNode) -> str:
@@ -244,6 +247,13 @@ class _Analysis(cst.CSTVisitor):
         if name == "spec" and isinstance(value, cst.Name):
             self.use_sites.setdefault(value.value, []).append(_UseSite("view", owner, line, line))
         if name == "action_specs" and isinstance(value, cst.Dict):
+            entries = frozenset(
+                element.key.evaluated_value
+                for element in value.elements
+                if isinstance(element, cst.DictElement)
+                and isinstance(element.key, cst.SimpleString)
+                and isinstance(element.key.evaluated_value, str)
+            )
             for element in value.elements:
                 if (
                     isinstance(element, cst.DictElement)
@@ -253,7 +263,7 @@ class _Analysis(cst.CSTVisitor):
                     action = element.key.evaluated_value
                     assert isinstance(action, str)
                     self.use_sites.setdefault(element.value.value, []).append(
-                        _UseSite("hook", owner, line, line, action=action)
+                        _UseSite("hook", owner, line, line, action=action, entries=entries)
                     )
 
     def visit_FunctionDef(self, node: cst.FunctionDef) -> None:
@@ -536,7 +546,9 @@ class _Rewrite(cst.CSTTransformer):
             self._insert(site.anchor, cst.parse_statement(f"{name} = {_source(value)}"))
             return f"{view}.{name}"
         actions = [site.action or ""]
-        if site.action == "update":
+        # drfs serves a PATCH the update entry's spec only when the view has
+        # no partial_update entry of its own.
+        if site.action == "update" and "partial_update" not in site.entries:
             actions.append("partial_update")
         spelled: list[str] = []
         for action in actions:

@@ -249,3 +249,80 @@ def test_a_view_already_answering_is_marked(body: str, reason: str) -> None:
     output, findings = rewrite_source(source, Path("app/views.py"))
     assert reason in [finding.reason for finding in findings]
     assert rewrite_source(output, Path("app/views.py"))[0] == output
+
+
+_BOTH_ENTRIES = textwrap.dedent(
+    """\
+    from django_service_specs import Parameter, Parameters
+    from rest_framework.permissions import AllowAny
+    from rest_framework_services import SelectorKind, SelectorSpec, ServiceSpec, ServiceViewSet
+
+    from tests.testapp.models import Author
+    from tests.testapp.serializers import AuthorSerializer
+
+
+    def rename(*, instance, data):
+        instance.name = data["name"]
+        instance.save(update_fields=["name"])
+        return instance
+
+
+    target = SelectorSpec(
+        kind=SelectorKind.RETRIEVE,
+        selector=lambda *, pk: Author.objects.filter(pk=pk).first(),
+        reads=Parameters.of(Parameter("pk", "integer", required=True)),
+    )
+
+    replace = ServiceSpec(
+        service=rename,
+        input_serializer=AuthorSerializer,
+        output_serializer=AuthorSerializer,
+        instance_selector_spec=target,
+        permission_classes=[AllowAny],
+        success_status=203,
+    )
+
+    amend = ServiceSpec(
+        service=rename,
+        input_serializer=AuthorSerializer,
+        output_serializer=AuthorSerializer,
+        instance_selector_spec=target,
+        permission_classes=[AllowAny],
+        success_status=202,
+    )
+
+
+    class Authors(ServiceViewSet):
+        queryset = Author.objects.all()
+        action_specs = {ENTRIES}
+    """
+)
+
+
+@pytest.mark.parametrize(
+    "entries",
+    [
+        '{"update": replace, "partial_update": amend}',
+        '{"partial_update": amend, "update": replace}',
+    ],
+    ids=["update-first", "partial-update-first"],
+)
+@pytest.mark.parametrize(
+    "method, action, status", [("put", "update", 203), ("patch", "partial_update", 202)]
+)
+def test_a_partial_update_entry_of_its_own_keeps_its_answer(
+    entries: str, method: str, action: str, status: int
+) -> None:
+    # drfs reads the partial_update entry's spec for a PATCH when the view has
+    # one, so the update entry's answer reaches only its own action.
+    output, findings = rewrite_source(
+        _BOTH_ENTRIES.replace("{ENTRIES}", entries), Path("app/views.py")
+    )
+    assert output.count("get_partial_update_success_status =") == 1
+    assert not [finding for finding in findings if "already declares" in finding.reason]
+    module = types.ModuleType("rewritten_both_entries")
+    exec(compile(output, "rewritten_both_entries.py", "exec"), module.__dict__)
+    author = Author.objects.create(name="before")
+    view = module.Authors.as_view({method: action})
+    response = getattr(factory, method)("/", {"name": "after"}, format="json")
+    assert view(response, pk=author.pk).status_code == status

@@ -39,7 +39,8 @@ kernel's, moving each field onto its seat as [below](#declaring-a-spec): the
 serializers and their contexts, `permission_classes`, an output selector's
 serializer and context, `document_service_error` and `field_audiences`. A
 spec's `success_status` and `response_finalizer` move to the views in the same
-module that serve it, as [Views and viewsets](#views-and-viewsets) places them.
+module that serve it, as [Views and viewsets](#views-and-viewsets) places them,
+for a spec bound to a module-level name; one built inline in a view is marked.
 A second run changes nothing.
 
 Every site it leaves gets a comment beginning `# drfs-codemod:` above its

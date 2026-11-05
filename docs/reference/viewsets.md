@@ -78,7 +78,9 @@ never `get_update_...`.
 
 `as_view()` asks each per-action value what it asks the viewset's, naming the
 action: a callable requiring a name the view cannot supply is refused, and so
-is a decorator value beside a hook for the same action. The decorator's own
+is a decorator value beside a hook for the same action. That refusal is
+this package's viewsets' `as_view()`: on a viewset of DRF's alone the
+decorator's value answers and the hook is never read. The decorator's own
 values are asked when it runs. The OpenAPI schema documents the status of the
 action, where it is an `int`; a callable documents the action's default.
 

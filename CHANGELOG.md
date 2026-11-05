@@ -34,7 +34,8 @@ carries; releases up to 0.62.0 are in
   each names, so a kernel name spelled like a drfs one is left alone, and
   turns each drfs `ServiceSpec` and `SelectorSpec` into the kernel's, its
   fields on their seats. A spec's `success_status` and `response_finalizer`
-  move to the views in the same module serving it. Every site left (a read
+  move to the views in the same module serving it, for a spec bound to a
+  module-level name; one built inline in a view is marked. Every site left (a read
   drfs took from a selector's signature, a `UrlKwarg` or `QueryParam` list, a
   name with no counterpart, an answer whose view is elsewhere) is marked with
   a `# drfs-codemod:` comment and reported as `path:line: reason`, and a
