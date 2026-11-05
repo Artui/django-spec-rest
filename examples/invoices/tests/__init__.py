@@ -338,6 +338,16 @@ class OpenAPISchemaTests(APITestCase):
         response = self.schema["paths"][path][method]["responses"][code]
         return response["content"]["application/json"]["schema"]["$ref"].rsplit("/", 1)[-1]
 
+    def test_the_detail_lookup_is_typed_from_the_spec_s_read(self) -> None:
+        # ``InvoiceViewSet`` sets no ``queryset``, so drf-spectacular finds no
+        # model to type ``{id}`` by: the retrieve and write specs declare the
+        # ``pk`` they read as an integer, and the schema says so.
+        operations = self.schema["paths"]["/invoices/{id}/"]
+        self.assertEqual(set(operations), {"get", "put", "patch"})
+        for method, operation in operations.items():
+            (parameter,) = [p for p in operation["parameters"] if p["in"] == "path"]
+            self.assertEqual((method, parameter["schema"]), (method, {"type": "integer"}))
+
     def test_a_permission_checked_route_documents_its_403(self) -> None:
         self.assertEqual(
             self._body_component("/invoices/{id}/send/", "post", "403"), "PermissionDenied"

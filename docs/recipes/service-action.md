@@ -11,7 +11,8 @@ and answers 405 for the writes, and `Allow` leaves an unserved write out.
 dispatch the list presents; every other action, a custom `@action` included,
 reads the viewset's `queryset`. So a viewset under DRF's
 `DjangoModelPermissions`, which asks `get_queryset()` on every action, sets
-`queryset`.
+`queryset`. The schema needs none: a lookup is documented from the read its
+spec declares (see [OpenAPI](../openapi.md#what-a-route-documents)).
 
 ```python
 from django_spec_rest import ServiceViewSet

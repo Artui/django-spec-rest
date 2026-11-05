@@ -30,6 +30,17 @@ carries; releases up to 0.62.0 are in
   leaves out. A project that scoped a tenant in its list selector alone and
   relied on it for those actions scopes `queryset` too, or serves them with a
   spec.
+- **A route capture is documented from the read its spec declares.** A spec
+  viewset with no `queryset` gave drf-spectacular its model through the list
+  spec's set; off `list` it now gives none. So where drf-spectacular finds no
+  model and the path does not type the capture, the schema types it from the
+  read the operation's spec declares for it (a retrieve's or a detail
+  action's selector, a write's target selector, or the write's own `reads`),
+  with the read's `help` as its description. A viewset with no `queryset`
+  keeps its router's `{id}` an integer, with no warning, and needs no
+  `queryset` for its schema; its description is now the read's `help`, where
+  it was the model's primary key's. Where drf-spectacular finds a model, or a
+  converter or regex types the capture, its answer stands.
 
 ### Fixed
 
