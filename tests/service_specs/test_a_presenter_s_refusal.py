@@ -33,7 +33,7 @@ from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 from rest_framework.test import APIRequestFactory
 
-from django_spec_rest import SelectorRetrieveView, ServiceCreateView
+from django_spec_rest import SelectorListView, SelectorRetrieveView, ServiceCreateView
 from django_spec_rest.service_specs.drf_invalid_arguments import DRFInvalidArguments
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from tests.testapp.models import Post
@@ -199,3 +199,33 @@ def test_a_retrieve_view_answers_the_refusal_as_a_400() -> None:
     response.render()
 
     assert (response.status_code, response.content) == (400, b'{"fields":["nope"]}')
+
+
+@pytest.mark.parametrize(
+    ("error", "body"),
+    [
+        # A page renders as one ``many=True`` serializer, and its list refusal is keyed
+        # under the non-field key as a single row's is, not DRF's bare list.
+        (ValidationError("Cannot render."), b'{"non_field_errors":["Cannot render."]}'),
+        (ValidationError({"fields": ["nope"]}), b'{"fields":["nope"]}'),
+    ],
+    ids=["message", "mapping"],
+)
+def test_a_list_view_answers_the_refusal_as_a_400(error: ValidationError, body: bytes) -> None:
+    Post.objects.create(title="t")
+    spec = SelectorSpec(
+        kind=SelectorKind.LIST,
+        selector=lambda: Post.objects.all(),
+        permissions=_OPEN,
+        presenter=SerializerPresenter(_refusing(error)),
+    )
+
+    class _View(SelectorListView):
+        permission_classes: Any = []
+        authentication_classes: Any = []
+
+    _View.spec = spec
+    response = _View.as_view()(APIRequestFactory().get("/"))
+    response.render()
+
+    assert (response.status_code, response.content) == (400, body)

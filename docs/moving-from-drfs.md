@@ -134,6 +134,19 @@ The query string is read by the kernel's flat reader:
   prefixed spellings `v.tenant` and `tags[0]` of a nested or list field), and a
   JSON body is checked against the spec's declared types as sent: `"true"` is
   no boolean in JSON.
+- **A JSON integer field still takes a numeric string.** `{"start_hour": "10"}`
+  is accepted as `10`, as drfs accepted it, while `{"title": 5}` is refused
+  with `Expected a string.`: "as sent" is a check of the kind of value, and the
+  kernel reads a numeric string as a number but not a number as a string.
+- **A JSON field's refusal is worded by the kernel, not DRF.** `Date has wrong
+  format. Use one of these formats instead: YYYY-MM-DD.` is `Enter a valid
+  date.`, `A valid integer is required.` is `Expected an integer.`, and `This
+  field may not be null.` is `This field cannot be null.`. A client matching
+  on a message must match the new one; the keys and the 400 are unchanged.
+  A form body keeps DRF's wording, since the serializer answers it.
+- **A body that is no object answers `{"detail": "The body must be an object;
+  got list."}`**, where drfs answered `{"non_field_errors": ["Invalid data.
+  Expected a dictionary, but got list."]}`. Both are a 400.
 - **A body key named `request`, `view` or `serializer` that no field declares
   is dropped**, as any undeclared key is; it never reaches the seed of that
   name.
@@ -157,6 +170,12 @@ The query string is read by the kernel's flat reader:
 
 - **A bare `DispatchError` answers 400** with its sentence under `detail`, where
   drfs answered 500.
+- **An output serializer refusing to render answers 400 as a mapping.** A
+  `ValidationError` raised from `to_representation` with a list (a message, as
+  DRF makes of a string) is keyed under `non_field_errors`:
+  `{"non_field_errors": ["..."]}`, where drfs answered the bare list. A mapping
+  is kept as it is. A page of rows renders as one `many=True` serializer, so a
+  list refusal there answers the same.
 - **A `many` spec with an `output_selector_spec` presents what the re-read
   returns**, where drfs presented the service's rows.
 - **Bulk and row refusals are worded by the kernel.**

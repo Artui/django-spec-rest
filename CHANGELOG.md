@@ -54,6 +54,12 @@ carries; releases up to 0.62.0 are in
   leaves a create out for a caller whose scope check refuses the create, and
   a spec declaring no permissions fails OPTIONS and an incomplete write with
   its configuration error, as a well-formed write already did.
+- **The moving page lists the four 400 answers a drfs client sees change.**
+  An output serializer's list `ValidationError` is keyed under
+  `non_field_errors` (a page too), DRF's field messages are the kernel's on a
+  JSON body, a body that is no object answers `{"detail": ...}`, and a numeric
+  string is still taken for an integer field while a number is no string.
+  Documentation only: the behaviour stands.
 
 ### Fixed
 
