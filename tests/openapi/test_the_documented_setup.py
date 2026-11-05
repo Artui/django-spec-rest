@@ -79,14 +79,13 @@ class TestAClassLevelExtendSchema:
         view = _decorated_view()
         enable_openapi()
         # drf-spectacular's own reading, where a declared mapping is the
-        # operation's every response: neither the spec's success nor its 400
-        # and 422.
+        # operation's every response: neither the spec's success nor its 400.
         assert _responses(path("v/", view.as_view())) == {"/v/": {"404"}}
 
     def test_decorated_after_enable_openapi_documents_the_spec(self) -> None:
         enable_openapi()
         view = _decorated_view()
-        assert _responses(path("v/", view.as_view())) == {"/v/": {"201", "400", "404", "422"}}
+        assert _responses(path("v/", view.as_view())) == {"/v/": {"201", "400", "404"}}
 
 
 def _method_decorated_view() -> type:
@@ -106,7 +105,7 @@ def test_a_method_level_extend_schema_has_no_order() -> None:
     # generates, so ``enable_openapi()`` may run after the decorator.
     view = _method_decorated_view()
     enable_openapi()
-    assert _responses(path("v/", view.as_view())) == {"/v/": {"201", "400", "404", "422"}}
+    assert _responses(path("v/", view.as_view())) == {"/v/": {"201", "400", "404"}}
 
 
 class _ActionViewSet(GenericViewSet):
@@ -155,7 +154,7 @@ class TestAViewSetOfTheProjectsOwn:
     ) -> None:
         enable_openapi()
         assert _responses(*_routed(viewset, schema=ServiceAutoSchema())) == {
-            route: {success, "400", "422"}
+            route: {success, "400"}
         }
 
 

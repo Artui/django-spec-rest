@@ -30,6 +30,7 @@ from rest_framework.viewsets import GenericViewSet
 
 from django_spec_rest import SelectorListView, ServiceCreateMixin, ServiceViewSet, service_action
 from django_spec_rest.openapi import (
+    SERVICE_ERROR_METADATA_KEY,
     NotAuthenticatedSerializer,
     PermissionDeniedSerializer,
     ServiceConflictSerializer,
@@ -96,7 +97,9 @@ UPDATE_SPEC = ServiceSpec(
 
 # Asked of DRF's ``IsAuthenticated`` over HTTP and through the kernel's own
 # ``dispatch`` alike. Unavailable (409) while sending is paused, a condition
-# reading the registered seed.
+# reading the registered seed. ``send_invoice`` raises a plain ``ServiceError``
+# (422) for an empty invoice, which the spec declares, so the schema documents
+# the 422 here and on no other operation.
 SEND_SPEC = ServiceSpec(
     service=send_invoice,
     instance_selector_spec=INVOICE_LOOKUP,
@@ -109,6 +112,7 @@ SEND_SPEC = ServiceSpec(
             when=lambda *, sending_paused: not sending_paused,
         )
     ],
+    metadata={SERVICE_ERROR_METADATA_KEY: True},
 )
 
 

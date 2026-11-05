@@ -86,6 +86,18 @@ declare every seat above.
   `collection_selector_spec` (a set) or `many=True`, and `as_view()` refuses one
   that declares none. A `get_object()` override no longer chooses a write's
   row.
+- **A route capture is read only where a spec declares it.** drfs handed a
+  selector the captures its signature took (`InputRequired`,
+  `Unpack[...UrlExtras]`); the kernel hands a spec only its declared
+  parameters. On a router-mounted detail route, `as_view()` refuses an action
+  whose row lookup (the `retrieve` spec, a detail `@selector_action`'s, or a write's
+  `instance_selector_spec`) declares no parameter named for the lookup capture
+  (`lookup_url_kwarg`, else `lookup_field`): add
+  `reads=Parameters.of(Parameter("<capture>", ..., required=True))` to that
+  selector. A viewset mounted by hand and a standalone view are not checked,
+  since their captures are the URLconf's: declare each capture the route
+  carries yourself
+  ([The lookup capture](reference/viewsets.md#the-lookup-capture)).
 - **A nested selector declares no `permissions`.** On `instance_selector_spec`,
   `collection_selector_spec` and `output_selector_spec` the kernel never asks
   them, so the kernel refuses them when the `ServiceSpec` is built: declare
@@ -123,6 +135,19 @@ The query string is read by the kernel's flat reader:
   prefixed spellings `v.tenant` and `tags[0]` of a nested or list field), and a
   JSON body is checked against the spec's declared types as sent: `"true"` is
   no boolean in JSON.
+- **A JSON integer field still takes a numeric string.** `{"start_hour": "10"}`
+  is accepted as `10`, as drfs accepted it, while `{"title": 5}` is refused
+  with `Expected a string.`: "as sent" is a check of the kind of value, and the
+  kernel reads a numeric string as a number but not a number as a string.
+- **A JSON field's refusal is worded by the kernel, not DRF.** `Date has wrong
+  format. Use one of these formats instead: YYYY-MM-DD.` is `Enter a valid
+  date.`, `A valid integer is required.` is `Expected an integer.`, and `This
+  field may not be null.` is `This field cannot be null.`. A client matching
+  on a message must match the new one; the keys and the 400 are unchanged.
+  A form body keeps DRF's wording, since the serializer answers it.
+- **A body that is no object answers `{"detail": "The body must be an object;
+  got list."}`**, where drfs answered `{"non_field_errors": ["Invalid data.
+  Expected a dictionary, but got list."]}`. Both are a 400.
 - **A body key named `request`, `view` or `serializer` that no field declares
   is dropped**, as any undeclared key is; it never reaches the seed of that
   name.
@@ -146,6 +171,12 @@ The query string is read by the kernel's flat reader:
 
 - **A bare `DispatchError` answers 400** with its sentence under `detail`, where
   drfs answered 500.
+- **An output serializer refusing to render answers 400 as a mapping.** A
+  `ValidationError` raised from `to_representation` with a list (a message, as
+  DRF makes of a string) is keyed under `non_field_errors`:
+  `{"non_field_errors": ["..."]}`, where drfs answered the bare list. A mapping
+  is kept as it is. A page of rows renders as one `many=True` serializer, so a
+  list refusal there answers the same.
 - **A `many` spec with an `output_selector_spec` presents what the re-read
   returns**, where drfs presented the service's rows.
 - **Bulk and row refusals are worded by the kernel.**
@@ -164,9 +195,20 @@ The query string is read by the kernel's flat reader:
   decimal string, an `OrderingFilter` with no `explode` or `style`, in declared
   order, with `maxItems` 1000, a `MultipleChoiceFilter` with `maxItems`, and
   an array as a repeated key. A validator's refusal is documented as the 400 it
-  answers, and a 422 on every service spec, the status of a plain
-  `ServiceError`. A selector's reads are not documented as query parameters, nor
+  answers. A selector's reads are not documented as query parameters, nor
   the affordance envelope, nor the `null` body of an `allow_none` retrieve.
+- **The 422 is documented only where a spec declares it.** drfs documented the
+  422 of a plain `ServiceError` on every spec with an `input_serializer`,
+  unless `document_service_error=False`; spec-rest documents it on no spec, a
+  service's or a selector's, unless the spec's `metadata` says
+  `{"document_service_error": True}` (`SERVICE_ERROR_METADATA_KEY` in
+  `django_spec_rest.openapi`). So a drfs `document_service_error=True` moves
+  into `metadata`, `False` and `None` are dropped, and a schema generated
+  from the same views loses its 422s until the specs that raise one declare
+  it. A schema subclass that popped the 422 through drfs' private
+  `resolve_service_spec` has nothing left to pop; one that wants the 422
+  everywhere overrides `ServiceAutoSchema.documents_service_error` to return
+  `True` ([Declaring the 422](openapi.md#declaring-the-422)).
 
 ## Serializer context
 
@@ -174,8 +216,17 @@ The query string is read by the kernel's flat reader:
   and the service's `call_context` are handed the same dict, so a key one
   serializer's `validate()` writes is there for the service and the output
   serializer, as in a stock `ModelViewSet`. drfs handed each serializer a copy.
-- **A presenter's `serializer_context` callable runs once per row** of a list,
-  not once for the page, so a callable that queries runs that query per row.
+- **A presenter's `serializer_context` callable receives what drfs' provider
+  did**: a list's rows under `page`, once for the page, and one value under
+  the presenter's `value_keyword` (`result` by default; set
+  `value_keyword="instance"` for a retrieve provider declaring `instance`). A
+  `many` service's provider declaring `result` receives its whole return.
+  `page` is always a list of the rows, never a queryset: as drfs did on a
+  paginated view, and unlike drfs on an unpaginated one, where it handed the
+  selector's queryset. A provider calling a queryset method on it
+  (`page.values_list(...)`, `page.filter(...)`) must change to work over the
+  list, for example `[row.pk for row in page]`
+  ([Serializer context](recipes/serializer-context.md#what-a-presenters-callable-receives)).
 - **A kernel selector gets no `get_<action>_output_serializer_context`** hook:
   declare the context on its `SerializerPresenter`.
 
@@ -195,10 +246,23 @@ The query string is read by the kernel's flat reader:
   403 with the class's own `message`. Off HTTP there is no authenticator, so
   the refusal is the kernel's `NotPermitted`.
 - **A kernel `PermissionCheck` asks a caller nobody authenticated to sign in**
-  too, as drfs answered it: 401 with the challenge, or 403 where the first
-  authenticator sends none, and 403 with its message to anyone else. A
-  service's own `NotPermitted`, and an inner dispatch its check refused, stay
-  403 with their message for every caller.
+  too: 401 with the challenge, or 403 where the first authenticator sends
+  none, and 403 with its message to anyone else. A service's own
+  `NotPermitted`, and an inner dispatch its check refused, stay 403 with their
+  message for every caller.
+- **A refusal comes before the body is read**, as drfs' view asked its
+  permission classes in `initial()`. The spec's checks are asked before its
+  arguments' shape is checked, so a caller they refuse gets the 401 or 403
+  above whatever it sends: an empty body, a missing field, a value of the
+  wrong type or a query string the read cannot parse answer the same as a
+  well-formed request, never the 400 that lists the fields. A request whose
+  body or query string fails its shape is judged with no arguments, the
+  question the OPTIONS answer asks before it describes a method, so OPTIONS
+  shows a method's schema exactly to the callers whose incomplete request is
+  told what it lacks. A check that reads the call's arguments and cannot
+  answer without them keeps the kernel's order: the caller is told the 400
+  first, and the check is asked once the shape passes. A check that answers
+  `False` with no arguments refuses every caller sending an incomplete body.
 - **`DRFPermissionCheck` can raise `DRFNotAuthenticated`**, not only
   `DRFNotPermitted`, when the call carries a real DRF request with
   authenticators and nobody was recognised. `DRFNotAuthenticated` is DRF's

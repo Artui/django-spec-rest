@@ -456,3 +456,26 @@ class TestTheSeedsTheTargetWasCheckedWith:
         view = _update_view(spec, pool_seeds=seeds).as_view()
         assert _patch(view, Post.objects.create(title="t").pk)[0] == 200
         assert resolver.calls == 1
+
+
+class _StampedCreate(PermissionCheck):
+    """A class-level check on a create opting into the ``stamp`` seed by naming it."""
+
+    def has_permission(self, principal: Any, spec: Any, *, stamp: str) -> bool:
+        return stamp == "stamp"
+
+
+def test_a_create_s_check_named_seed_is_resolved_once() -> None:
+    """A create has no lookup: the seeds the prelude offered its checks are the
+    ones ``dispatch`` runs on, so the seed is not resolved again."""
+    resolver = _CountingResolver()
+    spec = ServiceSpec(service=lambda: None, permissions=(_StampedCreate(),))
+    attrs = {
+        "spec": spec,
+        "permission_classes": [],
+        "authentication_classes": [],
+        "pool_seeds": DEFAULT_POOL_SEEDS.extend(stamp=resolver),
+    }
+    view = type("_View", (ServiceCreateView,), attrs).as_view()
+    assert view(factory.post("/", {}, format="json")).status_code in (201, 204)
+    assert resolver.calls == 1

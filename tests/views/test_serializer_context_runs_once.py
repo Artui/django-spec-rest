@@ -5,10 +5,6 @@ batched query against the data being serialized, so a second run is a second
 query, and a run per row is N of them. Each path is driven over HTTP with a
 counting callable. A list is presented with the whole set under one context,
 never row by row, so a list of two rows still counts one.
-
-A kernel spec's presenter asks its context once per row: a selector list view
-pins that answer, and each other test that meets it is a strict xfail naming what
-owes it.
 """
 
 from __future__ import annotations
@@ -39,13 +35,6 @@ pytestmark = pytest.mark.django_db
 
 factory = APIRequestFactory()
 _OPEN = (Unrestricted(),)
-
-
-_A_CONTEXT_PER_ROW = (
-    "SerializerPresenter (service_specs/serializer_presenter.py) inherits the kernel's "
-    "Presenter.presented_rows, which asks presented() once per row, so its serializer_context "
-    "callable runs once per row rather than once for the list."
-)
 
 
 def _counter() -> tuple[list[int], Callable[..., dict[str, Any]]]:
@@ -113,7 +102,6 @@ def test_a_create_view_validates_under_one_context() -> None:
     assert len(calls) == 1
 
 
-@pytest.mark.xfail(strict=True, reason=_A_CONTEXT_PER_ROW)
 def test_a_many_create_presents_its_rows_under_one_context() -> None:
     calls, context = _counter()
     spec = ServiceSpec(
@@ -149,7 +137,6 @@ def test_a_many_create_validates_its_rows_under_one_context() -> None:
     assert len(calls) == 1
 
 
-@pytest.mark.xfail(strict=True, reason=_A_CONTEXT_PER_ROW)
 def test_a_collection_update_presents_its_set_under_one_context(
     two_authors: list[Author],
 ) -> None:
@@ -157,9 +144,7 @@ def test_a_collection_update_presents_its_set_under_one_context(
     spec = ServiceSpec(
         service=_touch_all,
         permissions=_OPEN,
-        collection_selector_spec=SelectorSpec(
-            kind=SelectorKind.LIST, selector=_authors, permissions=_OPEN
-        ),
+        collection_selector_spec=SelectorSpec(kind=SelectorKind.LIST, selector=_authors),
         presenter=SerializerPresenter(AuthorSerializer, serializer_context=context),
         returns_many=True,
         atomic=False,
@@ -170,16 +155,9 @@ def test_a_collection_update_presents_its_set_under_one_context(
     assert len(calls) == 1
 
 
-def test_a_selector_list_view_presents_each_row_under_a_context_of_its_own(
+def test_a_selector_list_view_presents_its_rows_under_one_context(
     two_authors: list[Author],
 ) -> None:
-    """The decided answer: a list is presented row by row, one context for each.
-
-    The view presents the page's rows through the spec's presenter, and
-    ``SerializerPresenter`` inherits the kernel's ``Presenter.presented_rows``,
-    which asks ``presented()`` once per row, so the ``serializer_context`` callable
-    runs once per row (two rows, two runs) rather than once for the list.
-    """
     calls, context = _counter()
 
     class _View(SelectorListView):
@@ -193,7 +171,7 @@ def test_a_selector_list_view_presents_each_row_under_a_context_of_its_own(
 
     response = _View.as_view()(factory.get("/"))
     assert response.status_code == 200
-    assert len(calls) == 2
+    assert len(calls) == 1
 
 
 def test_an_update_viewset_action_presents_under_one_context(two_authors: list[Author]) -> None:

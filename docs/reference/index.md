@@ -20,7 +20,8 @@ and documented there. This package documents what it adds over DRF.
 - **[Types](types.md)**: `ServiceView`, `ViewHooks`, `HttpExtras`, the offline
   request and view, `MARKING` and the JSON Schema registry.
 - **[OpenAPI](openapi.md)**: `enable_openapi`, `ServiceAutoSchema`,
-  `ServiceErrorSerializer` (the opt-in `drf-spectacular` adapter).
+  `ServiceErrorSerializer`, `SERVICE_ERROR_METADATA_KEY` (the opt-in
+  `drf-spectacular` adapter).
 
 ## Public surface
 

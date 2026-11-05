@@ -11,6 +11,94 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-11-05
+
+### Changed
+
+- **The OpenAPI schema documents the 422 only where a spec declares it, so
+  every project's schema changes on upgrade.** `ServiceAutoSchema` documented
+  the 422 of a plain `ServiceError` (`ServiceErrorSerializer`) on every
+  service spec and every selector spec, though nothing in a spec says whether
+  its service, selector, preconditions or providers raise one; a project whose
+  code raises none published a status no route answers. Now an operation
+  documents it only where the spec it serves declares it, with
+  `metadata={"document_service_error": True}` (the key is exported as
+  `django_spec_rest.openapi.SERVICE_ERROR_METADATA_KEY`); a value other than
+  `True` or `False` is refused with `ImproperlyConfigured` when the schema is
+  generated. Upgrading, a schema loses its 422s: declare the key on each spec
+  that raises a plain `ServiceError` or an `AdditionalInputRequired`, declare
+  `@extend_schema(responses={422: ServiceErrorSerializer})` on one view, or
+  override the new public `ServiceAutoSchema.documents_service_error(spec)` in
+  your schema class to return `True` and keep the 422 everywhere. A drfs
+  spec's `document_service_error=True` moves into `metadata` under the same
+  name. The runtime is unchanged: the edge still answers a plain
+  `ServiceError` 422.
+- **A viewset refuses at `as_view()` a router-mounted detail route whose row
+  lookup does not read the lookup capture.** The capture a router builds
+  (`lookup_url_kwarg`, else `lookup_field`) reaches a spec only as a parameter
+  it declares, so a
+  `retrieve` spec, a detail `@selector_action`, or an `update`,
+  `partial_update`, `destroy` or detail `@service_action` whose
+  `instance_selector_spec` declared no read of that name looked its row up
+  without its key at every request. It is now refused when a router mounts
+  the detail route (it hands `as_view()` `detail=True`), naming the viewset, the
+  action, the capture and the read to declare. A project upgrading may see a
+  router fail to build its routes: declare the read on the selector, or set
+  `lookup_url_kwarg` to the name it reads. A viewset mounted by hand (a `me/`
+  singleton) and a standalone view are not checked; their captures are the
+  URLconf's.
+- **A `SerializerPresenter`'s `serializer_context` callable is asked once for a
+  list, not once per row.** A list view's page and a `many` service's return
+  are presented through `presented_rows`, which asks the callable once and
+  offers the rows under `page`, the name drfs gave them, and under the
+  presenter's `value_keyword`; a callable batching a lookup over the page ran
+  it once per row before, and one declaring `page` was never answered. The rows
+  render as one `many=True` serializer, so a `Meta.list_serializer_class` runs,
+  and the view's output hook is handed the whole set too. A project upgrading
+  whose list or `many` callable declares `result` (or its `value_keyword`)
+  expecting one row now receives the list of rows: read the row from the
+  serializer's own `to_representation` instead, or batch over the list. `page`
+  is always a list of the rows, never a queryset: as drfs did on a paginated
+  view, and unlike drfs on an unpaginated one, where it handed the selector's
+  queryset, so a provider calling `page.values_list(...)` or another queryset
+  method must work over the list instead. One value presents as before.
+- **A caller the spec's checks refuse is refused before its body's shape is
+  checked**, as DRF and drfs ask permission classes before the handler reads
+  the body. An anonymous caller sending an incomplete or ill-typed body to a
+  guarded write was answered 400 with the field errors, and a signed-in caller
+  the checks refuse 400 as well; both are now answered as for a well-formed
+  body, 401 with the authenticator's challenge or 403. A read's query string
+  is judged the same way. A request failing its shape is judged on no
+  arguments, and a check that cannot answer without them keeps the kernel's
+  order, so its caller is still told the 400 first. A client that sent 401 and
+  403 to sign-in no longer shows an anonymous visitor field errors. The
+  OPTIONS answer asks the same question, so it describes a method to exactly
+  the callers whose incomplete request is told what it lacks; it now also
+  leaves a create out for a caller whose scope check refuses the create, and
+  a spec declaring no permissions fails an incomplete write with
+  its configuration error, as a well-formed write already did.
+- **The moving page lists the four 400 answers a drfs client sees change.**
+  An output serializer's list `ValidationError` is keyed under
+  `non_field_errors` (a page too), DRF's field messages are the kernel's on a
+  JSON body, a body that is no object answers `{"detail": ...}`, and a numeric
+  string is still taken for an integer field while a number is no string.
+  Documentation only: the behaviour stands.
+
+### Fixed
+
+- **A list of the package's 403 or 401 body on a paginated view no longer lets
+  a project's serializer of the same name pass.** `PermissionDeniedSerializer(many=True)`
+  or `NotAuthenticatedSerializer(many=True)` is a plain `ListSerializer`, which
+  the "never a list" override on the two classes does not reach. On a
+  paginated list view, as its `200` or, under `ENABLE_LIST_MECHANICS_ON_NON_2XX`,
+  as its `403` or `401`, drf-spectacular's pagination naming descended to the
+  body and asked for its component name, which registered and armed the
+  reserved component without taking a `$ref` of it. A project's serializer of
+  the name resolved next was then documented by the package's `{detail}` body
+  instead of refused. The two bodies now build a list class of their own whose
+  pagination name is the body's, so the naming stops at the list; a list of
+  the body as a list view's `200` is documented as a page of them, as before.
+
 ## [0.6.1] — 2026-11-04
 
 ### Fixed
@@ -500,7 +588,8 @@ lists each with what a project rewrites.
 - **The package is no longer a Django app.** It has no models, migrations,
   templates, static files or URLs, so it needs no `INSTALLED_APPS` entry.
 
-[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/Artui/django-spec-rest/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/Artui/django-spec-rest/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/Artui/django-spec-rest/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Artui/django-spec-rest/compare/v0.4.0...v0.5.0

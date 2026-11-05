@@ -24,8 +24,17 @@ from django_spec_rest.openapi.permission_denied_serializer import PermissionDeni
 # One body, never a list: under ENABLE_LIST_MECHANICS_ON_NON_2XX a paginated
 # view's 403 or 401 would be wrapped as ``Paginated<Name>List``, and the
 # pagination naming asks the extension for a name it takes no ``$ref`` of.
+# That override covers the class; an instance with ``many=True`` is a
+# ``ListSerializer`` without it, which a list view still pages (as it does a
+# project's list), so the pagination naming stops at the list class, named for
+# the body, and never asks the extension (TestAListOfTheBody).
 for _body in (PermissionDeniedSerializer, NotAuthenticatedSerializer):
     set_override(_body, "many", False)
+    set_override(
+        _body.Meta.list_serializer_class,
+        "component_name",
+        _body.__name__.removesuffix("Serializer"),
+    )
 
 # Default success status by action / view kind. Mirrors the runtime defaults
 # in the standalone views and viewset mixins so the schema lines up with

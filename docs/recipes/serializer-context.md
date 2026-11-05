@@ -56,10 +56,59 @@ CREATE_SPEC = ServiceSpec(
 )
 ```
 
-A presenter's `serializer_context` callable runs once for each row it renders,
-so for a list it runs once per row, not once for the page: a callable that
-queries runs its query per row. Load what every row needs in the selector
-(`select_related`, `prefetch_related`, `annotations`) instead.
+## What a presenter's callable receives
+
+A presenter's `serializer_context` callable declares what it reads by name:
+`request`, `view`, `user`, `call_context`, a registered seed, and the value
+being rendered.
+
+| Rendering | Asked | The value, by name |
+| --- | --- | --- |
+| one value: a service's output, a retrieve | once | under `value_keyword`: `result` by default, `instance` where the presenter names it so |
+| a list: a page's rows, a `many` service's return | once for the list, not once per row | the rows under `page`, and under `value_keyword` too |
+
+So a callable on a list view can batch one lookup over the page's rows and
+hand the answer to every row through the context:
+
+```python
+def comment_counts(*, page):
+    ids = [post.pk for post in page]
+    counts = dict(
+        Comment.objects.filter(post_id__in=ids).values_list("post_id").annotate(n=Count("id"))
+    )
+    return {"comment_counts": counts}
+
+
+class PostSerializer(serializers.ModelSerializer):
+    comments = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Post
+        fields = ("id", "title", "comments")
+
+    def get_comments(self, post):
+        return self.context["comment_counts"].get(post.pk, 0)
+
+
+POSTS = SelectorSpec(
+    kind=SelectorKind.LIST,
+    selector=list_posts,
+    permissions=OPEN,
+    presenter=SerializerPresenter(PostSerializer, serializer_context=comment_counts),
+)
+```
+
+The query runs once a page, whatever the page size. `page` holds the rows
+being rendered, already evaluated, as a list: on a paginated view only the
+page's rows, never DRF's `Page` object, and never a queryset to filter
+further. A presenter with `value_keyword=None` offers the rows under `page`
+alone. A `many` service's callable declaring `result` receives its whole
+return, as the view's `get_output_serializer_context(result)` does.
+
+The rows render as one `many=True` serializer, so a `Meta.list_serializer_class`
+and its `to_representation` run on a list as behind a DRF view. Its answer
+keeps one row per value, in order: affordances are added to each row by its
+position, and a list of another length is refused.
 
 ## Keys a view adds
 

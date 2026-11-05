@@ -793,26 +793,26 @@ class TestTheResponse:
         assert _response(schema, "/create/", "post", "201") == {
             "$ref": "#/components/schemas/Author"
         }
-        assert set(_op(schema, "/create/", "post")["responses"]) == {"201", "400", "422"}
+        assert set(_op(schema, "/create/", "post")["responses"]) == {"201", "400"}
 
     def test_the_view_s_status_is_documented(self, schema: dict[str, Any]) -> None:
-        assert set(_op(schema, "/create-202/", "post")["responses"]) == {"202", "400", "422"}
+        assert set(_op(schema, "/create-202/", "post")["responses"]) == {"202", "400"}
 
     def test_a_callable_status_documents_the_action_s_default(self, schema: dict[str, Any]) -> None:
-        assert set(_op(schema, "/create-callable/", "post")["responses"]) == {"201", "400", "422"}
+        assert set(_op(schema, "/create-callable/", "post")["responses"]) == {"201", "400"}
 
     def test_a_spec_that_may_present_nothing_documents_its_204(
         self, schema: dict[str, Any]
     ) -> None:
         responses = _op(schema, "/create-may-be-none/", "post")["responses"]
-        assert set(responses) == {"201", "204", "400", "422"}
+        assert set(responses) == {"201", "204", "400"}
         assert "content" not in responses["204"]
 
     def test_no_presenter_documents_no_content_at_the_status(self, schema: dict[str, Any]) -> None:
         # The spec may present nothing, and the no-content response is already
         # the one documented, at its status: no 204 beside it.
         responses = _op(schema, "/create-bare/", "post")["responses"]
-        assert set(responses) == {"201", "400", "422"}
+        assert set(responses) == {"201", "400"}
         assert "content" not in responses["201"]
 
     def test_another_presenter_is_its_output_schema(self, schema: dict[str, Any]) -> None:
@@ -839,7 +839,7 @@ class TestTheResponse:
         # The output selector's presenter renders its rows, and a LIST re-read
         # never presents nothing, so no 204 is documented beside them.
         responses = _op(schema, "/create-re-read-list/", "post")["responses"]
-        assert set(responses) == {"201", "400", "422"}
+        assert set(responses) == {"201", "400"}
         assert _response(schema, "/create-re-read-list/", "post", "201") == {
             "type": "array",
             "items": {"$ref": "#/components/schemas/Author"},
@@ -851,19 +851,17 @@ class TestTheResponse:
         }
 
     def test_a_destroy_presenting_nothing_answers_204(self, schema: dict[str, Any]) -> None:
-        assert set(_op(schema, "/delete/{id}/", "delete")["responses"]) == {"204", "422"}
+        assert set(_op(schema, "/delete/{id}/", "delete")["responses"]) == {"204"}
 
-    def test_a_service_error_is_documented_with_or_without_a_validator(
+    def test_an_undeclared_service_error_is_not_documented_with_or_without_a_validator(
         self, schema: dict[str, Any]
     ) -> None:
-        # The ``ServiceError`` component carries under its name; what the 422
-        # is, and the 400 a Validator's refusal answers, are held end to end by
+        # Where the spec declares it, the 422 and its ``ServiceError`` body
+        # are held by test_service_error_declared, and end to end by
         # test_validator_refusal_schema.
-        assert _response(schema, "/create/", "post", "422") == {
-            "$ref": "#/components/schemas/ServiceError"
-        }
+        assert "422" not in _op(schema, "/create/", "post")["responses"]
         responses = _op(schema, "/create-no-input/", "post")["responses"]
-        assert "422" in responses
+        assert "422" not in responses
         assert "400" not in responses
 
 
@@ -941,7 +939,7 @@ class TestViewsets:
         assert _body(schema, "/authors/{id}/", "patch") == {
             "$ref": "#/components/schemas/PatchedNameIn"
         }
-        assert set(_op(schema, "/authors/{id}/", "delete")["responses"]) == {"204", "422"}
+        assert set(_op(schema, "/authors/{id}/", "delete")["responses"]) == {"204"}
         assert _response(schema, "/authors/", "get", "200")["type"] == "array"
         assert _response(schema, "/authors/{id}/", "get", "200") == {
             "$ref": "#/components/schemas/Author"

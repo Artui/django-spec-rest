@@ -5,6 +5,15 @@ from __future__ import annotations
 from rest_framework import serializers
 
 
+class _NotAuthenticatedList(serializers.ListSerializer):
+    """What ``many=True`` of the body builds, a class of its own so the schema can name it.
+
+    ``openapi.utils`` annotates it with the body's component name: the
+    pagination naming of a list view then stops at the list rather than asking
+    the body's extension, which arms a component nothing takes a ``$ref`` of.
+    """
+
+
 class NotAuthenticatedSerializer(serializers.Serializer):
     """No caller was authenticated. Why is under `detail`."""
 
@@ -17,3 +26,6 @@ class NotAuthenticatedSerializer(serializers.Serializer):
     # DRF's ``NotAuthenticated``.
 
     detail = serializers.CharField()
+
+    class Meta:
+        list_serializer_class = _NotAuthenticatedList

@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Generator, Mapping, Sequence
+from contextlib import contextmanager
 from types import MappingProxyType
 from typing import Any, Final
 
@@ -123,8 +124,7 @@ class SerializerPresenter(Presenter):
     renders for the principal the call ran for, and whose query string is
     the call's ``shapes``, so a serializer reading a ``fields`` selector off
     ``request.query_params`` finds the one the caller sent. A request the
-    call carries is left as it is. A list result is presented row by row by the kernel's ``present``,
-    each row with the same context, which is what a ``many=True`` render is.
+    call carries is left as it is.
     Over that, the output half of the view hooks a DRF edge adds to the
     result's context (``output_view_layers``), resolved with the value, then
     this Presenter's own ``serializer_context``, each winning on a key it shares
@@ -133,12 +133,21 @@ class SerializerPresenter(Presenter):
     The callable declares what it reads from the call's pool, ``request``,
     ``view``, ``user`` or a registered seed, and the value being presented
     under ``value_keyword``: ``result`` for a service's output, ``instance``
-    for a retrieve. **It is asked once per value presented**, so for a list
-    or a ``many`` service's output once per row, and no keyword names the
-    row then (``value_keyword`` is ``None``), nor is the view's hook handed
-    it: the kernel presents a set row by row, and the whole set a callable
-    may declare, a list's ``page`` or a ``many`` output's ``result``, is
-    never in hand here.
+    for a retrieve, nothing where it is ``None``.
+
+    ``presented_rows(values, context)`` is what the kernel's ``present`` asks
+    for a list: a page's rows over HTTP, a ``many`` service's return. **The
+    callable is asked once for them all**, offered the rows under ``page``,
+    the name drfs gave a list's, and under ``value_keyword`` too where it
+    names one, so a ``many`` service's ``result`` is its whole return, as the
+    view's output hook is handed it. A lookup it batches over the rows runs
+    once a page, not once a row. The rows are a list, already evaluated:
+    not a queryset to filter further, nor DRF's ``Page``. They render as one
+    ``many=True`` serializer, so a ``Meta.list_serializer_class`` and its
+    ``to_representation`` run as behind a DRF view, and its answer must keep
+    one row per value, in order, which the kernel checks: it adds affordances
+    to each row by its position. A ``None`` row stays ``None`` in its place,
+    as ``presented`` answers it, and the serializer renders the others.
 
     ``present(value)`` is the context-free form, and delegates to
     ``presented(value, None)``: a ``None`` context is the serializer context
@@ -242,41 +251,94 @@ class SerializerPresenter(Presenter):
         """
         if value is None:
             return None
-        try:
-            return self._data(value, context)
-        except KernelInvalidArguments:
-            raise
-        except serializers.ValidationError as exc:
-            detail = exc.detail
-            raise DRFInvalidArguments(
-                detail if isinstance(detail, Mapping) else {NON_FIELD_ERRORS: detail}
-            ) from exc
+        with _refusals_as_the_kernel_s():
+            return self.serializer_class(
+                value, context=self._context(value, context, extras=self._named(value))
+            ).data
 
-    def _data(self, value: Any, context: PresentationContext | None) -> Any:
+    def presented_rows(
+        self, values: Sequence[Any], context: PresentationContext | None
+    ) -> list[Any]:
+        """A list's rows as one ``many=True`` render, its context asked for once.
+
+        A ``None`` row is presented as ``None`` in its place, and the
+        serializer renders the rest. A ``list_serializer_class`` answering
+        another count for them is refused here when a ``None`` is to be
+        placed among its answer; otherwise the kernel refuses it, comparing
+        the answer with the rows it handed over
+        (test_a_list_serializer_answering_another_count_beside_a_none_is_refused).
+
+        A serializer's refusal leaves as ``presented``'s does
+        (test_a_refusal_on_a_page_leaves_as_the_kernel_s).
+        """
+        rows = [value for value in values if value is not None]
+        with _refusals_as_the_kernel_s():
+            rendered = list(
+                self.serializer_class(
+                    rows,
+                    many=True,
+                    context=self._context(
+                        rows, context, extras={**self._named(rows), "page": rows}
+                    ),
+                ).data
+            )
+        if len(rows) == len(values):
+            return rendered
+        if len(rendered) != len(rows):
+            raise ImproperlyConfigured(
+                f"{self.serializer_class.__name__}: its list serializer answered {len(rendered)} "
+                f"rows for {len(rows)} rows. Answer one row per value, in the order given."
+            )
+        answers = iter(rendered)
+        return [None if value is None else next(answers) for value in values]
+
+    def _named(self, value: Any) -> dict[str, Any]:
+        """``value`` under ``value_keyword``, or nothing where the presenter names none."""
+        return {} if self.value_keyword is None else {self.value_keyword: value}
+
+    def _context(
+        self, value: Any, context: PresentationContext | None, *, extras: Mapping[str, Any]
+    ) -> dict[str, Any]:
+        """The serializer context for ``value``, one row or a list's rows, in ``context``'s call."""
         if context is None:
-            return self.serializer_class(value, context=_context()).data
-        return self.serializer_class(
-            value,
-            context=serializer_context(
-                context.principal,
-                context.ambient,
-                None,
-                # A presenter naming no value is presenting one row of a set,
-                # which the view's hook, written for the whole set, is not handed.
-                view_layers=output_view_layers(
-                    context.ambient, value if self.value_keyword is not None else None
-                ),
-                provider=self.serializer_context,
-                extras={self.value_keyword: value} if self.value_keyword is not None else None,
-                call_context=context.call_context,
-                shapes=context.shapes,
+            return _context()
+        return serializer_context(
+            context.principal,
+            context.ambient,
+            None,
+            # A presenter naming no value hands the view's hook none either, as
+            # its callable is offered none under ``value_keyword``.
+            view_layers=output_view_layers(
+                context.ambient, value if self.value_keyword is not None else None
             ),
-        ).data
+            provider=self.serializer_context,
+            extras=extras,
+            call_context=context.call_context,
+            shapes=context.shapes,
+        )
 
 
 _REFUSED: Final = (
     "SerializerPresenter takes a serializer class or a dataclass type; got {declared!r}."
 )
+
+
+@contextmanager
+def _refusals_as_the_kernel_s() -> Generator[None]:
+    """A serializer's ``ValidationError`` raised as the dual ``DRFInvalidArguments``.
+
+    A mapping detail as it is, a list under the kernel's ``NON_FIELD_ERRORS``;
+    one already the kernel's ``InvalidArguments`` leaves as raised.
+    """
+    try:
+        yield
+    except KernelInvalidArguments:
+        raise
+    except serializers.ValidationError as exc:
+        detail = exc.detail
+        raise DRFInvalidArguments(
+            detail if isinstance(detail, Mapping) else {NON_FIELD_ERRORS: detail}
+        ) from exc
 
 
 def _context() -> dict[str, Any]:

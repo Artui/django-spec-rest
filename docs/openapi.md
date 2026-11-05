@@ -126,14 +126,14 @@ call `enable_openapi()` again after the reload.
   schema refuses such a serializer with `ImproperlyConfigured`, on any view and
   whichever is resolved first (see
   [the names this schema keeps](#the-component-names-this-schema-keeps)).
-- **A 422** is documented on every service spec, whether or not it has a
-  validator. It is not a validator's refusal: it is a plain `ServiceError`
-  raised by the service, a precondition or a provider, which no spec can rule
-  out. Its body is `{"detail": ...}`, with the `schema` an
-  `AdditionalInputRequired` carries beside it when it carries one (an object,
-  not required).
+- **A 422** is documented where the spec declares it can answer one (see
+  [Declaring the 422](#declaring-the-422)), whether or not it has a validator.
+  It is not a validator's refusal: it is a plain `ServiceError` raised by the
+  service, a precondition or a provider. Its body is `{"detail": ...}`, with
+  the `schema` an `AdditionalInputRequired` carries beside it when it carries
+  one (an object, not required).
 - **A selector spec** documents the same two refusals, since a selector is
-  refused the same way: a **422** on every selector spec (the selector, a
+  refused the same way: a **422** where it declares one (the selector, a
   precondition or a provider can raise a plain `ServiceError`), and a **400**
   where the spec takes any parameter, a read, a shape or a filter. The 400's
   body is the same as a validator's. A route capture is a parameter too: only
@@ -177,6 +177,56 @@ call `enable_openapi()` again after the reload.
 the body of that 422 and of the 400's `{"detail": ...}` alternative, under the
 `ServiceError` component.
 
+### Declaring the 422
+
+The edge answers any plain `ServiceError` with a 422, but nothing in a spec
+says whether its service, selector, preconditions or providers raise one, so
+an operation documents the 422 only where its spec declares it, under the
+`metadata` key `"document_service_error"` (exported as
+`django_spec_rest.openapi.SERVICE_ERROR_METADATA_KEY`):
+
+```python
+from django_service_specs import ServiceSpec
+
+from django_spec_rest.openapi import SERVICE_ERROR_METADATA_KEY
+
+book_room_spec = ServiceSpec(
+    service=book_room,
+    validator=...,
+    metadata={SERVICE_ERROR_METADATA_KEY: True},
+)
+```
+
+It is read off the spec the route serves, on every surface that serves it: a
+standalone view's `spec`, an `action_specs` entry, and a `@service_action` or
+`@selector_action`. Only that spec's `metadata` is read, never a target or
+re-read selector's nested in it. `False`, or no key, documents no 422; any
+other value is refused with `ImproperlyConfigured` when the schema is
+generated. An `AdditionalInputRequired` is a `ServiceError` too: a spec whose
+service asks for more input declares the 422 the same way.
+
+To document it on one view whatever its spec says, declare it there with
+`@extend_schema(responses={422: ServiceErrorSerializer})`. To answer for many
+operations at once, override `ServiceAutoSchema.documents_service_error(spec)`
+in your schema class: it is asked once per operation with the served spec
+(`self.view` and `self.method` are the operation's), and returning `True`
+documents the 422 on every spec, as releases before 0.7.0 did:
+
+```python
+from django_spec_rest.openapi.service_auto_schema import ServiceAutoSchema
+
+
+class ApiSchema(ServiceAutoSchema):
+    def documents_service_error(self, spec):
+        return True
+```
+
+Your class documents the views it is the schema of: set `schema = ApiSchema()`
+on your views, or on a base class they share. `enable_openapi()` sets the
+package's own `ServiceAutoSchema` on the package's view classes, which
+outranks a `DEFAULT_SCHEMA_CLASS` naming yours, as the top of this page
+says.
+
 Every other `@extend_schema` argument a project supplies wins, and
 `@extend_schema(parameters=...)` merges over the filter parameters as it does
 for a view-level `FilterSet`. `responses=` is added to what the spec documents,
@@ -197,7 +247,7 @@ body `map_service_error` sends:
 | `ServiceNotFound` | 404 | `ServiceNotFoundSerializer` | `{"detail": ...}` |
 | `ServiceConflict` | 409 | `ServiceConflictSerializer` | `{"detail": ...}`, and `code` where it is an `ActionUnavailable` |
 | `ActionUnavailable` | 409 | `ActionUnavailableSerializer` | `{"detail": ..., "code": ...}` |
-| any other `ServiceError` | 422 | already documented (`ServiceErrorSerializer`) | `{"detail": ...}`, and `schema` where an `AdditionalInputRequired` carries one |
+| any other `ServiceError` | 422 | the spec's `metadata` (see [Declaring the 422](#declaring-the-422)), or `ServiceErrorSerializer` | `{"detail": ...}`, and `schema` where an `AdditionalInputRequired` carries one |
 
 ```python
 from drf_spectacular.utils import OpenApiResponse, extend_schema
@@ -221,7 +271,7 @@ class CloseTaskView(ServiceUpdateView):
 
 A mapping of statuses is **added** to what the spec documents: the operation
 above still documents its success body, its validator's 400, its permission
-check's 403 and its 422, with the 404 and 409 beside them. A status you declare
+check's 403 and any 422 its spec declares, with the 404 and 409 beside them. A status you declare
 replaces the spec's at that status (`404` and `"404"` are one status, and so is
 a `(404, "application/json")` key), and any `2xx` you declare replaces every
 success status the spec documents. Anything else passed as `responses=`, a bare

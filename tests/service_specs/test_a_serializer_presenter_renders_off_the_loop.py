@@ -88,9 +88,9 @@ async def test_the_serializer_context_callable_may_query() -> None:
         def get_total(self, _: Post) -> int:
             return self.context["total"]
 
-    def context(*, result: Post) -> dict[str, Any]:
-        # Asked once per row, with the row under ``value_keyword``.
-        return {"total": Post.objects.filter(pk=result.pk).count()}
+    def context(*, page: list[Post]) -> dict[str, Any]:
+        # Asked once for the list, with its rows under ``page``.
+        return {"total": Post.objects.filter(pk__in=[post.pk for post in page]).count()}
 
     rendered = await _rendered(_list(_CountingSerializer, serializer_context=context))
 
