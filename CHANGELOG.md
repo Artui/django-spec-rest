@@ -11,6 +11,23 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+### Added
+
+- **A viewset's actions answer with their own status and finalizer.** A
+  viewset's `success_status` and `response_finalizer` answered for every
+  action, so actions answering differently needed a callable switching on
+  `view.action`. Now `@service_action(spec, success_status=...,
+  response_finalizer=...)` declares a decorated action's own, and a
+  `get_<action>_success_status` or `get_<action>_response_finalizer` hook (a
+  method, or an `int` for a status) an `action_specs` entry's. The most
+  specific answers: the decorator's, the hook, the viewset's, then the
+  action's default. `as_view()` asks each what it asks the viewset's, naming
+  the action, and refuses a decorator value beside a hook for the same action;
+  the OpenAPI schema documents the action's status. The viewset-wide
+  attributes are unchanged. Before, the decorator's two keywords went to DRF's
+  `@action`, which hands them to `as_view()` only under a router, unchecked by
+  name; they are the action's own on every mount now.
+
 ## [0.7.0] — 2026-11-05
 
 ### Changed

@@ -71,7 +71,7 @@ from django_spec_rest.service_specs.renderable_serializer_class import renderabl
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from django_spec_rest.views.mutation.utils import status_for_a_body
-from django_spec_rest.views.utils import view_pool_seeds
+from django_spec_rest.views.utils import action_answer, view_pool_seeds
 
 
 class ServiceAutoSchema(AutoSchema):
@@ -99,7 +99,8 @@ class ServiceAutoSchema(AutoSchema):
       presents rows (``_presents_rows``). A spec with no presenter documents
       the no-content response, and a selector spec with none keeps the base's
       reading of the view's ``serializer_class``, which renders it.
-    - **The status** is the view's ``success_status`` where it is an ``int``,
+    - **The status** is the view's ``success_status`` for the action, per
+      action where one is declared, where it is an ``int``,
       since a kernel spec declares none, over the action's default; a body is
       documented as the ``200`` it is served as where that is ``204``, and the
       ``204`` beside it where ``can_present_nothing``.
@@ -382,11 +383,14 @@ class ServiceAutoSchema(AutoSchema):
     def _kernel_responses(self, spec: KernelServiceSpec) -> dict[Any, Any]:
         """A kernel service spec's responses.
 
-        The status is the view's own ``success_status``, the hook the kernel
-        route answers with (``MutationFlowMixin``), where it is an ``int``; a
-        callable keys on the result, so the action's default stands
+        The status is the view's own ``success_status`` for the action it
+        serves, the hook the kernel route answers with (``action_answer``:
+        ``@service_action``'s, then ``get_<action>_success_status``, then the
+        viewset's), where it is an ``int``; a callable keys on the result, so
+        the action's default stands, never the viewset-wide value it replaces
         (test_the_view_s_status_is_documented,
-        test_a_callable_status_documents_the_action_s_default). The body is
+        test_a_callable_status_documents_the_action_s_default,
+        test_per_action_status). The body is
         the presenter the kernel's ``present`` renders with,
         ``presenter_for_output()``. The ``204`` beside a body is where the spec
         may present nothing; its operands are held here by
@@ -395,7 +399,7 @@ class ServiceAutoSchema(AutoSchema):
         question), and the branch by
         test_a_spec_that_may_present_nothing_documents_its_204.
         """
-        declared = getattr(self.view, "success_status", None)
+        declared = action_answer(self.view, "success_status")
         status = declared if isinstance(declared, int) else default_status(self.view)
         presenter = spec.presenter_for_output()
         rows = _presents_rows(spec)

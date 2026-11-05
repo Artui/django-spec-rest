@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import inspect
+import types
 from collections.abc import Callable, Mapping
 from typing import Any, ClassVar, TypeVar
 
@@ -18,6 +19,8 @@ from django_spec_rest.views.mutation.utils import _ServesRaisedSchema
 from django_spec_rest.views.spec_options import spec_options
 from django_spec_rest.views.spec_validation import (
     _check_kernel_seeds,
+    _validate_response_finalizer,
+    _validate_success_status,
     validate_mutation_view_spec,
     validate_selector_view_spec,
 )
@@ -160,6 +163,26 @@ def resolve_action_selector_spec(
     return entry
 
 
+# The view's two HTTP answers, which an action may declare for itself.
+_ANSWERS = ("success_status", "response_finalizer")
+
+
+def _action_hooks(view_cls: type | MountedView, action: str) -> dict[str, Any]:
+    """Each ``get_<action>_<answer>`` hook ``view_cls`` defines, as an instance reads it.
+
+    Read off the class a method is unbound, so it is bound here: its ``self``
+    is the view, never a key it asks the framework for
+    (test_per_action_answers' test_a_hook_s_own_self_is_not_a_key_it_requires).
+    An ``int`` is the status as it stands.
+    """
+    hooks: dict[str, Any] = {}
+    for name in _ANSWERS:
+        hook = getattr(view_cls, f"get_{action}_{name}", None)
+        if hook is not None:
+            hooks[name] = types.MethodType(hook, view_cls) if inspect.isfunction(hook) else hook
+    return hooks
+
+
 def _as_mounted(
     view_cls: type | MountedView, action: str, spec: object, *, label: str
 ) -> MountedView:
@@ -176,9 +199,14 @@ def _as_mounted(
     rather than a subclass, so no class is made per entry
     (test_mounting_makes_no_class), and named after the entry, so a refusal
     names the action it is about (test_service_viewset's
-    test_the_refusal_names_the_action).
+    test_the_refusal_names_the_action). The action's own
+    ``get_<action>_success_status`` and ``get_<action>_response_finalizer``
+    stand in for the viewset's, as they do at dispatch (``action_answer``), so
+    the checks ask the value the action answers with
+    (test_per_action_answers' TestTheMountedChecksReadThePerActionValue).
     """
-    return MountedView(view_cls, {"spec": spec, "action": action}, name=label)
+    overrides = {"spec": spec, "action": action, **_action_hooks(view_cls, action)}
+    return MountedView(view_cls, overrides, name=label)
 
 
 def _validate_kernel_action_spec(
@@ -266,6 +294,27 @@ def _fills_service_keywords(view_cls: type | MountedView, action: str) -> bool:
     )
 
 
+def _validate_action_answers(view_cls: type | MountedView, action: str, handler: Any) -> None:
+    """Ask a decorated action's per-action hooks what a standalone view's answers are asked.
+
+    Only a service action dispatches with them, and a selector action's are
+    asked as harmlessly as they are ignored. The decorator's own values were
+    asked at decoration. A hook beside one is
+    refused, since the action would carry two answers and only one is read
+    (test_per_action_answers' test_a_decorator_value_beside_a_hook_is_refused).
+    """
+    label = f"{view_cls.__name__}.{action}"
+    hooks = _action_hooks(view_cls, action)
+    for name in hooks:
+        if getattr(handler, f"_{name}", None) is not None:
+            raise ImproperlyConfigured(
+                f"{label}: @service_action declares `{name}` and the viewset defines "
+                f"get_{action}_{name}, so the action has two. Keep one."
+            )
+    _validate_success_status(hooks.get("success_status"), label=label)
+    _validate_response_finalizer(hooks.get("response_finalizer"), label=label)
+
+
 def _validate_decorated_actions(view_cls: type | MountedView, *, pool_seeds: PoolSeeds) -> None:
     """Ask each decorated action's spec the kernel's ``check_seeds`` against ``pool_seeds``.
 
@@ -282,6 +331,7 @@ def _validate_decorated_actions(view_cls: type | MountedView, *, pool_seeds: Poo
     unfiltered, so the ``filter_set`` check of a list view does not apply.
     """
     for action, handler in inspect.getmembers(view_cls, _is_decorated):
+        _validate_action_answers(view_cls, action, handler)
         spec: ActionSpec | None = getattr(handler, "_service_spec", None)
         # One arc to coverage, so each conjunct is named: a selector action on
         # a hooked viewset by test_a_service_kwargs_hook_does_not_excuse_it,

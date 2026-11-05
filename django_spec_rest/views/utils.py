@@ -269,6 +269,31 @@ def get_class_attr(view: Any, name: str) -> Any:
     return configured[name] if name in configured else getattr(type(view), name, None)
 
 
+def action_answer(view: Any, name: str) -> Any:
+    """The view's ``success_status`` or ``response_finalizer`` (``name``) for the action it serves.
+
+    Most specific first: the value ``@service_action`` stamped on the action's
+    handler, then the view's ``get_<action>_<name>`` hook, then the view's own
+    (``get_class_attr``, an ``as_view()`` keyword over the class attribute). A
+    hook read off the instance is bound, so a method is the callable itself,
+    handed the same keys the view-wide one is; an ``int`` attribute is the
+    status. A view serving no action (a standalone view) has the view's own
+    alone (test_per_action_answers). One branch to coverage for the two
+    lookups, so each is named: the stamp by
+    test_two_actions_answer_different_statuses_and_finalizers of a decorated
+    action, the hook by the same test of an ``action_specs`` entry.
+    """
+    action = getattr(view, "action", None)
+    if isinstance(action, str):
+        stamped = getattr(getattr(view, action, None), f"_{name}", None)
+        if stamped is not None:
+            return stamped
+        hook = getattr(view, f"get_{action}_{name}", None)
+        if hook is not None:
+            return hook
+    return get_class_attr(view, name)
+
+
 class MountedView:
     """A view class read through ``overrides``: each name from them first, then from the class.
 

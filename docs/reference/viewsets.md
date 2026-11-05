@@ -39,6 +39,49 @@ such as `path("me/", MeViewSet.as_view({"get": "retrieve"}))`, whose selector
 finds the caller's own row, carries no capture and needs no read; a hand-mounted
 route that does carry one must have it declared by the selector itself.
 
+## Per-action answers
+
+A kernel spec declares no HTTP answer, so a viewset's `success_status` and
+`response_finalizer` answer for every action it serves. An action that answers
+differently declares its own, and the most specific one answers:
+
+1. `@service_action(spec, success_status=..., response_finalizer=...)`, for a
+   decorated action;
+2. a `get_<action>_success_status` or `get_<action>_response_finalizer` hook on
+   the viewset, for any action, an `action_specs` entry included;
+3. the viewset's own, an `as_view(success_status=...)` keyword over the class
+   attribute;
+4. the action's default: 201 create, 200 update, 204 destroy, 200 a custom
+   action.
+
+```python
+class MembershipViewSet(ServiceViewSet):
+    action_specs = {"create": JOIN_SPEC, "destroy": LEAVE_SPEC}
+
+    def get_create_success_status(self, *, result: Membership) -> int:
+        return 201 if result.is_new else 200
+
+    get_destroy_success_status = 200
+
+    @service_action(CANCEL_SPEC, detail=True, methods=["post"], success_status=204)
+    def cancel(self, request: Any, pk: Any = None) -> None:
+        """Cancel a pending membership."""
+```
+
+Each takes the shapes the viewset's does. A status is an `int` or a callable
+declaring any of `result`, `instance`, `request` and `view`; a finalizer is a
+callable declaring any of `response`, `result`, `request`, `view`, `instance`
+and `data`. A hook method is that callable, its `self` the view, and an `int`
+attribute is the status. A hook is named for the action DRF names, as
+`get_<action>_service_kwargs` is: a `PATCH` reads `get_partial_update_...`,
+never `get_update_...`.
+
+`as_view()` asks each per-action value what it asks the viewset's, naming the
+action: a callable requiring a name the view cannot supply is refused, and so
+is a decorator value beside a hook for the same action. The decorator's own
+values are asked when it runs. The OpenAPI schema documents the status of the
+action, where it is an `int`; a callable documents the action's default.
+
 ## Full CRUD
 
 ::: django_spec_rest.viewsets.service_viewset.ServiceViewSet

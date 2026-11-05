@@ -108,8 +108,14 @@ declare every seat above.
   `request` and `view`.
 - **A viewset's `list` with a spec never goes through `get_queryset()`**; the
   view's filter backends and paginator still apply to the set the spec read.
-- **`success_status` and `response_finalizer` are the view's**, read off the
-  class for every action, since a kernel spec declares no HTTP answer.
+- **`success_status` and `response_finalizer` are the view's or the action's**,
+  since a kernel spec declares no HTTP answer. A drfs spec's value moves to the
+  route that served it: on a standalone view or a viewset whose actions all
+  answer alike, the class attribute; on a `@service_action`, the decorator's
+  `success_status=` and `response_finalizer=`; on an `action_specs` entry, a
+  `get_<action>_success_status` or `get_<action>_response_finalizer` hook,
+  a method declaring what the callable did, or an `int` for a status
+  ([Per-action answers](reference/viewsets.md#per-action-answers)).
 
 ## What a client sees
 

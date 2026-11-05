@@ -166,7 +166,8 @@ A result with nothing to present answers 204 with no body, and a body never
 goes out under 204: a value to present answers 200. `success_status` on the
 view overrides the default, with an `int` or a callable declaring any of
 `result`, `instance`, `request`, `view`; `response_finalizer` may replace the
-response built. `as_view()` refuses a callable
+response built. On a viewset an action may declare its own
+([Per-action answers](reference/viewsets.md#per-action-answers)). `as_view()` refuses a callable
 requiring a name the view cannot supply, whether or not it also takes
 `**kwargs`, which is handed the names the view has and no others.
 

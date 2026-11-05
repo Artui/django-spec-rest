@@ -45,7 +45,10 @@ class MutationFlowMixin(_ServesRaisedSchema):
 
     A kernel spec declares neither HTTP answer, so the response's two HTTP hooks
     are the view's: ``success_status`` and ``response_finalizer`` below, read
-    off the class unbound.
+    off the class unbound. On a viewset an action may declare its own, which
+    outranks these: ``@service_action``'s keywords, or a
+    ``get_<action>_success_status`` / ``get_<action>_response_finalizer`` hook
+    (``action_answer``, test_per_action_answers).
     """
 
     success_status: ClassVar[int | Callable[..., int] | None] = None
