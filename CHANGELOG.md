@@ -11,6 +11,8 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-11-05
+
 ### Added
 
 - **A viewset's actions answer with their own status and finalizer.** A
@@ -617,7 +619,8 @@ lists each with what a project rewrites.
 - **The package is no longer a Django app.** It has no models, migrations,
   templates, static files or URLs, so it needs no `INSTALLED_APPS` entry.
 
-[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/Artui/django-spec-rest/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/Artui/django-spec-rest/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/Artui/django-spec-rest/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/Artui/django-spec-rest/compare/v0.5.0...v0.6.0
