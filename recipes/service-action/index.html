@@ -1093,7 +1093,13 @@
 <code>partial_update</code> and <code>destroy</code>, each from its entry in <code>action_specs</code>.
 <code>SelectorViewSet</code> serves <code>list</code> and <code>retrieve</code>. An action with no entry falls
 back to DRF's own behaviour for the reads (<code>get_queryset()</code>, <code>get_object()</code>)
-and answers 405 for the writes, and <code>Allow</code> leaves an unserved write out.</p>
+and answers 405 for the writes, and <code>Allow</code> leaves an unserved write out.
+<code>get_queryset()</code> answers the <code>list</code> spec's set on <code>list</code> alone, from the one
+dispatch the list presents; every other action, a custom <code>@action</code> included,
+reads the viewset's <code>queryset</code>. So a viewset under DRF's
+<code>DjangoModelPermissions</code>, which asks <code>get_queryset()</code> on every action, sets
+<code>queryset</code>. The schema needs none: a lookup is documented from the read its
+spec declares (see <a href="../../openapi/#what-a-route-documents">OpenAPI</a>).</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_spec_rest</span><span class="w"> </span><span class="kn">import</span> <span class="n">ServiceViewSet</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>

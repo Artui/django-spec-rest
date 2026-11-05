@@ -1616,15 +1616,20 @@ over:</p>
   row.</li>
 <li><strong>A spec's rows are scoped by its selector alone.</strong> No action a spec serves
   takes its rows from the view's <code>get_queryset()</code>: not <code>list</code>, <code>retrieve</code>, a
-  <code>@selector_action</code>, nor a write's target lookup (a permission class that
+  <code>@selector_action</code>, nor a write's target lookup. A permission class that
   calls it, as DRF's <code>DjangoModelPermissions</code> does, reads its model and
-  narrows nothing). The view's <code>filter_backends</code>
+  narrows nothing: on <code>list</code> it reads the list spec's set, and on every other
+  action the view's own <code>queryset</code>, so a view under that class sets
+  <code>queryset</code>, as DRF asks. The view's <code>filter_backends</code>
   narrow a spec's <code>list</code> (a viewset's, and <code>SelectorListView</code>'s) and nothing
   else, so not <code>retrieve</code>, a <code>@selector_action</code>'s rows, or the row an update or
   delete reaches. A project that scoped rows to a tenant through either moves
   that scoping into each selector's own queryset (a selector may declare
   <code>user</code>): left where it was, a <code>PATCH</code> or <code>DELETE</code> reaches another tenant's
-  row with no error.</li>
+  row with no error. The reverse holds for an action with no spec: DRF's
+  fallback <code>retrieve</code> and a custom <code>@action</code> reading <code>self.get_queryset()</code>
+  take their rows from the view's <code>queryset</code>, never from the list selector,
+  so scoping kept in the list selector alone does not reach them.</li>
 <li><strong>A route capture is read only where a spec declares it.</strong> drfs handed a
   selector the captures its signature took (<code>InputRequired</code>,
   <code>Unpack[...UrlExtras]</code>); the kernel hands a spec only its declared

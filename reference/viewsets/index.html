@@ -1397,6 +1397,9 @@ their captures come from the URLconf, which <code>as_view()</code> cannot see. A
 such as <code>path("me/", MeViewSet.as_view({"get": "retrieve"}))</code>, whose selector
 finds the caller's own row, carries no capture and needs no read; a hand-mounted
 route that does carry one must have it declared by the selector itself.</p>
+<p>The schema documents a declared capture with the read's type and <code>help</code> where
+drf-spectacular finds no model to type it from, as on a viewset with no
+<code>queryset</code> (see <a href="../../openapi/#what-a-route-documents">OpenAPI</a>).</p>
 <h2 id="per-action-answers">Per-action answers<a class="headerlink" href="#per-action-answers" title="Permanent link">&para;</a></h2>
 <p>A kernel spec declares no HTTP answer, so a viewset's <code>success_status</code> and
 <code>response_finalizer</code> answer for every action it serves. An action that answers
@@ -1741,8 +1744,13 @@ raises <code>ImproperlyConfigured</code>.</p>
 <code>dispatch</code>, as on <code>SelectorListView</code>: the view's filter backends and
 paginator apply to the set it read, and the spec's <code>presenter</code> renders
 the rows served, with the affordance answers it declares; a spec declaring
-neither is rendered by the view's serializer. <code>get_queryset()</code> still
-answers the spec's set to whatever else asks it.</p>
+neither is rendered by the view's serializer.</p>
+<p><code>get_queryset()</code> answers the list spec's set on <code>list</code> alone, from the
+one dispatch <code>list</code> presents. On every other action it is DRF's own, the
+viewset's <code>queryset</code>: DRF's <code>DjangoModelPermissions</code> asks it on every
+action for the model it checks, and a <code>retrieve</code> or a <code>PATCH</code> beside a
+list spec answers as its own spec says, never the list's refusal
+(test_selector_list_mixin).</p>
 
 
 

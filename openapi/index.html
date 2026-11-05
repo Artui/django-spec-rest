@@ -1297,6 +1297,15 @@ call <code>enable_openapi()</code> again after the reload.</p>
   components, and yours to declare.</li>
 <li><strong>A <code>filter_set</code>'s query parameters</strong>, on a list operation, are the kernel's
   <code>filter_set_parameters</code>.</li>
+<li><strong>A route capture's type</strong> is drf-spectacular's where it finds one: a
+  converter or a regex on the path, or the view's model, which it reads off
+  <code>queryset</code>. A spec viewset with no <code>queryset</code> gives it no model off <code>list</code>,
+  so there the capture is typed from the read the operation's spec declares
+  for it (a retrieve's or a detail action's selector, a write's target
+  selector, or the write's own <code>reads</code>), with the read's <code>help</code> as its
+  description. A viewset needs no <code>queryset</code> for its schema. A capture no spec
+  declares, or that only a validator's field names (the request body's, not
+  the route's), stays drf-spectacular's string, with its warning.</li>
 <li><strong>A viewset method with no spec behind it</strong> is left out where <code>Allow</code> leaves
   it out: on a route serving some spec, a <code>create</code>, <code>update</code>,
   <code>partial_update</code> or <code>destroy</code> the router maps but the viewset declares no

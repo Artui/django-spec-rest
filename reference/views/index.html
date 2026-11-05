@@ -1671,6 +1671,10 @@ instead.</p>
 alone when the view paginates, with the affordance answers it declares;
 a spec declaring neither presenter nor affordances is rendered by the
 view's <code>serializer_class</code>, as DRF renders a queryset.</p>
+<p><code>get_queryset()</code> answers the spec's set to a <code>GET</code> or <code>HEAD</code> alone,
+from the one dispatch <code>list</code> presents, so a permission class asking it
+first does not run the selector twice; to an OPTIONS or any other method
+it is DRF's own, the view's <code>queryset</code>.</p>
 <p><code>spec = None</code> (the default) keeps <code>get_queryset()</code> and the rest of the
 flow as vanilla DRF. The rest of the list flow (filter backends,
 pagination, response rendering) is the standard DRF <code>ListModelMixin</code>.</p>
