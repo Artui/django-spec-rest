@@ -57,6 +57,11 @@ until its comment is deleted. Delete each once it is dealt with.
 - **A `success_status` or `response_finalizer` with no view here.** Set it on
   the view serving the spec, as the comment says where.
 
+An input serializer is carried over as declared, in a `SerializerValidator`, so
+it accepts what it accepted under drfs. An empty PATCH answers as the
+project's serializer did: a partial serializer lets it through to the service
+and the model, where the kernel's own validator would answer 400.
+
 The output is not formatted: run the project's formatter after the codemod.
 
 ## The import map

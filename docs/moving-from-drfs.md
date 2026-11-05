@@ -67,6 +67,10 @@ What it does not do:
 - **Follow a module import of drfs.** `import rest_framework_services` (or a
   submodule) is marked, and a spec built through it, such as
   `drfs.ServiceSpec(...)`, is left whole.
+- **Change what a serializer accepts.** It translates the serializer the
+  project declared, so an empty PATCH answers as that serializer did: a
+  partial serializer lets it through to the service and the model, not the
+  kernel's 400.
 - **Format.** What it writes keeps the layout of what it replaced, and a
   keyword it adds may make a line long; run the project's formatter after
   it.
