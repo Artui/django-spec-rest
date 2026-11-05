@@ -200,9 +200,11 @@ over:
   row.
 - **A spec's rows are scoped by its selector alone.** No action a spec serves
   takes its rows from the view's `get_queryset()`: not `list`, `retrieve`, a
-  `@selector_action`, nor a write's target lookup (a permission class that
+  `@selector_action`, nor a write's target lookup. A permission class that
   calls it, as DRF's `DjangoModelPermissions` does, reads its model and
-  narrows nothing). The view's `filter_backends`
+  narrows nothing: on `list` it reads the list spec's set, and on every other
+  action the view's own `queryset`, so a view under that class sets
+  `queryset`, as DRF asks. The view's `filter_backends`
   narrow a spec's `list` (a viewset's, and `SelectorListView`'s) and nothing
   else, so not `retrieve`, a `@selector_action`'s rows, or the row an update or
   delete reaches. A project that scoped rows to a tenant through either moves

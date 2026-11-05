@@ -11,6 +11,31 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+### Changed
+
+- **`get_queryset()` off `list` is DRF's own.** A viewset with a `list` spec
+  answered that spec's set from `get_queryset()` to every action. Now it does
+  so on `list` alone, and every other action reads the viewset's `queryset`,
+  as on DRF's own viewset: a `retrieve`, a write, a `@selector_action`, a
+  custom `@action` reading `self.get_queryset()`, and OPTIONS.
+  `SelectorListView` answers its spec's set to a `GET` or `HEAD` alone. So a
+  view under DRF's `DjangoModelPermissions` with no `queryset` attribute now
+  raises DRF's own assertion off the list, where it used to read the model
+  off the list spec's set: set `queryset` on it, as DRF asks.
+
+### Fixed
+
+- **A retrieve or a PATCH beside a list spec answers as its own spec says.**
+  DRF's `DjangoModelPermissions` asks `get_queryset()` on every action, so
+  beside a list spec with a required read a `retrieve`, a PATCH, a
+  `@selector_action` or an OPTIONS (a CORS preflight) answered the list's
+  400, or 403 where the list's own check refused. `SelectorListView`
+  answered an OPTIONS, and a method it does not serve, the same way.
+- **A list runs its selector once under `DjangoModelPermissions`.** The
+  permission class's `get_queryset()` and the list each dispatched the spec.
+  The list now presents the dispatch the permission class asked for, kept for
+  that request alone.
+
 ## [0.8.1] — 2026-11-05
 
 ### Fixed
