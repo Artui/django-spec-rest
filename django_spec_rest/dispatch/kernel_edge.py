@@ -92,7 +92,7 @@ from collections.abc import Callable, Mapping
 from types import MappingProxyType
 from typing import Any
 
-from django.core.exceptions import ImproperlyConfigured
+from django.core.exceptions import ImproperlyConfigured, PermissionDenied
 from django.http import QueryDict
 from django.utils.datastructures import MultiValueDict
 from django_service_specs.authorization.not_permitted import NotPermitted
@@ -118,6 +118,7 @@ from django_service_specs.types.dispatch_error import DispatchError
 from django_service_specs.types.unknown_arguments import UnknownArguments
 from django_service_specs.types.unset import UNSET
 from django_service_specs.validation.validator_parameters import validator_parameters
+from rest_framework.exceptions import APIException
 from rest_framework.request import Request
 
 from django_spec_rest.dispatch.kernel_refusals import RefusedCall, answering_refusals
@@ -622,6 +623,13 @@ def _overlay(
 _DENIALS = (NotPermitted, PrincipalUnavailable)
 """The kernel's two ways of refusing the caller rather than the call: the edge answers them first."""
 
+_RAISED_REFUSALS = (PermissionDenied, APIException)
+"""What a check may raise to refuse rather than answer ``False``: Django's
+``PermissionDenied`` and DRF's exceptions, which the view's exception handler
+answers. Raised on no arguments they refuse as a ``False`` does, never read
+as a check that cannot answer without them
+(test_a_check_raising_a_refusal_refuses_whatever_the_body)."""
+
 
 def _admitted(
     spec: KernelSpec,
@@ -742,7 +750,7 @@ def judge_without_arguments(
                 call_context=call_context,
                 pool_seeds=pool_seeds,
             )
-    except (*_DENIALS, ImproperlyConfigured):
+    except (*_DENIALS, *_RAISED_REFUSALS, ImproperlyConfigured):
         # A configuration error is raised as the call raises it, so OPTIONS and
         # a write fail with it rather than describing or admitting the method
         # (test_a_misconfigured_spec_fails_as_a_well_formed_call_fails).

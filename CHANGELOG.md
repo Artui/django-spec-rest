@@ -33,17 +33,19 @@ carries; releases up to 0.62.0 are in
   spec's `document_service_error=True` moves into `metadata` under the same
   name. The runtime is unchanged: the edge still answers a plain
   `ServiceError` 422.
-- **A viewset refuses at `as_view()` a detail action whose row lookup does not
-  read the lookup capture.** The capture a router builds (`lookup_url_kwarg`,
+- **A viewset refuses at `as_view()` a router-mounted detail route whose row
+  lookup does not read the lookup capture.** The capture a router builds (`lookup_url_kwarg`,
   else `lookup_field`) reaches a spec only as a parameter it declares, so a
   `retrieve` spec, a detail `@selector_action`, or an `update`,
   `partial_update`, `destroy` or detail `@service_action` whose
   `instance_selector_spec` declared no read of that name looked its row up
-  without its key at every request. It is now refused when the viewset is
-  mounted, naming the viewset, the action, the capture and the read to declare.
-  A project upgrading may see a viewset that mounted before refused: declare the
-  read on the selector, or set `lookup_url_kwarg` to the name it reads.
-  Standalone views are not checked; their captures are the URLconf's.
+  without its key at every request. It is now refused when a router mounts
+  the detail route (it hands `as_view()` `detail=True`), naming the viewset, the
+  action, the capture and the read to declare. A project upgrading may see a
+  router fail to build its routes: declare the read on the selector, or set
+  `lookup_url_kwarg` to the name it reads. A viewset mounted by hand (a `me/`
+  singleton) and a standalone view are not checked; their captures are the
+  URLconf's.
 - **A `SerializerPresenter`'s `serializer_context` callable is asked once for a
   list, not once per row.** A list view's page and a `many` service's return
   are presented through `presented_rows`, which asks the callable once and
@@ -72,7 +74,7 @@ carries; releases up to 0.62.0 are in
   OPTIONS answer asks the same question, so it describes a method to exactly
   the callers whose incomplete request is told what it lacks; it now also
   leaves a create out for a caller whose scope check refuses the create, and
-  a spec declaring no permissions fails OPTIONS and an incomplete write with
+  a spec declaring no permissions fails an incomplete write with
   its configuration error, as a well-formed write already did.
 - **The moving page lists the four 400 answers a drfs client sees change.**
   An output serializer's list `ValidationError` is keyed under

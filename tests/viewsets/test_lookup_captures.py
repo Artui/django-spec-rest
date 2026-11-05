@@ -1,12 +1,13 @@
-"""A viewset's detail action is refused at ``as_view()`` where its row lookup does not read the capture.
+"""A router-mounted detail route is refused at ``as_view()`` where its row lookup does not read the capture.
 
 A DRF router captures a detail route's lookup under ``lookup_url_kwarg``, else
 ``lookup_field``, and the edge hands a spec only the captures it declares as
 parameters, so a retrieve selector, or a write's target selector, that does not
 declare the capture would look its row up without its key at every request. The
 viewset's ``as_view()`` refuses it instead, naming the viewset, the action and
-the capture (``viewsets.utils._validate_lookup_captures``). Standalone views are
-not asked: their captures are the URLconf's.
+the capture (``viewsets.utils._validate_lookup_captures``). A router marks the
+detail route by handing ``detail=True``; a viewset mounted by hand, and a
+standalone view, have the URLconf's captures, and are not asked.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from django.contrib.auth.models import User
 from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import (
     Parameter,
@@ -24,6 +26,10 @@ from django_service_specs import (
     Unrestricted,
 )
 from rest_framework import serializers
+from rest_framework.decorators import action as drf_action
+from rest_framework.response import Response
+from rest_framework.routers import SimpleRouter
+from rest_framework.test import APIRequestFactory, force_authenticate
 
 from django_spec_rest import (
     SelectorRetrieveView,
@@ -32,6 +38,7 @@ from django_spec_rest import (
     selector_action,
     service_action,
 )
+from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from tests.testapp.models import Author
 
@@ -81,9 +88,14 @@ def _viewset(base: type = ServiceViewSet, **attrs: Any) -> type:
     return type("_Notes", (base,), {"queryset": Author.objects.all(), **attrs})
 
 
+def _mount(viewset: type, actions: dict[str, str]) -> Any:
+    """``viewset`` mounted as a router mounts its detail route."""
+    return viewset.as_view(actions, detail=True)
+
+
 def _refusal(viewset: type, actions: dict[str, str]) -> str:
     with pytest.raises(ImproperlyConfigured) as raised:
-        viewset.as_view(actions)
+        _mount(viewset, actions)
     return str(raised.value)
 
 
@@ -130,41 +142,57 @@ class TestTheCaptureName:
     def test_lookup_url_kwarg_is_the_capture(self) -> None:
         viewset = _viewset(lookup_url_kwarg="note_id", action_specs={"update": _write()})
         assert "captures the lookup as 'note_id'" in _refusal(viewset, {"put": "update"})
-        _viewset(lookup_url_kwarg="note_id", action_specs={"update": _write(by="note_id")}).as_view(
-            {"put": "update"}
+        _mount(
+            _viewset(lookup_url_kwarg="note_id", action_specs={"update": _write(by="note_id")}),
+            {"put": "update"},
         )
 
     def test_lookup_field_is_the_capture_with_no_url_kwarg(self) -> None:
         viewset = _viewset(lookup_field="slug", action_specs={"destroy": _write()})
         assert "captures the lookup as 'slug'" in _refusal(viewset, {"delete": "destroy"})
-        _viewset(lookup_field="slug", action_specs={"destroy": _write(by="slug")}).as_view(
-            {"delete": "destroy"}
+        _mount(
+            _viewset(lookup_field="slug", action_specs={"destroy": _write(by="slug")}),
+            {"delete": "destroy"},
         )
 
 
 class TestWhatIsNotAsked:
     def test_a_target_selector_reading_the_capture_mounts(self) -> None:
-        _viewset(
-            action_specs={"update": _write(), "destroy": _write(), "retrieve": _row()}
-        ).as_view({"put": "update"})
+        _mount(
+            _viewset(action_specs={"update": _write(), "destroy": _write(), "retrieve": _row()}),
+            {"get": "retrieve", "put": "update", "delete": "destroy"},
+        )
 
-    def test_a_list_or_collection_action(self) -> None:
-        """Each of these finds a row or a set by something other than the
-        lookup capture, which the collection route does not carry: the
-        ``list`` key and ``detail=False`` are what keep them unasked."""
+    def test_partial_update_is_asked_of_the_update_spec_it_falls_back_to(self) -> None:
+        viewset = _viewset(action_specs={"update": _write(by="other")})
+        assert _refusal(viewset, {"patch": "partial_update"}).startswith("_Notes.partial_update:")
+
+    def test_only_the_actions_the_route_maps(self) -> None:
+        """The router mounts each route with the actions it maps there; an
+        entry the route does not map is that other route's to answer."""
+        _mount(
+            _viewset(action_specs={"retrieve": _row(), "destroy": _write(by="other")}),
+            {"get": "retrieve"},
+        )
+
+    def test_an_action_no_spec_serves(self) -> None:
+        """A DRF handler of the author's has no lookup of this package's."""
+
+        @drf_action(detail=True)
+        def peek(self: Any, request: Any, pk: Any = None) -> Response:
+            return Response()
+
+        _mount(_viewset(peek=peek), {"get": "peek"})
+
+    def test_a_collection_route(self) -> None:
+        """A router mounts the list route and a ``detail=False`` action with
+        ``detail=False``: no lookup capture there to read."""
 
         @service_action(_write(by="other"), methods=["post"])
         def touch(self: Any, request: Any) -> None: ...
 
-        @selector_action(
-            SelectorSpec(kind=SelectorKind.LIST, selector=lambda: [], permissions=_OPEN)
-        )
-        def recent(self: Any, request: Any) -> None: ...
-
-        listing = SelectorSpec(kind=SelectorKind.LIST, selector=lambda: [], permissions=_OPEN)
-        _viewset(action_specs={"list": listing}, touch=touch, recent=recent).as_view(
-            {"get": "list"}
-        )
+        viewset = _viewset(action_specs={"update": _write(by="other")}, touch=touch)
+        viewset.as_view({"post": "touch", "put": "update"}, detail=False)
 
     def test_a_write_over_a_set_or_a_list_body_looks_up_no_row(self) -> None:
         over_a_set = ServiceSpec(
@@ -180,8 +208,64 @@ class TestWhatIsNotAsked:
             validator=SerializerValidator(_NameIn),
             many=True,
         )
-        _viewset(action_specs={"update": over_a_set, "destroy": rows}).as_view({"put": "update"})
+        _mount(
+            _viewset(action_specs={"update": over_a_set, "destroy": rows}),
+            {"put": "update", "delete": "destroy"},
+        )
 
     def test_a_standalone_view(self) -> None:
         """Its capture is the URLconf's, which ``as_view()`` cannot see."""
         type("_View", (SelectorRetrieveView,), {"spec": _row(by=None)}).as_view()
+
+
+class _Me(serializers.Serializer):
+    username = serializers.CharField()
+
+
+def _me(*, user: Any) -> Any:
+    return user
+
+
+class _MeViewSet(SelectorViewSet):
+    """A singleton: the caller's own row, found by who asks, not by a capture."""
+
+    permission_classes: list[Any] = []
+    action_specs = {
+        "retrieve": SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=_me,
+            permissions=_OPEN,
+            presenter=SerializerPresenter(_Me),
+        )
+    }
+
+
+class TestOnlyARouterMountedDetailRouteIsAsked:
+    @pytest.mark.django_db
+    def test_a_singleton_mounted_by_hand_serves(self) -> None:
+        """``path("me/", MeViewSet.as_view({"get": "retrieve"}))``: no capture
+        on the route, and none to read."""
+        view = _MeViewSet.as_view({"get": "retrieve"})
+        request = APIRequestFactory().get("/me/")
+        force_authenticate(request, User.objects.create(username="ada"))
+        response = view(request)
+        response.render()
+        assert (response.status_code, response.data) == (200, {"username": "ada"})
+
+    def test_the_same_viewset_on_a_router_is_refused(self) -> None:
+        """The router's detail route captures ``pk``, which the selector never reads."""
+        router = SimpleRouter()
+        router.register("me", _MeViewSet, basename="me")
+        with pytest.raises(ImproperlyConfigured) as raised:
+            router.urls  # noqa: B018 - building the routes mounts each view
+        assert str(raised.value).startswith(
+            "_MeViewSet.retrieve: the router captures the lookup as 'pk'"
+        )
+
+    def test_the_actions_handed_as_a_keyword(self) -> None:
+        with pytest.raises(ImproperlyConfigured):
+            _MeViewSet.as_view(actions={"get": "retrieve"}, detail=True)
+
+    def test_no_actions_is_left_to_drf_s_own_refusal(self) -> None:
+        with pytest.raises(TypeError, match="actions"):
+            _MeViewSet.as_view(detail=True)

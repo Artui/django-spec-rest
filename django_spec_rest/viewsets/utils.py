@@ -41,10 +41,6 @@ _SELECTOR_ACTION_KIND: dict[str, SelectorKind] = {
 # PATCH and PUT share one spec unless a dedicated ``"partial_update"`` entry
 # exists. Must be applied at every resolution site (see
 # ``resolve_action_spec_entry``).
-# The ``action_specs`` keys a router mounts on the detail route, under the
-# lookup capture (``_validate_lookup_captures``).
-_DETAIL_ACTIONS = frozenset({"retrieve", "update", "partial_update", "destroy"})
-
 _ACTION_SPEC_FALLBACKS: dict[str, str] = {
     "partial_update": "update",
 }
@@ -308,20 +304,24 @@ def _lookup_capture(view_cls: MountedView) -> str:
     return getattr(view_cls, "lookup_url_kwarg", None) or getattr(view_cls, "lookup_field", "pk")
 
 
-def _detail_specs(view_cls: MountedView) -> list[tuple[str, ActionSpec]]:
-    """Each action the router mounts on the detail route, and the spec serving it.
+def _mapped_specs(
+    view_cls: MountedView, actions: Mapping[str, str]
+) -> list[tuple[str, ActionSpec]]:
+    """Each action ``actions`` maps a method to, and the spec serving it, where one does.
 
-    The built-in detail keys of ``action_specs``, then every ``detail=True``
-    action ``@service_action`` or ``@selector_action`` stamped.
+    The spec ``@service_action`` or ``@selector_action`` stamped on the
+    handler, else the ``action_specs`` entry (``partial_update`` falling back
+    to ``update``). An action no spec serves (a DRF handler of the author's)
+    has no lookup of this package's to check.
     """
-    specs: list[tuple[str, ActionSpec]] = [
-        (action, spec)
-        for action, spec in view_cls.action_specs.items()
-        if action in _DETAIL_ACTIONS
-    ]
-    for action, handler in inspect.getmembers(view_cls, _is_decorated):
-        if handler.detail:
+    specs: list[tuple[str, ActionSpec]] = []
+    for action in dict.fromkeys(actions.values()):
+        handler: Any = getattr(view_cls, action, None)
+        if _is_decorated(handler):
             spec = getattr(handler, "_service_spec", None) or handler._selector_spec
+        else:
+            spec = resolve_action_spec_entry(view_cls.action_specs, action)
+        if spec is not None:
             specs.append((action, spec))
     return specs
 
@@ -339,21 +339,27 @@ def _row_lookup(spec: ActionSpec) -> KernelSelectorSpec | None:
     return spec.instance_selector_spec
 
 
-def _validate_lookup_captures(view_cls: MountedView) -> None:
-    """Refuse a detail action whose row lookup declares no parameter for the lookup capture.
+def _validate_lookup_captures(
+    view_cls: MountedView, actions: Mapping[str, str] | None, initkwargs: Mapping[str, Any]
+) -> None:
+    """Refuse a router-mounted detail route whose row lookup declares no parameter for the capture.
 
     A route capture reaches a spec only as a parameter it declares (the edge's
     ``kernel_arguments``), so a retrieve selector, or a write's target
     selector, that does not read the capture the router builds is never handed
     it: the row is looked up without its key at every request. Refused here
     instead, naming the viewset, the action, the capture and the read that
-    serves it (test_lookup_captures). A list or ``detail=False`` action has no
-    capture to read, and a write that looks up no row has none to miss
-    (``_row_lookup``). Standalone views are not asked: their captures are the
-    URLconf's, which ``as_view()`` cannot see.
+    serves it (test_lookup_captures). Asked only where a router mounts the
+    detail route, which DRF's ``SimpleRouter`` marks by handing ``detail=True``
+    to ``as_view()``, and only of the actions it maps there: a viewset mounted
+    by hand on a route of its own (a ``me/`` retrieve) has the URLconf's
+    captures, which ``as_view()`` cannot see, as a standalone view has. A
+    write that looks up no row has no capture to miss (``_row_lookup``).
     """
+    if initkwargs.get("detail") is not True or not actions:
+        return
     capture = _lookup_capture(view_cls)
-    for action, spec in _detail_specs(view_cls):
+    for action, spec in _mapped_specs(view_cls, actions):
         lookup = _row_lookup(spec)
         # One arc to coverage, so each conjunct is named: a write looking up
         # no row by test_a_write_over_a_set_or_a_list_body_looks_up_no_row,
@@ -413,7 +419,8 @@ class _ActionSpecsMixin(_ServesRaisedSchema):
         for action, spec in mounted.action_specs.items():
             _validate_action_spec(mounted, action, spec, pool_seeds=pool_seeds)
         _validate_decorated_actions(mounted, pool_seeds=pool_seeds)
-        _validate_lookup_captures(mounted)
+        actions = args[0] if args else initkwargs.get("actions")
+        _validate_lookup_captures(mounted, actions, initkwargs)
         return super().as_view(*args, **initkwargs)  # ty: ignore[unresolved-attribute]
 
     def options(self, request: Any, *args: Any, **kwargs: Any) -> Any:

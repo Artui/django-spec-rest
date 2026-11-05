@@ -22,6 +22,7 @@ from typing import Any
 import pytest
 from django.contrib.auth.models import User
 from django.core.exceptions import ImproperlyConfigured
+from django.core.exceptions import PermissionDenied as DjangoPermissionDenied
 from django_service_specs import (
     Parameter,
     Parameters,
@@ -32,6 +33,7 @@ from django_service_specs import (
 )
 from rest_framework import serializers
 from rest_framework.authentication import BasicAuthentication, SessionAuthentication
+from rest_framework.exceptions import PermissionDenied as DRFPermissionDenied
 from rest_framework.permissions import AllowAny, BasePermission
 from rest_framework.test import APIRequestFactory, force_authenticate
 
@@ -426,6 +428,67 @@ def test_a_deactivated_caller_is_refused_as_unavailable_whatever_the_body() -> N
     response = _view(_check("kernel-check"), [BasicAuthentication])(request)
     response.render()
     assert response.data == {"detail": "The acting principal is unavailable."}
+
+
+def test_a_deactivated_caller_s_body_that_is_no_object_is_refused_as_unavailable() -> None:
+    """The body that is no object is judged on no arguments, where the
+    kernel's ``PrincipalUnavailable`` is a refusal of the caller, as on a
+    well-formed body."""
+    request = factory.post("/", [1], format="json")
+    force_authenticate(request, User.objects.create(username="editor", is_active=False))
+    response = _view(_check("kernel-check"), [BasicAuthentication])(request)
+    response.render()
+    assert (response.status_code, response.data) == (
+        403,
+        {"detail": "The acting principal is unavailable."},
+    )
+
+
+def test_options_describes_no_method_to_a_deactivated_caller() -> None:
+    request = factory.options("/")
+    force_authenticate(request, User.objects.create(username="editor", is_active=False))
+    answer = _view(_check("kernel-check"), [BasicAuthentication])(request)
+    assert "POST" not in answer.data.get("actions", {})
+
+
+class _RaisesDRFDenial(BasePermission):
+    def has_permission(self, request: Any, view: Any) -> bool:
+        raise DRFPermissionDenied(EDITORS_ONLY)
+
+
+class _RaisesDenial(PermissionCheck):
+    """A kernel check refusing by raising rather than answering ``False``."""
+
+    def __init__(self, raised: Exception) -> None:
+        self.raised = raised
+
+    def has_permission(self, principal: Any, spec: Any) -> bool:
+        raise self.raised
+
+
+RAISING_CHECKS = {
+    "a DRF class raising DRF's PermissionDenied": lambda: DRFPermissionCheck([_RaisesDRFDenial]),
+    "a kernel check raising Django's PermissionDenied": lambda: _RaisesDenial(
+        DjangoPermissionDenied(EDITORS_ONLY)
+    ),
+    "a kernel check raising DRF's PermissionDenied": lambda: _RaisesDenial(
+        DRFPermissionDenied(EDITORS_ONLY)
+    ),
+}
+
+
+@pytest.mark.parametrize("case", RAISING_CHECKS)
+def test_a_check_raising_a_refusal_refuses_whatever_the_body(case: str) -> None:
+    """A refusal raised is a refusal, never a check that cannot answer without
+    its arguments: OPTIONS hides the method and an incomplete POST is answered
+    403, as a well-formed one is."""
+    view = _view(RAISING_CHECKS[case](), [SessionAuthentication])
+    user = User.objects.create(username="ada")
+    options, posted = factory.options("/"), factory.post("/", {}, format="json")
+    force_authenticate(options, user)
+    force_authenticate(posted, user)
+    assert "POST" not in view(options).data.get("actions", {})
+    assert view(posted).status_code == 403
 
 
 OPTIONS_CASES = {

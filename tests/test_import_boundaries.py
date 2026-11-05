@@ -67,8 +67,10 @@ ALLOWED_VIEWS_IMPORTS: dict[str, frozenset[str]] = {
 ALLOWED_DRF_IMPORTS: dict[str, frozenset[str]] = {
     # The DRF edge over the kernel's own ``dispatch``. ``request`` is for
     # annotations alone: the ``Request`` whose body and query string it reads is
-    # handed in.
-    "dispatch/kernel_edge.py": frozenset({"rest_framework.request"}),
+    # handed in. ``exceptions`` for ``APIException``, which a check may raise to
+    # refuse, so judging on no arguments re-raises it rather than reading it as
+    # a check that cannot answer without them.
+    "dispatch/kernel_edge.py": frozenset({"rest_framework.exceptions", "rest_framework.request"}),
     # The kernel route's refusal map answers each kernel refusal as a DRF
     # exception (``exceptions``), the bare ``DispatchError``'s under a ``400`` it
     # declares (``status``).
