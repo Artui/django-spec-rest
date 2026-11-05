@@ -11,6 +11,20 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+### Changed
+
+- **A viewset refuses at `as_view()` a detail action whose row lookup does not
+  read the lookup capture.** The capture a router builds (`lookup_url_kwarg`,
+  else `lookup_field`) reaches a spec only as a parameter it declares, so a
+  `retrieve` spec, a detail `@selector_action`, or an `update`,
+  `partial_update`, `destroy` or detail `@service_action` whose
+  `instance_selector_spec` declared no read of that name looked its row up
+  without its key at every request. It is now refused when the viewset is
+  mounted, naming the viewset, the action, the capture and the read to declare.
+  A project upgrading may see a viewset that mounted before refused: declare the
+  read on the selector, or set `lookup_url_kwarg` to the name it reads.
+  Standalone views are not checked; their captures are the URLconf's.
+
 ### Fixed
 
 - **A list of the package's 403 or 401 body on a paginated view no longer lets

@@ -41,6 +41,10 @@ _SELECTOR_ACTION_KIND: dict[str, SelectorKind] = {
 # PATCH and PUT share one spec unless a dedicated ``"partial_update"`` entry
 # exists. Must be applied at every resolution site (see
 # ``resolve_action_spec_entry``).
+# The ``action_specs`` keys a router mounts on the detail route, under the
+# lookup capture (``_validate_lookup_captures``).
+_DETAIL_ACTIONS = frozenset({"retrieve", "update", "partial_update", "destroy"})
+
 _ACTION_SPEC_FALLBACKS: dict[str, str] = {
     "partial_update": "update",
 }
@@ -294,6 +298,74 @@ def _validate_decorated_actions(view_cls: type | MountedView, *, pool_seeds: Poo
             raise ImproperlyConfigured(f"{view_cls.__name__}.{action}: {refusal}") from refusal
 
 
+def _lookup_capture(view_cls: MountedView) -> str:
+    """The name a DRF router captures a detail route's lookup under.
+
+    ``lookup_url_kwarg``, else ``lookup_field``, else ``"pk"``, read as
+    ``SimpleRouter.get_lookup_regex`` reads them, so the name checked is the
+    one the route hands the view.
+    """
+    return getattr(view_cls, "lookup_url_kwarg", None) or getattr(view_cls, "lookup_field", "pk")
+
+
+def _detail_specs(view_cls: MountedView) -> list[tuple[str, ActionSpec]]:
+    """Each action the router mounts on the detail route, and the spec serving it.
+
+    The built-in detail keys of ``action_specs``, then every ``detail=True``
+    action ``@service_action`` or ``@selector_action`` stamped.
+    """
+    specs: list[tuple[str, ActionSpec]] = [
+        (action, spec)
+        for action, spec in view_cls.action_specs.items()
+        if action in _DETAIL_ACTIONS
+    ]
+    for action, handler in inspect.getmembers(view_cls, _is_decorated):
+        if handler.detail:
+            spec = getattr(handler, "_service_spec", None) or handler._selector_spec
+            specs.append((action, spec))
+    return specs
+
+
+def _row_lookup(spec: ActionSpec) -> KernelSelectorSpec | None:
+    """The selector that finds the one row ``spec`` acts on, or ``None`` where it finds none.
+
+    A selector spec is its own lookup; a write's is its ``instance_selector_spec``,
+    which the kernel hands only its own parameters, so a capture another of
+    the write's parameters declares never reaches the row. A write over a set
+    (``collection_selector_spec``) or a list body (``many``) looks up no row.
+    """
+    if isinstance(spec, KernelSelectorSpec):
+        return spec
+    return spec.instance_selector_spec
+
+
+def _validate_lookup_captures(view_cls: MountedView) -> None:
+    """Refuse a detail action whose row lookup declares no parameter for the lookup capture.
+
+    A route capture reaches a spec only as a parameter it declares (the edge's
+    ``kernel_arguments``), so a retrieve selector, or a write's target
+    selector, that does not read the capture the router builds is never handed
+    it: the row is looked up without its key at every request. Refused here
+    instead, naming the viewset, the action, the capture and the read that
+    serves it (test_lookup_captures). A list or ``detail=False`` action has no
+    capture to read, and a write that looks up no row has none to miss
+    (``_row_lookup``). Standalone views are not asked: their captures are the
+    URLconf's, which ``as_view()`` cannot see.
+    """
+    capture = _lookup_capture(view_cls)
+    for action, spec in _detail_specs(view_cls):
+        lookup = _row_lookup(spec)
+        if lookup is not None and lookup.parameters().get(capture) is None:
+            raise ImproperlyConfigured(
+                f"{view_cls.__name__}.{action}: the router captures the lookup as "
+                f"{capture!r} (lookup_url_kwarg, else lookup_field), and the selector "
+                "finding the row declares no parameter of that name, so the capture "
+                "never reaches it. Declare it on that selector: "
+                f'reads=Parameters.of(Parameter("{capture}", ..., required=True)), '
+                "or set lookup_url_kwarg to the name it reads."
+            )
+
+
 class _ActionSpecsMixin(_ServesRaisedSchema):
     """Declares the ``action_specs`` class attribute shared by all viewset mixins.
 
@@ -338,6 +410,7 @@ class _ActionSpecsMixin(_ServesRaisedSchema):
         for action, spec in mounted.action_specs.items():
             _validate_action_spec(mounted, action, spec, pool_seeds=pool_seeds)
         _validate_decorated_actions(mounted, pool_seeds=pool_seeds)
+        _validate_lookup_captures(mounted)
         return super().as_view(*args, **initkwargs)  # ty: ignore[unresolved-attribute]
 
     def options(self, request: Any, *args: Any, **kwargs: Any) -> Any:

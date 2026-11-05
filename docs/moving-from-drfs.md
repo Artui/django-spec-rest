@@ -86,6 +86,17 @@ declare every seat above.
   `collection_selector_spec` (a set) or `many=True`, and `as_view()` refuses one
   that declares none. A `get_object()` override no longer chooses a write's
   row.
+- **A route capture is read only where a spec declares it.** drfs handed a
+  selector the captures its signature took (`InputRequired`,
+  `Unpack[...UrlExtras]`); the kernel hands a spec only its declared
+  parameters. On a viewset, `as_view()` refuses a detail action whose row
+  lookup (the `retrieve` spec, a detail `@selector_action`'s, or a write's
+  `instance_selector_spec`) declares no parameter named for the lookup capture
+  (`lookup_url_kwarg`, else `lookup_field`): add
+  `reads=Parameters.of(Parameter("<capture>", ..., required=True))` to that
+  selector. Standalone views are not checked, since their captures are the
+  URLconf's: declare each capture the route carries yourself
+  ([The lookup capture](reference/viewsets.md#the-lookup-capture)).
 - **A nested selector declares no `permissions`.** On `instance_selector_spec`,
   `collection_selector_spec` and `output_selector_spec` the kernel never asks
   them, so the kernel refuses them when the `ServiceSpec` is built: declare

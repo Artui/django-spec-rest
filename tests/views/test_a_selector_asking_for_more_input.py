@@ -22,7 +22,14 @@ from typing import Any
 import pytest
 from django.conf import settings
 from django.test import override_settings
-from django_service_specs import AdditionalInputRequired, SelectorKind, SelectorSpec, Unrestricted
+from django_service_specs import (
+    AdditionalInputRequired,
+    Parameter,
+    Parameters,
+    SelectorKind,
+    SelectorSpec,
+    Unrestricted,
+)
 from rest_framework.exceptions import ErrorDetail
 from rest_framework.response import Response
 from rest_framework.test import APIRequestFactory
@@ -48,12 +55,20 @@ _SCHEMA: dict[str, Any] = {
 _SENT = {"detail": "Say which.", "schema": _SCHEMA}
 
 
-def _asking() -> None:
+def _asking(*, pk: Any = None) -> None:
     raise AdditionalInputRequired("Say which.", schema=_SCHEMA)
 
 
 def _spec(kind: SelectorKind) -> SelectorSpec:
-    return SelectorSpec(kind=kind, selector=_asking, permissions=_OPEN)
+    # The ``pk`` read is the lookup capture a detail ``@selector_action``
+    # declares to mount (test_lookup_captures); optional, so a call sending
+    # none still reaches the selector and its 422.
+    return SelectorSpec(
+        kind=kind,
+        selector=_asking,
+        permissions=_OPEN,
+        reads=Parameters.of(Parameter("pk", "integer")),
+    )
 
 
 def _served(view: Any) -> tuple[int, Any]:

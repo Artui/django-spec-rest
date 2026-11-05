@@ -111,7 +111,8 @@ class TestTheTarget:
                 "update": _UPDATE,
                 "retrieve": SelectorSpec(
                     kind=SelectorKind.RETRIEVE,
-                    selector=lambda: other,
+                    selector=lambda *, pk: other,
+                    reads=_BY_PK,
                     permissions=_OPEN,
                     presenter=SerializerPresenter(AuthorSerializer),
                 ),
