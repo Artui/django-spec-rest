@@ -12,7 +12,11 @@ from rest_framework.decorators import action
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from django_spec_rest.selectors.utils import present_kernel_list, present_kernel_row
+from django_spec_rest.selectors.utils import (
+    dispatch_kernel_selector,
+    present_kernel_list,
+    present_kernel_row,
+)
 from django_spec_rest.views.mutation.map_service_error import (
     _AdditionalInputAPIException,
 )
@@ -99,5 +103,7 @@ def _serve_kernel_spec(view: Any, spec: KernelSelectorSpec) -> Response:
     if spec.kind is SelectorKind.RETRIEVE:
         row, data = present_kernel_row(view, spec)
         return _JsonNullResponse() if row is None else Response(data)
-    data, paginated = present_kernel_list(view, spec, filtered=False)
+    data, paginated = present_kernel_list(
+        view, spec, dispatch_kernel_selector(view, spec), filtered=False
+    )
     return view.get_paginated_response(data) if paginated else Response(data)

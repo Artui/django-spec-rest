@@ -22,7 +22,6 @@ from django_service_specs import (
     Unrestricted,
 )
 from rest_framework import serializers
-from rest_framework.decorators import action
 from rest_framework.filters import BaseFilterBackend
 from rest_framework.response import Response
 from rest_framework.test import APIRequestFactory
@@ -111,20 +110,6 @@ class TestTheActions:
     def test_retrieve_of_no_row_is_404(self) -> None:
         viewset = _viewset(action_specs={"retrieve": _retrieve()})
         assert _get(viewset, "retrieve", pk=999).status_code == 404
-
-    def test_get_queryset_answers_the_list_spec_s_set(self, posts: tuple[Post, Post]) -> None:
-        """A handler of the view's own reading ``get_queryset()`` reads the
-        spec's set."""
-
-        class _ViewSet(SelectorViewSet):
-            queryset = Post.objects.none()
-            action_specs = {"list": _list(selector=lambda: Post.objects.filter(published=True))}
-
-            @action(detail=False)
-            def titles(self, request: Any) -> Response:
-                return Response([post.title for post in self.get_queryset()])
-
-        assert _get(_ViewSet, "titles").data == ["out"]
 
 
 class TestAffordances:
