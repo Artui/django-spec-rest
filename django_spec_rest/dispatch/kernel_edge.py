@@ -92,6 +92,7 @@ from collections.abc import Callable, Mapping
 from types import MappingProxyType
 from typing import Any
 
+from django.core.exceptions import ImproperlyConfigured
 from django.http import QueryDict
 from django.utils.datastructures import MultiValueDict
 from django_service_specs.authorization.not_permitted import NotPermitted
@@ -708,13 +709,14 @@ def judge_without_arguments(
     stays unasked. ``None`` for the arguments, the kernel's word for a call
     with none to hand.
 
-    Only a denial is raised: ``NotPermitted``, the check's own as the kernel
-    marked it, or ``PrincipalUnavailable``. Anything else a check raises
-    asked with no arguments - a check that reads them and cannot answer
-    without (``arguments["owner"]`` on ``None``), or a spec declaring no
-    permissions - says nothing about the caller, so the call keeps the
-    kernel's order: ``dispatch`` tells the shape's refusal, and asks such a
-    check once the shape passes
+    A denial is raised: ``NotPermitted``, the check's own as the kernel
+    marked it, or ``PrincipalUnavailable``; so is a configuration error
+    (``ImproperlyConfigured``: a spec declaring no permissions, a check left
+    awaiting its answer), which every well-formed call raises too. Anything
+    else a check raises asked with no arguments - a check that reads them and
+    cannot answer without (``arguments["owner"]`` on ``None``) - says nothing
+    about the caller, so the call keeps the kernel's order: ``dispatch``
+    tells the shape's refusal, and asks such a check once the shape passes
     (test_a_check_reading_the_arguments_keeps_the_kernel_s_order). That is
     where this edge parts from django-spec-mcp's prelude, which refuses a
     call whose checks raise on no arguments, as its listing hides the tool.
@@ -740,7 +742,10 @@ def judge_without_arguments(
                 call_context=call_context,
                 pool_seeds=pool_seeds,
             )
-    except _DENIALS:
+    except (*_DENIALS, ImproperlyConfigured):
+        # A configuration error is raised as the call raises it, so OPTIONS and
+        # a write fail with it rather than describing or admitting the method
+        # (test_a_misconfigured_spec_fails_as_a_well_formed_call_fails).
         raise
     except Exception:  # noqa: BLE001 - a check that cannot answer without its arguments
         return

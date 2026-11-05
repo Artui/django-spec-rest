@@ -36,7 +36,9 @@ carries; releases up to 0.62.0 are in
   403 to sign-in no longer shows an anonymous visitor field errors. The
   OPTIONS answer asks the same question, so it describes a method to exactly
   the callers whose incomplete request is told what it lacks; it now also
-  leaves a create out for a caller whose scope check refuses the create.
+  leaves a create out for a caller whose scope check refuses the create, and
+  a spec declaring no permissions fails OPTIONS and an incomplete write with
+  its configuration error, as a well-formed write already did.
 
 ### Fixed
 

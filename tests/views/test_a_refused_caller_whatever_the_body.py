@@ -21,6 +21,7 @@ from typing import Any
 
 import pytest
 from django.contrib.auth.models import User
+from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import (
     Parameter,
     Parameters,
@@ -460,3 +461,21 @@ def test_options_hides_a_method_exactly_when_its_write_is_refused_first(case: st
     assert answer.status_code == 200
     assert ("POST" in answer.data.get("actions", {})) is described
     assert (view(posted).status_code == 400) is described
+
+
+@pytest.mark.parametrize("method", ["options", "post"])
+def test_a_misconfigured_spec_fails_as_a_well_formed_call_fails(method: str) -> None:
+    """A spec declaring no permissions is a configuration error, never judged as a check that cannot answer.
+
+    Fails where the judgment on no arguments swallows it with the rest: OPTIONS
+    then describes the method and an incomplete POST is told its 400, while
+    every well-formed POST raises.
+    """
+    spec = ServiceSpec(
+        service=lambda *, submission_id, outcome: None, validator=SerializerValidator(_Review)
+    )
+    attrs = {"spec": spec, "permission_classes": [], "authentication_classes": []}
+    view = type("_View", (ServiceCreateView,), attrs).as_view()
+    request = getattr(factory, method)("/", {}, format="json")
+    with pytest.raises(ImproperlyConfigured, match="declares no permissions"):
+        view(request)
