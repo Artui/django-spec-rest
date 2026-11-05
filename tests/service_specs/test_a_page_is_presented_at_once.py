@@ -119,17 +119,14 @@ class TestThePageIsAskedForOnce:
     def test_the_queries_a_page_costs_do_not_grow_with_its_rows(self) -> None:
         _posts(6)
 
-        def batched(*, page: Any) -> dict[str, Any]:
-            ids = [post.pk for post in page]
-            return {
-                "seen": dict.fromkeys(
-                    Post.objects.filter(pk__in=ids).values_list("pk", flat=True), 1
-                )
-            }
+        # Declares no value, so it is answered whether it is asked once for the
+        # page or once per row: the count alone tells the two apart.
+        def one_query() -> dict[str, Any]:
+            return {"seen": dict.fromkeys(Post.objects.values_list("pk", flat=True), 1)}
 
         def cost(size: int) -> int:
             with CaptureQueriesContext(connection) as queries:
-                _paged(size, batched).as_view()(factory.get("/"))
+                _paged(size, one_query).as_view()(factory.get("/"))
             return len(queries)
 
         assert cost(2) == cost(5)
