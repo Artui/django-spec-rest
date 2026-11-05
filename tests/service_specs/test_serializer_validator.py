@@ -431,9 +431,9 @@ def test_a_key_a_validate_adds_named_like_a_registered_seed_stays_in_data() -> N
 def test_a_many_spec_validates_once_and_binds_one_list_serializer() -> None:
     received: dict[str, Any] = {}
 
-    def service(*, data: Any, serializer: Any) -> str:
+    def service(*, data: Any, serializer: Any) -> Any:
         received.update(data=data, serializer=serializer)
-        return "ok"
+        return data
 
     spec = ServiceSpec(
         service=service,
