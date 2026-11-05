@@ -149,11 +149,22 @@ class TestWhatIsNotAsked:
         ).as_view({"put": "update"})
 
     def test_a_list_or_collection_action(self) -> None:
-        @service_action(ServiceSpec(service=lambda: None, permissions=_OPEN), methods=["post"])
-        def ping(self: Any, request: Any) -> None: ...
+        """Each of these finds a row or a set by something other than the
+        lookup capture, which the collection route does not carry: the
+        ``list`` key and ``detail=False`` are what keep them unasked."""
+
+        @service_action(_write(by="other"), methods=["post"])
+        def touch(self: Any, request: Any) -> None: ...
+
+        @selector_action(
+            SelectorSpec(kind=SelectorKind.LIST, selector=lambda: [], permissions=_OPEN)
+        )
+        def recent(self: Any, request: Any) -> None: ...
 
         listing = SelectorSpec(kind=SelectorKind.LIST, selector=lambda: [], permissions=_OPEN)
-        _viewset(action_specs={"list": listing}, ping=ping).as_view({"get": "list"})
+        _viewset(action_specs={"list": listing}, touch=touch, recent=recent).as_view(
+            {"get": "list"}
+        )
 
     def test_a_write_over_a_set_or_a_list_body_looks_up_no_row(self) -> None:
         over_a_set = ServiceSpec(

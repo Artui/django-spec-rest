@@ -355,6 +355,9 @@ def _validate_lookup_captures(view_cls: MountedView) -> None:
     capture = _lookup_capture(view_cls)
     for action, spec in _detail_specs(view_cls):
         lookup = _row_lookup(spec)
+        # One arc to coverage, so each conjunct is named: a write looking up
+        # no row by test_a_write_over_a_set_or_a_list_body_looks_up_no_row,
+        # the read by test_a_target_selector_reading_the_capture_mounts.
         if lookup is not None and lookup.parameters().get(capture) is None:
             raise ImproperlyConfigured(
                 f"{view_cls.__name__}.{action}: the router captures the lookup as "
