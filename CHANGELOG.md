@@ -39,6 +39,21 @@ carries; releases up to 0.62.0 are in
   view, and unlike drfs on an unpaginated one, where it handed the selector's
   queryset, so a provider calling `page.values_list(...)` or another queryset
   method must work over the list instead. One value presents as before.
+- **A caller the spec's checks refuse is refused before its body's shape is
+  checked**, as DRF and drfs ask permission classes before the handler reads
+  the body. An anonymous caller sending an incomplete or ill-typed body to a
+  guarded write was answered 400 with the field errors, and a signed-in caller
+  the checks refuse 400 as well; both are now answered as for a well-formed
+  body, 401 with the authenticator's challenge or 403. A read's query string
+  is judged the same way. A request failing its shape is judged on no
+  arguments, and a check that cannot answer without them keeps the kernel's
+  order, so its caller is still told the 400 first. A client that sent 401 and
+  403 to sign-in no longer shows an anonymous visitor field errors. The
+  OPTIONS answer asks the same question, so it describes a method to exactly
+  the callers whose incomplete request is told what it lacks; it now also
+  leaves a create out for a caller whose scope check refuses the create, and
+  a spec declaring no permissions fails OPTIONS and an incomplete write with
+  its configuration error, as a well-formed write already did.
 
 ### Fixed
 

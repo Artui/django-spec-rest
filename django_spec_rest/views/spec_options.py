@@ -8,7 +8,6 @@ from typing import Any
 from django.core.exceptions import PermissionDenied
 from django_service_specs.authorization.not_permitted import NotPermitted
 from django_service_specs.authorization.principal_unavailable import PrincipalUnavailable
-from django_service_specs.dispatch.authorize import authorize
 from django_service_specs.schema.spec_caller_input_schema import spec_caller_input_schema
 from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelectorSpec
 from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
@@ -18,7 +17,7 @@ from rest_framework.metadata import SimpleMetadata
 from rest_framework.request import Request, clone_request
 from rest_framework.response import Response
 
-from django_spec_rest.dispatch.kernel_edge import UNKNOWN_ARGUMENTS
+from django_spec_rest.dispatch.kernel_edge import UNKNOWN_ARGUMENTS, judge_without_arguments
 from django_spec_rest.views.utils import view_call_context, view_pool_seeds
 
 # DRF's ``SimpleMetadata`` describes these two and no other method.
@@ -46,10 +45,15 @@ def spec_options(
 
     A method is described only when the caller may send it: DRF's per-method
     ``check_permissions`` on a clone of the request carrying that method, as
-    DRF's metadata asks it, and then the kernel's ``authorize`` for the spec,
-    with the view's call context and the pool seeds the edge dispatches with,
-    the view's ``pool_seeds`` (test_pool_seeds'
-    test_options_asks_a_check_naming_a_seed_with_the_view_s_seeds).
+    DRF's metadata asks it, and then the spec's checks judged on no
+    arguments, as the edge judges a write whose body fails its shape
+    (``judge_without_arguments``), with the view's call context and the pool
+    seeds the edge dispatches with, the view's ``pool_seeds`` (test_pool_seeds'
+    test_options_asks_a_check_naming_a_seed_with_the_view_s_seeds). So a
+    method left out here is one whose write the edge refuses whatever the
+    body, and one described is one whose write tells the caller what its
+    body lacks (test_a_refused_caller_whatever_the_body's
+    test_options_hides_a_method_exactly_when_its_write_is_refused_first).
     Either refusing leaves the method out of ``actions``, never the answer
     a 403: OPTIONS describes, and the method is still routed.
 
@@ -125,11 +129,16 @@ def _grants(
     spec: KernelServiceSpec | KernelSelectorSpec,
     call_context: dict[str, Any],
 ) -> bool:
-    """Whether the caller may send ``method``: the view's own check, then the spec's ``authorize``."""
+    """Whether the caller may send ``method``: the view's own check, then the edge's judgment of the spec."""
     view.request = clone_request(request, method)
     try:
         view.check_permissions(view.request)
-        authorize(spec, request.user, call_context=call_context, pool_seeds=view_pool_seeds(view))
+        judge_without_arguments(
+            spec,
+            principal=request.user,
+            call_context=call_context,
+            pool_seeds=view_pool_seeds(view),
+        )
     except (APIException, PermissionDenied, NotPermitted, PrincipalUnavailable):
         return False
     finally:
