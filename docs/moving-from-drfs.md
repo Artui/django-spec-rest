@@ -89,8 +89,8 @@ declare every seat above.
 - **A route capture is read only where a spec declares it.** drfs handed a
   selector the captures its signature took (`InputRequired`,
   `Unpack[...UrlExtras]`); the kernel hands a spec only its declared
-  parameters. On a router-mounted detail route, `as_view()` refuses an action whose row
-  lookup (the `retrieve` spec, a detail `@selector_action`'s, or a write's
+  parameters. On a router-mounted detail route, `as_view()` refuses an action
+  whose row lookup (the `retrieve` spec, a detail `@selector_action`'s, or a write's
   `instance_selector_spec`) declares no parameter named for the lookup capture
   (`lookup_url_kwarg`, else `lookup_field`): add
   `reads=Parameters.of(Parameter("<capture>", ..., required=True))` to that

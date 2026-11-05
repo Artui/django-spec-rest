@@ -34,8 +34,9 @@ carries; releases up to 0.62.0 are in
   name. The runtime is unchanged: the edge still answers a plain
   `ServiceError` 422.
 - **A viewset refuses at `as_view()` a router-mounted detail route whose row
-  lookup does not read the lookup capture.** The capture a router builds (`lookup_url_kwarg`,
-  else `lookup_field`) reaches a spec only as a parameter it declares, so a
+  lookup does not read the lookup capture.** The capture a router builds
+  (`lookup_url_kwarg`, else `lookup_field`) reaches a spec only as a parameter
+  it declares, so a
   `retrieve` spec, a detail `@selector_action`, or an `update`,
   `partial_update`, `destroy` or detail `@service_action` whose
   `instance_selector_spec` declared no read of that name looked its row up
