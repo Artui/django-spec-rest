@@ -27,6 +27,18 @@ carries; releases up to 0.62.0 are in
   attributes are unchanged. Before, the decorator's two keywords went to DRF's
   `@action`, which hands them to `as_view()` only under a router, unchecked by
   name; they are the action's own on every mount now.
+- **A codemod for moving from drfs, in the repository, not the wheel.**
+  `tools/drfs_codemod` rewrites a project's drfs 0.62.0 imports by the module
+  each names, so a kernel name spelled like a drfs one is left alone, and
+  turns each drfs `ServiceSpec` and `SelectorSpec` into the kernel's, its
+  fields on their seats. A spec's `success_status` and `response_finalizer`
+  move to the views in the same module serving it. Every site left (a read
+  drfs took from a selector's signature, a `UrlKwarg` or `QueryParam` list, a
+  name with no counterpart, an answer whose view is elsewhere) is marked with
+  a `# drfs-codemod:` comment and reported as `path:line: reason`, and a
+  second run changes nothing. Run from a clone with `PYTHONPATH=tools python
+  -m drfs_codemod <paths>`; "Moving from djangorestframework-services" says
+  what it does not do.
 
 ## [0.7.0] — 2026-11-05
 

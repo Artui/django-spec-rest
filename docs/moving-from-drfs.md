@@ -25,6 +25,52 @@ clients see change. drfs' history is in its
 The package reads no setting of its own. `SPEC_REST` is reserved as the name
 of the first one.
 
+## The codemod
+
+The repository carries a codemod,
+[`tools/drfs_codemod`](https://github.com/Artui/django-spec-rest/blob/main/tools/drfs_codemod/README.md),
+that does the mechanical part of this page in place. It is not in the wheel:
+run it from a clone, with `libcst` installed, over the project's own modules.
+
+It rewrites each drfs import by the module it names, following the
+[import map](#the-import-map), so a kernel name spelled like a drfs one is never
+taken for it. It turns each drfs `ServiceSpec` and `SelectorSpec` into the
+kernel's, moving each field onto its seat as [below](#declaring-a-spec): the
+serializers and their contexts, `permission_classes`, an output selector's
+serializer and context, `document_service_error` and `field_audiences`. A
+spec's `success_status` and `response_finalizer` move to the views in the same
+module that serve it, as [Views and viewsets](#views-and-viewsets) places them.
+A second run changes nothing.
+
+Every site it leaves gets a comment beginning `# drfs-codemod:` above its
+statement, giving the reason, and a line of its report, `path:line: reason`.
+A site stays in the report until its comment is deleted. `--check` writes
+nothing and exits 1 while a file would still change.
+
+What it does not do:
+
+- **Declare reads.** drfs handed a selector the route captures and query
+  values its signature named; the kernel hands it only the `reads=` its spec
+  declares. The codemod reads the selector's `def` and writes the
+  `reads=Parameters.of(...)` it would take into the marker, but applies none,
+  since a key a provider or the server filled would become the caller's to
+  send.
+- **Translate a `UrlKwarg` or `QueryParam` list.** A drfs `reads=` is marked
+  and kept as it was, for a `Parameter` declaring its type to replace it.
+- **Split a `PolymorphicServiceSpec`** into one kernel spec per route or
+  action, nor replace `OfflineContract`, `TargetGuard`, `ArgumentBinding` or
+  an input marker (`InputRequired`, `NotClientInput`, `InputDescription`). A
+  use of one is marked, and its import kept.
+- **Answer from another module.** A `success_status` or `response_finalizer`
+  whose view is in another module, or that no view serves, is marked on the
+  spec: set it on that view.
+- **Follow a module import of drfs.** `import rest_framework_services` (or a
+  submodule) is marked, and a spec built through it, such as
+  `drfs.ServiceSpec(...)`, is left whole.
+- **Format.** What it writes keeps the layout of what it replaced, and a
+  keyword it adds may make a line long; run the project's formatter after
+  it.
+
 ## The import map
 
 The package root exports [29 names](reference/index.md#public-surface), none of
