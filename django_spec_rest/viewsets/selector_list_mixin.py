@@ -8,7 +8,7 @@ from rest_framework.mixins import ListModelMixin
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from django_spec_rest.selectors.utils import dispatch_selector_for_spec, present_kernel_list
+from django_spec_rest.selectors.utils import dispatch_list_once, present_kernel_list
 from django_spec_rest.viewsets.utils import (
     _ActionSpecsMixin,
     resolve_action_selector_spec,
@@ -27,26 +27,34 @@ class SelectorListMixin(ListModelMixin, _ActionSpecsMixin):
     ``dispatch``, as on ``SelectorListView``: the view's filter backends and
     paginator apply to the set it read, and the spec's ``presenter`` renders
     the rows served, with the affordance answers it declares; a spec declaring
-    neither is rendered by the view's serializer. ``get_queryset()`` still
-    answers the spec's set to whatever else asks it.
+    neither is rendered by the view's serializer.
+
+    ``get_queryset()`` answers the list spec's set on ``list`` alone, from the
+    one dispatch ``list`` presents. On every other action it is DRF's own, the
+    viewset's ``queryset``: DRF's ``DjangoModelPermissions`` asks it on every
+    action for the model it checks, and a ``retrieve`` or a ``PATCH`` beside a
+    list spec answers as its own spec says, never the list's refusal
+    (test_selector_list_mixin).
     """
 
     # Provided at runtime by ``GenericViewSet`` / ``GenericAPIView``.
+    action: str | None
     request: Any
     kwargs: dict[str, Any]
 
     def list(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         spec = resolve_action_selector_spec(self.action_specs, "list")
         if spec is not None:
-            # Dispatched once, here, rather than through ``get_queryset()``:
-            # the result dispatch built is what the spec's presenter renders
-            # (test_service_viewset's test_a_list_is_dispatched_once).
-            data, paginated = present_kernel_list(self, spec, filtered=True)
+            # The dispatch a permission class's ``get_queryset()`` made, if one
+            # asked first, never the set ``get_queryset()`` answers: a subclass
+            # overriding it does not choose the rows a spec serves.
+            result = dispatch_list_once(self, spec)
+            data, paginated = present_kernel_list(self, spec, result, filtered=True)
             return self.get_paginated_response(data) if paginated else Response(data)  # ty: ignore[unresolved-attribute]
         return super().list(request, *args, **kwargs)
 
     def get_queryset(self) -> Any:
         spec = resolve_action_selector_spec(self.action_specs, "list")
-        if spec is None:
+        if spec is None or self.action != "list":
             return super().get_queryset()  # ty: ignore[unresolved-attribute]
-        return dispatch_selector_for_spec(self, spec)
+        return dispatch_list_once(self, spec).value

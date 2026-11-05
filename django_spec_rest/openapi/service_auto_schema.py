@@ -23,7 +23,7 @@ from django_service_specs import (
     provider_keys,
     spec_caller_input_schema,
 )
-from django_service_specs.parameters.parameters import Parameters
+from django_service_specs.parameters.parameters import Parameter, Parameters
 from django_service_specs.schema.can_present_nothing import can_present_nothing
 from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelectorSpec
 from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
@@ -33,13 +33,18 @@ from drf_spectacular.plumbing import (
     ResolvedComponent,
     build_array_type,
     build_parameter_type,
+    get_view_model,
+    resolve_django_path_parameter,
+    resolve_regex_path_parameter,
 )
+from drf_spectacular.settings import spectacular_settings
 from drf_spectacular.utils import (
     OpenApiParameter,
     OpenApiRequest,
     OpenApiResponse,
 )
 from rest_framework.serializers import Serializer
+from rest_framework.settings import api_settings
 
 from django_spec_rest.dispatch.kernel_edge import UNKNOWN_ARGUMENTS
 from django_spec_rest.openapi._caller_serializer_class import caller_serializer_class
@@ -578,6 +583,47 @@ class ServiceAutoSchema(AutoSchema):
         wrap = rows and not self._is_list_view(Serializer())
         return _presented(presenter, rows=rows, wrap=wrap)
 
+    def _resolve_path_parameters(self, variables: list[str]) -> list[Any]:
+        """Each path variable's parameter: drf-spectacular's, or the read a spec declares for it.
+
+        drf-spectacular types an untyped capture (a router's ``pk``, documented
+        as ``id``) from the view's model, found through ``queryset`` or
+        ``get_queryset()``. A spec viewset's ``get_queryset()`` off ``list`` is
+        DRF's own, so one with no ``queryset`` gives it no model, and it
+        documented the lookup as a string with a warning. The capture is a read
+        the operation's spec declares (``_route_reads``), so where
+        drf-spectacular has no model and the path no typed converter, the
+        parameter is built from that declaration: its type under the edge's
+        unknown-argument policy, and its ``help`` as the description
+        (test_lookup_path_parameters). Wherever drf-spectacular can type it,
+        and for a capture no spec declares, its own answer stands.
+        """
+        if get_view_model(self.view, emit_warnings=False) is not None:
+            return super()._resolve_path_parameters(variables)
+        reads = _route_reads(self.view)
+        captures = self._route_captures()
+        declared = {
+            variable: reads[name]
+            for variable in variables
+            if (name := _capture_named(variable, captures)) in reads
+            and not self._typed_by_the_path(variable)
+        }
+        theirs = super()._resolve_path_parameters([v for v in variables if v not in declared])
+        by_name = {parameter["name"]: parameter for parameter in theirs}
+        return [
+            _declared_path_parameter(variable, declared[variable])
+            if variable in declared
+            else by_name[variable]
+            for variable in variables
+        ]
+
+    def _typed_by_the_path(self, variable: str) -> bool:
+        """Whether the route types ``variable`` itself: a ``path()`` converter or a regex's."""
+        return bool(
+            resolve_django_path_parameter(self.path_regex, variable, self.map_renderers("format"))
+            or resolve_regex_path_parameter(self.path_regex, variable)
+        )
+
     def _get_filter_parameters(self) -> list[Any]:
         # A spec-level FilterSet must drop ``DjangoFilterBackend`` (the
         # ``as_view()`` guard forbids running both), so it is invisible to the
@@ -594,6 +640,59 @@ class ServiceAutoSchema(AutoSchema):
         if spec is None or spec.filter_set is None:
             return parameters
         return parameters + _kernel_filter_parameters(spec.filter_set)
+
+
+def _route_reads(view: Any) -> dict[str, Parameter]:
+    """The reads the operation's spec declares, by name: those a route capture may fill.
+
+    A selector spec's own (a retrieve's lookup, a detail ``@selector_action``'s,
+    a list's on a nested route), or a service spec's target selector's, which
+    name the row an update or delete reaches, with the service's own
+    ``reads``. Never a Validator's field: that is the request body's, not the
+    route's. Empty where no spec serves the operation.
+    """
+    selector = resolve_selector_spec(view)
+    if selector is not None:
+        return {parameter.name: parameter for parameter in selector.parameters().items}
+    service = resolve_service_spec(view)
+    if service is None:
+        return {}
+    target = service.target_selector_spec()
+    found = () if target is None else target.parameters().items
+    return {parameter.name: parameter for parameter in (*found, *service.reads.items)}
+
+
+def _capture_named(variable: str, captures: list[str]) -> str | None:
+    """The route capture a documented path ``variable`` stands for, or ``None``."""
+    return {_documented_as(capture): capture for capture in captures}.get(variable)
+
+
+def _documented_as(capture: str) -> str:
+    """The name the documented path gives a route ``capture``.
+
+    The renames the generator makes where the view has no model: DRF's
+    ``SCHEMA_COERCE_PATH_PK`` documents a ``pk`` as ``id``, and
+    drf-spectacular's ``SCHEMA_COERCE_PATH_PK_SUFFIX`` a ``parent_pk`` as
+    ``parent_id``.
+    """
+    if capture == "pk" and api_settings.SCHEMA_COERCE_PATH_PK:
+        return "id"
+    if capture.endswith("_pk") and spectacular_settings.SCHEMA_COERCE_PATH_PK_SUFFIX:
+        return f"{capture[:-3]}_id"
+    return capture
+
+
+def _declared_path_parameter(variable: str, read: Parameter) -> Any:
+    """``variable`` as a path parameter, typed by the ``read`` a spec declares for it."""
+    schema = dict(
+        parameters_schema(Parameters.of(read), unknown_arguments=UNKNOWN_ARGUMENTS)["properties"][
+            read.name
+        ]
+    )
+    description = schema.pop("description", None)
+    return build_parameter_type(
+        name=variable, schema=schema, location=OpenApiParameter.PATH, description=description
+    )
 
 
 def _partial_variant(spec: KernelServiceSpec) -> KernelServiceSpec:

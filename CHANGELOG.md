@@ -11,6 +11,50 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-11-05
+
+### Changed
+
+- **`get_queryset()` off `list` is DRF's own.** A viewset with a `list` spec
+  answered that spec's set from `get_queryset()` to every action. Now it does
+  so on `list` alone, and every other action reads the viewset's `queryset`,
+  as on DRF's own viewset: a `retrieve`, a write, a `@selector_action`, a
+  custom `@action` reading `self.get_queryset()`, and OPTIONS.
+  `SelectorListView` answers its spec's set to a `GET` or `HEAD` alone. So a
+  view under DRF's `DjangoModelPermissions` with no `queryset` attribute now
+  raises DRF's own assertion off the list, where it used to read the model
+  off the list spec's set: set `queryset` on it, as DRF asks. And the rows an
+  action with no spec of its own reaches now come from `queryset`, no longer
+  from the list selector: DRF's fallback `retrieve` (its `get_object()`) and a
+  custom `@action` reading `self.get_queryset()` reach a row the list selector
+  leaves out. A project that scoped a tenant in its list selector alone and
+  relied on it for those actions scopes `queryset` too, or serves them with a
+  spec.
+- **A route capture is documented from the read its spec declares.** A spec
+  viewset with no `queryset` gave drf-spectacular its model through the list
+  spec's set; off `list` it now gives none. So where drf-spectacular finds no
+  model and the path does not type the capture, the schema types it from the
+  read the operation's spec declares for it (a retrieve's or a detail
+  action's selector, a write's target selector, or the write's own `reads`),
+  with the read's `help` as its description. A viewset with no `queryset`
+  keeps its router's `{id}` an integer, with no warning, and needs no
+  `queryset` for its schema; its description is now the read's `help`, where
+  it was the model's primary key's. Where drf-spectacular finds a model, or a
+  converter or regex types the capture, its answer stands.
+
+### Fixed
+
+- **A retrieve or a PATCH beside a list spec answers as its own spec says.**
+  DRF's `DjangoModelPermissions` asks `get_queryset()` on every action, so
+  beside a list spec with a required read a `retrieve`, a PATCH, a
+  `@selector_action` or an OPTIONS (a CORS preflight) answered the list's
+  400, or 403 where the list's own check refused. `SelectorListView`
+  answered an OPTIONS, and a method it does not serve, the same way.
+- **A list runs its selector once under `DjangoModelPermissions`.** The
+  permission class's `get_queryset()` and the list each dispatched the spec.
+  The list now presents the dispatch the permission class asked for, kept for
+  that request alone.
+
 ## [0.8.1] — 2026-11-05
 
 ### Fixed
@@ -643,7 +687,8 @@ lists each with what a project rewrites.
 - **The package is no longer a Django app.** It has no models, migrations,
   templates, static files or URLs, so it needs no `INSTALLED_APPS` entry.
 
-[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.8.1...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/Artui/django-spec-rest/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/Artui/django-spec-rest/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/Artui/django-spec-rest/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/Artui/django-spec-rest/compare/v0.6.1...v0.7.0

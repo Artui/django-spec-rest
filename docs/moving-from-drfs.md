@@ -200,15 +200,20 @@ over:
   row.
 - **A spec's rows are scoped by its selector alone.** No action a spec serves
   takes its rows from the view's `get_queryset()`: not `list`, `retrieve`, a
-  `@selector_action`, nor a write's target lookup (a permission class that
+  `@selector_action`, nor a write's target lookup. A permission class that
   calls it, as DRF's `DjangoModelPermissions` does, reads its model and
-  narrows nothing). The view's `filter_backends`
+  narrows nothing: on `list` it reads the list spec's set, and on every other
+  action the view's own `queryset`, so a view under that class sets
+  `queryset`, as DRF asks. The view's `filter_backends`
   narrow a spec's `list` (a viewset's, and `SelectorListView`'s) and nothing
   else, so not `retrieve`, a `@selector_action`'s rows, or the row an update or
   delete reaches. A project that scoped rows to a tenant through either moves
   that scoping into each selector's own queryset (a selector may declare
   `user`): left where it was, a `PATCH` or `DELETE` reaches another tenant's
-  row with no error.
+  row with no error. The reverse holds for an action with no spec: DRF's
+  fallback `retrieve` and a custom `@action` reading `self.get_queryset()`
+  take their rows from the view's `queryset`, never from the list selector,
+  so scoping kept in the list selector alone does not reach them.
 - **A route capture is read only where a spec declares it.** drfs handed a
   selector the captures its signature took (`InputRequired`,
   `Unpack[...UrlExtras]`); the kernel hands a spec only its declared

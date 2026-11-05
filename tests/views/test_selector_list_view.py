@@ -12,6 +12,7 @@ import json
 from typing import Any
 
 import pytest
+from django.contrib.auth.models import User
 from django.core.exceptions import ImproperlyConfigured, ObjectDoesNotExist
 from django.db.models import Q, QuerySet
 from django_service_specs import (
@@ -27,8 +28,9 @@ from django_service_specs import (
 from rest_framework import serializers
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.permissions import DjangoModelPermissions
 from rest_framework.response import Response
-from rest_framework.test import APIRequestFactory
+from rest_framework.test import APIRequestFactory, force_authenticate
 
 from django_spec_rest import SelectorListView
 from django_spec_rest.dispatch import kernel_edge
@@ -140,6 +142,72 @@ class TestThePresenter:
         view.request = view.initialize_request(view.request)
         view.format_kwarg = None
         assert list(view.get_queryset()) == three
+
+
+def _guarded(spec: SelectorSpec, **attrs: Any) -> Any:
+    namespace = {
+        "spec": spec,
+        "queryset": Author.objects.all(),
+        "permission_classes": [DjangoModelPermissions],
+        **attrs,
+    }
+    return type("_View", (SelectorListView,), namespace)
+
+
+def _as_admin(view: Any, method: str, path: str = "/", **params: Any) -> Response:
+    request = getattr(factory, method)(path, params or None)
+    admin, _ = User.objects.get_or_create(
+        username="admin", defaults={"is_superuser": True, "is_active": True}
+    )
+    force_authenticate(request, admin)
+    return view.as_view()(request)
+
+
+_NEEDS_A_NAME = _listing(
+    lambda *, name: Author.objects.filter(name=name).order_by("id"),
+    reads=Parameters.of(Parameter("name", "string", required=True)),
+    presenter=SerializerPresenter(_NameOnly),
+)
+
+
+class TestUnderDjangoModelPermissions:
+    """``DjangoModelPermissions`` asks ``get_queryset()`` before any handler runs."""
+
+    def test_the_selector_runs_once(self, three: list[Author]) -> None:
+        """The list presents the dispatch the permission class asked for,
+        rather than running the selector again."""
+        calls: list[int] = []
+
+        def counted() -> QuerySet[Author]:
+            calls.append(1)
+            return _authors()
+
+        view = _guarded(_listing(counted, presenter=SerializerPresenter(_NameOnly)))
+        response = _as_admin(view, "get")
+        assert [row["name"] for row in response.data] == ["a", "b", "c"]
+        assert calls == [1]
+
+    def test_the_spec_s_read_answers_its_list(self, three: list[Author]) -> None:
+        assert _as_admin(_guarded(_NEEDS_A_NAME), "get", name="b").data == [{"name": "b"}]
+        assert _as_admin(_guarded(_NEEDS_A_NAME), "get").status_code == 400
+
+    def test_options_answers_beside_a_spec_with_a_required_read(self) -> None:
+        """A CORS preflight carries none of the list's reads."""
+        assert _as_admin(_guarded(_NEEDS_A_NAME), "options").status_code == 200
+
+    def test_an_unserved_method_is_405_not_the_list_s_refusal(self) -> None:
+        assert _as_admin(_guarded(_NEEDS_A_NAME), "post").status_code == 405
+
+    def test_a_head_reads_the_spec_s_set_not_the_view_s_queryset(self) -> None:
+        """A HEAD is the list's own request: with no ``queryset`` attribute the
+        permission class reads the model off the spec's set."""
+        view = _guarded(_listing(presenter=SerializerPresenter(_NameOnly)), queryset=None)
+        assert _as_admin(view, "head").status_code == 200
+
+    def test_off_the_list_with_no_queryset_is_drf_s_own_assertion(self) -> None:
+        view = _guarded(_NEEDS_A_NAME, queryset=None)
+        with pytest.raises(AssertionError, match="should either include a `queryset` attribute"):
+            _as_admin(view, "options")
 
 
 class TestTheArguments:

@@ -165,6 +165,15 @@ call `enable_openapi()` again after the reload.
   components, and yours to declare.
 - **A `filter_set`'s query parameters**, on a list operation, are the kernel's
   `filter_set_parameters`.
+- **A route capture's type** is drf-spectacular's where it finds one: a
+  converter or a regex on the path, or the view's model, which it reads off
+  `queryset`. A spec viewset with no `queryset` gives it no model off `list`,
+  so there the capture is typed from the read the operation's spec declares
+  for it (a retrieve's or a detail action's selector, a write's target
+  selector, or the write's own `reads`), with the read's `help` as its
+  description. A viewset needs no `queryset` for its schema. A capture no spec
+  declares, or that only a validator's field names (the request body's, not
+  the route's), stays drf-spectacular's string, with its warning.
 - **A viewset method with no spec behind it** is left out where `Allow` leaves
   it out: on a route serving some spec, a `create`, `update`,
   `partial_update` or `destroy` the router maps but the viewset declares no

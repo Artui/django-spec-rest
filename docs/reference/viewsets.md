@@ -39,6 +39,10 @@ such as `path("me/", MeViewSet.as_view({"get": "retrieve"}))`, whose selector
 finds the caller's own row, carries no capture and needs no read; a hand-mounted
 route that does carry one must have it declared by the selector itself.
 
+The schema documents a declared capture with the read's type and `help` where
+drf-spectacular finds no model to type it from, as on a viewset with no
+`queryset` (see [OpenAPI](../openapi.md#what-a-route-documents)).
+
 ## Per-action answers
 
 A kernel spec declares no HTTP answer, so a viewset's `success_status` and

@@ -94,8 +94,40 @@ def present_kernel_selection(
     return view.get_serializer(rows, many=many).data
 
 
-def present_kernel_list(view: Any, spec: KernelSelectorSpec, *, filtered: bool) -> tuple[Any, bool]:
-    """Dispatch a kernel LIST spec for ``view`` and present it: the body, and whether it is a page.
+# The attribute ``dispatch_list_once`` keeps its dispatch in, on the view.
+_LIST_DISPATCH = "_spec_rest_list_dispatch"
+
+
+def dispatch_list_once(view: Any, spec: KernelSelectorSpec) -> DispatchResult:
+    """The one dispatch of a ``list``'s spec for ``view``'s request, kept on the view.
+
+    DRF's ``DjangoModelPermissions`` asks ``get_queryset()`` before ``list``
+    runs, so a ``list`` and its ``get_queryset()`` both read their spec
+    through here, and the selector runs once a request
+    (test_selector_list_mixin's
+    test_the_list_selector_runs_once_under_django_model_permissions). The
+    dispatch is kept beside the request it answered and read back only for
+    that same object: DRF builds a view instance per request, and an instance
+    handed another request dispatches again
+    (test_the_dispatch_is_the_request_s_own). A dispatch that raised keeps
+    nothing.
+    """
+    kept: tuple[Any, DispatchResult] | None = getattr(view, _LIST_DISPATCH, None)
+    if kept is not None and kept[0] is view.request:
+        return kept[1]
+    result = dispatch_kernel_selector(view, spec)
+    setattr(view, _LIST_DISPATCH, (view.request, result))
+    return result
+
+
+def present_kernel_list(
+    view: Any, spec: KernelSelectorSpec, result: DispatchResult, *, filtered: bool
+) -> tuple[Any, bool]:
+    """Present a kernel LIST spec's ``result`` for ``view``: the body, and whether it is a page.
+
+    The caller dispatches: a ``list`` through ``dispatch_list_once``, so the
+    dispatch its ``get_queryset()`` made is the one presented, and a
+    ``@selector_action`` through ``dispatch_kernel_selector``.
 
     DRF's ``list`` steps in DRF's order on the set the dispatch read: the
     view's filter backends where ``filtered`` (a viewset's ``list``; a custom
@@ -104,7 +136,6 @@ def present_kernel_list(view: Any, spec: KernelSelectorSpec, *, filtered: bool) 
     none), then ``present_kernel_selection``. The caller wraps the body,
     through ``get_paginated_response`` for a page.
     """
-    result = dispatch_kernel_selector(view, spec)
     rows = view.filter_queryset(result.value) if filtered else result.value
     paginate = getattr(view, "paginate_queryset", None)
     page = None if paginate is None else paginate(rows)

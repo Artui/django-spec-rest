@@ -7,6 +7,12 @@
 `SelectorViewSet` serves `list` and `retrieve`. An action with no entry falls
 back to DRF's own behaviour for the reads (`get_queryset()`, `get_object()`)
 and answers 405 for the writes, and `Allow` leaves an unserved write out.
+`get_queryset()` answers the `list` spec's set on `list` alone, from the one
+dispatch the list presents; every other action, a custom `@action` included,
+reads the viewset's `queryset`. So a viewset under DRF's
+`DjangoModelPermissions`, which asks `get_queryset()` on every action, sets
+`queryset`. The schema needs none: a lookup is documented from the read its
+spec declares (see [OpenAPI](../openapi.md#what-a-route-documents)).
 
 ```python
 from django_spec_rest import ServiceViewSet

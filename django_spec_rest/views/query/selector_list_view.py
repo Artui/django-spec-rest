@@ -12,10 +12,14 @@ from rest_framework.mixins import ListModelMixin
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from django_spec_rest.selectors.utils import dispatch_selector_for_spec, present_kernel_list
+from django_spec_rest.selectors.utils import dispatch_list_once, present_kernel_list
 from django_spec_rest.views.mutation.utils import _ServesRaisedSchema
 from django_spec_rest.views.spec_validation import validate_selector_view_spec
 from django_spec_rest.views.utils import get_class_attr, mounted_view, view_pool_seeds
+
+# The methods ``get`` answers: Django routes a HEAD to ``get`` where a view
+# declares no ``head``.
+_THE_LIST_S_METHODS = ("GET", "HEAD")
 
 
 class SelectorListView(_ServesRaisedSchema, ListModelMixin, GenericAPIView):
@@ -26,6 +30,11 @@ class SelectorListView(_ServesRaisedSchema, ListModelMixin, GenericAPIView):
     alone when the view paginates, with the affordance answers it declares;
     a spec declaring neither presenter nor affordances is rendered by the
     view's ``serializer_class``, as DRF renders a queryset.
+
+    ``get_queryset()`` answers the spec's set to a ``GET`` or ``HEAD`` alone,
+    from the one dispatch ``list`` presents, so a permission class asking it
+    first does not run the selector twice; to an OPTIONS or any other method
+    it is DRF's own, the view's ``queryset``.
 
     ``spec = None`` (the default) keeps ``get_queryset()`` and the rest of the
     flow as vanilla DRF. The rest of the list flow (filter backends,
@@ -53,9 +62,15 @@ class SelectorListView(_ServesRaisedSchema, ListModelMixin, GenericAPIView):
 
     def get_queryset(self) -> Any:
         s: SelectorSpec | None = get_class_attr(self, "spec")
-        if s is None:
+        # The spec's set answers the list's own request alone: DRF's
+        # ``DjangoModelPermissions`` asks ``get_queryset()`` before any handler
+        # runs, so an OPTIONS (a CORS preflight) or an unserved method beside a
+        # spec with a required read answered the list's 400. Off the list it is
+        # DRF's own, the view's ``queryset`` (test_selector_list_view's
+        # TestUnderDjangoModelPermissions).
+        if s is None or self.request.method not in _THE_LIST_S_METHODS:
             return super().get_queryset()
-        return dispatch_selector_for_spec(self, s)
+        return dispatch_list_once(self, s).value
 
     def list(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         # The answers are added here rather than in ``get`` so a subclass that
@@ -65,8 +80,9 @@ class SelectorListView(_ServesRaisedSchema, ListModelMixin, GenericAPIView):
         if s is None:
             return super().list(request, *args, **kwargs)
         # DRF's ``list`` steps over the set the dispatch read, presented
-        # by the spec, shared with the viewset's ``list``.
-        data, paginated = present_kernel_list(self, s, filtered=True)
+        # by the spec, shared with the viewset's ``list``: the one dispatch a
+        # permission class's ``get_queryset()`` made, if one asked first.
+        data, paginated = present_kernel_list(self, s, dispatch_list_once(self, s), filtered=True)
         return self.get_paginated_response(data) if paginated else Response(data)
 
     def get(self, request: Request, *args: Any, **kwargs: Any) -> Response:
