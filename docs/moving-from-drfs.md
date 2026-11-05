@@ -71,7 +71,7 @@ What it does not do:
 - **Change what a serializer accepts.** It translates the serializer the
   project declared, so an empty PATCH answers as that serializer did: a
   partial serializer lets it through to the service and the model, not the
-  kernel's 400.
+  kernel's 400 ([a PATCH hands the service the keys sent](#bodies-and-arguments)).
 - **Format.** What it writes keeps the layout of what it replaced, and a
   keyword it adds may make a line long; run the project's formatter after
   it.
@@ -199,8 +199,10 @@ over:
   that declares none. A `get_object()` override no longer chooses a write's
   row.
 - **A spec's rows are scoped by its selector alone.** No action a spec serves
-  asks the view's `get_queryset()`: not `list`, `retrieve`, a
-  `@selector_action`, nor a write's target lookup. The view's `filter_backends`
+  takes its rows from the view's `get_queryset()`: not `list`, `retrieve`, a
+  `@selector_action`, nor a write's target lookup (a permission class that
+  calls it, as DRF's `DjangoModelPermissions` does, reads its model and
+  narrows nothing). The view's `filter_backends`
   narrow a spec's `list` (a viewset's, and `SelectorListView`'s) and nothing
   else, so not `retrieve`, a `@selector_action`'s rows, or the row an update or
   delete reaches. A project that scoped rows to a tenant through either moves
@@ -227,11 +229,12 @@ over:
   at `as_view()`, with the per-action `get_<action>_selector_kwargs`: return
   those keys from the spec's own `kwargs` provider, which may declare
   `request` and `view`.
-- **A viewset's `list` with a spec never goes through `get_queryset()`**, nor
-  does its `retrieve`; the view's filter backends and paginator still apply to
-  the set the spec read. So an eager-loading mixin that adds `select_related`
-  or `prefetch_related` in a `get_queryset()` override no longer runs, and the
-  list goes N+1 with no error. Declare the loading on the selector spec:
+- **A viewset's `list` with a spec never takes its rows from
+  `get_queryset()`**, nor does its `retrieve`; the view's filter backends and
+  paginator still apply to the set the spec read. So an eager-loading mixin
+  that adds `select_related` or `prefetch_related` in a `get_queryset()`
+  override no longer loads the rows the list serves, and the list goes N+1
+  with no error. Declare the loading on the selector spec:
   `SelectorSpec(select_related=..., prefetch_related=...)`, or an
   `extend_queryset` callable, which is handed the selector's declared reads
   but never its `shapes`.
@@ -278,6 +281,18 @@ The query string is read by the kernel's flat reader:
   field may not be null.` is `This field cannot be null.`. A client matching
   on a message must match the new one; the keys and the 400 are unchanged.
   A form body keeps DRF's wording, since the serializer answers it.
+- **A PATCH behind a `SerializerValidator` hands the service only the keys
+  the client sent.** The serializer is partial on a PATCH, as DRF's is, so
+  `{}`, or a body naming one field of several, validates and reaches the
+  service with only those keys. A service behind it writes only what was
+  sent (`serializer.save()`, or `if key in data`). One written for a whole
+  body reads an unsent key as `None` and writes it: a 500 where the column is
+  `NOT NULL`, and a silent null under a 200 where it is not. Serve such a
+  service on PUT alone, or behind a validator that is not partial: a
+  dataclass declaration, a `DataclassSerializer` or the kernel's
+  `DataclassValidator` is validated whole on a PATCH and answers 400 for a
+  missing field. Plain DRF answers a PATCH of `{}` to a `ModelSerializer` with
+  200 and leaves the row as it was, so the 500 is the service's, not DRF's.
 - **A body that is no object answers `{"detail": "The body must be an object;
   got list."}`**, where drfs answered `{"non_field_errors": ["Invalid data.
   Expected a dictionary, but got list."]}`. Both are a 400.
