@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import inspect
-import types
 from collections.abc import Callable, Mapping
 from typing import Any, ClassVar, TypeVar
 
@@ -167,19 +166,37 @@ def resolve_action_selector_spec(
 _ANSWERS = ("success_status", "response_finalizer")
 
 
-def _action_hooks(view_cls: type | MountedView, action: str) -> dict[str, Any]:
-    """Each ``get_<action>_<answer>`` hook ``view_cls`` defines, as an instance reads it.
+def _as_the_instance_reads(view_cls: type | MountedView, name: str) -> Any:
+    """``name`` on ``view_cls`` as an instance of it reads the attribute, or ``None``.
 
-    Read off the class a method is unbound, so it is bound here: its ``self``
-    is the view, never a key it asks the framework for
-    (test_per_action_answers' test_a_hook_s_own_self_is_not_a_key_it_requires).
-    An ``int`` is the status as it stands.
+    An ``as_view()`` keyword is set on the instance, where nothing binds it,
+    so a ``MountedView``'s override is the value as it stands. A class
+    attribute goes through its descriptor with the class standing in for the
+    instance: a method is bound, so its ``self`` is never a key it asks the
+    framework for, a ``staticmethod`` stays a plain function and a
+    ``classmethod`` is bound to the class, as each is at dispatch
+    (test_per_action_answers' test_a_hook_s_own_self_is_not_a_key_it_requires,
+    TestAStaticHookIsReadAsTheInstanceReadsIt). Anything else, an ``int``
+    among them, is the value as it stands.
     """
+    base: Any = view_cls
+    while isinstance(base, MountedView):
+        overrides: dict[str, Any] = base._mounted_overrides
+        if name in overrides:
+            return overrides[name]
+        base = base._mounted_base
+    raw = inspect.getattr_static(base, name, None)
+    get = getattr(type(raw), "__get__", None)
+    return raw if get is None else get(raw, view_cls, base)
+
+
+def _action_hooks(view_cls: type | MountedView, action: str) -> dict[str, Any]:
+    """Each ``get_<action>_<answer>`` hook ``view_cls`` defines, as an instance reads it."""
     hooks: dict[str, Any] = {}
     for name in _ANSWERS:
-        hook = getattr(view_cls, f"get_{action}_{name}", None)
+        hook = _as_the_instance_reads(view_cls, f"get_{action}_{name}")
         if hook is not None:
-            hooks[name] = types.MethodType(hook, view_cls) if inspect.isfunction(hook) else hook
+            hooks[name] = hook
     return hooks
 
 

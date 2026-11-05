@@ -71,8 +71,8 @@ class MembershipViewSet(ServiceViewSet):
 Each takes the shapes the viewset's does. A status is an `int` or a callable
 declaring any of `result`, `instance`, `request` and `view`; a finalizer is a
 callable declaring any of `response`, `result`, `request`, `view`, `instance`
-and `data`. A hook method is that callable, its `self` the view, and an `int`
-attribute is the status. A hook is named for the action DRF names, as
+and `data`. A hook method is that callable, its `self` the view (a
+`staticmethod` takes none), and an `int` attribute is the status. A hook is named for the action DRF names, as
 `get_<action>_service_kwargs` is: a `PATCH` reads `get_partial_update_...`,
 never `get_update_...`.
 

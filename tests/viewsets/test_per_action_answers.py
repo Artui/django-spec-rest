@@ -282,3 +282,53 @@ class TestTheMountedChecksReadThePerActionValue:
         viewset = _decorated_viewset(**{f"get_enrol_{name}": _header("hook")})
         with pytest.raises(ImproperlyConfigured, match=rf"enrol.*get_enrol_{name}"):
             viewset.as_view({"post": "enrol"})
+
+
+class TestAStaticHookIsReadAsTheInstanceReadsIt:
+    """A ``staticmethod`` hook has no ``self``, at dispatch or at ``as_view()``.
+
+    Read off the class it is a plain function, which must not be bound as a
+    method is, or the check would take its first parameter for the view's.
+    """
+
+    def test_it_mounts_and_answers(self) -> None:
+        def accepted() -> int:
+            return 203
+
+        def finalize(*, response: Response) -> None:
+            response["X-Answer"] = "static"
+
+        viewset = _hooked_viewset(
+            get_create_success_status=staticmethod(accepted),
+            get_create_response_finalizer=staticmethod(finalize),
+        )
+        response = _call(viewset, "post", "create", {"name": "Ada"})
+        assert (response.status_code, response["X-Answer"]) == (203, "static")
+
+    def test_one_the_view_cannot_call_is_still_refused(self) -> None:
+        def needs_tenant(*, tenant: Any) -> int:
+            return 200
+
+        viewset = _hooked_viewset(get_create_success_status=staticmethod(needs_tenant))
+        with pytest.raises(ImproperlyConfigured, match=r"\['create'\].*success_status"):
+            viewset.as_view({"post": "create"})
+
+    def test_a_classmethod_hook_is_bound_to_the_class(self) -> None:
+        def by_class(cls: type, *, result: Author) -> int:
+            return 201
+
+        viewset = _hooked_viewset(get_create_success_status=classmethod(by_class))
+        assert _call(viewset, "post", "create", {"name": "Ada"}).status_code == 201
+
+    def test_a_hook_handed_to_as_view_is_asked_as_handed(self) -> None:
+        # A keyword is set on the instance, where nothing binds it, so the
+        # check asks it unbound, and asks it rather than the class's.
+        def needs_tenant(*, tenant: Any) -> int:
+            return 200
+
+        viewset = _hooked_viewset(get_create_success_status=201)
+        with pytest.raises(ImproperlyConfigured, match=r"\['create'\].*success_status"):
+            viewset.as_view({"post": "create"}, get_create_success_status=needs_tenant)
+        view = viewset.as_view({"post": "create"}, get_create_success_status=lambda: 203)
+        response = view(factory.post("/", {"name": "Ada"}, format="json"))
+        assert response.status_code == 203
