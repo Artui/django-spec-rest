@@ -11,6 +11,21 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+### Fixed
+
+- **A list of the package's 403 or 401 body on a paginated view no longer lets
+  a project's serializer of the same name pass.** `PermissionDeniedSerializer(many=True)`
+  or `NotAuthenticatedSerializer(many=True)` is a plain `ListSerializer`, which
+  the "never a list" override on the two classes does not reach. On a
+  paginated list view, as its `200` or, under `ENABLE_LIST_MECHANICS_ON_NON_2XX`,
+  as its `403` or `401`, drf-spectacular's pagination naming descended to the
+  body and asked for its component name, which registered and armed the
+  reserved component without taking a `$ref` of it. A project's serializer of
+  the name resolved next was then documented by the package's `{detail}` body
+  instead of refused. The two bodies now build a list class of their own whose
+  pagination name is the body's, so the naming stops at the list; a list of
+  the body as a list view's `200` is documented as a page of them, as before.
+
 ## [0.6.1] — 2026-11-04
 
 ### Fixed

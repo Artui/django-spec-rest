@@ -121,6 +121,21 @@ def _paginated_listing_a_refusal(prefix: str) -> URLPattern:
     return path(f"{prefix}/", _Listing.as_view())
 
 
+def _paginated_declaring(prefix: str, responses: Any) -> URLPattern:
+    """A project's paginated list view on drf-spectacular's ``AutoSchema``, declaring ``responses``."""
+
+    class _PaginatedDeclaring(ListAPIView):
+        schema = AutoSchema()
+        queryset = Author.objects.all()
+        serializer_class = AuthorSerializer
+        pagination_class = PageNumberPagination
+        permission_classes = []
+        authentication_classes = []
+
+    view = extend_schema(responses=responses)(_PaginatedDeclaring)
+    return path(f"{prefix}/", view.as_view())
+
+
 def _refusals(schema: dict[str, Any], route: str) -> dict[int, Any]:
     responses = schema["paths"][route]["post"]["responses"]
     return {code: responses[str(code)]["content"]["application/json"]["schema"] for code in _BODIES}
@@ -359,3 +374,53 @@ class TestUnderListMechanicsOnARefusal:
         assert str(raised.value).startswith(
             "The operation POST /b-declaring/ is documented as the component 'PermissionDenied'"
         )
+
+
+@pytest.mark.parametrize("code", [403, 401])
+class TestAListOfTheBody:
+    """An instance of the body with ``many=True``, a plain ``ListSerializer`` carrying no override.
+
+    The override on the classes does not reach it, so the pagination naming of
+    a paginated list view descends to its child and asks the extension for the
+    name, takes no ``$ref`` of it, and leaves the component armed for the next
+    class of the name.
+    """
+
+    def test_a_project_s_serializer_of_the_name_after_a_list_beside_a_listed_200_is_refused(
+        self, code: int
+    ) -> None:
+        """Under ``ENABLE_LIST_MECHANICS_ON_NON_2XX``, the list is the refusal of a paginated view."""
+        with (
+            patched_settings({"ENABLE_LIST_MECHANICS_ON_NON_2XX": True}),
+            pytest.raises(ImproperlyConfigured) as raised,
+        ):
+            _generate(
+                _paginated_declaring(
+                    "a-listing", {200: AuthorSerializer, code: _BODIES[code](many=True)}
+                ),
+                _declaring("b-declaring", {200: _THEIRS[code]}),
+            )
+        assert str(raised.value).startswith(
+            f"The operation POST /b-declaring/ is documented as the component {_COMPONENTS[code]!r}"
+        )
+
+    def test_a_project_s_serializer_of_the_name_after_a_list_as_the_200_is_refused(
+        self, code: int
+    ) -> None:
+        """Under the default settings, the list is the 200 of a paginated view."""
+        with pytest.raises(ImproperlyConfigured) as raised:
+            _generate(
+                _paginated_declaring("a-listing", {200: _BODIES[code](many=True)}),
+                _declaring("b-declaring", {200: _THEIRS[code]}),
+            )
+        assert str(raised.value).startswith(
+            f"The operation POST /b-declaring/ is documented as the component {_COMPONENTS[code]!r}"
+        )
+
+    def test_a_list_as_the_200_of_a_list_view_is_an_array(self, code: int) -> None:
+        """Documented as it was: a page of the body, not the body alone."""
+        schema = _generate(_paginated_declaring("a-listing", {200: _BODIES[code](many=True)}))
+        body = schema["paths"]["/a-listing/"]["get"]["responses"]["200"]["content"]
+        assert body["application/json"]["schema"] == {
+            "$ref": f"#/components/schemas/Paginated{_COMPONENTS[code]}List"
+        }
