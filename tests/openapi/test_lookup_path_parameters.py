@@ -27,8 +27,10 @@ from django_service_specs import (
 )
 from drf_spectacular.drainage import GENERATOR_STATS
 from drf_spectacular.generators import SchemaGenerator
+from drf_spectacular.settings import spectacular_settings
 from rest_framework import serializers
 from rest_framework.routers import SimpleRouter
+from rest_framework.settings import api_settings
 
 from django_spec_rest import (
     SelectorListView,
@@ -162,6 +164,25 @@ def _shelved() -> ServiceSpec:
     )
 
 
+# Two captures, one ``pk`` and one a ``_pk`` suffix, each its own read.
+_Parented = type(
+    "_Parented",
+    (SelectorRetrieveView,),
+    {
+        "spec": SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=lambda *, parent_pk, pk: Author.objects.filter(pk=pk).first(),
+            reads=Parameters.of(
+                Parameter("parent_pk", "string", required=True, help="The parent."),
+                Parameter("pk", "integer", required=True, help="The child."),
+            ),
+            permissions=_OPEN,
+            presenter=_PRESENTER,
+        )
+    },
+)
+
+
 _router = SimpleRouter()
 _router.register("bare", _NoQueryset, basename="bare")
 _router.register("hex", _ByHex, basename="hex")
@@ -174,6 +195,7 @@ urlpatterns = [
         r"^nested/(?P<author_id>[^/.]+)/$",
         type("_Nested", (SelectorListView,), {"spec": _books_of_author()}).as_view(),
     ),
+    re_path(r"^parents/(?P<parent_pk>[^/.]+)/(?P<pk>[^/.]+)/$", _Parented.as_view()),
     path(
         "slugged/<slug:pk>/", type("_Slugged", (SelectorRetrieveView,), {"spec": _row()}).as_view()
     ),
@@ -290,3 +312,46 @@ def test_a_validator_s_field_never_types_the_capture(
     parameter = _path_parameter(schema, "/shelves/{shelf}/{rank}/", "post", "rank")
     assert parameter["schema"] == {"type": "string"}
     assert [w for w in warnings if w.startswith("_Shelved:") and 'parameter "rank"' in w]
+
+
+def _two_captures(schema: dict[str, Any], route: str, parent: str) -> list[tuple[Any, ...]]:
+    return [
+        (name, p["schema"], p["description"])
+        for name in (parent, "id")
+        for p in [_path_parameter(schema, route, "get", name)]
+    ]
+
+
+def test_each_capture_is_typed_from_its_own_read(schema: dict[str, Any]) -> None:
+    assert _two_captures(schema, "/parents/{parent_pk}/{id}/", "parent_pk") == [
+        ("parent_pk", {"type": "string"}, "The parent."),
+        ("id", {"type": "integer"}, "The child."),
+    ]
+
+
+def test_a_suffixed_capture_is_typed_from_its_own_read(
+    monkeypatch: pytest.MonkeyPatch, warnings: list[str]
+) -> None:
+    """Under ``SCHEMA_COERCE_PATH_PK_SUFFIX`` the route's ``parent_pk`` is
+    documented as ``parent_id``: it is still the ``parent_pk`` read's, never
+    the ``pk``'s."""
+    monkeypatch.setattr(spectacular_settings, "SCHEMA_COERCE_PATH_PK_SUFFIX", True)
+    schema = SchemaGenerator(patterns=urlpatterns).get_schema(request=None, public=True)
+    assert _two_captures(schema, "/parents/{parent_id}/{id}/", "parent_id") == [
+        ("parent_id", {"type": "string"}, "The parent."),
+        ("id", {"type": "integer"}, "The child."),
+    ]
+    assert not [w for w in warnings if w.startswith("_Parented:")]
+    # A capture with no ``_pk`` suffix keeps its name.
+    shelf = _path_parameter(schema, "/shelves/{shelf}/{rank}/", "post", "shelf")
+    assert shelf["schema"] == {"type": "integer"}
+
+
+def test_an_uncoerced_pk_is_typed_from_its_read(monkeypatch: pytest.MonkeyPatch) -> None:
+    """With DRF's ``SCHEMA_COERCE_PATH_PK`` off the router's ``{pk}`` is
+    documented as itself, and is still the ``pk`` read's."""
+    monkeypatch.setattr(api_settings, "SCHEMA_COERCE_PATH_PK", False)
+    schema = SchemaGenerator(patterns=urlpatterns).get_schema(request=None, public=True)
+    parameter = _path_parameter(schema, "/bare/{pk}/", "get", "pk")
+    assert parameter["schema"] == {"type": "integer"}
+    assert parameter["description"] == "The author's id."

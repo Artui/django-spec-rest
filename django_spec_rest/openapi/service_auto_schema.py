@@ -37,12 +37,14 @@ from drf_spectacular.plumbing import (
     resolve_django_path_parameter,
     resolve_regex_path_parameter,
 )
+from drf_spectacular.settings import spectacular_settings
 from drf_spectacular.utils import (
     OpenApiParameter,
     OpenApiRequest,
     OpenApiResponse,
 )
 from rest_framework.serializers import Serializer
+from rest_framework.settings import api_settings
 
 from django_spec_rest.dispatch.kernel_edge import UNKNOWN_ARGUMENTS
 from django_spec_rest.openapi._caller_serializer_class import caller_serializer_class
@@ -661,15 +663,23 @@ def _route_reads(view: Any) -> dict[str, Parameter]:
 
 
 def _capture_named(variable: str, captures: list[str]) -> str | None:
-    """The route capture a documented path ``variable`` stands for, or ``None``.
+    """The route capture a documented path ``variable`` stands for, or ``None``."""
+    return {_documented_as(capture): capture for capture in captures}.get(variable)
 
-    drf-spectacular documents a ``pk`` capture as ``id`` where it has no model
-    (``SCHEMA_COERCE_PATH_PK``), so a variable the route does not capture is
-    its ``pk``.
+
+def _documented_as(capture: str) -> str:
+    """The name the documented path gives a route ``capture``.
+
+    The renames the generator makes where the view has no model: DRF's
+    ``SCHEMA_COERCE_PATH_PK`` documents a ``pk`` as ``id``, and
+    drf-spectacular's ``SCHEMA_COERCE_PATH_PK_SUFFIX`` a ``parent_pk`` as
+    ``parent_id``.
     """
-    if variable in captures:
-        return variable
-    return "pk" if "pk" in captures else None
+    if capture == "pk" and api_settings.SCHEMA_COERCE_PATH_PK:
+        return "id"
+    if capture.endswith("_pk") and spectacular_settings.SCHEMA_COERCE_PATH_PK_SUFFIX:
+        return f"{capture[:-3]}_id"
+    return capture
 
 
 def _declared_path_parameter(variable: str, read: Parameter) -> Any:
