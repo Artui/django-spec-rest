@@ -190,7 +190,11 @@ The query string is read by the kernel's flat reader:
   the presenter's `value_keyword` (`result` by default; set
   `value_keyword="instance"` for a retrieve provider declaring `instance`). A
   `many` service's provider declaring `result` receives its whole return.
-  `page` is a list of the page's rows, not a queryset
+  `page` is always a list of the rows, never a queryset: as drfs did on a
+  paginated view, and unlike drfs on an unpaginated one, where it handed the
+  selector's queryset. A provider calling a queryset method on it
+  (`page.values_list(...)`, `page.filter(...)`) must change to work over the
+  list, for example `[row.pk for row in page]`
   ([Serializer context](recipes/serializer-context.md#what-a-presenters-callable-receives)).
 - **A kernel selector gets no `get_<action>_output_serializer_context`** hook:
   declare the context on its `SerializerPresenter`.

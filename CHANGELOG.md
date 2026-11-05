@@ -34,8 +34,11 @@ carries; releases up to 0.62.0 are in
   and the view's output hook is handed the whole set too. A project upgrading
   whose list or `many` callable declares `result` (or its `value_keyword`)
   expecting one row now receives the list of rows: read the row from the
-  serializer's own `to_representation` instead, or batch over the list. One
-  value presents as before.
+  serializer's own `to_representation` instead, or batch over the list. `page`
+  is always a list of the rows, never a queryset: as drfs did on a paginated
+  view, and unlike drfs on an unpaginated one, where it handed the selector's
+  queryset, so a provider calling `page.values_list(...)` or another queryset
+  method must work over the list instead. One value presents as before.
 
 ### Fixed
 
