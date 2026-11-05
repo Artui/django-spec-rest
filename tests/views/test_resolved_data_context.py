@@ -10,8 +10,8 @@ declaring only ``view`` and ``request``, or a subset of them, is unaffected.
 The view-side binder, ``_invoke_provider``, is held here too: it is how the
 view's own hooks are asked, on either route.
 
-A selector view reaches the presenter, but a list is presented row by row, so a
-callable asking for the page is a strict xfail naming what owes it.
+A list view's presenter is asked for the page once, so a callable declaring
+``page`` (or the presenter's ``value_keyword``) is handed the page's rows.
 """
 
 from __future__ import annotations
@@ -40,13 +40,6 @@ from tests.testapp.serializers import AuthorSerializer
 
 factory = APIRequestFactory()
 _OPEN = (Unrestricted(),)
-
-_A_PAGE_IS_PRESENTED_ROW_BY_ROW = (
-    "A kernel SelectorListView presents the page's rows through the spec's SerializerPresenter, "
-    "but the presenter inherits the kernel's Presenter.presented_rows, which asks presented() "
-    "once per row, so a callable declaring value_keyword='page' is handed one row (len(page) "
-    "raises) and never the page's rows together."
-)
 
 
 def _capturing_serializer_factory() -> type[serializers.ModelSerializer]:
@@ -241,7 +234,6 @@ class TestTheRowsOfARead:
         _View.as_view()(factory.get("/"), pk=str(author.pk))
         assert capturing.captured["instance_pk"] == author.pk
 
-    @pytest.mark.xfail(strict=True, reason=_A_PAGE_IS_PRESENTED_ROW_BY_ROW)
     def test_a_paginated_list_view_s_callable_is_handed_the_page(self) -> None:
         capturing = _capturing_serializer_factory()
         for name in ("a", "b", "c"):

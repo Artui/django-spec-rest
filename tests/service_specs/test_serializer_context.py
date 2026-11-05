@@ -320,8 +320,8 @@ def test_a_retrieve_presenter_names_the_row_by_its_value_keyword() -> None:
 
 
 @pytest.mark.django_db
-def test_a_list_s_output_callable_is_asked_per_row_and_offered_no_row_by_name() -> None:
-    """The kernel presents a list row by row; a presenter naming no value keyword offers no row."""
+def test_a_list_s_output_callable_is_asked_once_and_offered_the_rows_as_the_page() -> None:
+    """A list is asked for once; a presenter naming no value keyword offers the rows as ``page``."""
     received: list[dict[str, Any]] = []
 
     def provider(**pool: Any) -> dict[str, Any]:
@@ -338,8 +338,9 @@ def test_a_list_s_output_callable_is_asked_per_row_and_offered_no_row_by_name() 
     payload = present(spec, dispatch(spec, principal=None, arguments={}))
 
     assert [row["context"]["tenant"] for row in payload] == ["acme", "acme"]
-    assert len(received) == 2
-    assert not {"page", "instance", "result"} & set(received[0])
+    assert len(received) == 1
+    assert [row.title for row in received[0]["page"]] == ["a", "b"]
+    assert not {"instance", "result"} & set(received[0])
 
 
 def test_present_with_no_call_runs_no_callable() -> None:

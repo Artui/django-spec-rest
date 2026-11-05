@@ -185,8 +185,13 @@ The query string is read by the kernel's flat reader:
   and the service's `call_context` are handed the same dict, so a key one
   serializer's `validate()` writes is there for the service and the output
   serializer, as in a stock `ModelViewSet`. drfs handed each serializer a copy.
-- **A presenter's `serializer_context` callable runs once per row** of a list,
-  not once for the page, so a callable that queries runs that query per row.
+- **A presenter's `serializer_context` callable receives what drfs' provider
+  did**: a list's rows under `page`, once for the page, and one value under
+  the presenter's `value_keyword` (`result` by default; set
+  `value_keyword="instance"` for a retrieve provider declaring `instance`). A
+  `many` service's provider declaring `result` receives its whole return.
+  `page` is a list of the page's rows, not a queryset
+  ([Serializer context](recipes/serializer-context.md#what-a-presenters-callable-receives)).
 - **A kernel selector gets no `get_<action>_output_serializer_context`** hook:
   declare the context on its `SerializerPresenter`.
 

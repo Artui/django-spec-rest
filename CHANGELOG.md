@@ -24,6 +24,18 @@ carries; releases up to 0.62.0 are in
   A project upgrading may see a viewset that mounted before refused: declare the
   read on the selector, or set `lookup_url_kwarg` to the name it reads.
   Standalone views are not checked; their captures are the URLconf's.
+- **A `SerializerPresenter`'s `serializer_context` callable is asked once for a
+  list, not once per row.** A list view's page and a `many` service's return
+  are presented through `presented_rows`, which asks the callable once and
+  offers the rows under `page`, the name drfs gave them, and under the
+  presenter's `value_keyword`; a callable batching a lookup over the page ran
+  it once per row before, and one declaring `page` was never answered. The rows
+  render as one `many=True` serializer, so a `Meta.list_serializer_class` runs,
+  and the view's output hook is handed the whole set too. A project upgrading
+  whose list or `many` callable declares `result` (or its `value_keyword`)
+  expecting one row now receives the list of rows: read the row from the
+  serializer's own `to_representation` instead, or batch over the list. One
+  value presents as before.
 
 ### Fixed
 
