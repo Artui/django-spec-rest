@@ -21,10 +21,10 @@ carries; releases up to 0.62.0 are in
   only a `list`. So tenant scoping kept in a `get_queryset()` override or a
   filter backend no longer narrows an update or delete that drfs looked up
   through DRF's `get_object()`, and scoping kept in `get_queryset()` no longer
-  narrows a `list`: the scoping moves into the selector. An eager-loading mixin overriding
-  `get_queryset()` no longer loads a `list`'s rows, so the loading moves to
-  the selector spec's `select_related`, `prefetch_related` or
-  `extend_queryset`. A PATCH behind a `SerializerValidator` hands the service
+  narrows a `list`: the scoping moves into the selector. An eager-loading
+  mixin overriding `get_queryset()` no longer loads a `list`'s rows, so the
+  loading moves to the selector spec's `select_related`, `prefetch_related`
+  or `extend_queryset`. A PATCH behind a `SerializerValidator` hands the service
   only the keys sent, as DRF does, so a service written for a whole body
   belongs on PUT or behind a validator that is not partial. Code reading a
   drfs spec's `output_serializer`, `input_serializer` or `permission_classes`
