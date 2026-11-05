@@ -206,10 +206,23 @@ The query string is read by the kernel's flat reader:
   403 with the class's own `message`. Off HTTP there is no authenticator, so
   the refusal is the kernel's `NotPermitted`.
 - **A kernel `PermissionCheck` asks a caller nobody authenticated to sign in**
-  too, as drfs answered it: 401 with the challenge, or 403 where the first
-  authenticator sends none, and 403 with its message to anyone else. A
-  service's own `NotPermitted`, and an inner dispatch its check refused, stay
-  403 with their message for every caller.
+  too: 401 with the challenge, or 403 where the first authenticator sends
+  none, and 403 with its message to anyone else. A service's own
+  `NotPermitted`, and an inner dispatch its check refused, stay 403 with their
+  message for every caller.
+- **A refusal comes before the body is read**, as drfs' view asked its
+  permission classes in `initial()`. The spec's checks are asked before its
+  arguments' shape is checked, so a caller they refuse gets the 401 or 403
+  above whatever it sends: an empty body, a missing field, a value of the
+  wrong type or a query string the read cannot parse answer the same as a
+  well-formed request, never the 400 that lists the fields. A request whose
+  body or query string fails its shape is judged with no arguments, the
+  question the OPTIONS answer asks before it describes a method, so OPTIONS
+  shows a method's schema exactly to the callers whose incomplete request is
+  told what it lacks. A check that reads the call's arguments and cannot
+  answer without them keeps the kernel's order: the caller is told the 400
+  first, and the check is asked once the shape passes. A check that answers
+  `False` with no arguments refuses every caller sending an incomplete body.
 - **`DRFPermissionCheck` can raise `DRFNotAuthenticated`**, not only
   `DRFNotPermitted`, when the call carries a real DRF request with
   authenticators and nobody was recognised. `DRFNotAuthenticated` is DRF's

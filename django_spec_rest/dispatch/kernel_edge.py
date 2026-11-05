@@ -30,8 +30,8 @@ What a view hands it, and what it does with each:
   ``dispatch`` as the very object, since the kernel binds the seed values the
   lookup's checks resolved to it and refuses them under any other.
 
-Two of the edge's answers are decided for every spec, and both are the
-kernel's own unless stated:
+The edge's answers decided for every spec, each the kernel's own unless
+stated:
 
 - **Nothing is stripped**: a body key ``request`` or ``serializer`` that no
   field declares reaches the kernel's closed argument set as any undeclared key
@@ -70,6 +70,14 @@ kernel's own unless stated:
   the spec's own provider, where they outrank a key a ``validate()`` derives
   or a ``source="*"`` serializer flattens (``recording_spec``).
 
+- **The spec's checks are asked before the arguments' shape is told**, as
+  DRF's ``initial()`` asks a view's permission classes before the handler
+  reads the body: the edge runs the kernel's own prelude, ``check_call``,
+  before ``dispatch``, and judges a call whose arguments fail their shape on
+  no arguments, so a caller the checks refuse is answered 401 or 403 whatever
+  the body (``_admitted``, ``judge_without_arguments``). A check that cannot
+  answer without the arguments keeps the kernel's order.
+
 Every refusal the kernel raises leaves as a DRF exception, by
 ``KERNEL_REFUSALS`` (``dispatch/kernel_refusals.py``). The seed-named fields
 and the recording twin live in the adapter, ``service_specs/seed_named_fields.py``
@@ -86,12 +94,20 @@ from typing import Any
 
 from django.http import QueryDict
 from django.utils.datastructures import MultiValueDict
+from django_service_specs.authorization.not_permitted import NotPermitted
+from django_service_specs.authorization.principal_unavailable import PrincipalUnavailable
+from django_service_specs.dispatch.authorize import authorize
+from django_service_specs.dispatch.authorize_scope import authorize_scope
+from django_service_specs.dispatch.call_seeds import CallSeeds
+from django_service_specs.dispatch.check_call import check_call
 from django_service_specs.dispatch.dispatch import dispatch
 from django_service_specs.dispatch.dispatch_result import DispatchResult
+from django_service_specs.dispatch.grant import Grant
 from django_service_specs.dispatch.resolve_target import resolve_target
 from django_service_specs.dispatch.resolved_target import ResolvedTarget
 from django_service_specs.flat.flat_arguments import flat_arguments
 from django_service_specs.parameters.coerce_flat import coerce_flat
+from django_service_specs.parameters.invalid_arguments import InvalidArguments
 from django_service_specs.parameters.parameters import Parameters
 from django_service_specs.pool.pool_seeds import DEFAULT_POOL_SEEDS, PoolSeeds
 from django_service_specs.pool.provider_keys import provider_keys
@@ -103,7 +119,7 @@ from django_service_specs.types.unset import UNSET
 from django_service_specs.validation.validator_parameters import validator_parameters
 from rest_framework.request import Request
 
-from django_spec_rest.dispatch.kernel_refusals import answering_refusals
+from django_spec_rest.dispatch.kernel_refusals import RefusedCall, answering_refusals
 from django_spec_rest.service_specs.recording_spec import KernelSpec, recording_spec
 from django_spec_rest.service_specs.register_drf_row_errors import register_drf_row_errors
 from django_spec_rest.service_specs.seed_named_fields import seed_named_fields
@@ -359,9 +375,11 @@ def dispatch_kernel_spec(
     permissions, which ``get_object()`` asks of a row it finds and the kernel's
     lookup never would (``_resolved``).
 
-    Every refusal leaves as its DRF answer (``KERNEL_REFUSALS``), a check
-    the dispatched spec declares denying a caller nobody authenticated as a
-    request to authenticate, as DRF's ``permission_denied`` answers it.
+    The spec's class-level checks are asked first (``_admitted``), so a
+    caller they refuse is refused whatever the request sends. Every refusal
+    leaves as its DRF answer (``KERNEL_REFUSALS``), a check the dispatched
+    spec declares denying a caller nobody authenticated as a request to
+    authenticate, as DRF's ``permission_denied`` answers it.
     """
     hooks = view_hooks if view_hooks is not None else ViewHooks()
     with answering_refusals(request) as refused:
@@ -371,12 +389,24 @@ def dispatch_kernel_spec(
         token = EDGE_CALL.set(state)
         try:
             dispatched, extra_kwargs, arguments, state.validator_input = _read_call(
-                spec, view=view, request=request, hooks=hooks, query=query
+                spec,
+                view=view,
+                request=request,
+                hooks=hooks,
+                query=query,
+                refused=refused,
+                pool_seeds=pool_seeds,
             )
-            # The spec whose checks' denials are this call's own, which the
-            # map answers as DRF's ``permission_denied``: the twin dispatched,
-            # since that is the spec the kernel names on the denial.
-            refused.spec = dispatched
+            # The spec's checks first, as DRF's ``initial()`` asks a view's
+            # permission classes before the handler reads the body
+            # (``_admitted``).
+            grant, seeds = _admitted(
+                dispatched,
+                principal=request.user,
+                arguments=arguments,
+                call_context=call_context,
+                pool_seeds=pool_seeds,
+            )
             found = _resolved(
                 dispatched,
                 principal=request.user,
@@ -385,6 +415,8 @@ def dispatch_kernel_spec(
                 target=target,
                 on_target=on_target,
                 pool_seeds=pool_seeds,
+                grant=grant,
+                seeds=seeds,
             )
             if isinstance(found, DispatchResult):
                 return found
@@ -393,10 +425,10 @@ def dispatch_kernel_spec(
                 principal=request.user,
                 arguments=arguments,
                 grant=found[1],
-                # The seeds the lookup's checks were offered, so the run
-                # resolves none of them again (test_pool_seeds'
+                # The seeds the checks were offered, by the prelude or by the
+                # lookup, so the run resolves none of them again (test_pool_seeds'
                 # test_are_handed_on_so_a_call_through_the_view_s_lookup_resolves_each_once).
-                seeds=found.seeds if isinstance(found, ResolvedTarget) else None,
+                seeds=found.seeds if isinstance(found, ResolvedTarget) else seeds,
                 pool_seeds=pool_seeds,
                 unknown_arguments=UNKNOWN_ARGUMENTS,
                 progress=hooks.progress,
@@ -416,6 +448,8 @@ def _read_call(
     request: Request,
     hooks: ViewHooks,
     query: QueryDict | None,
+    refused: RefusedCall,
+    pool_seeds: PoolSeeds,
 ) -> tuple[KernelSpec, dict[str, Any], dict[str, Any], tuple[Any, Any] | None]:
     """The spec to dispatch, the overlay, the arguments and the held body of one call.
 
@@ -423,7 +457,19 @@ def _read_call(
     dispatch is ``recording_spec``'s, built here rather than before the call's
     state is set, so the fields it records are those the serializer declares
     described with the call's request (test_kernel_edge's
-    test_the_twin_records_the_fields_the_call_s_own_serializer_declares).
+    test_the_twin_records_the_fields_the_call_s_own_serializer_declares), and
+    set on ``refused`` as soon as it is built, as the spec whose checks'
+    denials are this call's own, which the map answers as DRF's
+    ``permission_denied``: the twin, since that is the spec the kernel names
+    on the denial.
+
+    A request whose values cannot be read as the spec's arguments - a flat
+    value ``coerce_flat`` refuses (``?year=x`` for an integer), a body that is
+    no object - is refused here, before ``check_call`` could ask the checks,
+    so it is judged on no arguments first, as a failed shape is
+    (``judge_without_arguments``), and a caller the checks refuse is told
+    that rather than the read's refusal
+    (test_a_read_s_refused_caller_is_refused_whatever_the_query_string).
     """
     extra_kwargs, pinned, server = _overlay(spec, hooks)
     # Read by the recording twin's ``kwargs`` seat, which lays them beneath the
@@ -432,6 +478,7 @@ def _read_call(
     # Read before the arguments, which the twin's Validator declares: lenient
     # for a form body, whose values its serializer alone parses.
     dispatched = recording_spec(spec, lenient=isinstance(request.data, MultiValueDict))
+    refused.spec = dispatched
     # The twin's Validator, the one the view's input layers are for: a kernel
     # call the service makes validates without them (``input_view_layers``).
     # The twin, not the spec's: a form body's is lenient, so another object
@@ -447,9 +494,18 @@ def _read_call(
     # it takes, out of the edge's own.
     if isinstance(state.validator, SerializerValidator):
         state.describing = (*state.describing, state.validator)
-    arguments, held = kernel_arguments(
-        dispatched, view=view, request=request, input_data=server, query=query
-    )
+    try:
+        arguments, held = kernel_arguments(
+            dispatched, view=view, request=request, input_data=server, query=query
+        )
+    except DispatchError:
+        judge_without_arguments(
+            dispatched,
+            principal=request.user,
+            call_context=state.call_context,
+            pool_seeds=pool_seeds,
+        )
+        raise
     if held is not None:
         # The server's value for each field it put one into, as it put it: what
         # the Validator validates for the field on its own and lays back over
@@ -562,6 +618,134 @@ def _overlay(
     return overlay, frozenset(pinned), {**pinned, **(hooks.input_data or {})}
 
 
+_DENIALS = (NotPermitted, PrincipalUnavailable)
+"""The kernel's two ways of refusing the caller rather than the call: the edge answers them first."""
+
+
+def _admitted(
+    spec: KernelSpec,
+    *,
+    principal: Any,
+    arguments: Mapping[str, Any],
+    call_context: dict[str, Any],
+    pool_seeds: PoolSeeds,
+) -> tuple[Grant | None, CallSeeds | None]:
+    """Ask ``spec``'s class-level checks of the call before its arguments' shape is told.
+
+    DRF asks a view's permission classes in ``initial()``, before the handler
+    reads the body, and drfs asked them there; the kernel's ``dispatch``
+    checks the arguments' shape first and asks the checks second. So the edge
+    asks the checks first, through ``check_call``, the kernel's own prelude:
+    a caller they refuse is answered 401 or 403 whatever the body, as for a
+    well-formed one (test_a_refused_caller_whatever_the_body's
+    test_a_refused_caller_is_refused_whatever_the_body), and its denial is
+    raised as the kernel raised it, so the map answers it as the dispatched
+    spec's own and asks a caller nobody authenticated to sign in. django-spec-mcp
+    asks the same prelude before a tool call (its ``admit_kernel_call``).
+
+    Arguments that pass their shape are shown to the checks as ``dispatch``
+    shows them, checked, and the grant and the seeds the checks were offered
+    are handed on, to the target's lookup and to ``dispatch``, so neither asks
+    the class-level check again (test_a_well_formed_call_asks_the_class_level_check_once,
+    test_a_row_write_asks_the_class_level_check_once).
+
+    Arguments that fail their shape have no checked form to show a check, so
+    the call is judged on none (``judge_without_arguments``): refused there
+    exactly when the OPTIONS answer leaves the method undescribed, and
+    otherwise left to ``dispatch``, which tells the admitted caller what its
+    body lacks (test_an_admitted_caller_is_told_what_its_body_lacks). A
+    ``many`` call whose top level passes and whose rows do not is no failed
+    shape: the kernel asked the checks on its top level before it raised the
+    row, and marks that refusal ``after_authorize``, so the checks admitted it.
+
+    What is left to ``dispatch`` - a failed shape the judgment admits, a
+    refused row - goes with no grant and no seeds, so ``dispatch`` asks the
+    checks again in its own order and reports the refusal as before, a refused
+    row beside the Validator's refusals of the other rows. Every other
+    refusal the prelude raises, a denial or one that is no denial (a
+    ``ServiceError`` a check or a seed's resolver raises), and what is no
+    refusal, a configuration error or a check that raises, leaves here as
+    ``dispatch`` would have raised it, the same exception the same map
+    answers, with the check asked once.
+    """
+    try:
+        checked = check_call(
+            spec,
+            principal=principal,
+            arguments=arguments,
+            pool_seeds=pool_seeds,
+            unknown_arguments=UNKNOWN_ARGUMENTS,
+            call_context=call_context,
+        )
+    except InvalidArguments as refusal:
+        if not refusal.after_authorize:
+            judge_without_arguments(
+                spec, principal=principal, call_context=call_context, pool_seeds=pool_seeds
+            )
+        return None, None
+    return checked[1], checked.seeds
+
+
+def judge_without_arguments(
+    spec: KernelSpec,
+    *,
+    principal: Any,
+    call_context: dict[str, Any] | None,
+    pool_seeds: PoolSeeds,
+) -> None:
+    """Raise the denial ``spec``'s checks give ``principal`` asked with no arguments, if they give one.
+
+    Shared with the OPTIONS answer (``views/spec_options.py``), which leaves a
+    method undescribed exactly when this refuses it, so a caller OPTIONS
+    shows no schema to is never shown it by a write's 400
+    (test_a_refused_caller_whatever_the_body's
+    test_options_hides_a_method_exactly_when_its_write_is_refused_first).
+
+    The two questions a call asks before it reads anything: ``authorize``, the
+    class-level one, and ``authorize_scope`` of ``None``, which ``dispatch``
+    asks of a create, a service spec with no target selector; any other
+    spec's scope question is of a row or a set only the arguments name, and
+    stays unasked. ``None`` for the arguments, the kernel's word for a call
+    with none to hand.
+
+    Only a denial is raised: ``NotPermitted``, the check's own as the kernel
+    marked it, or ``PrincipalUnavailable``. Anything else a check raises
+    asked with no arguments - a check that reads them and cannot answer
+    without (``arguments["owner"]`` on ``None``), or a spec declaring no
+    permissions - says nothing about the caller, so the call keeps the
+    kernel's order: ``dispatch`` tells the shape's refusal, and asks such a
+    check once the shape passes
+    (test_a_check_reading_the_arguments_keeps_the_kernel_s_order). That is
+    where this edge parts from django-spec-mcp's prelude, which refuses a
+    call whose checks raise on no arguments, as its listing hides the tool.
+    """
+    # Asked outside the ``try``, so what it raises is never read as a check's.
+    # One arc to coverage, so each conjunct is held by its own test: the first
+    # by test_a_read_is_not_judged_on_the_scope_of_nothing, the second by
+    # test_a_write_to_a_row_is_not_judged_on_the_scope_of_nothing.
+    asks_scope_of_nothing = (
+        isinstance(spec, KernelServiceSpec) and spec.target_selector_spec() is None
+    )
+    try:
+        granted = authorize(
+            spec, principal, arguments=None, call_context=call_context, pool_seeds=pool_seeds
+        )
+        if asks_scope_of_nothing:
+            authorize_scope(
+                spec,
+                principal,
+                None,
+                grant=granted,
+                arguments=None,
+                call_context=call_context,
+                pool_seeds=pool_seeds,
+            )
+    except _DENIALS:
+        raise
+    except Exception:  # noqa: BLE001 - a check that cannot answer without its arguments
+        return
+
+
 def _resolved(
     spec: KernelSpec,
     *,
@@ -571,7 +755,9 @@ def _resolved(
     target: Any,
     on_target: Callable[[Any], None] | None,
     pool_seeds: PoolSeeds,
-) -> ResolvedTarget | tuple[Any, None] | DispatchResult:
+    grant: Grant | None,
+    seeds: CallSeeds | None,
+) -> ResolvedTarget | tuple[Any, Grant | None] | DispatchResult:
     """The target and grant ``dispatch`` takes for ``spec``, or a missing row's answer.
 
     Where ``on_target`` asks of what the spec's own lookup finds, the kernel's
@@ -583,8 +769,11 @@ def _resolved(
     seeds its checks named, which ``dispatch`` takes rather than resolving
     them again. The kernel binds both to the call, so the lookup is handed the
     spec, principal, ``call_context`` and ``pool_seeds`` that ``dispatch`` is.
-    Otherwise ``target`` as given, no grant and no seeds, ``dispatch``'s own
-    lookup finding it where that is ``UNSET``.
+    Otherwise ``target`` as given, beside the prelude's ``grant``, and
+    ``dispatch``'s own lookup finding it where that is ``UNSET``. ``grant`` and
+    ``seeds`` are the prelude's (``_admitted``), handed to the lookup so it
+    asks no class-level check again, or ``None`` where the prelude left the
+    checks to ask.
 
     One arc to coverage, so each condition is named:
     test_service_update_view's test_a_put_s_own_row_is_asked_of_the_view_once
@@ -606,13 +795,15 @@ def _resolved(
         or not isinstance(spec, KernelServiceSpec)
         or spec.target_selector_spec() is None
     ):
-        return target, None
+        return target, grant
     found = resolve_target(
         spec,
         principal=principal,
         arguments=arguments,
+        grant=grant,
         call_context=call_context,
         pool_seeds=pool_seeds,
+        seeds=seeds,
     )
     if isinstance(found, DispatchResult):
         return found
