@@ -46,6 +46,11 @@ class _Lenient(serializers.Serializer):
     nick = serializers.CharField(required=False, allow_null=True)
 
 
+class _Typed(serializers.Serializer):
+    when = serializers.DateField(required=False)
+    title = serializers.CharField(required=False)
+
+
 class _Checkbox(serializers.Serializer):
     title = serializers.CharField()
     published = serializers.BooleanField()
@@ -238,6 +243,30 @@ def test_a_validator_that_is_not_lenient_keeps_the_kernel_s_typed_check() -> Non
         "published": ["Expected a boolean."],
         "views": ["Expected an integer."],
     }
+    assert "data" not in SEEN
+
+
+@pytest.mark.parametrize(
+    ("body", "served"),
+    [
+        pytest.param(
+            {"when": "not-a-date"}, b'{"when":["Enter a valid date."]}', id="malformed-date"
+        ),
+        pytest.param({"title": 5}, b'{"title":["Expected a string."]}', id="number-for-string"),
+    ],
+)
+def test_a_json_field_s_refusal_is_worded_by_the_kernel(
+    body: dict[str, Any], served: bytes
+) -> None:
+    """The wording ``docs/moving-from-drfs.md`` tells a client to match on, pinned as
+    served over the whole payload, so a kernel rewording fails here and not on the
+    page: the kernel's ``Enter a valid date.`` is not DRF's ``Date has wrong
+    format...``, nor ``Expected a string.`` anything DRF says of a number (DRF's
+    ``CharField`` takes it)."""
+    response = _view(_Typed, lenient=False)(_request(body, "json"))
+    response.render()
+
+    assert (response.status_code, response.content) == (400, served)
     assert "data" not in SEEN
 
 
