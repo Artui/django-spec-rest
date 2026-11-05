@@ -103,7 +103,8 @@ call `enable_openapi()` again after the reload.
   no presenter documents no content; a selector spec with none keeps the
   view's `serializer_class`, which renders it.
 - **The status** is the view's `success_status` where it is an `int`, over the
-  action's default. A body documented under 204 is documented as the 200 it is
+  action's default. On a viewset it is the action's own where one is declared
+  ([Per-action answers](reference/viewsets.md#per-action-answers)). A body documented under 204 is documented as the 200 it is
   served as, with a 204 beside it where the spec can present nothing.
 - **A 400** is documented wherever the spec declares a validator, because that
   is the status a validator's refusal gets, whichever kind refused

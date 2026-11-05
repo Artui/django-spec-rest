@@ -49,8 +49,11 @@ The method's body never runs: the decorator supplies the handler, and the
 method gives DRF's `@action` its name. `detail`, `methods`, `url_path`,
 `url_name` and any other keyword go to DRF's `@action`. On a detail route the
 row is the spec's own target selector's, read from the route's `pk`, never
-`get_object()`'s. The answer is the spec's presenter's, under the viewset's
-`success_status` (200 by default).
+`get_object()`'s. The answer is the spec's presenter's, under the action's
+`success_status` and through its `response_finalizer` where the decorator
+declares them, else the viewset's (200 by default):
+`@service_action(SEND_SPEC, detail=True, methods=["post"], success_status=202)`.
+See [Per-action answers](../reference/viewsets.md#per-action-answers).
 
 ## A custom read: `@selector_action`
 

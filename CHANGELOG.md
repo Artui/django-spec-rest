@@ -11,6 +11,38 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-11-05
+
+### Added
+
+- **A viewset's actions answer with their own status and finalizer.** A
+  viewset's `success_status` and `response_finalizer` answered for every
+  action, so actions answering differently needed a callable switching on
+  `view.action`. Now `@service_action(spec, success_status=...,
+  response_finalizer=...)` declares a decorated action's own, and a
+  `get_<action>_success_status` or `get_<action>_response_finalizer` hook (a
+  method, or an `int` for a status) an `action_specs` entry's. The most
+  specific answers: the decorator's, the hook, the viewset's, then the
+  action's default. `as_view()` asks each what it asks the viewset's, naming
+  the action, and refuses a decorator value beside a hook for the same action;
+  the OpenAPI schema documents the action's status. The viewset-wide
+  attributes are unchanged. Before, the decorator's two keywords went to DRF's
+  `@action`, which hands them to `as_view()` only under a router, unchecked by
+  name; they are the action's own on every mount now.
+- **A codemod for moving from drfs, in the repository, not the wheel.**
+  `tools/drfs_codemod` rewrites a project's drfs 0.62.0 imports by the module
+  each names, so a kernel name spelled like a drfs one is left alone, and
+  turns each drfs `ServiceSpec` and `SelectorSpec` into the kernel's, its
+  fields on their seats. A spec's `success_status` and `response_finalizer`
+  move to the views in the same module serving it, for a spec bound to a
+  module-level name; one built inline in a view is marked. Every site left (a read
+  drfs took from a selector's signature, a `UrlKwarg` or `QueryParam` list, a
+  name with no counterpart, an answer whose view is elsewhere) is marked with
+  a `# drfs-codemod:` comment and reported as `path:line: reason`, and a
+  second run changes nothing. Run from a clone with `PYTHONPATH=tools python
+  -m drfs_codemod <paths>`; "Moving from djangorestframework-services" says
+  what it does not do.
+
 ## [0.7.0] — 2026-11-05
 
 ### Changed
@@ -588,7 +620,8 @@ lists each with what a project rewrites.
 - **The package is no longer a Django app.** It has no models, migrations,
   templates, static files or URLs, so it needs no `INSTALLED_APPS` entry.
 
-[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/Artui/django-spec-rest/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/Artui/django-spec-rest/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/Artui/django-spec-rest/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/Artui/django-spec-rest/compare/v0.5.0...v0.6.0

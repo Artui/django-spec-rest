@@ -24,7 +24,14 @@ from django_spec_rest.views.mutation.utils import (
 from django_spec_rest.views.spec_validation import validate_mutation_view_spec
 
 
-def _validate_kernel_spec(spec: KernelServiceSpec, *, label: str, detail: bool) -> None:
+def _validate_kernel_spec(
+    spec: KernelServiceSpec,
+    *,
+    label: str,
+    detail: bool,
+    success_status: int | Callable[..., int] | None,
+    response_finalizer: Callable[..., Response | None] | None,
+) -> None:
     """Ask a kernel spec what a standalone mutation view asks of its own, with no view.
 
     ``validate_mutation_view_spec`` reads the spec and the view's hooks off a
@@ -38,13 +45,23 @@ def _validate_kernel_spec(spec: KernelServiceSpec, *, label: str, detail: bool) 
     test_a_decorated_action_s_seeds).
     A detail action with no target selector is refused, since the viewset's
     ``get_object()`` is never asked for a kernel spec's row
-    (test_a_detail_action_with_no_target_is_refused).
+    (test_a_detail_action_with_no_target_is_refused). The action's own
+    ``success_status`` and ``response_finalizer`` ride on the probe, so they
+    are asked what a standalone view's are
+    (test_per_action_answers' test_a_status_the_view_cannot_resolve_is_refused_at_decoration).
     """
     # The registry is the viewset's, unknown here; the probe reads as
     # hooked, so the seed check waits for the viewset's ``as_view()``.
-    validate_mutation_view_spec(
-        type(label, (), {"spec": spec}), has_instance=detail, pool_seeds=DEFAULT_POOL_SEEDS
+    probe = type(
+        label,
+        (),
+        {
+            "spec": spec,
+            "success_status": success_status,
+            "response_finalizer": response_finalizer,
+        },
     )
+    validate_mutation_view_spec(probe, has_instance=detail, pool_seeds=DEFAULT_POOL_SEEDS)
 
 
 def service_action(
@@ -54,6 +71,8 @@ def service_action(
     methods: list[str] | None = None,
     url_path: str | None = None,
     url_name: str | None = None,
+    success_status: int | Callable[..., int] | None = None,
+    response_finalizer: Callable[..., Response | None] | None = None,
     **action_kwargs: Any,
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Wrap a viewset method as a service-backed custom action.
@@ -69,9 +88,18 @@ def service_action(
     The spec runs through the kernel's own ``dispatch``, as on the standalone
     mutation views: its ``permissions`` are asked there, after the view's own
     classes, a detail action's row is its own target selector's (never
-    ``get_object()``), and the answer is its presenter's, under the viewset's
-    ``success_status`` (``200`` by default) and through its
-    ``response_finalizer``.
+    ``get_object()``), and the answer is its presenter's.
+
+    ``success_status`` and ``response_finalizer`` are this action's answer, in
+    the shapes the viewset's take (``MutationFlowMixin``), and outrank the
+    viewset's, an ``as_view()`` keyword included. Left ``None``, the action
+    answers with the viewset's, else ``200``. They are asked at decoration what
+    a standalone view's are, and a viewset defining a
+    ``get_<action>_success_status`` or ``get_<action>_response_finalizer``
+    hook beside one is refused at ``as_view()``: one action, one answer
+    (test_per_action_answers). The refusal is this package's viewsets'
+    ``as_view()``; on a viewset of DRF's alone the decorator's value answers
+    and the hook is never read.
 
     An [`AdditionalInputRequired`][django_service_specs.services.additional_input_required.AdditionalInputRequired]
     answers ``422`` with its ``schema`` as raised on any viewset, DRF's own
@@ -101,15 +129,22 @@ def service_action(
         # The viewset class is unknown at decoration time, so any
         # ``get_<action>_service_kwargs`` / ``get_service_kwargs`` it may
         # carry has to be assumed permissive until its ``as_view()``.
-        _validate_kernel_spec(spec, label=f"@service_action {fn_label}", detail=detail)
+        _validate_kernel_spec(
+            spec,
+            label=f"@service_action {fn_label}",
+            detail=detail,
+            success_status=success_status,
+            response_finalizer=response_finalizer,
+        )
 
         @functools.wraps(fn)
         def handler(self: Any, request: Request, *args: Any, **kwargs: Any) -> Response:
             try:
                 instance: Any = resolve_mutation_instance(self, spec) if detail else None
-                # The viewset's ``success_status`` is resolved per request inside
-                # the dispatch, since it may be a callable keyed on the result,
-                # so the decorator passes only the action default (200).
+                # The action's ``success_status`` (the one stamped below, else
+                # the viewset's) is resolved per request inside the dispatch,
+                # since it may be a callable keyed on the result, so the
+                # decorator passes only the action default (200).
                 return dispatch_mutation_for_spec(
                     self,
                     request,
@@ -128,6 +163,12 @@ def service_action(
         # Stash the spec on the handler so schema generators can recover it;
         # the closure is otherwise opaque.
         handler._service_spec = spec  # ty: ignore[unresolved-attribute]
+        # Read by ``action_answer`` at dispatch, by ``ServiceAutoSchema`` and by
+        # the viewset's ``as_view()``. Stamped rather than handed to DRF's
+        # ``@action``, whose keywords a router hands ``as_view()``: there they
+        # would answer for the route only under a router.
+        handler._success_status = success_status  # ty: ignore[unresolved-attribute]
+        handler._response_finalizer = response_finalizer  # ty: ignore[unresolved-attribute]
         return action(**drf_kwargs)(handler)
 
     return decorator

@@ -37,7 +37,7 @@ from django_spec_rest.views.mutation.map_service_error import (
 )
 from django_spec_rest.views.mutation.resolve_success_status import resolve_success_status
 from django_spec_rest.views.utils import (
-    get_class_attr,
+    action_answer,
     resolve_view_hooks,
     view_call_context,
     view_pool_seeds,
@@ -103,9 +103,10 @@ def dispatch_mutation_for_spec(
     - **The response.** The spec's presenter presents the result through the
       kernel's ``present``. An update whose service returned ``None`` presents
       its target, as DRF's ``UpdateAPIView`` does (``render_instance_on_none``).
-      The status is the view's ``success_status`` over ``default_status``, a
-      body never going out under ``204``; then the view's
-      ``response_finalizer`` (``MutationFlowMixin``).
+      The status is the view's ``success_status`` for the action it serves
+      over ``default_status``, a body never going out under ``204``; then
+      the view's ``response_finalizer`` for that action (``action_answer``,
+      ``MutationFlowMixin``).
     """
     resolved: Any = None if instance is UNSET else instance
     result = dispatch_kernel_spec(
@@ -144,7 +145,7 @@ def dispatch_mutation_for_spec(
     # present (test_a_presenter_s_refusal_is_answered_by_the_map_too).
     with answering_refusals():
         presented = present(spec, result)
-    success_status = get_class_attr(view, "success_status")
+    success_status = action_answer(view, "success_status")
     pool: dict[str, Any] = {"request": request, "view": view, "result": result.service_result}
     if result.instance is not None:
         pool["instance"] = result.instance
@@ -159,7 +160,7 @@ def dispatch_mutation_for_spec(
     else:
         response = Response(presented, status=status_for_a_body(status))
     return apply_response_finalizer(
-        get_class_attr(view, "response_finalizer"),
+        action_answer(view, "response_finalizer"),
         response,
         request=request,
         view=view,
