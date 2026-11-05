@@ -356,6 +356,8 @@ _NOT_MOVED = [
     "@service_action(..., success_status=...), or get_<action>_success_status on the viewset"
 ]
 
+_NOT_MOVED_201 = _NOT_MOVED[0].replace("=202", "=201")
+
 _LOOKALIKES = {
     # ``action_specs``: the dict literal, its keys and its values.
     "an-inline-spec-as-an-action-specs-value": (
@@ -397,6 +399,8 @@ _LOOKALIKES = {
         "class V(ServiceViewSet):\n    class Inner:\n        @service_action(signup)\n"
         "        def act(self):\n            pass\n"
     ),
+    "a-chained-spec-assignment": "class V(ServiceCreateView):\n    spec = other = signup\n",
+    "a-tuple-target-in-a-class": "class V(ServiceCreateView):\n    spec, other = signup, 1\n",
     "a-spec-attribute-of-a-nested-class": (
         "class V(ServiceViewSet):\n    class Inner:\n        spec = signup\n"
     ),
@@ -443,7 +447,8 @@ def test_a_selector_takes_no_answer() -> None:
         "target = SelectorSpec(selector=lambda: None, success_status=201)\n\n\n"
         "class V(ServiceCreateView):\n    spec = target\n"
     )
-    output, _ = rewrite_source(source, Path("app/views.py"))
+    output, findings = rewrite_source(source, Path("app/views.py"))
+    assert [f.reason for f in findings if "success_status=201" in f.reason] == [_NOT_MOVED_201]
     assert "success_status =" not in output
 
 
@@ -453,7 +458,8 @@ def test_a_spec_built_inside_a_class_is_not_a_module_level_name() -> None:
         + "class V(ServiceCreateView):\n    mine = ServiceSpec(service=print, success_status=201)\n"
         "    spec = mine\n"
     )
-    output, _ = rewrite_source(source, Path("app/views.py"))
+    output, findings = rewrite_source(source, Path("app/views.py"))
+    assert [f.reason for f in findings if "success_status=201" in f.reason] == [_NOT_MOVED_201]
     assert "success_status =" not in output
 
 
@@ -463,6 +469,12 @@ def test_a_spec_built_inside_a_class_is_not_a_module_level_name() -> None:
         ("201", "get_update_success_status = 201\n"),
         ("status.HTTP_201_CREATED", "get_update_success_status = status.HTTP_201_CREATED\n"),
         ("created", "get_update_success_status = staticmethod(created)\n"),
+        # The pattern is anchored: a status inside a longer expression or name is a callable.
+        (
+            "201 if flag else 202",
+            "get_update_success_status = staticmethod(201 if flag else 202)\n",
+        ),
+        ("MY_HTTP_201", "get_update_success_status = staticmethod(MY_HTTP_201)\n"),
     ],
 )
 def test_a_hook_is_spelled_direct_for_a_status_and_wrapped_for_a_callable(
@@ -478,3 +490,15 @@ def test_a_hook_is_spelled_direct_for_a_status_and_wrapped_for_a_callable(
     )
     output, _ = rewrite_source(source, Path("app/views.py"))
     assert f"    {written}" in output
+
+
+def test_a_decorator_reached_through_a_module_takes_the_answer() -> None:
+    source = (
+        "import rest_framework_services as drfs\n"
+        "from rest_framework_services import ServiceSpec, ServiceViewSet\n\n"
+        "signup = ServiceSpec(service=print, success_status=202)\n\n\n"
+        "class V(ServiceViewSet):\n    @drfs.service_action(signup)\n"
+        "    def act(self):\n        pass\n"
+    )
+    output, _ = rewrite_source(source, Path("app/views.py"))
+    assert "    @drfs.service_action(signup, success_status=202)\n" in output
