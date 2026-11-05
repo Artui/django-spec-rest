@@ -429,6 +429,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="What a route documents">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#declaring-the-422" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Declaring the 422
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1038,6 +1055,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="What a route documents">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#declaring-the-422" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Declaring the 422
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1224,14 +1258,14 @@ call <code>enable_openapi()</code> again after the reload.</p>
   schema refuses such a serializer with <code>ImproperlyConfigured</code>, on any view and
   whichever is resolved first (see
   <a href="#the-component-names-this-schema-keeps">the names this schema keeps</a>).</li>
-<li><strong>A 422</strong> is documented on every service spec, whether or not it has a
-  validator. It is not a validator's refusal: it is a plain <code>ServiceError</code>
-  raised by the service, a precondition or a provider, which no spec can rule
-  out. Its body is <code>{"detail": ...}</code>, with the <code>schema</code> an
-  <code>AdditionalInputRequired</code> carries beside it when it carries one (an object,
-  not required).</li>
+<li><strong>A 422</strong> is documented where the spec declares it can answer one (see
+  <a href="#declaring-the-422">Declaring the 422</a>), whether or not it has a validator.
+  It is not a validator's refusal: it is a plain <code>ServiceError</code> raised by the
+  service, a precondition or a provider. Its body is <code>{"detail": ...}</code>, with
+  the <code>schema</code> an <code>AdditionalInputRequired</code> carries beside it when it carries
+  one (an object, not required).</li>
 <li><strong>A selector spec</strong> documents the same two refusals, since a selector is
-  refused the same way: a <strong>422</strong> on every selector spec (the selector, a
+  refused the same way: a <strong>422</strong> where it declares one (the selector, a
   precondition or a provider can raise a plain <code>ServiceError</code>), and a <strong>400</strong>
   where the spec takes any parameter, a read, a shape or a filter. The 400's
   body is the same as a validator's. A route capture is a parameter too: only
@@ -1274,6 +1308,47 @@ call <code>enable_openapi()</code> again after the reload.</p>
 <p><code>ServiceErrorSerializer</code>, a <code>detail</code> field and the optional <code>schema</code> object, is
 the body of that 422 and of the 400's <code>{"detail": ...}</code> alternative, under the
 <code>ServiceError</code> component.</p>
+<h3 id="declaring-the-422">Declaring the 422<a class="headerlink" href="#declaring-the-422" title="Permanent link">&para;</a></h3>
+<p>The edge answers any plain <code>ServiceError</code> with a 422, but nothing in a spec
+says whether its service, selector, preconditions or providers raise one, so
+an operation documents the 422 only where its spec declares it, under the
+<code>metadata</code> key <code>"document_service_error"</code> (exported as
+<code>django_spec_rest.openapi.SERVICE_ERROR_METADATA_KEY</code>):</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_service_specs</span><span class="w"> </span><span class="kn">import</span> <span class="n">ServiceSpec</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_spec_rest.openapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">SERVICE_ERROR_METADATA_KEY</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="n">book_room_spec</span> <span class="o">=</span> <span class="n">ServiceSpec</span><span class="p">(</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="n">service</span><span class="o">=</span><span class="n">book_room</span><span class="p">,</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>    <span class="n">validator</span><span class="o">=...</span><span class="p">,</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>    <span class="n">metadata</span><span class="o">=</span><span class="p">{</span><span class="n">SERVICE_ERROR_METADATA_KEY</span><span class="p">:</span> <span class="kc">True</span><span class="p">},</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="p">)</span>
+</span></code></pre></div>
+<p>It is read off the spec the route serves, on every surface that serves it: a
+standalone view's <code>spec</code>, an <code>action_specs</code> entry, and a <code>@service_action</code> or
+<code>@selector_action</code>. Only that spec's <code>metadata</code> is read, never a target or
+re-read selector's nested in it. <code>False</code>, or no key, documents no 422; any
+other value is refused with <code>ImproperlyConfigured</code> when the schema is
+generated. An <code>AdditionalInputRequired</code> is a <code>ServiceError</code> too: a spec whose
+service asks for more input declares the 422 the same way.</p>
+<p>To document it on one view whatever its spec says, declare it there with
+<code>@extend_schema(responses={422: ServiceErrorSerializer})</code>. To answer for many
+operations at once, override <code>ServiceAutoSchema.documents_service_error(spec)</code>
+in your schema class: it is asked once per operation with the served spec
+(<code>self.view</code> and <code>self.method</code> are the operation's), and returning <code>True</code>
+documents the 422 on every spec, as releases before 0.7.0 did:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_spec_rest.openapi.service_auto_schema</span><span class="w"> </span><span class="kn">import</span> <span class="n">ServiceAutoSchema</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">ApiSchema</span><span class="p">(</span><span class="n">ServiceAutoSchema</span><span class="p">):</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">documents_service_error</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">spec</span><span class="p">):</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>        <span class="k">return</span> <span class="kc">True</span>
+</span></code></pre></div>
+<p>Your class documents the views it is the schema of: set <code>schema = ApiSchema()</code>
+on your views, or on a base class they share. <code>enable_openapi()</code> sets the
+package's own <code>ServiceAutoSchema</code> on the package's view classes, which
+outranks a <code>DEFAULT_SCHEMA_CLASS</code> naming yours, as the top of this page
+says.</p>
 <p>Every other <code>@extend_schema</code> argument a project supplies wins, and
 <code>@extend_schema(parameters=...)</code> merges over the filter parameters as it does
 for a view-level <code>FilterSet</code>. <code>responses=</code> is added to what the spec documents,
@@ -1322,32 +1397,32 @@ body <code>map_service_error</code> sends:</p>
 <tr>
 <td>any other <code>ServiceError</code></td>
 <td>422</td>
-<td>already documented (<code>ServiceErrorSerializer</code>)</td>
+<td>the spec's <code>metadata</code> (see <a href="#declaring-the-422">Declaring the 422</a>), or <code>ServiceErrorSerializer</code></td>
 <td><code>{"detail": ...}</code>, and <code>schema</code> where an <code>AdditionalInputRequired</code> carries one</td>
 </tr>
 </tbody>
 </table>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">drf_spectacular.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">OpenApiResponse</span><span class="p">,</span> <span class="n">extend_schema</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_spec_rest</span><span class="w"> </span><span class="kn">import</span> <span class="n">ServiceUpdateView</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_spec_rest.openapi</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">ActionUnavailableSerializer</span><span class="p">,</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="n">ServiceNotFoundSerializer</span><span class="p">,</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="p">)</span>
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="nd">@extend_schema</span><span class="p">(</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>    <span class="n">responses</span><span class="o">=</span><span class="p">{</span>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>        <span class="mi">404</span><span class="p">:</span> <span class="n">ServiceNotFoundSerializer</span><span class="p">,</span>
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>        <span class="mi">409</span><span class="p">:</span> <span class="n">OpenApiResponse</span><span class="p">(</span><span class="n">ActionUnavailableSerializer</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;The task is closed.&quot;</span><span class="p">),</span>
-</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>    <span class="p">}</span>
-</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="p">)</span>
-</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="k">class</span><span class="w"> </span><span class="nc">CloseTaskView</span><span class="p">(</span><span class="n">ServiceUpdateView</span><span class="p">):</span>
-</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>    <span class="n">spec</span> <span class="o">=</span> <span class="n">close_task_spec</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">drf_spectacular.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">OpenApiResponse</span><span class="p">,</span> <span class="n">extend_schema</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_spec_rest</span><span class="w"> </span><span class="kn">import</span> <span class="n">ServiceUpdateView</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_spec_rest.openapi</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="n">ActionUnavailableSerializer</span><span class="p">,</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>    <span class="n">ServiceNotFoundSerializer</span><span class="p">,</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="p">)</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="nd">@extend_schema</span><span class="p">(</span>
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>    <span class="n">responses</span><span class="o">=</span><span class="p">{</span>
+</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>        <span class="mi">404</span><span class="p">:</span> <span class="n">ServiceNotFoundSerializer</span><span class="p">,</span>
+</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>        <span class="mi">409</span><span class="p">:</span> <span class="n">OpenApiResponse</span><span class="p">(</span><span class="n">ActionUnavailableSerializer</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;The task is closed.&quot;</span><span class="p">),</span>
+</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a>    <span class="p">}</span>
+</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a><span class="p">)</span>
+</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a><span class="k">class</span><span class="w"> </span><span class="nc">CloseTaskView</span><span class="p">(</span><span class="n">ServiceUpdateView</span><span class="p">):</span>
+</span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a>    <span class="n">spec</span> <span class="o">=</span> <span class="n">close_task_spec</span>
 </span></code></pre></div>
 <p>A mapping of statuses is <strong>added</strong> to what the spec documents: the operation
 above still documents its success body, its validator's 400, its permission
-check's 403 and its 422, with the 404 and 409 beside them. A status you declare
+check's 403 and any 422 its spec declares, with the 404 and 409 beside them. A status you declare
 replaces the spec's at that status (<code>404</code> and <code>"404"</code> are one status, and so is
 a <code>(404, "application/json")</code> key), and any <code>2xx</code> you declare replaces every
 success status the spec documents. Anything else passed as <code>responses=</code>, a bare
@@ -1453,22 +1528,22 @@ refusals are:</p>
 Declare it with the package's <code>PermissionDeniedSerializer</code> and
 <code>NotAuthenticatedSerializer</code>, which are the <code>PermissionDenied</code> and
 <code>NotAuthenticated</code> components, on a view of the package's or one of your own:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">drf_spectacular.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">OpenApiResponse</span><span class="p">,</span> <span class="n">extend_schema</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rest_framework.permissions</span><span class="w"> </span><span class="kn">import</span> <span class="n">IsAdminUser</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_spec_rest</span><span class="w"> </span><span class="kn">import</span> <span class="n">ServiceCreateView</span>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_spec_rest.openapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">NotAuthenticatedSerializer</span><span class="p">,</span> <span class="n">PermissionDeniedSerializer</span>
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
-</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>
-</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="nd">@extend_schema</span><span class="p">(</span>
-</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>    <span class="n">responses</span><span class="o">=</span><span class="p">{</span>
-</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>        <span class="mi">401</span><span class="p">:</span> <span class="n">OpenApiResponse</span><span class="p">(</span><span class="n">NotAuthenticatedSerializer</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;No credentials were sent.&quot;</span><span class="p">),</span>
-</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>        <span class="mi">403</span><span class="p">:</span> <span class="n">OpenApiResponse</span><span class="p">(</span><span class="n">PermissionDeniedSerializer</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;The caller is not staff.&quot;</span><span class="p">),</span>
-</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>    <span class="p">}</span>
-</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a><span class="p">)</span>
-</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="k">class</span><span class="w"> </span><span class="nc">PublishReportView</span><span class="p">(</span><span class="n">ServiceCreateView</span><span class="p">):</span>
-</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>    <span class="n">spec</span> <span class="o">=</span> <span class="n">publish_report_spec</span>
-</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>    <span class="n">permission_classes</span> <span class="o">=</span> <span class="p">[</span><span class="n">IsAdminUser</span><span class="p">]</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">drf_spectacular.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">OpenApiResponse</span><span class="p">,</span> <span class="n">extend_schema</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">rest_framework.permissions</span><span class="w"> </span><span class="kn">import</span> <span class="n">IsAdminUser</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_spec_rest</span><span class="w"> </span><span class="kn">import</span> <span class="n">ServiceCreateView</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_spec_rest.openapi</span><span class="w"> </span><span class="kn">import</span> <span class="n">NotAuthenticatedSerializer</span><span class="p">,</span> <span class="n">PermissionDeniedSerializer</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="nd">@extend_schema</span><span class="p">(</span>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>    <span class="n">responses</span><span class="o">=</span><span class="p">{</span>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>        <span class="mi">401</span><span class="p">:</span> <span class="n">OpenApiResponse</span><span class="p">(</span><span class="n">NotAuthenticatedSerializer</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;No credentials were sent.&quot;</span><span class="p">),</span>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>        <span class="mi">403</span><span class="p">:</span> <span class="n">OpenApiResponse</span><span class="p">(</span><span class="n">PermissionDeniedSerializer</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">&quot;The caller is not staff.&quot;</span><span class="p">),</span>
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>    <span class="p">}</span>
+</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="p">)</span>
+</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="k">class</span><span class="w"> </span><span class="nc">PublishReportView</span><span class="p">(</span><span class="n">ServiceCreateView</span><span class="p">):</span>
+</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a>    <span class="n">spec</span> <span class="o">=</span> <span class="n">publish_report_spec</span>
+</span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a>    <span class="n">permission_classes</span> <span class="o">=</span> <span class="p">[</span><span class="n">IsAdminUser</span><span class="p">]</span>
 </span></code></pre></div>
 <p>As with a service's refusals, the statuses are added to what the spec
 documents, and one the spec documents too is replaced by yours. The bodies

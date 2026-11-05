@@ -1457,6 +1457,18 @@ declare every seat above.</p>
   <code>collection_selector_spec</code> (a set) or <code>many=True</code>, and <code>as_view()</code> refuses one
   that declares none. A <code>get_object()</code> override no longer chooses a write's
   row.</li>
+<li><strong>A route capture is read only where a spec declares it.</strong> drfs handed a
+  selector the captures its signature took (<code>InputRequired</code>,
+  <code>Unpack[...UrlExtras]</code>); the kernel hands a spec only its declared
+  parameters. On a router-mounted detail route, <code>as_view()</code> refuses an action
+  whose row lookup (the <code>retrieve</code> spec, a detail <code>@selector_action</code>'s, or a write's
+  <code>instance_selector_spec</code>) declares no parameter named for the lookup capture
+  (<code>lookup_url_kwarg</code>, else <code>lookup_field</code>): add
+  <code>reads=Parameters.of(Parameter("&lt;capture&gt;", ..., required=True))</code> to that
+  selector. A viewset mounted by hand and a standalone view are not checked,
+  since their captures are the URLconf's: declare each capture the route
+  carries yourself
+  (<a href="../reference/viewsets/#the-lookup-capture">The lookup capture</a>).</li>
 <li><strong>A nested selector declares no <code>permissions</code>.</strong> On <code>instance_selector_spec</code>,
   <code>collection_selector_spec</code> and <code>output_selector_spec</code> the kernel never asks
   them, so the kernel refuses them when the <code>ServiceSpec</code> is built: declare
@@ -1492,6 +1504,19 @@ declare every seat above.</p>
   prefixed spellings <code>v.tenant</code> and <code>tags[0]</code> of a nested or list field), and a
   JSON body is checked against the spec's declared types as sent: <code>"true"</code> is
   no boolean in JSON.</li>
+<li><strong>A JSON integer field still takes a numeric string.</strong> <code>{"start_hour": "10"}</code>
+  is accepted as <code>10</code>, as drfs accepted it, while <code>{"title": 5}</code> is refused
+  with <code>Expected a string.</code>: "as sent" is a check of the kind of value, and the
+  kernel reads a numeric string as a number but not a number as a string.</li>
+<li><strong>A JSON field's refusal is worded by the kernel, not DRF.</strong> <code>Date has wrong
+  format. Use one of these formats instead: YYYY-MM-DD.</code> is <code>Enter a valid
+  date.</code>, <code>A valid integer is required.</code> is <code>Expected an integer.</code>, and <code>This
+  field may not be null.</code> is <code>This field cannot be null.</code>. A client matching
+  on a message must match the new one; the keys and the 400 are unchanged.
+  A form body keeps DRF's wording, since the serializer answers it.</li>
+<li><strong>A body that is no object answers <code>{"detail": "The body must be an object;
+  got list."}</code></strong>, where drfs answered <code>{"non_field_errors": ["Invalid data.
+  Expected a dictionary, but got list."]}</code>. Both are a 400.</li>
 <li><strong>A body key named <code>request</code>, <code>view</code> or <code>serializer</code> that no field declares
   is dropped</strong>, as any undeclared key is; it never reaches the seed of that
   name.</li>
@@ -1515,6 +1540,12 @@ declare every seat above.</p>
 <ul>
 <li><strong>A bare <code>DispatchError</code> answers 400</strong> with its sentence under <code>detail</code>, where
   drfs answered 500.</li>
+<li><strong>An output serializer refusing to render answers 400 as a mapping.</strong> A
+  <code>ValidationError</code> raised from <code>to_representation</code> with a list (a message, as
+  DRF makes of a string) is keyed under <code>non_field_errors</code>:
+  <code>{"non_field_errors": ["..."]}</code>, where drfs answered the bare list. A mapping
+  is kept as it is. A page of rows renders as one <code>many=True</code> serializer, so a
+  list refusal there answers the same.</li>
 <li><strong>A <code>many</code> spec with an <code>output_selector_spec</code> presents what the re-read
   returns</strong>, where drfs presented the service's rows.</li>
 <li><strong>Bulk and row refusals are worded by the kernel.</strong></li>
@@ -1533,9 +1564,20 @@ declare every seat above.</p>
   decimal string, an <code>OrderingFilter</code> with no <code>explode</code> or <code>style</code>, in declared
   order, with <code>maxItems</code> 1000, a <code>MultipleChoiceFilter</code> with <code>maxItems</code>, and
   an array as a repeated key. A validator's refusal is documented as the 400 it
-  answers, and a 422 on every service spec, the status of a plain
-  <code>ServiceError</code>. A selector's reads are not documented as query parameters, nor
+  answers. A selector's reads are not documented as query parameters, nor
   the affordance envelope, nor the <code>null</code> body of an <code>allow_none</code> retrieve.</li>
+<li><strong>The 422 is documented only where a spec declares it.</strong> drfs documented the
+  422 of a plain <code>ServiceError</code> on every spec with an <code>input_serializer</code>,
+  unless <code>document_service_error=False</code>; spec-rest documents it on no spec, a
+  service's or a selector's, unless the spec's <code>metadata</code> says
+  <code>{"document_service_error": True}</code> (<code>SERVICE_ERROR_METADATA_KEY</code> in
+  <code>django_spec_rest.openapi</code>). So a drfs <code>document_service_error=True</code> moves
+  into <code>metadata</code>, <code>False</code> and <code>None</code> are dropped, and a schema generated
+  from the same views loses its 422s until the specs that raise one declare
+  it. A schema subclass that popped the 422 through drfs' private
+  <code>resolve_service_spec</code> has nothing left to pop; one that wants the 422
+  everywhere overrides <code>ServiceAutoSchema.documents_service_error</code> to return
+  <code>True</code> (<a href="../openapi/#declaring-the-422">Declaring the 422</a>).</li>
 </ul>
 <h2 id="serializer-context">Serializer context<a class="headerlink" href="#serializer-context" title="Permanent link">&para;</a></h2>
 <ul>
@@ -1543,8 +1585,17 @@ declare every seat above.</p>
   and the service's <code>call_context</code> are handed the same dict, so a key one
   serializer's <code>validate()</code> writes is there for the service and the output
   serializer, as in a stock <code>ModelViewSet</code>. drfs handed each serializer a copy.</li>
-<li><strong>A presenter's <code>serializer_context</code> callable runs once per row</strong> of a list,
-  not once for the page, so a callable that queries runs that query per row.</li>
+<li><strong>A presenter's <code>serializer_context</code> callable receives what drfs' provider
+  did</strong>: a list's rows under <code>page</code>, once for the page, and one value under
+  the presenter's <code>value_keyword</code> (<code>result</code> by default; set
+  <code>value_keyword="instance"</code> for a retrieve provider declaring <code>instance</code>). A
+  <code>many</code> service's provider declaring <code>result</code> receives its whole return.
+  <code>page</code> is always a list of the rows, never a queryset: as drfs did on a
+  paginated view, and unlike drfs on an unpaginated one, where it handed the
+  selector's queryset. A provider calling a queryset method on it
+  (<code>page.values_list(...)</code>, <code>page.filter(...)</code>) must change to work over the
+  list, for example <code>[row.pk for row in page]</code>
+  (<a href="../recipes/serializer-context/#what-a-presenters-callable-receives">Serializer context</a>).</li>
 <li><strong>A kernel selector gets no <code>get_&lt;action&gt;_output_serializer_context</code></strong> hook:
   declare the context on its <code>SerializerPresenter</code>.</li>
 </ul>
@@ -1564,10 +1615,23 @@ declare every seat above.</p>
   403 with the class's own <code>message</code>. Off HTTP there is no authenticator, so
   the refusal is the kernel's <code>NotPermitted</code>.</li>
 <li><strong>A kernel <code>PermissionCheck</code> asks a caller nobody authenticated to sign in</strong>
-  too, as drfs answered it: 401 with the challenge, or 403 where the first
-  authenticator sends none, and 403 with its message to anyone else. A
-  service's own <code>NotPermitted</code>, and an inner dispatch its check refused, stay
-  403 with their message for every caller.</li>
+  too: 401 with the challenge, or 403 where the first authenticator sends
+  none, and 403 with its message to anyone else. A service's own
+  <code>NotPermitted</code>, and an inner dispatch its check refused, stay 403 with their
+  message for every caller.</li>
+<li><strong>A refusal comes before the body is read</strong>, as drfs' view asked its
+  permission classes in <code>initial()</code>. The spec's checks are asked before its
+  arguments' shape is checked, so a caller they refuse gets the 401 or 403
+  above whatever it sends: an empty body, a missing field, a value of the
+  wrong type or a query string the read cannot parse answer the same as a
+  well-formed request, never the 400 that lists the fields. A request whose
+  body or query string fails its shape is judged with no arguments, the
+  question the OPTIONS answer asks before it describes a method, so OPTIONS
+  shows a method's schema exactly to the callers whose incomplete request is
+  told what it lacks. A check that reads the call's arguments and cannot
+  answer without them keeps the kernel's order: the caller is told the 400
+  first, and the check is asked once the shape passes. A check that answers
+  <code>False</code> with no arguments refuses every caller sending an incomplete body.</li>
 <li><strong><code>DRFPermissionCheck</code> can raise <code>DRFNotAuthenticated</code></strong>, not only
   <code>DRFNotPermitted</code>, when the call carries a real DRF request with
   authenticators and nobody was recognised. <code>DRFNotAuthenticated</code> is DRF's

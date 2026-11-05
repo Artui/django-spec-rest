@@ -942,6 +942,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#django_spec_rest.openapi.service_auto_schema.ServiceAutoSchema.documents_service_error" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        documents_service_error
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -963,6 +974,17 @@
     <span class="md-ellipsis">
       
         ServiceErrorSerializer
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_rest.openapi.service_error_metadata_key.SERVICE_ERROR_METADATA_KEY" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SERVICE_ERROR_METADATA_KEY
       
     </span>
   </a>
@@ -1111,6 +1133,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#django_spec_rest.openapi.service_auto_schema.ServiceAutoSchema.documents_service_error" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        documents_service_error
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1132,6 +1165,17 @@
     <span class="md-ellipsis">
       
         ServiceErrorSerializer
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_rest.openapi.service_error_metadata_key.SERVICE_ERROR_METADATA_KEY" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SERVICE_ERROR_METADATA_KEY
       
     </span>
   </a>
@@ -1339,12 +1383,13 @@ action mixins, and <code>@service_action</code> / <code>@selector_action</code>:
   sends as a 400: a <code>detail</code> sentence (the body is no object), and the
   bare list of messages a service's <code>ServiceValidationError</code> over a
   sentence or a list answers with.</li>
-<li><strong>A</strong> <code>422</code> is documented on every service spec, since the service, a
-  precondition or a provider can raise a plain <code>ServiceError</code>, which the
-  edge answers 422 with or without a Validator; and on every selector spec,
-  whose selector, preconditions and providers can raise one too. A selector
-  spec taking a parameter (a read, a shape or a filter) documents the
-  <code>400</code> its refusal is, with the same body.</li>
+<li><strong>A</strong> <code>422</code> is documented where the spec declares that it can answer
+  one, <code>metadata={"document_service_error": True}</code>
+  (<code>documents_service_error</code>): the edge answers a plain <code>ServiceError</code>
+  422, from the service, the selector, a precondition or a provider, with
+  or without a Validator, and which specs raise one the schema cannot see.
+  A selector spec taking a parameter (a read, a shape or a filter)
+  documents the <code>400</code> its refusal is, with the body of a Validator's.</li>
 <li><strong>A</strong> <code>403</code> is documented wherever the spec declares a permission
   check, any check but <code>Unrestricted</code>: a check's denial and a principal
   who cannot act are both answered 403 with a <code>detail</code>. A <code>401</code> beside
@@ -1411,6 +1456,40 @@ reads, never of <code>allowed_methods</code> itself: the generator binds no
 handler to the view it builds, so DRF's half of that list is empty
 there (test_spec_less_actions). A view with no such predicate, a
 standalone view or one of DRF's, is not asked.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="django_spec_rest.openapi.service_auto_schema.ServiceAutoSchema.documents_service_error" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">documents_service_error</span>
+
+
+<a href="#django_spec_rest.openapi.service_auto_schema.ServiceAutoSchema.documents_service_error" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">documents_service_error</span><span class="p">(</span><span class="n">spec</span><span class="p">:</span> <span class="n">ServiceSpec</span> <span class="o">|</span> <span class="n">SelectorSpec</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Whether this operation documents the <code>422</code> a plain <code>ServiceError</code> is answered with.</p>
+<p>Where <code>spec</code>, the one the route serves, declares it:
+<code>metadata={"document_service_error": True}</code>
+(<code>SERVICE_ERROR_METADATA_KEY</code>), on a service spec and on a selector
+spec alike (test_service_error_declared). A spec declaring nothing, or
+<code>False</code>, documents none: the edge answers 422 for a plain
+<code>ServiceError</code> from the service, the selector, a precondition or a
+provider, and nothing the schema can read says which specs raise one.
+Only the served spec's <code>metadata</code> is read, never that of its target
+or re-read selector. A value other than <code>True</code> or <code>False</code> is
+refused, naming the view, rather than read as either.</p>
+<p>A project's subclass may override it to answer for many operations at
+once (every spec, or a predicate over <code>spec</code>, <code>self.view</code> and
+<code>self.method</code>), and an <code>@extend_schema(responses={422: ...})</code>
+documents it on one view whatever this answers.</p>
 
 
     </div>
@@ -1525,6 +1604,38 @@ project's.</p>
 
 
   </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h2 id="django_spec_rest.openapi.service_error_metadata_key.SERVICE_ERROR_METADATA_KEY" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">SERVICE_ERROR_METADATA_KEY</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-module-attribute"><code>module-attribute</code></small>
+  </span>
+
+<a href="#django_spec_rest.openapi.service_error_metadata_key.SERVICE_ERROR_METADATA_KEY" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">SERVICE_ERROR_METADATA_KEY</span> <span class="o">=</span> <span class="s1">&#39;document_service_error&#39;</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p><code>metadata={"document_service_error": True}</code> documents the <code>422</code> on that spec's operations.</p>
+<p>The edge answers a plain <code>ServiceError</code> 422, from the service, the selector,
+a precondition or a provider; the schema cannot tell which specs raise one, so
+it documents the 422 only where a spec says so. Read by
+<code>ServiceAutoSchema.documents_service_error</code> off the spec the route serves,
+never off a nested target or re-read spec. The name is drfs' own
+<code>document_service_error</code>, so a drfs spec carrying <code>document_service_error=True</code>
+moves by putting the flag in its <code>metadata</code>. The value is <code>True</code> or
+<code>False</code>; any other is refused when the schema is generated.</p>
 
     </div>
 

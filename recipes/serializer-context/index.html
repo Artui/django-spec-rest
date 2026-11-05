@@ -679,6 +679,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#what-a-presenters-callable-receives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What a presenter's callable receives
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#keys-a-view-adds" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1019,6 +1030,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#what-a-presenters-callable-receives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What a presenter's callable receives
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#keys-a-view-adds" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1112,10 +1134,69 @@ one dict, so the service and the output serializer see them too.</p>
 </span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="n">permissions</span><span class="o">=</span><span class="n">OPEN</span><span class="p">,</span>
 </span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="p">)</span>
 </span></code></pre></div>
-<p>A presenter's <code>serializer_context</code> callable runs once for each row it renders,
-so for a list it runs once per row, not once for the page: a callable that
-queries runs its query per row. Load what every row needs in the selector
-(<code>select_related</code>, <code>prefetch_related</code>, <code>annotations</code>) instead.</p>
+<h2 id="what-a-presenters-callable-receives">What a presenter's callable receives<a class="headerlink" href="#what-a-presenters-callable-receives" title="Permanent link">&para;</a></h2>
+<p>A presenter's <code>serializer_context</code> callable declares what it reads by name:
+<code>request</code>, <code>view</code>, <code>user</code>, <code>call_context</code>, a registered seed, and the value
+being rendered.</p>
+<table>
+<thead>
+<tr>
+<th>Rendering</th>
+<th>Asked</th>
+<th>The value, by name</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>one value: a service's output, a retrieve</td>
+<td>once</td>
+<td>under <code>value_keyword</code>: <code>result</code> by default, <code>instance</code> where the presenter names it so</td>
+</tr>
+<tr>
+<td>a list: a page's rows, a <code>many</code> service's return</td>
+<td>once for the list, not once per row</td>
+<td>the rows under <code>page</code>, and under <code>value_keyword</code> too</td>
+</tr>
+</tbody>
+</table>
+<p>So a callable on a list view can batch one lookup over the page's rows and
+hand the answer to every row through the context:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">comment_counts</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">page</span><span class="p">):</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="n">ids</span> <span class="o">=</span> <span class="p">[</span><span class="n">post</span><span class="o">.</span><span class="n">pk</span> <span class="k">for</span> <span class="n">post</span> <span class="ow">in</span> <span class="n">page</span><span class="p">]</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="n">counts</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>        <span class="n">Comment</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">filter</span><span class="p">(</span><span class="n">post_id__in</span><span class="o">=</span><span class="n">ids</span><span class="p">)</span><span class="o">.</span><span class="n">values_list</span><span class="p">(</span><span class="s2">&quot;post_id&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">annotate</span><span class="p">(</span><span class="n">n</span><span class="o">=</span><span class="n">Count</span><span class="p">(</span><span class="s2">&quot;id&quot;</span><span class="p">))</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="p">)</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;comment_counts&quot;</span><span class="p">:</span> <span class="n">counts</span><span class="p">}</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="k">class</span><span class="w"> </span><span class="nc">PostSerializer</span><span class="p">(</span><span class="n">serializers</span><span class="o">.</span><span class="n">ModelSerializer</span><span class="p">):</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>    <span class="n">comments</span> <span class="o">=</span> <span class="n">serializers</span><span class="o">.</span><span class="n">SerializerMethodField</span><span class="p">()</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>    <span class="k">class</span><span class="w"> </span><span class="nc">Meta</span><span class="p">:</span>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>        <span class="n">model</span> <span class="o">=</span> <span class="n">Post</span>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>        <span class="n">fields</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;id&quot;</span><span class="p">,</span> <span class="s2">&quot;title&quot;</span><span class="p">,</span> <span class="s2">&quot;comments&quot;</span><span class="p">)</span>
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">get_comments</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">post</span><span class="p">):</span>
+</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">context</span><span class="p">[</span><span class="s2">&quot;comment_counts&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">post</span><span class="o">.</span><span class="n">pk</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a>
+</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>
+</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="n">POSTS</span> <span class="o">=</span> <span class="n">SelectorSpec</span><span class="p">(</span>
+</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a>    <span class="n">kind</span><span class="o">=</span><span class="n">SelectorKind</span><span class="o">.</span><span class="n">LIST</span><span class="p">,</span>
+</span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a>    <span class="n">selector</span><span class="o">=</span><span class="n">list_posts</span><span class="p">,</span>
+</span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a>    <span class="n">permissions</span><span class="o">=</span><span class="n">OPEN</span><span class="p">,</span>
+</span><span id="__span-2-24"><a id="__codelineno-2-24" name="__codelineno-2-24" href="#__codelineno-2-24"></a>    <span class="n">presenter</span><span class="o">=</span><span class="n">SerializerPresenter</span><span class="p">(</span><span class="n">PostSerializer</span><span class="p">,</span> <span class="n">serializer_context</span><span class="o">=</span><span class="n">comment_counts</span><span class="p">),</span>
+</span><span id="__span-2-25"><a id="__codelineno-2-25" name="__codelineno-2-25" href="#__codelineno-2-25"></a><span class="p">)</span>
+</span></code></pre></div>
+<p>The query runs once a page, whatever the page size. <code>page</code> holds the rows
+being rendered, already evaluated, as a list: on a paginated view only the
+page's rows, never DRF's <code>Page</code> object, and never a queryset to filter
+further. A presenter with <code>value_keyword=None</code> offers the rows under <code>page</code>
+alone. A <code>many</code> service's callable declaring <code>result</code> receives its whole
+return, as the view's <code>get_output_serializer_context(result)</code> does.</p>
+<p>The rows render as one <code>many=True</code> serializer, so a <code>Meta.list_serializer_class</code>
+and its <code>to_representation</code> run on a list as behind a DRF view. Its answer
+keeps one row per value, in order: affordances are added to each row by its
+position, and a list of another length is refused.</p>
 <h2 id="keys-a-view-adds">Keys a view adds<a class="headerlink" href="#keys-a-view-adds" title="Permanent link">&para;</a></h2>
 <p>A mutation view's hooks layer keys over DRF's context, view-wide then per
 action:</p>

@@ -827,6 +827,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#the-lookup-capture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The lookup capture
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#full-crud" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1124,6 +1135,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#the-lookup-capture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The lookup capture
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#full-crud" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1329,6 +1351,30 @@ a <code>@service_action</code> or <code>@selector_action</code> one included, di
 DRF viewset of your own serving a decorated action reads the same attribute
 where it declares one. See
 <a href="../../recipes/extra-kwargs/#registering-a-seed">Registering a seed</a>.</p>
+<h2 id="the-lookup-capture">The lookup capture<a class="headerlink" href="#the-lookup-capture" title="Permanent link">&para;</a></h2>
+<p>A router mounts <code>retrieve</code>, <code>update</code>, <code>partial_update</code>, <code>destroy</code> and every
+<code>detail=True</code> action on the detail route, capturing the lookup under
+<code>lookup_url_kwarg</code>, else <code>lookup_field</code> (<code>pk</code> by default), and hands
+<code>as_view()</code> <code>detail=True</code>. A route capture reaches a spec only as a parameter it
+declares, so on a router-mounted detail route <code>as_view()</code> refuses an action
+whose row lookup does not declare the capture: the <code>retrieve</code> spec or a detail
+<code>@selector_action</code>'s spec, or a write's <code>instance_selector_spec</code>, whose own
+<code>reads</code> are all the kernel hands it. The refusal names the viewset, the action
+and the capture. Declare the read under the capture's name, or point
+<code>lookup_url_kwarg</code> at the name the selector reads:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">by_id</span> <span class="o">=</span> <span class="n">SelectorSpec</span><span class="p">(</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">kind</span><span class="o">=</span><span class="n">SelectorKind</span><span class="o">.</span><span class="n">RETRIEVE</span><span class="p">,</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">selector</span><span class="o">=</span><span class="k">lambda</span> <span class="o">*</span><span class="p">,</span> <span class="n">pk</span><span class="p">:</span> <span class="n">Invoice</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">pk</span><span class="o">=</span><span class="n">pk</span><span class="p">),</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">reads</span><span class="o">=</span><span class="n">Parameters</span><span class="o">.</span><span class="n">of</span><span class="p">(</span><span class="n">Parameter</span><span class="p">(</span><span class="s2">&quot;pk&quot;</span><span class="p">,</span> <span class="s2">&quot;integer&quot;</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">)),</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="p">)</span>
+</span></code></pre></div>
+<p>A list action, a <code>detail=False</code> action, and a write over a set
+(<code>collection_selector_spec</code>) or a list body (<code>many=True</code>) look up no row and are
+not asked. A viewset mounted by hand is not asked, nor is a standalone view:
+their captures come from the URLconf, which <code>as_view()</code> cannot see. A singleton
+such as <code>path("me/", MeViewSet.as_view({"get": "retrieve"}))</code>, whose selector
+finds the caller's own row, carries no capture and needs no read; a hand-mounted
+route that does carry one must have it declared by the selector itself.</p>
 <h2 id="full-crud">Full CRUD<a class="headerlink" href="#full-crud" title="Permanent link">&para;</a></h2>
 
 

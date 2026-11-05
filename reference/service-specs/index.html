@@ -982,6 +982,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#django_spec_rest.service_specs.serializer_presenter.SerializerPresenter.presented_rows" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        presented_rows
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1484,6 +1495,17 @@
     <span class="md-ellipsis">
       
         presented
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_rest.service_specs.serializer_presenter.SerializerPresenter.presented_rows" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        presented_rows
       
     </span>
   </a>
@@ -2215,8 +2237,7 @@ offline request whose <code>user</code> is the principal, so a
 renders for the principal the call ran for, and whose query string is
 the call's <code>shapes</code>, so a serializer reading a <code>fields</code> selector off
 <code>request.query_params</code> finds the one the caller sent. A request the
-call carries is left as it is. A list result is presented row by row by the kernel's <code>present</code>,
-each row with the same context, which is what a <code>many=True</code> render is.
+call carries is left as it is.
 Over that, the output half of the view hooks a DRF edge adds to the
 result's context (<code>output_view_layers</code>), resolved with the value, then
 this Presenter's own <code>serializer_context</code>, each winning on a key it shares
@@ -2225,12 +2246,20 @@ with what it layers over (see
 The callable declares what it reads from the call's pool, <code>request</code>,
 <code>view</code>, <code>user</code> or a registered seed, and the value being presented
 under <code>value_keyword</code>: <code>result</code> for a service's output, <code>instance</code>
-for a retrieve. <strong>It is asked once per value presented</strong>, so for a list
-or a <code>many</code> service's output once per row, and no keyword names the
-row then (<code>value_keyword</code> is <code>None</code>), nor is the view's hook handed
-it: the kernel presents a set row by row, and the whole set a callable
-may declare, a list's <code>page</code> or a <code>many</code> output's <code>result</code>, is
-never in hand here.</p>
+for a retrieve, nothing where it is <code>None</code>.</p>
+<p><code>presented_rows(values, context)</code> is what the kernel's <code>present</code> asks
+for a list: a page's rows over HTTP, a <code>many</code> service's return. <strong>The
+callable is asked once for them all</strong>, offered the rows under <code>page</code>,
+the name drfs gave a list's, and under <code>value_keyword</code> too where it
+names one, so a <code>many</code> service's <code>result</code> is its whole return, as the
+view's output hook is handed it. A lookup it batches over the rows runs
+once a page, not once a row. The rows are a list, already evaluated:
+not a queryset to filter further, nor DRF's <code>Page</code>. They render as one
+<code>many=True</code> serializer, so a <code>Meta.list_serializer_class</code> and its
+<code>to_representation</code> run as behind a DRF view, and its answer must keep
+one row per value, in order, which the kernel checks: it adds affordances
+to each row by its position. A <code>None</code> row stays <code>None</code> in its place,
+as <code>presented</code> answers it, and the serializer renders the others.</p>
 <p><code>present(value)</code> is the context-free form, and delegates to
 <code>presented(value, None)</code>: a <code>None</code> context is the serializer context
 a serializer is described with outside any call (<code>request</code>, <code>view</code>
@@ -2332,6 +2361,34 @@ already the kernel's <code>InvalidArguments</code> leaves as raised. A view
 presents through the kernel's <code>present</code>, so the refusal reaches HTTP
 as a <code>400</code> whose body is the mapping
 (<code>tests/service_specs/test_a_presenter_s_refusal.py</code>).</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="django_spec_rest.service_specs.serializer_presenter.SerializerPresenter.presented_rows" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">presented_rows</span>
+
+
+<a href="#django_spec_rest.service_specs.serializer_presenter.SerializerPresenter.presented_rows" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">presented_rows</span><span class="p">(</span><span class="n">values</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">context</span><span class="p">:</span> <span class="n">PresentationContext</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>A list's rows as one <code>many=True</code> render, its context asked for once.</p>
+<p>A <code>None</code> row is presented as <code>None</code> in its place, and the
+serializer renders the rest. A <code>list_serializer_class</code> answering
+another count for them is refused here when a <code>None</code> is to be
+placed among its answer; otherwise the kernel refuses it, comparing
+the answer with the rows it handed over
+(test_a_list_serializer_answering_another_count_beside_a_none_is_refused).</p>
+<p>A serializer's refusal leaves as <code>presented</code>'s does
+(test_a_refusal_on_a_page_leaves_as_the_kernel_s).</p>
 
 
     </div>
