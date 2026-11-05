@@ -61,7 +61,7 @@ class _StampedCheck(PermissionCheck):
         return stamp == "stamp"
 
 
-def _post(body: list[Any]) -> tuple[int, _Counted]:
+def _post(body: list[Any]) -> tuple[Any, _Counted]:
     counted = _Counted()
     spec = ServiceSpec(
         service=lambda *, data: data,
@@ -77,13 +77,13 @@ def _post(body: list[Any]) -> tuple[int, _Counted]:
         "pool_seeds": DEFAULT_POOL_SEEDS.extend(stamp=counted.seed),
     }
     view = type("_View", (ServiceCreateView,), attrs).as_view()
-    return view(factory.post("/", body, format="json")).status_code, counted
+    return view(factory.post("/", body, format="json")), counted
 
 
 def test_a_well_formed_many_call_asks_its_check_and_resolves_its_seed_once() -> None:
     """The contrast: the prelude's grant and seeds reach ``dispatch``, which asks nothing again."""
-    status, counted = _post([{"title": "a"}, {"title": "b"}])
-    assert status in (201, 204)
+    response, counted = _post([{"title": "a"}, {"title": "b"}])
+    assert response.status_code == 201
     assert (counted.asked, counted.resolved) == (1, 1)
 
 
@@ -93,6 +93,7 @@ def test_a_many_call_with_a_refused_row_asks_its_check_and_resolves_its_seed_twi
     Accepted on purpose (see ``_admitted``): pinned so that handing the grant
     on, or asking only once, is a deliberate change that updates this count.
     """
-    status, counted = _post([{"title": "a"}, 5])
-    assert status == 400
+    response, counted = _post([{"title": "a"}, 5])
+    assert response.status_code == 400
+    assert list(response.data["items"]) == [1]
     assert (counted.asked, counted.resolved) == (2, 2)
