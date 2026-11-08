@@ -41,9 +41,10 @@ carries; releases up to 0.62.0 are in
   callable `success_status` or `response_finalizer` on such an action may
   declare `variant`, the chosen key. OPTIONS describes the method as a `oneOf`
   of the variants the caller may send. A plain spec's
-  `success_status(result, variant=None)` passed `as_view()` on 0.9.0, since a
-  defaulted parameter was never checked; it is now refused, as only a
-  `DiscriminatedAction` offers `variant`.
+  `success_status(result, variant=None)` or
+  `response_finalizer(response, variant=None)` passed `as_view()` on 0.9.0,
+  since a defaulted parameter was never checked; each is now refused, as only
+  a `DiscriminatedAction` offers `variant`.
 - **OpenAPI documents a `DiscriminatedAction`.** The request is one component,
   `{View}_{action}_Request`, a `oneOf` over each variant's body (a serializer's
   `$ref`, or the inline schema of any other Validator); a variant taking no
