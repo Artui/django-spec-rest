@@ -13,15 +13,20 @@ from rest_framework.decorators import action
 from rest_framework.request import Request
 from rest_framework.response import Response
 
+from django_spec_rest.types.discriminated_action import DiscriminatedAction
 from django_spec_rest.views.mutation.map_service_error import (
     _AdditionalInputAPIException,
 )
 from django_spec_rest.views.mutation.utils import (
+    dispatch_discriminated_action,
     dispatch_mutation_for_spec,
     resolve_mutation_instance,
     restore_schema_when_handled,
 )
-from django_spec_rest.views.spec_validation import validate_mutation_view_spec
+from django_spec_rest.views.spec_validation import (
+    validate_discriminated_action,
+    validate_mutation_view_spec,
+)
 
 
 def _validate_kernel_spec(
@@ -31,6 +36,7 @@ def _validate_kernel_spec(
     detail: bool,
     success_status: int | Callable[..., int] | None,
     response_finalizer: Callable[..., Response | None] | None,
+    discriminated: bool = False,
 ) -> None:
     """Ask a kernel spec what a standalone mutation view asks of its own, with no view.
 
@@ -49,6 +55,8 @@ def _validate_kernel_spec(
     ``success_status`` and ``response_finalizer`` ride on the probe, so they
     are asked what a standalone view's are
     (test_per_action_answers' test_a_status_the_view_cannot_resolve_is_refused_at_decoration).
+    ``discriminated`` is that ``spec`` is a variant of a ``DiscriminatedAction``,
+    so those answers may declare ``variant``.
     """
     # The registry is the viewset's, unknown here; the probe reads as
     # hooked, so the seed check waits for the viewset's ``as_view()``.
@@ -61,11 +69,34 @@ def _validate_kernel_spec(
             "response_finalizer": response_finalizer,
         },
     )
-    validate_mutation_view_spec(probe, has_instance=detail, pool_seeds=DEFAULT_POOL_SEEDS)
+    validate_mutation_view_spec(
+        probe, has_instance=detail, pool_seeds=DEFAULT_POOL_SEEDS, discriminated=discriminated
+    )
+
+
+def _validate_discriminated(
+    action: DiscriminatedAction,
+    *,
+    label: str,
+    detail: bool,
+    success_status: int | Callable[..., int] | None,
+    response_finalizer: Callable[..., Response | None] | None,
+) -> None:
+    """Ask a ``DiscriminatedAction`` its own shape, then each variant as a plain spec, ``[key]``."""
+    validate_discriminated_action(action, label=label)
+    for key, variant in action.specs.items():
+        _validate_kernel_spec(
+            variant,
+            label=f"{label}[{key!r}]",
+            detail=detail,
+            success_status=success_status,
+            response_finalizer=response_finalizer,
+            discriminated=True,
+        )
 
 
 def service_action(
-    spec: KernelServiceSpec,
+    spec: KernelServiceSpec | DiscriminatedAction,
     *,
     detail: bool = False,
     methods: list[str] | None = None,
@@ -114,6 +145,11 @@ def service_action(
     viewset's may fill what it would refuse. On DRF's own ``GenericViewSet`` or
     ``ViewSet`` nothing asks it, and a seed nobody registers is the first
     request's ``TypeError``.
+
+    A ``DiscriminatedAction`` in place of the spec is asked its own shape here
+    and each of its variants as a spec is, and the request chooses which runs;
+    a callable ``success_status`` or ``response_finalizer`` may then declare
+    ``variant``.
     """
     drf_kwargs: dict[str, Any] = {"detail": detail}
     if methods is not None:
@@ -129,17 +165,28 @@ def service_action(
         # The viewset class is unknown at decoration time, so any
         # ``get_<action>_service_kwargs`` / ``get_service_kwargs`` it may
         # carry has to be assumed permissive until its ``as_view()``.
-        _validate_kernel_spec(
-            spec,
-            label=f"@service_action {fn_label}",
-            detail=detail,
-            success_status=success_status,
-            response_finalizer=response_finalizer,
-        )
+        checks: dict[str, Any] = {
+            "label": f"@service_action {fn_label}",
+            "detail": detail,
+            "success_status": success_status,
+            "response_finalizer": response_finalizer,
+        }
+        if isinstance(spec, DiscriminatedAction):
+            _validate_discriminated(spec, **checks)
+        else:
+            _validate_kernel_spec(spec, **checks)
 
         @functools.wraps(fn)
         def handler(self: Any, request: Request, *args: Any, **kwargs: Any) -> Response:
             try:
+                if isinstance(spec, DiscriminatedAction):
+                    return dispatch_discriminated_action(
+                        self,
+                        request,
+                        spec,
+                        default_status=drf_status.HTTP_200_OK,
+                        render_instance_on_none=detail,
+                    )
                 instance: Any = resolve_mutation_instance(self, spec) if detail else None
                 # The action's ``success_status`` (the one stamped below, else
                 # the viewset's) is resolved per request inside the dispatch,

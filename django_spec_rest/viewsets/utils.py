@@ -13,6 +13,7 @@ from django_service_specs.specs.service_spec import ServiceSpec as KernelService
 from django_service_specs.types.selector_kind import SelectorKind
 from rest_framework.exceptions import MethodNotAllowed
 
+from django_spec_rest.types.discriminated_action import DiscriminatedAction
 from django_spec_rest.views.mutation.mutation_flow_mixin import MutationFlowMixin
 from django_spec_rest.views.mutation.utils import _ServesRaisedSchema
 from django_spec_rest.views.spec_options import spec_options
@@ -20,12 +21,14 @@ from django_spec_rest.views.spec_validation import (
     _check_kernel_seeds,
     _validate_response_finalizer,
     _validate_success_status,
+    refuse_a_stray_variant,
+    validate_discriminated_action,
     validate_mutation_view_spec,
     validate_selector_view_spec,
 )
 from django_spec_rest.views.utils import MountedView, mounted_view, view_pool_seeds
 
-ActionSpec = KernelServiceSpec | KernelSelectorSpec
+ActionSpec = KernelServiceSpec | KernelSelectorSpec | DiscriminatedAction
 
 # ``has_instance`` is whether the action acts on one row, so a spec naming no
 # target for it is refused.
@@ -119,16 +122,20 @@ def resolve_action_service_spec(
     action_specs: Mapping[str, ActionSpec],
     action: str,
     method: str,
-) -> KernelServiceSpec:
+) -> KernelServiceSpec | DiscriminatedAction:
     """Pick the kernel ``ServiceSpec`` from ``action_specs`` for a mutation action.
 
-    Centralised so all three mutation viewset mixins share one error path."""
+    Centralised so all three mutation viewset mixins share one error path. A
+    ``DiscriminatedAction`` comes back as it is: only the request can choose
+    among its variants, so the mixin hands it to
+    ``dispatch_discriminated_action`` (test_discriminated_action_readers'
+    test_resolve_action_service_spec_leaves_it_unresolved)."""
     entry = resolve_action_spec_entry(action_specs, action)
     if entry is None:
         raise MethodNotAllowed(method)
     # ``as_view`` refuses this pairing at setup, so reaching it means the mapping
     # was built or swapped after the view was wired. Kept as the backstop.
-    if not isinstance(entry, KernelServiceSpec):
+    if not isinstance(entry, KernelServiceSpec | DiscriminatedAction):
         raise ImproperlyConfigured(
             f"action_specs[{action!r}] must be a ServiceSpec, got "
             f"{type(entry).__name__}. "
@@ -250,6 +257,7 @@ def _validate_kernel_action_spec(
     *,
     label: str,
     pool_seeds: PoolSeeds,
+    discriminated: bool = False,
 ) -> None:
     """Ask a kernel entry the checks a standalone view asks of its kernel ``spec``.
 
@@ -265,6 +273,9 @@ def _validate_kernel_action_spec(
     a custom key never reaches: the entry would guard nothing it seems to.
     ``@service_action`` and ``@selector_action`` serve one
     (test_service_viewset's test_a_kernel_spec_under_a_custom_key_is_refused).
+
+    ``discriminated`` is that ``spec`` is a variant of a ``DiscriminatedAction``,
+    only ever asked under a built-in write action (``_validate_action_spec``).
     """
     mounted = _as_mounted(view_cls, action, spec, label=label)
     if action in _MUTATION_ACTIONS:
@@ -272,6 +283,7 @@ def _validate_kernel_action_spec(
             mounted,
             has_instance=_MUTATION_ACTIONS[action]["has_instance"],
             pool_seeds=pool_seeds,
+            discriminated=discriminated,
         )
     elif action in _SELECTOR_ACTION_KIND:
         validate_selector_view_spec(
@@ -296,11 +308,48 @@ def _validate_action_spec(
     the viewset dispatches with.
     """
     label = f"{view_cls.__name__}.action_specs[{action!r}]"
+    if isinstance(spec, DiscriminatedAction):
+        _validate_discriminated_entry(view_cls, action, spec, label=label, pool_seeds=pool_seeds)
+        return
     if not isinstance(spec, KernelServiceSpec | KernelSelectorSpec):
         raise ImproperlyConfigured(
             f"{label} must be a ServiceSpec or SelectorSpec, got {type(spec).__name__}."
         )
     _validate_kernel_action_spec(view_cls, action, spec, label=label, pool_seeds=pool_seeds)
+
+
+def _validate_discriminated_entry(
+    view_cls: type | MountedView,
+    action: str,
+    entry: DiscriminatedAction,
+    *,
+    label: str,
+    pool_seeds: PoolSeeds,
+) -> None:
+    """Ask a ``DiscriminatedAction`` entry its own shape, then each variant as a plain entry.
+
+    Refused under ``list``, ``retrieve`` or a custom key: it serves a write and
+    only a built-in write action or ``@service_action`` dispatches one. Each
+    variant is asked under the entry's action with the entry's label and its key
+    (``[key]``), which ``_as_mounted`` names the refusal after
+    (test_discriminated_action_checks' TestEachVariantIsAskedAsAPlainEntry).
+    """
+    if action not in _MUTATION_ACTIONS:
+        raise ImproperlyConfigured(
+            f"{label} is a DiscriminatedAction, which serves a write action. Put it under "
+            "create, update, partial_update or destroy, or hand it to @service_action on the "
+            "action's method."
+        )
+    validate_discriminated_action(entry, label=label)
+    for key, variant in entry.specs.items():
+        _validate_kernel_action_spec(
+            view_cls,
+            action,
+            variant,
+            label=f"{label}[{key!r}]",
+            pool_seeds=pool_seeds,
+            discriminated=True,
+        )
 
 
 def _is_decorated(member: object) -> bool:
@@ -329,7 +378,7 @@ def _fills_service_keywords(view_cls: type | MountedView, action: str) -> bool:
 
 
 def _validate_action_answers(
-    view_cls: type | MountedView, action: str, handler: Any = None
+    view_cls: type | MountedView, action: str, handler: Any = None, *, discriminated: bool = False
 ) -> None:
     """Ask a decorated action's per-action hooks what a standalone view's answers are asked.
 
@@ -347,8 +396,43 @@ def _validate_action_answers(
                 f"{label}: @service_action declares `{name}` and the viewset defines "
                 f"get_{action}_{name}, so the action has two. Keep one."
             )
-    _validate_success_status(hooks.get("success_status"), label=label)
-    _validate_response_finalizer(hooks.get("response_finalizer"), label=label)
+    _validate_success_status(hooks.get("success_status"), label=label, discriminated=discriminated)
+    _validate_response_finalizer(
+        hooks.get("response_finalizer"), label=label, discriminated=discriminated
+    )
+
+
+def _refuse_view_answers_naming_variant(
+    view_cls: type | MountedView, action: str, handler: Any
+) -> None:
+    """Refuse the view's own answers declaring ``variant``, for a plain decorated service action.
+
+    Such an action answers with them where it declares neither a value nor a
+    hook of its own (``action_answer``), and is otherwise asked nothing about
+    them, so one written for a discriminated action of the same viewset would
+    be a ``TypeError`` after this one's write committed (test_discriminated_action_answers'
+    test_a_view_wide_answer_naming_variant_is_refused_beside_a_plain_decorated_action).
+    """
+    hooks = _action_hooks(view_cls, action)
+    for name in _ANSWERS:
+        if name not in hooks and getattr(handler, f"_{name}", None) is None:
+            refuse_a_stray_variant(
+                getattr(view_cls, name, None), label=f"{view_cls.__name__}.{action}", seat=name
+            )
+
+
+def _each_kernel_spec(
+    action: str, spec: ActionSpec
+) -> list[tuple[str, KernelServiceSpec | KernelSelectorSpec]]:
+    """The kernel specs ``spec`` serves ``action`` with, each with the name a refusal gives it.
+
+    A plain spec is its own, under the action. A ``DiscriminatedAction`` is never
+    asked as a spec, since it compiles to nothing: each variant is, as
+    ``action[key]``.
+    """
+    if isinstance(spec, DiscriminatedAction):
+        return [(f"{action}[{key!r}]", variant) for key, variant in spec.specs.items()]
+    return [(action, spec)]
 
 
 def _validate_decorated_actions(view_cls: type | MountedView, *, pool_seeds: PoolSeeds) -> None:
@@ -367,17 +451,22 @@ def _validate_decorated_actions(view_cls: type | MountedView, *, pool_seeds: Poo
     unfiltered, so the ``filter_set`` check of a list view does not apply.
     """
     for action, handler in inspect.getmembers(view_cls, _is_decorated):
-        _validate_action_answers(view_cls, action, handler)
         spec: ActionSpec | None = getattr(handler, "_service_spec", None)
+        discriminated = isinstance(spec, DiscriminatedAction)
+        _validate_action_answers(view_cls, action, handler, discriminated=discriminated)
+        # A selector action is not asked: it answers with neither.
+        if isinstance(spec, KernelServiceSpec):
+            _refuse_view_answers_naming_variant(view_cls, action, handler)
         # One arc to coverage, so each conjunct is named: a selector action on
         # a hooked viewset by test_a_service_kwargs_hook_does_not_excuse_it,
         # the hook by test_a_catch_all_hook_filling_the_keyword_mounts_and_fills_it.
         if spec is not None and _fills_service_keywords(view_cls, action):
             continue
-        try:
-            _check_kernel_seeds(spec or handler._selector_spec, pool_seeds=pool_seeds)
-        except ImproperlyConfigured as refusal:
-            raise ImproperlyConfigured(f"{view_cls.__name__}.{action}: {refusal}") from refusal
+        for label, each in _each_kernel_spec(action, spec or handler._selector_spec):
+            try:
+                _check_kernel_seeds(each, pool_seeds=pool_seeds)
+            except ImproperlyConfigured as refusal:
+                raise ImproperlyConfigured(f"{view_cls.__name__}.{label}: {refusal}") from refusal
 
 
 def _lookup_capture(view_cls: MountedView) -> str:
@@ -392,15 +481,17 @@ def _lookup_capture(view_cls: MountedView) -> str:
 
 def _mapped_specs(
     view_cls: MountedView, actions: Mapping[str, str]
-) -> list[tuple[str, ActionSpec]]:
-    """Each action ``actions`` maps a method to, and the spec serving it, where one does.
+) -> list[tuple[str, KernelServiceSpec | KernelSelectorSpec]]:
+    """Each action ``actions`` maps a method to, and each kernel spec serving it, where one does.
 
     The spec ``@service_action`` or ``@selector_action`` stamped on the
     handler, else the ``action_specs`` entry (``partial_update`` falling back
     to ``update``). An action no spec serves (a DRF handler of the author's)
-    has no lookup of this package's to check.
+    has no lookup of this package's to check. A ``DiscriminatedAction`` is its
+    variants, each with its own lookup (``_each_kernel_spec``,
+    test_discriminated_action_checks' TestALookupCapture).
     """
-    specs: list[tuple[str, ActionSpec]] = []
+    specs: list[tuple[str, KernelServiceSpec | KernelSelectorSpec]] = []
     for action in dict.fromkeys(actions.values()):
         handler: Any = getattr(view_cls, action, None)
         if _is_decorated(handler):
@@ -408,11 +499,11 @@ def _mapped_specs(
         else:
             spec = resolve_action_spec_entry(view_cls.action_specs, action)
         if spec is not None:
-            specs.append((action, spec))
+            specs.extend(_each_kernel_spec(action, spec))
     return specs
 
 
-def _row_lookup(spec: ActionSpec) -> KernelSelectorSpec | None:
+def _row_lookup(spec: KernelServiceSpec | KernelSelectorSpec) -> KernelSelectorSpec | None:
     """The selector that finds the one row ``spec`` acts on, or ``None`` where it finds none.
 
     A selector spec is its own lookup; a write's is its ``instance_selector_spec``,
@@ -512,7 +603,10 @@ class _ActionSpecsMixin(_ServesRaisedSchema):
         # test_a_status_hook_the_view_cannot_resolve_is_refused[partial_update]).
         for action, fallback in _ACTION_SPEC_FALLBACKS.items():
             if fallback in mounted.action_specs:
-                _validate_action_answers(mounted, action)
+                entry = resolve_action_spec_entry(mounted.action_specs, action)
+                _validate_action_answers(
+                    mounted, action, discriminated=isinstance(entry, DiscriminatedAction)
+                )
         _validate_decorated_actions(mounted, pool_seeds=pool_seeds)
         actions = args[0] if args else initkwargs.get("actions")
         _validate_lookup_captures(mounted, actions, initkwargs)
@@ -531,16 +625,19 @@ class _ActionSpecsMixin(_ServesRaisedSchema):
             return spec_options(self, request, served)
         return super().options(request, *args, **kwargs)  # ty: ignore[unresolved-attribute]
 
-    def _kernel_specs_served(self) -> dict[str, KernelServiceSpec | KernelSelectorSpec]:
+    def _kernel_specs_served(self) -> dict[str, ActionSpec]:
         """Each method the route maps to an action served by a kernel spec, and that spec.
 
         Read through ``resolve_action_spec``, as dispatch resolves a spec, so the
         ``"partial_update"`` to ``"update"`` fallback and a spec stamped by
         ``@service_action`` or ``@selector_action`` are both served here too.
         Empty where the view has no action map: built other than by
-        ``as_view(actions)``.
+        ``as_view(actions)``. A ``DiscriminatedAction`` stays one, since no request
+        has chosen a variant, and ``spec_options`` describes each it admits
+        (test_discriminated_action_readers'
+        test_kernel_specs_served_leaves_it_unresolved).
         """
-        served: dict[str, KernelServiceSpec | KernelSelectorSpec] = {}
+        served: dict[str, ActionSpec] = {}
         for method, action in getattr(self, "action_map", {}).items():
             spec = resolve_action_spec(self, action)
             if spec is not None:
