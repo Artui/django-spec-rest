@@ -71,6 +71,13 @@ carries; releases up to 0.62.0 are in
   not know) and a body two variants accept is valid for both, which a `oneOf`
   would document as invalid.
 
+### Changed
+
+- **The floor on `django-service-specs` is 0.29.0**, for its `build_call_context`
+  and `authorize_without_arguments`. The check a caller is judged by before the
+  body is read, and that an `OPTIONS` answer shares, now asks through the second,
+  with no change in what it answers.
+
 ### Fixed
 
 - **The moving page and the codemod no longer say `OfflineContract` has no
