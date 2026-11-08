@@ -128,6 +128,10 @@ SHAPES = {
         lambda: DiscriminatedAction(_choose, {1: _create()}),  # ty: ignore
         r"\[1\]",
     ),
+    "a None variant": (
+        lambda: DiscriminatedAction(_choose, {"a": None}),  # ty: ignore
+        r"\['a'\].*None",
+    ),
     "no callable": (lambda: DiscriminatedAction("a", {"a": _create()}), "must be a callable"),  # ty: ignore
     "async": (
         lambda: DiscriminatedAction(_async_choose, {"a": _create()}),

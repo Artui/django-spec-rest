@@ -255,6 +255,15 @@ def validate_discriminated_action(action: DiscriminatedAction, *, label: str) ->
         raise ImproperlyConfigured(
             f"{label}: a DiscriminatedAction's keys are strings, and these are not: {strays}."
         )
+    # A ``None`` would pass the per-variant check, whose ``spec is None`` return is
+    # meant for a view with no spec set (test_discriminated_action_checks'
+    # TestTheShape, "a None variant"); a string or another spec kind is refused here too.
+    for key, variant in specs.items():
+        if not isinstance(variant, KernelServiceSpec):
+            raise ImproperlyConfigured(
+                f"{label}[{key!r}]: a DiscriminatedAction's variants are ServiceSpecs, and this "
+                f"is a {type(variant).__name__}."
+            )
     discriminator: Any = action.discriminator
     if not callable(discriminator):
         raise ImproperlyConfigured(
