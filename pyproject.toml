@@ -81,7 +81,7 @@ dependencies = [
     # spec's Validator through as dispatch does, and ``PermissionCheckDenied``,
     # the mark on a declared check's denial the edge answers as DRF's
     # ``permission_denied`` does.
-    "django-service-specs>=0.24.0",
+    "django-service-specs>=0.29.0",
 ]
 
 [project.optional-dependencies]
