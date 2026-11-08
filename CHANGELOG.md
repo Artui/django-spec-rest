@@ -28,6 +28,29 @@ carries; releases up to 0.62.0 are in
   and the [moving page](https://artui.github.io/django-spec-rest/moving-from-drfs/#views-and-viewsets) now says a
   tenant backend loses its scoping the same way.
 
+- **`DiscriminatedAction`: one action at one URL, chosen by the request.** drfs'
+  `PolymorphicServiceSpec` returns as an opt-in for an endpoint that must keep
+  one URL; one kernel spec per route stays the default. `DiscriminatedAction(
+  discriminator=, specs=)` maps each key the discriminator may answer to a
+  kernel `ServiceSpec`, and attaches as an `action_specs` entry under `create`,
+  `update`, `partial_update` or `destroy`, or as `@service_action(...)`, which
+  now accepts it. It is this package's alone, not a kernel spec: agents and MCP
+  register each variant on its own. A caller every variant refuses is refused
+  before the body is read; otherwise the chosen variant runs as a plain entry
+  would, its own checks deciding, so drfs' `permission_strategy=` is gone. A
+  callable `success_status` or `response_finalizer` on such an action may
+  declare `variant`, the chosen key. OPTIONS describes the method as a `oneOf`
+  of the variants the caller may send.
+- **OpenAPI documents a `DiscriminatedAction`.** The request is one component,
+  `{View}_{action}_Request`, a `oneOf` over each variant's body (a serializer's
+  `$ref`, or the inline schema of any other Validator); a variant taking no
+  body adds no member, and where none takes one there is no request body, never
+  an empty `oneOf`, as OPTIONS describes it. The responses are the variants'
+  merged per status, one body where they agree and an inline `oneOf` where they
+  differ, and a `400` always, since the discriminator may refuse. A variant with
+  a body but no serializer (an array of rows) is now documented, which drfs left
+  out of its component.
+
 ### Fixed
 
 - **The moving page and the codemod no longer say `OfflineContract` has no

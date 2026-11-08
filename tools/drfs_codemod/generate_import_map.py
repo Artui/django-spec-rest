@@ -63,7 +63,10 @@ _DECLARING = "drfs' declaration type, gone with it; see 'Declaring a spec' on th
 # Why a drfs name has no import to rewrite to, for the names a project is most
 # likely to hold. Every other dropped name gets the default.
 DROP_REASONS = {
-    "PolymorphicServiceSpec": "declare one kernel spec per route or action",
+    "PolymorphicServiceSpec": (
+        "declare a DiscriminatedAction to keep one URL, else one kernel spec per route or "
+        "action; permission_strategy= is dropped"
+    ),
     "UrlKwarg": "declare the capture as a kernel Parameter in reads=",
     "QueryParam": "declare the read as a kernel Parameter in reads= (or shapes= where no callable names it)",
     "ArgumentBinding": _DECLARING,

@@ -5,6 +5,15 @@ DRF-typed authoring helpers, the offline request and view a caller off HTTP
 hands a serializer, and the serializer-field marking and schema registry the
 seats read.
 
+## Discriminated actions
+
+`DiscriminatedAction` serves one write action at one URL through one of several
+kernel specs, chosen by the request. One spec per route stays the default; this is
+the opt-in for an endpoint that must keep one URL. It is this package's alone, never a
+kernel spec: agents and MCP register each variant on its own.
+
+::: django_spec_rest.types.discriminated_action.DiscriminatedAction
+
 ## Views and hooks
 
 ::: django_spec_rest.types.service_view.ServiceView

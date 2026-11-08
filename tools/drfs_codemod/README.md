@@ -51,10 +51,15 @@ until its comment is deleted. Delete each once it is dealt with.
   `django_service_specs`.
 - **A drfs `reads=[UrlKwarg(...), QueryParam(...)]`.** Kept as it was, with
   its import: replace it with the `Parameter` declaring each read's type.
-- **A name with no counterpart** (`PolymorphicServiceSpec`, `TargetGuard`, an input
-  marker) **or whose parts have several** (`OfflineContract`, `ArgumentBinding`). Its
-  import is kept so the module still imports; the comment says what replaces it, and
-  the moving page's "Declaring a spec" places each part.
+- **A name with no counterpart** (`TargetGuard`, an input marker) **or whose parts
+  have several** (`OfflineContract`, `ArgumentBinding`). Its import is kept so the module
+  still imports; the comment says what replaces it, and the moving page's "Declaring a
+  spec" places each part.
+- **A `PolymorphicServiceSpec`**, whose counterpart is a different shape:
+  `DiscriminatedAction(discriminator=, specs=)`, for an endpoint that must keep one URL,
+  without `permission_strategy=`. Its import is kept and the comment names the type; the
+  `specs` become kernel specs by the rest of this page, and the moving page's "Declaring
+  a spec" places the rest.
 - **A `success_status` or `response_finalizer` with no view here**, or on a
   spec built inline in a view rather than bound to a module-level name. Set it
   on the view serving the spec, as the comment says where.

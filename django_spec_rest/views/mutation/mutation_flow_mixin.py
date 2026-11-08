@@ -57,13 +57,15 @@ class MutationFlowMixin(_ServesRaisedSchema):
     action's default (``201`` create, ``200`` update, ``204`` delete). A body
     never goes out under ``204``, so a status resolving to it answers ``200``
     with one; set, it applies to an answer with nothing to present too
-    (test_callable_success_status)."""
+    (test_callable_success_status). On a ``DiscriminatedAction`` a callable may
+    also declare ``variant``, the key the discriminator chose."""
 
     response_finalizer: ClassVar[Callable[..., Response | None] | None] = None
     """The post-presentation hook on a ``2xx``: declares any of
     ``response`` / ``result`` / ``request`` / ``view`` / ``instance`` / ``data``
     and returns a ``Response`` to replace the one built, or ``None`` to keep it
-    (test_response_finalizer)."""
+    (test_response_finalizer). On a ``DiscriminatedAction`` it may also declare
+    ``variant``, the key the discriminator chose."""
 
     pool_seeds: PoolSeeds = DEFAULT_POOL_SEEDS
     """The seeds the spec's callables are resolved with: the kernel's

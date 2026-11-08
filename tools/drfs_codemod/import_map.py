@@ -2469,8 +2469,12 @@ DROPPED: dict[tuple[str, str], str] = {
     "reads= (a capture the model must never see is a "
     "server argument), query_params as shapes= on the "
     "spec; see 'Declaring a spec' on the moving page",
-    ("rest_framework_services", "PolymorphicServiceSpec"): "declare one kernel spec per route or "
-    "action",
+    (
+        "rest_framework_services",
+        "PolymorphicServiceSpec",
+    ): "declare a DiscriminatedAction to keep one "
+    "URL, else one kernel spec per route or "
+    "action; permission_strategy= is dropped",
     (
         "rest_framework_services",
         "QueryParam",
@@ -3068,10 +3072,13 @@ DROPPED: dict[tuple[str, str], str] = {
         "rest_framework_services.management.commands.startserviceapp",
         "Command",
     ): "drfs' own name, with no counterpart in django-spec-rest or the kernel",
-    (
-        "rest_framework_services.openapi._resolve",
-        "PolymorphicServiceSpec",
-    ): "declare one kernel spec per route or action",
+    ("rest_framework_services.openapi._resolve", "PolymorphicServiceSpec"): "declare a "
+    "DiscriminatedAction to "
+    "keep one URL, else one "
+    "kernel spec per route or "
+    "action; "
+    "permission_strategy= is "
+    "dropped",
     ("rest_framework_services.openapi._resolve", "resolve_action_spec_entry"): "a private helper, "
     "kept by no public "
     "name in "
@@ -3651,10 +3658,10 @@ DROPPED: dict[tuple[str, str], str] = {
     "must never see is a server argument), "
     "query_params as shapes= on the spec; see "
     "'Declaring a spec' on the moving page",
-    (
-        "rest_framework_services.types",
-        "PolymorphicServiceSpec",
-    ): "declare one kernel spec per route or action",
+    ("rest_framework_services.types", "PolymorphicServiceSpec"): "declare a DiscriminatedAction to "
+    "keep one URL, else one kernel spec "
+    "per route or action; "
+    "permission_strategy= is dropped",
     ("rest_framework_services.types", "QueryParam"): "declare the read as a kernel Parameter in "
     "reads= (or shapes= where no callable names it)",
     ("rest_framework_services.types", "TargetGuard"): "use the kernel's preconditions and object "
@@ -3745,11 +3752,20 @@ DROPPED: dict[tuple[str, str], str] = {
     "counterpart in "
     "django-spec-rest "
     "or the kernel",
-    ("rest_framework_services.types.polymorphic_service_spec", "PolymorphicServiceSpec"): "declare "
-    "one kernel "
+    (
+        "rest_framework_services.types.polymorphic_service_spec",
+        "PolymorphicServiceSpec",
+    ): "declare a "
+    "DiscriminatedAction "
+    "to keep "
+    "one URL, "
+    "else one "
+    "kernel "
     "spec per "
     "route or "
-    "action",
+    "action; "
+    "permission_strategy= "
+    "is dropped",
     ("rest_framework_services.types.query_param", "QueryParam"): "declare the read as a kernel "
     "Parameter in reads= (or shapes= "
     "where no callable names it)",
@@ -4098,10 +4114,14 @@ DROPPED: dict[tuple[str, str], str] = {
         "rest_framework_services.views.spec_validation",
         "AffordanceDeclarer",
     ): "drfs' own name, with no counterpart in django-spec-rest or the kernel",
-    (
-        "rest_framework_services.views.spec_validation",
-        "PolymorphicServiceSpec",
-    ): "declare one kernel spec per route or action",
+    ("rest_framework_services.views.spec_validation", "PolymorphicServiceSpec"): "declare a "
+    "DiscriminatedAction "
+    "to keep one URL, "
+    "else one kernel "
+    "spec per route or "
+    "action; "
+    "permission_strategy= "
+    "is dropped",
     (
         "rest_framework_services.views.spec_validation",
         "UNREADABLE_WITHOUT_A_CALL",
@@ -4196,7 +4216,24 @@ DROPPED: dict[tuple[str, str], str] = {
     (
         "rest_framework_services.viewsets.action_serializer_resolver",
         "PolymorphicServiceSpec",
-    ): "declare one kernel spec per route or action",
+    ): "declare "
+    "a "
+    "DiscriminatedAction "
+    "to "
+    "keep "
+    "one "
+    "URL, "
+    "else "
+    "one "
+    "kernel "
+    "spec "
+    "per "
+    "route "
+    "or "
+    "action; "
+    "permission_strategy= "
+    "is "
+    "dropped",
     (
         "rest_framework_services.viewsets.action_serializer_resolver",
         "polymorphic_inputs_disagree",
@@ -4232,7 +4269,24 @@ DROPPED: dict[tuple[str, str], str] = {
     (
         "rest_framework_services.viewsets.decorators.service_action",
         "PolymorphicServiceSpec",
-    ): "declare one kernel spec per route or action",
+    ): "declare "
+    "a "
+    "DiscriminatedAction "
+    "to "
+    "keep "
+    "one "
+    "URL, "
+    "else "
+    "one "
+    "kernel "
+    "spec "
+    "per "
+    "route "
+    "or "
+    "action; "
+    "permission_strategy= "
+    "is "
+    "dropped",
     (
         "rest_framework_services.viewsets.decorators.service_action",
         "dispatch_mutation_for_spec",
@@ -4262,7 +4316,24 @@ DROPPED: dict[tuple[str, str], str] = {
     (
         "rest_framework_services.viewsets.resolve_polymorphic_service_spec",
         "PolymorphicServiceSpec",
-    ): "declare one kernel spec per route or action",
+    ): "declare "
+    "a "
+    "DiscriminatedAction "
+    "to "
+    "keep "
+    "one "
+    "URL, "
+    "else "
+    "one "
+    "kernel "
+    "spec "
+    "per "
+    "route "
+    "or "
+    "action; "
+    "permission_strategy= "
+    "is "
+    "dropped",
     (
         "rest_framework_services.viewsets.resolve_polymorphic_service_spec",
         "resolve_polymorphic_service_spec",
@@ -4372,8 +4443,13 @@ DROPPED: dict[tuple[str, str], str] = {
     "kernel",
     ("rest_framework_services.viewsets.utils", "ActionSpec"): "a private helper, kept by no public "
     "name in django-spec-rest or the kernel",
-    ("rest_framework_services.viewsets.utils", "PolymorphicServiceSpec"): "declare one kernel spec "
-    "per route or action",
+    ("rest_framework_services.viewsets.utils", "PolymorphicServiceSpec"): "declare a "
+    "DiscriminatedAction to "
+    "keep one URL, else one "
+    "kernel spec per route or "
+    "action; "
+    "permission_strategy= is "
+    "dropped",
     (
         "rest_framework_services.viewsets.utils",
         "dispatches_action_specs",

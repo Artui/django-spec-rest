@@ -22,7 +22,9 @@ def resolve_success_status(
     - a callable is resolved through the framework keyword ``pool`` — it may
       declare any subset of ``result`` / ``instance`` / ``request`` / ``view``
       (or ``**kwargs``) and receives only what it names — so an upsert can
-      return ``200`` for an existing row and ``201`` for a freshly created one;
+      return ``200`` for an existing row and ``201`` for a freshly created one.
+      On a ``DiscriminatedAction`` it may also declare ``variant``, the key the
+      discriminator chose;
     - ``None`` falls back to ``default``, the calling surface's
       action-appropriate status (201 create / 200 update / 204 destroy).
 

@@ -115,6 +115,21 @@ class TestImportsByModulePath:
         assert "from rest_framework_services import OfflineContract\n" in output
         assert "from django_service_specs import ServiceSpec\n" in output
 
+    def test_a_polymorphic_spec_is_marked_with_its_counterpart(self) -> None:
+        output, findings = _rewrite(
+            """\
+            from rest_framework_services import PolymorphicServiceSpec
+
+            LOGIN = PolymorphicServiceSpec
+            """
+        )
+        reason = (
+            "PolymorphicServiceSpec: declare a DiscriminatedAction to keep one URL, else one "
+            "kernel spec per route or action; permission_strategy= is dropped"
+        )
+        assert findings == [reason, reason]
+        assert "from rest_framework_services import PolymorphicServiceSpec\n" in output
+
     def test_a_name_with_nowhere_to_go_and_no_use_is_dropped_unmarked(self) -> None:
         output, findings = _rewrite("from rest_framework_services import OfflineContract\n")
         assert output.strip() == ""

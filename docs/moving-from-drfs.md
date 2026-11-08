@@ -58,10 +58,11 @@ What it does not do:
   send.
 - **Translate a `UrlKwarg` or `QueryParam` list.** A drfs `reads=` is marked
   and kept as it was, for a `Parameter` declaring its type to replace it.
-- **Split a `PolymorphicServiceSpec`** into one kernel spec per route or
-  action, nor replace `OfflineContract`, `TargetGuard`, `ArgumentBinding` or
-  an input marker (`InputRequired`, `NotClientInput`, `InputDescription`). A
-  use of one is marked, and its import kept.
+- **Turn a `PolymorphicServiceSpec` into a `DiscriminatedAction`**, split it
+  into one kernel spec per route or action, nor replace `OfflineContract`,
+  `TargetGuard`, `ArgumentBinding` or an input marker (`InputRequired`,
+  `NotClientInput`, `InputDescription`). A use of one is marked, and its import
+  kept.
 - **Answer from another module.** A `success_status` or `response_finalizer`
   whose view is in another module, or that no view serves, is marked on the
   spec: set it on that view.
@@ -102,8 +103,10 @@ them the kernel's. A name drfs re-exported from the kernel is imported from
 
 drfs' `ServiceSpec`, `SelectorSpec`, `PolymorphicServiceSpec`, `UrlKwarg`,
 `QueryParam`, `ArgumentBinding`, `OfflineContract`, `TargetGuard` and the input
-markers (`InputRequired`, `NotClientInput`, `InputDescription`) are gone. A
-spec is the kernel's, and each drfs field maps onto one of its seats:
+markers (`InputRequired`, `NotClientInput`, `InputDescription`) are gone;
+`PolymorphicServiceSpec` returns as [`DiscriminatedAction`](reference/types.md),
+the others have no same-named counterpart. A spec is the kernel's, and each
+drfs field maps onto one of its seats:
 
 | drfs field | Kernel spec |
 | --- | --- |
@@ -116,7 +119,7 @@ spec is the kernel's, and each drfs field maps onto one of its seats:
 | a `QueryParam` no callable names | `shapes=Parameters.of(...)` |
 | `NotClientInput`, a hidden lookup key | a typed `kwargs` provider filling the key, which the kernel then keeps out of the caller's arguments (`server_owned_keys`) |
 | `InputRequired`, `InputDescription("...")` on a key the selector reads | `reads=Parameters.of(Parameter(..., required=True, help="..."))`, as [worked below](#a-nested-routes-captures) |
-| `PolymorphicServiceSpec` | one kernel spec per route or action; the polymorphic request body and its `{View}_{action}_Request` OpenAPI component are gone |
+| `PolymorphicServiceSpec` | one kernel spec per route or action stays the default. For an endpoint that must keep one URL, an `action_specs` entry (or `@service_action`) of `DiscriminatedAction(discriminator=, specs=)`, which is this package's alone: agents and MCP register each variant on its own. Its `{View}_{action}_Request` OpenAPI component comes back under that name. `permission_strategy=` is gone: the chosen variant's checks always decide. A callable `success_status` or `response_finalizer` on such an action may declare `variant`, the chosen key, to answer per variant |
 | `TargetGuard` | the kernel's preconditions and object permission, which see the row |
 | `OfflineContract.field_audiences` | `SerializerPresenter(S, field_audiences={...})`, layered over the serializer's own markings at the top level; a name the serializer does not output is refused when the output is read. HTTP names no audience, so a REST response is unchanged |
 | `OfflineContract.url_kwargs` | the selector's `reads=Parameters.of(Parameter("pk", "integer", required=True))`. A capture the model must never see is a server-supplied argument instead: `tool_server_arguments` on django-spec-agents' toolset, `server_arguments=` on a django-spec-mcp tool binding |
