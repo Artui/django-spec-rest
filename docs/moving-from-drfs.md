@@ -58,10 +58,11 @@ What it does not do:
   send.
 - **Translate a `UrlKwarg` or `QueryParam` list.** A drfs `reads=` is marked
   and kept as it was, for a `Parameter` declaring its type to replace it.
-- **Split a `PolymorphicServiceSpec`** into one kernel spec per route or
-  action, nor replace `OfflineContract`, `TargetGuard`, `ArgumentBinding` or
-  an input marker (`InputRequired`, `NotClientInput`, `InputDescription`). A
-  use of one is marked, and its import kept.
+- **Turn a `PolymorphicServiceSpec` into a `DiscriminatedAction`**, split it
+  into one kernel spec per route or action, nor replace `OfflineContract`,
+  `TargetGuard`, `ArgumentBinding` or an input marker (`InputRequired`,
+  `NotClientInput`, `InputDescription`). A use of one is marked, and its import
+  kept.
 - **Answer from another module.** A `success_status` or `response_finalizer`
   whose view is in another module, or that no view serves, is marked on the
   spec: set it on that view.
@@ -78,7 +79,7 @@ What it does not do:
 
 ## The import map
 
-The package root exports [29 names](reference/index.md#public-surface), none of
+The package root exports [32 names](reference/index.md#public-surface), none of
 them the kernel's. A name drfs re-exported from the kernel is imported from
 `django_service_specs`.
 
@@ -102,8 +103,10 @@ them the kernel's. A name drfs re-exported from the kernel is imported from
 
 drfs' `ServiceSpec`, `SelectorSpec`, `PolymorphicServiceSpec`, `UrlKwarg`,
 `QueryParam`, `ArgumentBinding`, `OfflineContract`, `TargetGuard` and the input
-markers (`InputRequired`, `NotClientInput`, `InputDescription`) are gone. A
-spec is the kernel's, and each drfs field maps onto one of its seats:
+markers (`InputRequired`, `NotClientInput`, `InputDescription`) are gone;
+`PolymorphicServiceSpec` returns as [`DiscriminatedAction`](reference/types.md),
+the others have no same-named counterpart. A spec is the kernel's, and each
+drfs field maps onto one of its seats:
 
 | drfs field | Kernel spec |
 | --- | --- |
@@ -116,8 +119,12 @@ spec is the kernel's, and each drfs field maps onto one of its seats:
 | a `QueryParam` no callable names | `shapes=Parameters.of(...)` |
 | `NotClientInput`, a hidden lookup key | a typed `kwargs` provider filling the key, which the kernel then keeps out of the caller's arguments (`server_owned_keys`) |
 | `InputRequired`, `InputDescription("...")` on a key the selector reads | `reads=Parameters.of(Parameter(..., required=True, help="..."))`, as [worked below](#a-nested-routes-captures) |
-| `PolymorphicServiceSpec` | one kernel spec per route or action; the polymorphic request body and its `{View}_{action}_Request` OpenAPI component are gone |
+| `PolymorphicServiceSpec` | one kernel spec per route or action stays the default. For an endpoint that must keep one URL, an `action_specs` entry (or `@service_action`) of `DiscriminatedAction(discriminator=, specs=)`, which is this package's alone: agents and MCP register each variant on its own. Its `{View}_{action}_Request` OpenAPI component comes back under that name, as an `anyOf` where drfs' was a `oneOf`: a body two variants accept is valid for both. `permission_strategy=` is gone: the chosen variant's checks always decide. A callable `success_status` or `response_finalizer` on such an action may declare `variant`, the chosen key, to answer per variant |
 | `TargetGuard` | the kernel's preconditions and object permission, which see the row |
+| `OfflineContract.field_audiences` | `SerializerPresenter(S, field_audiences={...})`, layered over the serializer's own markings at the top level; a name the serializer does not output is refused when the output is read. HTTP names no audience, so a REST response is unchanged |
+| `OfflineContract.url_kwargs` | the selector's `reads=Parameters.of(Parameter("pk", "integer", required=True))`. A capture the model must never see is a server-supplied argument instead: `tool_server_arguments` on django-spec-agents' toolset, `server_arguments=` on a django-spec-mcp tool binding |
+| `OfflineContract.query_params` | `shapes=Parameters.of(...)` on the spec for a query that shapes what the presenter renders; a query the selector reads is a `reads=` `Parameter`, as above. A default that applies only off HTTP is [read from the call's transport](#a-default-for-off-http-calls) |
+| `ArgumentBinding` | none: a call has one argument namespace, [described below](#one-argument-namespace-in-place-of-argumentbinding) |
 
 `JsonSchemaRegistry` keeps its `fields` rules alone. Its `filters` and
 `python_types` rules are gone: a `filter_set` is described by the kernel's
@@ -125,7 +132,47 @@ spec is the kernel's, and each drfs field maps onto one of its seats:
 so a project passing either to `extend()` or the constructor drops it.
 
 The example project's [views](https://github.com/Artui/django-spec-rest/blob/main/examples/invoices/views/__init__.py)
-declare every seat above.
+declare the seats they use.
+
+### One argument namespace, in place of `ArgumentBinding`
+
+drfs' `ArgumentBinding` chose whether a callable's own parameters were the
+caller's input. The kernel has no such choice: the arguments a caller may send
+are the spec's `reads=` and `shapes=`, its Validator's parameters and, on a
+selector, its `filter_set`'s names, and the set is closed. A name that is none of them is refused under
+`UnknownArguments.REJECT` and dropped under `IGNORE`, whatever the callable's
+signature names.
+
+| drfs | Kernel |
+| --- | --- |
+| `BUNDLE`, and `AUTO` on a service | what the kernel always does: a service's own parameters, with no Validator in front of them, are never the caller's, and it receives `data={}` and its declared reads |
+| `SPREAD_AUTHOR_WINS`, and `AUTO` on a selector | declare each parameter the caller may send as a `Parameter` in the selector's `reads=`, or on the service's Validator. A value the spec's `kwargs` provider fills for a declared name still replaces the caller's, so an author-scoped `tenant_id` cannot be reset by the client |
+| `SPREAD_CALLER_WINS` | retired in drfs too. To let the caller's value win, leave the key out of the `kwargs` provider |
+
+A selector dispatched under drfs' `AUTO` took the caller's value for every
+parameter its signature named, so those parameters become the `reads=` the
+codemod writes into its markers.
+
+### A default for off-HTTP calls
+
+A default that should apply only when a call does not come over HTTP, such as
+a query an agent's tool call leaves out, reads which transport built the call's
+context. A presenter's `serializer_context` callable declares `call_context`
+and compares what the transport stamped under the `"transport"` key:
+
+```python
+from django_service_specs import call_transport
+
+
+def off_http_defaults(*, call_context):
+    if call_transport(call_context) in ("agent", "mcp"):
+        return {"default_query": "..."}
+    return {}
+```
+
+`call_transport` is in the kernel from 0.28.0, and a transport stamps its own
+name from the release that adopts the key. A view of this package stamps
+`"rest"` from 0.10.0 (`REST_TRANSPORT`).
 
 ### A nested route's captures
 
@@ -210,7 +257,12 @@ over:
   delete reaches. A project that scoped rows to a tenant through either moves
   that scoping into each selector's own queryset (a selector may declare
   `user`): left where it was, a `PATCH` or `DELETE` reaches another tenant's
-  row with no error. The reverse holds for an action with no spec: DRF's
+  row with no error. DRF's `get_object()` ran the backends, so a backend that
+  scoped a tenant's rows there no longer does, and nothing reports it, since
+  most backends are plain list filters. A `get_queryset()` override beside a
+  write or list spec is reported at `as_view()`
+  ([`django_spec_rest.W001`](reference/viewsets.md#the-row-scoping-warning)).
+  The reverse holds for an action with no spec: DRF's
   fallback `retrieve` and a custom `@action` reading `self.get_queryset()`
   take their rows from the view's `queryset`, never from the list selector,
   so scoping kept in the list selector alone does not reach them.

@@ -27,12 +27,14 @@ from django_service_specs.parameters.parameters import Parameter, Parameters
 from django_service_specs.schema.can_present_nothing import can_present_nothing
 from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelectorSpec
 from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
+from drf_spectacular.drainage import warn
 from drf_spectacular.extensions import OpenApiSerializerExtension
 from drf_spectacular.openapi import AutoSchema
 from drf_spectacular.plumbing import (
     ResolvedComponent,
     build_array_type,
     build_parameter_type,
+    force_instance,
     get_view_model,
     resolve_django_path_parameter,
     resolve_regex_path_parameter,
@@ -49,6 +51,7 @@ from rest_framework.settings import api_settings
 from django_spec_rest.dispatch.kernel_edge import UNKNOWN_ARGUMENTS
 from django_spec_rest.openapi._caller_serializer_class import caller_serializer_class
 from django_spec_rest.openapi._resolve import (
+    resolve_discriminated_action,
     resolve_selector_spec,
     resolve_service_spec,
 )
@@ -75,6 +78,7 @@ from django_spec_rest.service_specs.kernel_spec_variant import kernel_spec_varia
 from django_spec_rest.service_specs.renderable_serializer_class import renderable_serializer_class
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
+from django_spec_rest.types.discriminated_action import DiscriminatedAction
 from django_spec_rest.views.mutation.utils import status_for_a_body
 from django_spec_rest.views.utils import action_answer, view_pool_seeds
 
@@ -128,6 +132,12 @@ class ServiceAutoSchema(AutoSchema):
       it where the view's first authenticator sends a ``WWW-Authenticate``:
       DRF answers such a check's denial of a caller nobody authenticated 401
       there, and 403 where the authenticator sends none (``_caller_refusals``).
+    - **A** ``DiscriminatedAction`` **is one request component**,
+      ``{View}_{action}_Request``, an ``anyOf`` over the body of each variant
+      that takes one (``_discriminated_request_body``), and its responses are
+      the variants' merged per status: one body where they agree, an inline
+      ``anyOf`` where they differ, and a ``400`` always, since the
+      discriminator may refuse (``_discriminated_responses``).
     - **A FilterSet's query parameters** are the kernel's
       ``filter_set_parameters``, on a list operation only.
     - **A viewset method answered 405 for want of a spec** is no operation:
@@ -167,6 +177,9 @@ class ServiceAutoSchema(AutoSchema):
         spec = resolve_service_spec(self.view)
         if spec is not None:
             return self._kernel_request_body(spec)
+        action = resolve_discriminated_action(self.view)
+        if action is not None:
+            return self._discriminated_request_body(action)
         return super().get_request_serializer()
 
     def _kernel_request_body(self, spec: KernelServiceSpec) -> Any:
@@ -239,19 +252,95 @@ class ServiceAutoSchema(AutoSchema):
         the schema given: a bare ``dict`` would be read as a mapping of media
         types.
         """
+        schema = self._caller_schema(spec)
+        if not schema["properties"]:
+            return None
+        if spec.many:
+            schema = schema["properties"][spec.many_argument]
+        return OpenApiRequest(schema)
+
+    def _caller_schema(self, spec: KernelServiceSpec) -> dict[str, Any]:
+        """What a caller sends ``spec`` as an object schema: the kernel's less what stays this transport's.
+
+        ``spec_caller_input_schema`` under the view's ``pool_seeds`` and the
+        edge's unknown-argument policy, less the target lookup's reads and the
+        route's captures. The same reading OPTIONS makes (``spec_options``'
+        ``_described``), so ``properties`` is empty exactly where OPTIONS
+        finds a variant takes no body.
+        """
         target = spec.target_selector_spec()
-        schema = _without(
+        return _without(
             spec_caller_input_schema(
                 spec, pool_seeds=view_pool_seeds(self.view), unknown_arguments=UNKNOWN_ARGUMENTS
             ),
             (target.parameters().names() if target is not None else frozenset())
             | frozenset(self._route_captures()),
         )
-        if not schema["properties"]:
+
+    def _discriminated_request_body(self, action: DiscriminatedAction) -> Any:
+        """The request of a ``DiscriminatedAction``: one component, an ``anyOf`` over its variants' bodies.
+
+        Named ``{View}_{action}_Request`` and registered as the package's own
+        ``ValidationErrors`` is (``_validation_errors_response``), not as a
+        ``PolymorphicProxySerializer``, which takes serializers only and drops
+        a ``many`` one, where a variant's body may be a raw array. Each member
+        is ``_variant_body``'s, once however many variants share it; a variant
+        taking no body adds none, and where no variant takes one there is no
+        request body and no component, never an empty ``anyOf``
+        (test_it_is_never_an_empty_any_of). ``anyOf`` rather than ``oneOf``: a
+        member's schema is open, since the edge drops a key it does not know, so
+        a body two variants accept matches both, which a ``oneOf`` would call
+        invalid (test_a_body_two_variants_accept_is_valid_for_what_both_document).
+        A second operation of the same name whose members differ (two classes of
+        one name in different modules, a route capture named as a variant's
+        field, one action reached by a ``PUT`` and a ``PATCH``) warns and documents its own ``anyOf`` inline
+        rather than the first's, since a name can be a component only once
+        (test_discriminated_action_schema's TestOneNameForTwoBodies).
+        """
+        members: list[dict[str, Any]] = []
+        for variant in action.specs.values():
+            member = self._variant_body(variant)
+            # Variants of one body are one member, since a second says nothing
+            # more (test_variants_taking_one_body_add_it_once).
+            if member is not None and member not in members:
+                members.append(member)
+        if not members:
             return None
-        if spec.many:
-            schema = schema["properties"][spec.many_argument]
-        return OpenApiRequest(schema)
+        view_name, action_name = type(self.view).__name__, getattr(self.view, "action", None)
+        name = f"{view_name}_{action_name}_Request"
+        component = ResolvedComponent(
+            name=name,
+            type=ResolvedComponent.SCHEMA,
+            object=DiscriminatedAction,
+            schema={"anyOf": members},
+        )
+        self.registry.register_on_missing(component)
+        if self.registry[component].schema != component.schema:
+            warn(
+                f"{view_name}.{action_name} documents a different request than the component "
+                f"{name!r} already holds, so its request is given inline. Name the views "
+                "differently to give each its own component."
+            )
+            return OpenApiRequest(component.schema)
+        return OpenApiRequest(component.ref)
+
+    def _variant_body(self, spec: KernelServiceSpec) -> dict[str, Any] | None:
+        """One variant's member of the request ``anyOf``, or ``None`` where it takes no body.
+
+        ``_kernel_request_body``'s reading of the variant: a serializer's
+        ``$ref`` (a list of them for a ``many`` variant) or the inline schema
+        of any other Validator, a raw array included. A variant is left out
+        wherever OPTIONS finds nothing for the caller to send (its fields all
+        route captures or the target's reads, ``_caller_schema``), also where
+        a serializer would otherwise be its ``$ref``
+        (test_a_variant_whose_every_field_is_a_route_capture_is_in_neither).
+        """
+        if not self._caller_schema(spec)["properties"]:
+            return None
+        body = self._kernel_request_body(spec)
+        if isinstance(body, OpenApiRequest):
+            return cast("dict[str, Any]", body.request)
+        return cast("dict[str, Any]", self._unwrap_list_serializer(body, "request"))
 
     def _route_captures(self) -> list[str]:
         """The names the inspected route captures, as the view's ``kwargs`` carry them.
@@ -264,7 +353,7 @@ class ServiceAutoSchema(AutoSchema):
 
     def _get_request_body(self, direction: str = "request") -> Any:
         spec = resolve_service_spec(self.view)
-        if spec is None:
+        if spec is None and resolve_discriminated_action(self.view) is None:
             return super()._get_request_body(direction)
         if self.method == "DELETE":
             # drf-spectacular documents no body on a ``DELETE``, and a
@@ -273,12 +362,14 @@ class ServiceAutoSchema(AutoSchema):
             # body depends on (test_a_delete_with_a_validator_documents_its_body,
             # test_a_spec_taking_nothing_documents_no_body).
             return self._as_method("POST", direction)
-        if self.method == "PATCH" and not _partial_variant(spec).partial:
+        if spec is not None and self.method == "PATCH" and not _partial_variant(spec).partial:
             # drf-spectacular re-stamps a ``PATCH``'s serializer partial,
             # where the route validates this one whole: its Validator cannot
             # take a partial call. Presented as the ``PUT`` it is validated
             # as (test_a_patch_a_dataclass_validates_whole_is_documented_whole);
-            # every other ``PATCH`` keeps the stamp, so an
+            # a discriminated action's body is a schema given whole, which
+            # drf-spectacular stamps nothing of; every other ``PATCH`` keeps
+            # the stamp, so an
             # ``@extend_schema(request=...)`` serializer is documented
             # partial as it is on any view
             # (test_an_extend_schema_request_is_documented_partial_on_a_patch).
@@ -351,6 +442,9 @@ class ServiceAutoSchema(AutoSchema):
         spec = resolve_service_spec(self.view)
         if spec is not None:
             return self._kernel_responses(spec)
+        action = resolve_discriminated_action(self.view)
+        if action is not None:
+            return self._discriminated_responses(action)
         selector = resolve_selector_spec(self.view)
         if selector is not None:
             return self._kernel_selector_responses(selector)
@@ -430,6 +524,64 @@ class ServiceAutoSchema(AutoSchema):
         if self.documents_service_error(spec):
             responses[422] = ServiceErrorSerializer
         return responses
+
+    def _discriminated_responses(self, action: DiscriminatedAction) -> dict[Any, Any]:
+        """A ``DiscriminatedAction``'s responses: each variant's, merged per status.
+
+        The variants answer what a plain spec does (``_kernel_responses``) and
+        any of them may be the one chosen, so a status is documented as every
+        variant answering it does (``_one_response``). A ``400`` is always
+        there: the discriminator may refuse, as a ``ServiceValidationError``,
+        which the ``ValidationErrors`` component admits whatever the variants
+        declare (test_a_400_is_documented_whatever_the_variants_declare).
+        """
+        answers = [self._kernel_responses(variant) for variant in action.specs.values()]
+        statuses = dict.fromkeys(status for answered in answers for status in answered)
+        responses: dict[Any, Any] = {
+            status: self._one_response(
+                [answered[status] for answered in answers if status in answered]
+            )
+            for status in statuses
+        }
+        responses.setdefault(400, self._validation_errors_response())
+        return responses
+
+    def _one_response(self, answers: list[Any]) -> Any:
+        """The documented response of one status that several variants answer.
+
+        One body where the variants' bodies are the same schema; an inline
+        ``anyOf`` of the distinct ones where they differ
+        (test_variants_that_differ_are_an_inline_any_of). A variant answering
+        the status with no body adds no member, since an ``anyOf`` cannot say
+        nothing, so a body beside a bodiless answer is documented
+        (test_a_body_less_response_beside_a_body_keeps_the_body) and a status
+        no variant gives a body is the first's.
+        """
+        bodies = [
+            (answer, schema)
+            for answer in answers
+            if (schema := self._response_schema(answer)) is not None
+        ]
+        if not bodies:
+            return answers[0]
+        distinct: list[dict[str, Any]] = []
+        for _, schema in bodies:
+            if schema not in distinct:
+                distinct.append(schema)
+        if len(distinct) == 1:
+            return bodies[0][0]
+        return OpenApiResponse(response={"anyOf": distinct})
+
+    def _response_schema(self, answer: Any) -> dict[str, Any] | None:
+        """The schema a response in a ``_kernel_responses`` mapping documents, or ``None`` for no body."""
+        body = answer.response if isinstance(answer, OpenApiResponse) else answer
+        if body is None:
+            return None
+        if isinstance(body, dict):
+            return body
+        return cast(
+            "dict[str, Any]", self._unwrap_list_serializer(force_instance(body), "response")
+        )
 
     def documents_service_error(self, spec: KernelServiceSpec | KernelSelectorSpec) -> bool:
         """Whether this operation documents the ``422`` a plain ``ServiceError`` is answered with.
@@ -648,18 +800,28 @@ def _route_reads(view: Any) -> dict[str, Parameter]:
     A selector spec's own (a retrieve's lookup, a detail ``@selector_action``'s,
     a list's on a nested route), or a service spec's target selector's, which
     name the row an update or delete reaches, with the service's own
-    ``reads``. Never a Validator's field: that is the request body's, not the
-    route's. Empty where no spec serves the operation.
+    ``reads``, of every variant where a ``DiscriminatedAction`` serves it.
+    Never a Validator's field: that is the request body's, not the route's.
+    Empty where no spec serves the operation.
     """
     selector = resolve_selector_spec(view)
     if selector is not None:
         return {parameter.name: parameter for parameter in selector.parameters().items}
     service = resolve_service_spec(view)
-    if service is None:
-        return {}
-    target = service.target_selector_spec()
-    found = () if target is None else target.parameters().items
-    return {parameter.name: parameter for parameter in (*found, *service.reads.items)}
+    action = resolve_discriminated_action(view)
+    # Every variant may be the one served; a name two declare is the first's.
+    served = (
+        tuple(action.specs.values())
+        if action is not None
+        else (() if service is None else (service,))
+    )
+    reads: dict[str, Parameter] = {}
+    for spec in served:
+        target = spec.target_selector_spec()
+        found = () if target is None else target.parameters().items
+        for parameter in {p.name: p for p in (*found, *spec.reads.items)}.values():
+            reads.setdefault(parameter.name, parameter)
+    return reads
 
 
 def _capture_named(variable: str, captures: list[str]) -> str | None:

@@ -286,7 +286,7 @@ class _ReadsItsContext(serializers.Serializer):
     strict=True,
     reason=(
         "The serializers and the service share one dict now, but it is the one "
-        "fill_call_context builds (view_call_context, views/utils.py), not the object "
+        "view_call_context builds (views/utils.py), not the object "
         "get_serializer_context() returned, so only the final identity assertion fails."
     ),
 )

@@ -3,16 +3,15 @@
 Utils-shaped: the helpers here are shared by the mutation views
 (``views/mutation/utils.py``), the selector views (``selectors/utils.py``) and
 ``as_view()``'s spec checks (``views/spec_validation.py``), and none is public
-API, so the module exports nothing and carries no ``__all__``. It sits beside
-``dispatch/utils.py``, which holds the smaller helpers the views share: a kernel
-spec is dispatched as declared.
+API, so the module exports nothing and carries no ``__all__``. A kernel spec is
+dispatched as declared.
 
 What a view hands it, and what it does with each:
 
 - **The call's context**, ``view_call_context(view, request)``, the one dict
-  per request the view already builds with ``request``, ``view``, ``format``
-  and ``action``. It reaches the kernel's ``dispatch`` as ``call_context`` as
-  the very object, so the kernel seeds ``request`` and ``view`` from it by name
+  per request the view already builds with ``request``, ``view``, ``format``,
+  ``action`` and this package's transport stamp. It reaches the kernel's
+  ``dispatch`` as ``call_context`` as the very object, so the kernel seeds ``request`` and ``view`` from it by name
   (``CALL_SEEDS``) for every callable declaring either, and the spec's
   ``SerializerValidator`` and ``SerializerPresenter`` read both from it for
   the serializer context DRF builds. The view builds it rather than this
@@ -97,8 +96,7 @@ from django.http import QueryDict
 from django.utils.datastructures import MultiValueDict
 from django_service_specs.authorization.not_permitted import NotPermitted
 from django_service_specs.authorization.principal_unavailable import PrincipalUnavailable
-from django_service_specs.dispatch.authorize import authorize
-from django_service_specs.dispatch.authorize_scope import authorize_scope
+from django_service_specs.dispatch.authorize_without_arguments import authorize_without_arguments
 from django_service_specs.dispatch.call_seeds import CallSeeds
 from django_service_specs.dispatch.check_call import check_call
 from django_service_specs.dispatch.dispatch import dispatch
@@ -710,12 +708,10 @@ def judge_without_arguments(
     (test_a_refused_caller_whatever_the_body's
     test_options_hides_a_method_exactly_when_its_write_is_refused_first).
 
-    The two questions a call asks before it reads anything: ``authorize``, the
-    class-level one, and ``authorize_scope`` of ``None``, which ``dispatch``
-    asks of a create, a service spec with no target selector; any other
-    spec's scope question is of a row or a set only the arguments name, and
-    stays unasked. ``None`` for the arguments, the kernel's word for a call
-    with none to hand.
+    The two questions a call asks before it reads anything, asked through the
+    kernel's ``authorize_without_arguments``, which raises whatever they raise, so
+    what each answer means on this edge is decided here. ``pool_seeds`` is handed
+    on: a deactivated principal is refused only when it is.
 
     A denial is raised: ``NotPermitted``, the check's own as the kernel
     marked it, or ``PrincipalUnavailable``; so is a configuration error
@@ -729,27 +725,10 @@ def judge_without_arguments(
     where this edge parts from django-spec-mcp's prelude, which refuses a
     call whose checks raise on no arguments, as its listing hides the tool.
     """
-    # Asked outside the ``try``, so what it raises is never read as a check's.
-    # One arc to coverage, so each conjunct is held by its own test: the first
-    # by test_a_read_is_not_judged_on_the_scope_of_nothing, the second by
-    # test_a_write_to_a_row_is_not_judged_on_the_scope_of_nothing.
-    asks_scope_of_nothing = (
-        isinstance(spec, KernelServiceSpec) and spec.target_selector_spec() is None
-    )
     try:
-        granted = authorize(
-            spec, principal, arguments=None, call_context=call_context, pool_seeds=pool_seeds
+        authorize_without_arguments(
+            spec, principal, call_context=call_context, pool_seeds=pool_seeds
         )
-        if asks_scope_of_nothing:
-            authorize_scope(
-                spec,
-                principal,
-                None,
-                grant=granted,
-                arguments=None,
-                call_context=call_context,
-                pool_seeds=pool_seeds,
-            )
     except (*_DENIALS, *_RAISED_REFUSALS, ImproperlyConfigured):
         # A configuration error is raised as the call raises it, so OPTIONS and
         # a write fail with it rather than describing or admitting the method

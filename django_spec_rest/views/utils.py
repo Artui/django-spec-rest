@@ -10,12 +10,13 @@ from django_service_specs.pool.pool_seeds import DEFAULT_POOL_SEEDS, PoolSeeds
 from django_service_specs.pool.resolve_callable_kwargs import (
     resolve_callable_kwargs as bind_by_name_only,
 )
+from django_service_specs.types.build_call_context import build_call_context
 from django_service_specs.types.unset import UNSET
 from rest_framework.renderers import JSONRenderer
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from django_spec_rest.dispatch.utils import fill_call_context
+from django_spec_rest.types.rest_transport import REST_TRANSPORT
 from django_spec_rest.types.view_hooks import ViewHooks
 
 
@@ -121,11 +122,15 @@ def view_pool_seeds(view: Any) -> PoolSeeds:
 def view_call_context(view: Any, request: Request) -> dict[str, Any]:
     """The call's context of the request ``view`` is serving: one dict per request.
 
-    Built on first use with the edge's four standard entries (``request``,
-    ``view``, ``format``, the route's suffix or ``None``, and the view's
-    ``action`` or ``None``) and kept on the view, which DRF builds afresh for every request, so a second request
-    is a second dict (test_each_request_is_a_dict_of_its_own). Kept rather than
-    rebuilt: a dict per caller fails the identity assertions of
+    Built on first use through the kernel's ``build_call_context``, with the four
+    standard entries (``request``, ``view``, ``format``, the route's suffix or
+    ``None``, and the view's ``action`` or ``None``) and ``REST_TRANSPORT`` stamped
+    under the kernel's ``TRANSPORT_KEY``. This is the one place the stamp is written:
+    a serializer of this package running under another transport's ``dispatch``
+    never comes through here, so that transport's stamp stands
+    (test_the_transport_stamp's TestUnderAnotherTransport). Kept on the view, which
+    DRF builds afresh for every request, so a second request is a second dict
+    (test_each_request_is_a_dict_of_its_own). Kept rather than rebuilt: a dict per caller fails the identity assertions of
     test_every_callable_of_a_kernel_service_is_handed_the_view_s_dict. Two
     dispatches in one request, the retrieve spec finding an update's row and
     then the update spec, are one call and share it.
@@ -159,8 +164,16 @@ def view_call_context(view: Any, request: Request) -> dict[str, Any]:
         # DRF's ``initial``): the answer ``get_serializer_context`` gives for it, so a
         # hyperlink a serializer builds from this dict carries the suffix
         # (test_a_suffix_route_s_format_is_in_the_one_dict_the_validator_reads).
-        context = fill_call_context(
-            {"format": getattr(view, "format_kwarg", None)}, request=request, view=view
+        # Each value is handed in, since the builder leaves a key nothing gave
+        # present as ``None`` and a ``setdefault`` downstream reads that as filled
+        # (test_a_serializer_keeps_the_real_request_view_format_and_action).
+        context = build_call_context(
+            REST_TRANSPORT,
+            request=request,
+            view=view,
+            format=getattr(view, "format_kwarg", None),
+            # An empty action is none (test_the_action_is_the_view_s_where_it_has_one).
+            action=getattr(view, "action", None) or None,
         )
         view._call_context = context
     return context

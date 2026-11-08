@@ -20,6 +20,7 @@ def apply_response_finalizer(
     result: Any,
     instance: Any = None,
     data: Any = None,
+    variant: str | None = None,
 ) -> Response:
     """Apply ``ServiceSpec.response_finalizer`` to a freshly built 2xx response.
 
@@ -33,6 +34,9 @@ def apply_response_finalizer(
     it deliberately carries ``view`` (a response decision may read view/request
     context). ``instance`` / ``data`` are offered only when present (absent on
     create and on the bulk path), matching how the service pool gates them.
+    ``variant``, the key a ``DiscriminatedAction`` chose, is offered only on such
+    an action (test_apply_response_finalizer's
+    test_variant_is_offered_only_where_there_is_one).
     """
     if finalizer is None:
         return response
@@ -46,5 +50,7 @@ def apply_response_finalizer(
         pool["instance"] = instance
     if data is not None:
         pool["data"] = data
+    if variant is not None:
+        pool["variant"] = variant
     finalized = finalizer(**resolve_callable_kwargs(finalizer, pool))
     return finalized if finalized is not None else response

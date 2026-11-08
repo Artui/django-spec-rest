@@ -19,6 +19,7 @@ import django_spec_rest as pkg
 from django_spec_rest.service_specs.base_serializer_context import base_serializer_context
 from django_spec_rest.service_specs.build_offline_context import build_offline_context
 from django_spec_rest.service_specs.renderable_serializer_class import renderable_serializer_class
+from django_spec_rest.types.discriminated_action import DiscriminatedAction
 from django_spec_rest.types.field_marking import MARKING
 from django_spec_rest.types.http_extras import HttpExtras
 from django_spec_rest.types.json_schema_registry import (
@@ -28,6 +29,7 @@ from django_spec_rest.types.json_schema_registry import (
 from django_spec_rest.types.offline_context import OfflineContext
 from django_spec_rest.types.offline_http_request import OfflineHttpRequest
 from django_spec_rest.types.offline_service_view import OfflineServiceView
+from django_spec_rest.types.rest_transport import REST_TRANSPORT
 from django_spec_rest.types.service_view import ServiceView
 from django_spec_rest.types.view_hooks import ViewHooks
 from django_spec_rest.views.mutation.mutation_flow_mixin import MutationFlowMixin
@@ -40,6 +42,7 @@ from django_spec_rest.views.query.selector_retrieve_view import SelectorRetrieve
 from django_spec_rest.viewsets.action_serializer_resolver import ActionSerializerResolver
 from django_spec_rest.viewsets.decorators.selector_action import selector_action
 from django_spec_rest.viewsets.decorators.service_action import service_action
+from django_spec_rest.viewsets.get_queryset_scope_warning import GetQuerysetScopeWarning
 from django_spec_rest.viewsets.selector_list_mixin import SelectorListMixin
 from django_spec_rest.viewsets.selector_retrieve_mixin import SelectorRetrieveMixin
 from django_spec_rest.viewsets.selector_viewset import SelectorViewSet
@@ -52,9 +55,12 @@ from django_spec_rest.viewsets.service_viewset import ServiceViewSet
 _SURFACE = {
     "ActionSerializerResolver": ActionSerializerResolver,
     "DEFAULT_JSON_SCHEMA_REGISTRY": DEFAULT_JSON_SCHEMA_REGISTRY,
+    "DiscriminatedAction": DiscriminatedAction,
+    "GetQuerysetScopeWarning": GetQuerysetScopeWarning,
     "HttpExtras": HttpExtras,
     "JsonSchemaRegistry": JsonSchemaRegistry,
     "MARKING": MARKING,
+    "REST_TRANSPORT": REST_TRANSPORT,
     "MutationFlowMixin": MutationFlowMixin,
     "OfflineContext": OfflineContext,
     "OfflineHttpRequest": OfflineHttpRequest,

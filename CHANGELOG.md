@@ -11,6 +11,86 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-11-08
+
+### Added
+
+- **A view stamps its call's context `"rest"`.** The request's one dict is built
+  through the kernel's `build_call_context` and carries `call_context["transport"]
+  == "rest"`, so checks, a discriminator, hooks, the validator, the service, the
+  presenter and an `OPTIONS` answer read one value through the kernel's
+  `call_transport`. The value is `REST_TRANSPORT`, from the package root. A
+  serializer of this package running under another transport's `dispatch` leaves
+  that transport's stamp alone, and a context written by hand from
+  `build_offline_context` reads as its caller wrote it. Requires
+  `django-service-specs>=0.29.0`.
+- **A `get_queryset()` override beside a spec is reported.** A spec's rows are
+  its selector's, so tenant scoping left in a viewset's `get_queryset()` narrows
+  nothing, and a `PATCH` or `DELETE` reaches another tenant's row with no error.
+  `as_view()` now warns of a viewset overriding it while serving a write spec
+  or a list spec: a `GetQuerysetScopeWarning`, from `django_spec_rest`, whose
+  text begins with the stable id
+  `django_spec_rest.W001` and names the class. Set
+  `spec_rows_scoped_by_selector = True` on a class to silence it once its
+  selectors scope their own rows; it is inherited, and covers only overrides on
+  that class and its bases. A project needs no `INSTALLED_APPS` entry to get
+  it, so it is a Python warning rather than a system check, and
+  `SILENCED_SYSTEM_CHECKS` does not apply. `filter_backends` are not reported,
+  and the [moving page](https://artui.github.io/django-spec-rest/moving-from-drfs/#views-and-viewsets) now says a
+  tenant backend loses its scoping the same way.
+
+- **`DiscriminatedAction`: one action at one URL, chosen by the request.** drfs'
+  `PolymorphicServiceSpec` returns as an opt-in for an endpoint that must keep
+  one URL; one kernel spec per route stays the default. `DiscriminatedAction(
+  discriminator=, specs=)` maps each key the discriminator may answer to a
+  kernel `ServiceSpec`, and attaches as an `action_specs` entry under `create`,
+  `update`, `partial_update` or `destroy`, or as `@service_action(...)`, which
+  now accepts it. It is this package's alone, not a kernel spec: agents and MCP
+  register each variant on its own. A caller every variant refuses is refused
+  before the body is read; otherwise the chosen variant runs as a plain entry
+  would, its own checks deciding, so drfs' `permission_strategy=` is gone. A
+  callable `success_status` or `response_finalizer` on such an action may
+  declare `variant`, the chosen key. OPTIONS describes the method as an `anyOf`
+  of the variants the caller may send. A plain spec's
+  `success_status(result, variant=None)` or
+  `response_finalizer(response, variant=None)` passed `as_view()` on 0.9.0,
+  since a defaulted parameter was never checked; each is now refused, as only
+  a `DiscriminatedAction` offers `variant`.
+- **OpenAPI documents a `DiscriminatedAction`.** The request is one component,
+  `{View}_{action}_Request`, an `anyOf` over each variant's body (a serializer's
+  `$ref`, or the inline schema of any other Validator); a variant taking no
+  body adds no member, and where none takes one there is no request body, never
+  an empty `anyOf`, as OPTIONS describes it. The responses are the variants'
+  merged per status, one body where they agree and an inline `anyOf` where they
+  differ, and a `400` always, since the discriminator may refuse. A variant with
+  a body but no serializer (an array of rows) is now documented, which drfs left
+  out of its component. Variants of one body are one member, in OpenAPI and in
+  OPTIONS. Where two operations would give one component name two bodies (two
+  classes of one name in different modules, or a route capture that changes a
+  variant's body), the second is given inline as the same `anyOf` with a
+  drf-spectacular warning, rather than refused. drfs' component was a `oneOf`;
+  this one is an `anyOf`, since a member is open (the edge drops a key it does
+  not know) and a body two variants accept is valid for both, which a `oneOf`
+  would document as invalid.
+
+### Changed
+
+- **The floor on `django-service-specs` is 0.29.0**, for its `build_call_context`
+  and `authorize_without_arguments`. The check a caller is judged by before the
+  body is read, and that an `OPTIONS` answer shares, now asks through the second,
+  with no change in what it answers.
+
+### Fixed
+
+- **The moving page and the codemod no longer say `OfflineContract` has no
+  counterpart.** Its parts have seats: `field_audiences` is
+  `SerializerPresenter(S, field_audiences=...)`, `url_kwargs` a `Parameter` in
+  the selector's `reads=` (or a server-supplied argument where the model must
+  never see the capture), `query_params` `shapes=` on the spec. The "Declaring
+  a spec" table carries a row for each, and one for `ArgumentBinding`, whose
+  choice the kernel's single argument namespace makes for the caller. The
+  codemod's marker on a use of `OfflineContract` names those seats.
+
 ## [0.9.0] — 2026-11-05
 
 ### Changed
@@ -687,7 +767,8 @@ lists each with what a project rewrites.
 - **The package is no longer a Django app.** It has no models, migrations,
   templates, static files or URLs, so it needs no `INSTALLED_APPS` entry.
 
-[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/Artui/django-spec-rest/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/Artui/django-spec-rest/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/Artui/django-spec-rest/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/Artui/django-spec-rest/compare/v0.7.0...v0.8.0

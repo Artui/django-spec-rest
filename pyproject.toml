@@ -81,7 +81,7 @@ dependencies = [
     # spec's Validator through as dispatch does, and ``PermissionCheckDenied``,
     # the mark on a declared check's denial the edge answers as DRF's
     # ``permission_denied`` does.
-    "django-service-specs>=0.24.0",
+    "django-service-specs>=0.29.0",
 ]
 
 [project.optional-dependencies]
@@ -229,7 +229,7 @@ root = ["./django_spec_rest"]
 # CHANGELOG [Unreleased] block under a new dated heading. Run via
 # `uvx bump-my-version` (no permanent dependency added to the project).
 [tool.bumpversion]
-current_version = "0.9.0"
+current_version = "0.10.0"
 allow_dirty = false
 commit = false
 tag = false

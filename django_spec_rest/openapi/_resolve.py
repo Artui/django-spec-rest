@@ -7,12 +7,15 @@ entry.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TypeVar
 
 from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelectorSpec
 from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
 
+from django_spec_rest.types.discriminated_action import DiscriminatedAction
 from django_spec_rest.viewsets.utils import resolve_action_spec_entry
+
+_Served = TypeVar("_Served")
 
 
 def resolve_service_spec(
@@ -25,27 +28,21 @@ def resolve_service_spec(
     ``view.action``. The last follows the same ``"partial_update"`` →
     ``"update"`` fallback as runtime dispatch, so the documented PATCH schema
     matches what actually validates. ``None`` when no service-style spec
-    applies.
+    applies, a ``DiscriminatedAction`` included: that is not a spec, and is
+    read through ``resolve_discriminated_action``.
     """
-    spec = getattr(view, "spec", None)
-    if isinstance(spec, KernelServiceSpec):
-        return spec
+    return _served(view, KernelServiceSpec, "_service_spec")
 
-    action_name = getattr(view, "action", None)
-    if action_name is None:
-        return None
 
-    handler = getattr(view, action_name, None)
-    action_spec = getattr(handler, "_service_spec", None)
-    if isinstance(action_spec, KernelServiceSpec):
-        return action_spec
+def resolve_discriminated_action(view: Any) -> DiscriminatedAction | None:
+    """Return the ``DiscriminatedAction`` serving ``view``'s current request, if any.
 
-    action_specs = getattr(view, "action_specs", None)
-    if action_specs is not None:
-        entry = resolve_action_spec_entry(action_specs, action_name)
-        if isinstance(entry, KernelServiceSpec):
-            return entry
-    return None
+    The twin of ``resolve_service_spec`` over the same surfaces, answering the
+    wrapper where a spec would be: its variants are ``.specs``. Never asked of
+    a standalone view's ``spec``, which ``as_view()`` refuses it as, though the
+    walk reads that surface too.
+    """
+    return _served(view, DiscriminatedAction, "_service_spec")
 
 
 def resolve_selector_spec(view: Any) -> KernelSelectorSpec | None:
@@ -57,8 +54,13 @@ def resolve_selector_spec(view: Any) -> KernelSelectorSpec | None:
     entry is a ``ServiceSpec`` yields ``None`` rather than raising during schema
     generation.
     """
+    return _served(view, KernelSelectorSpec, "_selector_spec")
+
+
+def _served(view: Any, kind: type[_Served], stamp: str) -> _Served | None:
+    """What ``view`` serves that is a ``kind``: its ``spec``, its handler's ``stamp``, or its ``action_specs`` entry."""
     spec = getattr(view, "spec", None)
-    if isinstance(spec, KernelSelectorSpec):
+    if isinstance(spec, kind):
         return spec
 
     action_name = getattr(view, "action", None)
@@ -66,13 +68,13 @@ def resolve_selector_spec(view: Any) -> KernelSelectorSpec | None:
         return None
 
     handler = getattr(view, action_name, None)
-    action_spec = getattr(handler, "_selector_spec", None)
-    if isinstance(action_spec, KernelSelectorSpec):
+    action_spec = getattr(handler, stamp, None)
+    if isinstance(action_spec, kind):
         return action_spec
 
     action_specs = getattr(view, "action_specs", None)
     if action_specs is not None:
         entry = resolve_action_spec_entry(action_specs, action_name)
-        if isinstance(entry, KernelSelectorSpec):
+        if isinstance(entry, kind):
             return entry
     return None

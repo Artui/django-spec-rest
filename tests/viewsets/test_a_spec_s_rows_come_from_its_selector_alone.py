@@ -106,6 +106,8 @@ class _ViewSet(ServiceViewSet):
     queryset = Author.objects.all()
     filter_backends = [_HidesB]
     action_specs = {"list": _all(), "retrieve": _one()}
+    # The override here is what these tests prove asks nothing, so the warning is not theirs.
+    spec_rows_scoped_by_selector = True
 
     def get_queryset(self) -> Any:
         _ASKED.append(str(self.action))

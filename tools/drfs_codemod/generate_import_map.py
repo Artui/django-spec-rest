@@ -63,11 +63,18 @@ _DECLARING = "drfs' declaration type, gone with it; see 'Declaring a spec' on th
 # Why a drfs name has no import to rewrite to, for the names a project is most
 # likely to hold. Every other dropped name gets the default.
 DROP_REASONS = {
-    "PolymorphicServiceSpec": "declare one kernel spec per route or action",
+    "PolymorphicServiceSpec": (
+        "declare a DiscriminatedAction to keep one URL, else one kernel spec per route or "
+        "action; permission_strategy= is dropped"
+    ),
     "UrlKwarg": "declare the capture as a kernel Parameter in reads=",
     "QueryParam": "declare the read as a kernel Parameter in reads= (or shapes= where no callable names it)",
     "ArgumentBinding": _DECLARING,
-    "OfflineContract": "no counterpart: a kernel spec dispatches off HTTP through the kernel's dispatch",
+    "OfflineContract": (
+        "declare its parts on their seats: field_audiences on SerializerPresenter, url_kwargs as a "
+        "Parameter in the selector's reads= (a capture the model must never see is a server "
+        "argument), query_params as shapes= on the spec; see 'Declaring a spec' on the moving page"
+    ),
     "TargetGuard": "use the kernel's preconditions and object permission, which see the row",
     "InputRequired": "an input marker: declare the read as a kernel Parameter in reads=",
     "NotClientInput": "an input marker: fill the key from a typed kwargs provider",
