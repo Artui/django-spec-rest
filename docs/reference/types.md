@@ -30,6 +30,10 @@ kernel spec: agents and MCP register each variant on its own.
 
 ::: django_spec_rest.types.offline_service_view.OfflineServiceView
 
+## The transport
+
+::: django_spec_rest.types.rest_transport.REST_TRANSPORT
+
 ## Serializer fields
 
 ::: django_spec_rest.types.field_marking.MARKING

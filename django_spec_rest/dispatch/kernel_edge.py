@@ -3,15 +3,14 @@
 Utils-shaped: the helpers here are shared by the mutation views
 (``views/mutation/utils.py``), the selector views (``selectors/utils.py``) and
 ``as_view()``'s spec checks (``views/spec_validation.py``), and none is public
-API, so the module exports nothing and carries no ``__all__``. It sits beside
-``dispatch/utils.py``, which holds the smaller helpers the views share: a kernel
-spec is dispatched as declared.
+API, so the module exports nothing and carries no ``__all__``. A kernel spec is
+dispatched as declared.
 
 What a view hands it, and what it does with each:
 
 - **The call's context**, ``view_call_context(view, request)``, the one dict
-  per request the view already builds with ``request``, ``view``, ``format``
-  and ``action``. It reaches the kernel's ``dispatch`` as ``call_context`` as
+  per request the view already builds with ``request``, ``view``, ``format``,
+  ``action`` and this package's transport stamp. It reaches the kernel's ``dispatch`` as ``call_context`` as
   the very object, so the kernel seeds ``request`` and ``view`` from it by name
   (``CALL_SEEDS``) for every callable declaring either, and the spec's
   ``SerializerValidator`` and ``SerializerPresenter`` read both from it for

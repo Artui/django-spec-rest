@@ -79,7 +79,7 @@ What it does not do:
 
 ## The import map
 
-The package root exports [29 names](reference/index.md#public-surface), none of
+The package root exports [32 names](reference/index.md#public-surface), none of
 them the kernel's. A name drfs re-exported from the kernel is imported from
 `django_service_specs`.
 
@@ -171,7 +171,8 @@ def off_http_defaults(*, call_context):
 ```
 
 `call_transport` is in the kernel from 0.28.0, and a transport stamps its own
-name from the release that adopts the key.
+name from the release that adopts the key. A view of this package stamps
+`"rest"` from 0.10.0 (`REST_TRANSPORT`).
 
 ### A nested route's captures
 

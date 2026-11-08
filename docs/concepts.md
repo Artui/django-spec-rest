@@ -221,3 +221,27 @@ One context dict is built per request, with `request`, `view`, `format` and
 `call_context` are handed that same dict, so a key one serializer's
 `validate()` writes is there for the service and for the serializer rendering
 the answer. See [Serializer context](recipes/serializer-context.md).
+
+## Which transport is calling
+
+That dict also carries the kernel's `"transport"` key, stamped `"rest"`
+(`REST_TRANSPORT`, from the package root), so a callable shared with another
+transport can tell them apart with the kernel's `call_transport`. Checks, a
+discriminator, hooks, the validator, the service, the presenter and an `OPTIONS`
+answer all read that one value. The dict is the view's, built by the kernel's
+`build_call_context`.
+
+- **A serializer of this package under another transport keeps that transport's
+  stamp.** Only a view stamps. A `SerializerValidator` or `SerializerPresenter`
+  dispatched by spec-mcp or spec-agents reads their value.
+- **A context you write by hand reads as you wrote it.** `build_offline_context`
+  returns a request and a view, not a context, so a dict built from them with
+  no `"transport"` key reads as an in-process call, where `call_transport`
+  answers `None`.
+- **The key is the transport's to write.** A view hook or a `serializer_context`
+  callable answering a `"transport"` key of its own replaces the stamp for the
+  rest of the call, in the dict every stage shares, so name such a key something else.
+
+What you override on this transport is DRF's and the view's: authenticators and
+`EXCEPTION_HANDLER`, the view's attributes and its `get_*` hooks
+([Serializer context](recipes/serializer-context.md)).

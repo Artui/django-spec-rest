@@ -15,6 +15,7 @@ from django_spec_rest.service_specs.renderable_serializer_class import (
 from django_spec_rest.types import (
     DEFAULT_JSON_SCHEMA_REGISTRY,
     MARKING,
+    REST_TRANSPORT,
     DiscriminatedAction,
     HttpExtras,
     JsonSchemaRegistry,
@@ -51,6 +52,7 @@ from django_spec_rest.viewsets import (
 __all__ = [
     "DEFAULT_JSON_SCHEMA_REGISTRY",
     "MARKING",
+    "REST_TRANSPORT",
     "ActionSerializerResolver",
     "DiscriminatedAction",
     "GetQuerysetScopeWarning",

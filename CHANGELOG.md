@@ -13,6 +13,15 @@ carries; releases up to 0.62.0 are in
 
 ### Added
 
+- **A view stamps its call's context `"rest"`.** The request's one dict is built
+  through the kernel's `build_call_context` and carries `call_context["transport"]
+  == "rest"`, so checks, a discriminator, hooks, the validator, the service, the
+  presenter and an `OPTIONS` answer read one value through the kernel's
+  `call_transport`. The value is `REST_TRANSPORT`, from the package root. A
+  serializer of this package running under another transport's `dispatch` leaves
+  that transport's stamp alone, and a context written by hand from
+  `build_offline_context` reads as its caller wrote it. Requires
+  `django-service-specs>=0.29.0`.
 - **A `get_queryset()` override beside a spec is reported.** A spec's rows are
   its selector's, so tenant scoping left in a viewset's `get_queryset()` narrows
   nothing, and a `PATCH` or `DELETE` reaches another tenant's row with no error.

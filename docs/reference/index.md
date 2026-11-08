@@ -26,7 +26,7 @@ and documented there. This package documents what it adds over DRF.
 
 ## Public surface
 
-The top-level `django_spec_rest` package exports the 31 names below. The
+The top-level `django_spec_rest` package exports the 32 names below. The
 subpackages `django_spec_rest.views`, `django_spec_rest.viewsets`,
 `django_spec_rest.types` and `django_spec_rest.openapi` export theirs from
 their `__init__`, and the seat adapters are imported from their leaf modules
@@ -37,5 +37,5 @@ page shows.
 | --- | --- |
 | Views | `ServiceCreateView`, `ServiceUpdateView`, `ServiceDeleteView`, `SelectorListView`, `SelectorRetrieveView`, `MutationFlowMixin`, `resolve_mutation_instance` |
 | Viewsets | `ServiceViewSet`, `SelectorViewSet`, `ServiceCreateMixin`, `ServiceUpdateMixin`, `ServiceDestroyMixin`, `SelectorListMixin`, `SelectorRetrieveMixin`, `ActionSerializerResolver`, `service_action`, `selector_action`, `GetQuerysetScopeWarning` |
-| Types | `DiscriminatedAction`, `ServiceView`, `ViewHooks`, `HttpExtras`, `OfflineContext`, `OfflineHttpRequest`, `OfflineServiceView`, `MARKING`, `JsonSchemaRegistry`, `DEFAULT_JSON_SCHEMA_REGISTRY` |
+| Types | `DiscriminatedAction`, `ServiceView`, `ViewHooks`, `HttpExtras`, `OfflineContext`, `OfflineHttpRequest`, `OfflineServiceView`, `MARKING`, `JsonSchemaRegistry`, `DEFAULT_JSON_SCHEMA_REGISTRY`, `REST_TRANSPORT` |
 | Serializer helpers | `base_serializer_context`, `build_offline_context`, `renderable_serializer_class` |
