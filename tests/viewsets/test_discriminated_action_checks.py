@@ -232,6 +232,24 @@ class TestEachVariantIsAskedAsAPlainEntry:
         with pytest.raises(ImproperlyConfigured, match=r"\['bad'\]"):
             _decorate(action)
 
+    @pytest.mark.parametrize(
+        ("variant", "says"),
+        [
+            (_row(), "Set the spec on a view of its own kind"),
+            ("create", "Set the spec on a view of its own kind"),
+            (DiscriminatedAction(_choose, {"a": _create()}), "Put it in action_specs"),
+        ],
+        ids=["a selector spec", "a string", "a nested wrapper"],
+    )
+    def test_one_of_the_wrong_kind_is_told_what_to_do_at_either_door(
+        self, variant: Any, says: str
+    ) -> None:
+        action = _action(bad=variant)
+        with pytest.raises(ImproperlyConfigured, match=says):
+            _mount(action)
+        with pytest.raises(ImproperlyConfigured, match=says):
+            _decorate(action)
+
     def test_one_naming_no_target_under_a_detail_action_is_refused_labelled(self) -> None:
         action = _action(fine=_on_a_row(), bare=_create())
         with pytest.raises(ImproperlyConfigured, match=r"\['bare'\].*no target selector"):
