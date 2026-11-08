@@ -13,7 +13,7 @@ request. No view hook reaches a kernel spec, so nothing is lenient on extras.
 from __future__ import annotations
 
 import inspect
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Any
 
 from django.core.exceptions import ImproperlyConfigured
@@ -21,9 +21,11 @@ from django_service_specs.dispatch.check_seeds import check_seeds
 from django_service_specs.pool.pool_seeds import PoolSeeds
 from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelectorSpec
 from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
+from django_service_specs.types.is_async import is_async
 from django_service_specs.types.selector_kind import SelectorKind
 
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
+from django_spec_rest.types.discriminated_action import DiscriminatedAction
 from django_spec_rest.views.utils import MountedView
 
 
@@ -132,9 +134,39 @@ _SUCCESS_STATUS_KEYS = frozenset({"result", "instance", "request", "view"})
 # Keys the framework offers a ``response_finalizer`` callable.
 _RESPONSE_FINALIZER_KEYS = frozenset({"response", "result", "request", "view", "instance", "data"})
 
+# The chosen key, which both offer on a discriminated action and nowhere else.
+_VARIANT = "variant"
+
+# Keys the dispatching handler offers a ``DiscriminatedAction``'s discriminator.
+_DISCRIMINATOR_KEYS = frozenset({"request", "data", "user", "view", "call_context"})
+
+_KEYWORD_KINDS = (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
+
+
+def refuse_a_stray_variant(answer: Any, *, label: str, seat: str) -> None:
+    """Refuse a callable answer naming ``variant`` where no discriminated action offers it.
+
+    Named with a default too, unlike a key the pool merely lacks: one written
+    for a chosen key would run on a plain action with its default, answering
+    for a choice nobody made (test_discriminated_action_answers'
+    TestVariantElsewhere). ``**kwargs`` declares no name, so it is left to run.
+    One arc to coverage, so each conjunct is named: the name by every callable
+    answer declaring none, and the kind by
+    test_a_catch_all_named_variant_is_no_declaration. A non-callable, a viewset's
+    ``None`` or ``int``, has no signature to read
+    (test_a_view_s_int_status_beside_a_plain_decorated_action_is_left_alone).
+    """
+    declared = inspect.signature(answer).parameters.get(_VARIANT) if callable(answer) else None
+    if declared is not None and declared.kind in _KEYWORD_KINDS:
+        raise ImproperlyConfigured(
+            f"{label}: `{seat}` declares `{_VARIANT}`, the key a DiscriminatedAction chose, and "
+            "this action is not discriminated, so nothing would ever hand it. Remove it, or "
+            "declare it on the action's own answer."
+        )
+
 
 def _validate_success_status(
-    success_status: int | Callable[..., int] | None, *, label: str
+    success_status: int | Callable[..., int] | None, *, label: str, discriminated: bool = False
 ) -> None:
     """Reject a ``success_status`` that is neither int/None nor a well-formed callable.
 
@@ -145,6 +177,8 @@ def _validate_success_status(
     (test_a_callable_taking_kwargs_beside_a_key_the_pool_lacks_is_refused_at_as_view).
     Nor can a required positional-only parameter, a key's name included
     (test_a_callable_taking_a_positional_only_parameter_is_refused_at_as_view).
+    ``discriminated`` is whether the action answering with it is a
+    ``DiscriminatedAction``, which offers ``variant`` too.
     """
     if success_status is None or isinstance(success_status, int):
         return
@@ -154,16 +188,21 @@ def _validate_success_status(
             f"or None — got {type(success_status).__name__}."
         )
     _refuse_positional_only(success_status, label=label, seat="success_status")
-    unknown = set(_required_kw_params(success_status)) - _SUCCESS_STATUS_KEYS
+    if not discriminated:
+        refuse_a_stray_variant(success_status, label=label, seat="success_status")
+    keys = _SUCCESS_STATUS_KEYS | {_VARIANT} if discriminated else _SUCCESS_STATUS_KEYS
+    unknown = set(_required_kw_params(success_status)) - keys
     if unknown:
         raise ImproperlyConfigured(
             f"{label}: `success_status` callable requires parameter(s) "
             f"{sorted(unknown)} the framework can't supply — declare only a subset "
-            f"of {sorted(_SUCCESS_STATUS_KEYS)}, and `**kwargs` for the rest."
+            f"of {sorted(keys)}, and `**kwargs` for the rest."
         )
 
 
-def _validate_response_finalizer(finalizer: Any, *, label: str) -> None:
+def _validate_response_finalizer(
+    finalizer: Any, *, label: str, discriminated: bool = False
+) -> None:
     """Reject a ``response_finalizer`` that isn't a well-formed callable.
 
     Same rule as ``_validate_success_status``, against
@@ -179,12 +218,66 @@ def _validate_response_finalizer(finalizer: Any, *, label: str) -> None:
             f"or None — got {type(finalizer).__name__}."
         )
     _refuse_positional_only(finalizer, label=label, seat="response_finalizer")
-    unknown = set(_required_kw_params(finalizer)) - _RESPONSE_FINALIZER_KEYS
+    if not discriminated:
+        refuse_a_stray_variant(finalizer, label=label, seat="response_finalizer")
+    keys = _RESPONSE_FINALIZER_KEYS | {_VARIANT} if discriminated else _RESPONSE_FINALIZER_KEYS
+    unknown = set(_required_kw_params(finalizer)) - keys
     if unknown:
         raise ImproperlyConfigured(
             f"{label}: `response_finalizer` requires parameter(s) {sorted(unknown)} the "
             f"framework can't supply — declare only a subset of "
-            f"{sorted(_RESPONSE_FINALIZER_KEYS)}, and `**kwargs` for the rest."
+            f"{sorted(keys)}, and `**kwargs` for the rest."
+        )
+
+
+def validate_discriminated_action(action: DiscriminatedAction, *, label: str) -> None:
+    """Refuse the shape of a ``DiscriminatedAction`` no request could be served through.
+
+    ``specs`` maps each ``str`` key the discriminator may answer, at least one.
+    The discriminator is sync, since no handler of this package awaits
+    anything, and declares only what the dispatching handler hands it
+    (``_DISCRIMINATOR_KEYS``) or ``**kwargs``. Named by the caller, ``as_view()``
+    or the decorator, which then asks each variant what a plain entry of that
+    action is asked. An optional name outside the pool is refused as a required
+    one is: it could only ever hold its default
+    (test_discriminated_action_checks' TestTheShape, one case each). One arc to
+    coverage for ``specs``, so each disjunct is named by its case there: ``not
+    a mapping`` and ``no variants``.
+    """
+    specs: Any = action.specs
+    if not isinstance(specs, Mapping) or not specs:
+        raise ImproperlyConfigured(
+            f"{label}: a DiscriminatedAction must map each key to a ServiceSpec, and has no "
+            "variants to choose from."
+        )
+    strays = [key for key in specs if not isinstance(key, str)]
+    if strays:
+        raise ImproperlyConfigured(
+            f"{label}: a DiscriminatedAction's keys are strings, and these are not: {strays}."
+        )
+    discriminator: Any = action.discriminator
+    if not callable(discriminator):
+        raise ImproperlyConfigured(
+            f"{label}: `discriminator` must be a callable answering one of {sorted(specs)}, got "
+            f"{type(discriminator).__name__}."
+        )
+    if is_async(discriminator):
+        raise ImproperlyConfigured(
+            f"{label}: `discriminator` is async, and nothing on this route awaits it. Declare "
+            "it with `def`."
+        )
+    _refuse_positional_only(discriminator, label=label, seat="discriminator")
+    named = {
+        name
+        for name, parameter in inspect.signature(discriminator).parameters.items()
+        if parameter.kind in _KEYWORD_KINDS
+    }
+    unknown = named - _DISCRIMINATOR_KEYS
+    if unknown:
+        raise ImproperlyConfigured(
+            f"{label}: `discriminator` declares parameter(s) {sorted(unknown)} the framework "
+            f"can't supply — declare only a subset of {sorted(_DISCRIMINATOR_KEYS)}, and "
+            "`**kwargs` for the rest."
         )
 
 
@@ -209,6 +302,12 @@ def _validate_selector_kind(
 
 def _serves_the_other_kind(view_cls: type | MountedView, spec: Any, served: type) -> str:
     """Why ``view_cls`` refuses ``spec``: a kernel spec of the kind the view does not serve."""
+    if isinstance(spec, DiscriminatedAction):
+        return (
+            f"{view_cls.__name__}.spec is a DiscriminatedAction, which one action of a viewset "
+            "dispatches. Put it in action_specs under create, update, partial_update or "
+            "destroy, or hand it to @service_action."
+        )
     return (
         f"{view_cls.__name__}.spec is a {type(spec).__name__}, but this view serves a "
         f"{served.__name__}. Set the spec on a view of its own kind."
@@ -285,6 +384,7 @@ def validate_mutation_view_spec(
     *,
     has_instance: bool,
     pool_seeds: PoolSeeds,
+    discriminated: bool = False,
 ) -> None:
     """Validate ``view_cls.spec`` on a standalone mutation view.
 
@@ -292,7 +392,8 @@ def validate_mutation_view_spec(
     placeholder so ``as_view()`` itself doesn't trip. ``pool_seeds`` is the
     registry the view dispatches with: ``as_view()`` runs before any instance
     exists, so it reads the one it was handed before the class's
-    (``view_pool_seeds``).
+    (``view_pool_seeds``). ``discriminated`` is that the spec is a variant of a
+    ``DiscriminatedAction``, whose answers may declare ``variant``.
     """
     spec: KernelServiceSpec | KernelSelectorSpec | None = getattr(view_cls, "spec", None)
     if spec is None:
@@ -317,9 +418,15 @@ def validate_mutation_view_spec(
     # (test_callable_success_status' TestASuccessStatusTheViewCannotResolve,
     # test_response_finalizer's TestAFinalizerTheViewCannotCall). Read off
     # the class, which a function stored there is returned from unbound.
-    _validate_success_status(getattr(view_cls, "success_status", None), label=view_cls.__name__)
+    _validate_success_status(
+        getattr(view_cls, "success_status", None),
+        label=view_cls.__name__,
+        discriminated=discriminated,
+    )
     _validate_response_finalizer(
-        getattr(view_cls, "response_finalizer", None), label=view_cls.__name__
+        getattr(view_cls, "response_finalizer", None),
+        label=view_cls.__name__,
+        discriminated=discriminated,
     )
     _refuse_a_detail_spec_with_no_target(view_cls, spec, has_instance=has_instance)
     # A view hook's keys reach the service through the edge's overlay,
@@ -329,7 +436,16 @@ def validate_mutation_view_spec(
     # test_a_view_hook_fills_a_keyword_check_seeds_cannot_see, the
     # per-action one by test_a_per_action_hook_fills_a_keyword_check_seeds_cannot_see.
     if not (hooked or _overrides_the_action_hook(view_cls, "service")):
-        _check_kernel_seeds(spec, pool_seeds=pool_seeds)
+        try:
+            _check_kernel_seeds(spec, pool_seeds=pool_seeds)
+        except ImproperlyConfigured as refusal:
+            # The kernel's sentence names the callable and not where it is
+            # mounted, which a variant among several needs
+            # (test_discriminated_action_checks'
+            # test_a_keyword_nothing_fills_is_refused_labelled).
+            if not discriminated:
+                raise
+            raise ImproperlyConfigured(f"{view_cls.__name__}: {refusal}") from refusal
 
 
 def _refuse_a_detail_spec_with_no_target(

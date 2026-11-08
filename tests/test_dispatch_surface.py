@@ -19,6 +19,7 @@ import django_spec_rest as pkg
 from django_spec_rest.service_specs.base_serializer_context import base_serializer_context
 from django_spec_rest.service_specs.build_offline_context import build_offline_context
 from django_spec_rest.service_specs.renderable_serializer_class import renderable_serializer_class
+from django_spec_rest.types.discriminated_action import DiscriminatedAction
 from django_spec_rest.types.field_marking import MARKING
 from django_spec_rest.types.http_extras import HttpExtras
 from django_spec_rest.types.json_schema_registry import (
@@ -52,6 +53,7 @@ from django_spec_rest.viewsets.service_viewset import ServiceViewSet
 _SURFACE = {
     "ActionSerializerResolver": ActionSerializerResolver,
     "DEFAULT_JSON_SCHEMA_REGISTRY": DEFAULT_JSON_SCHEMA_REGISTRY,
+    "DiscriminatedAction": DiscriminatedAction,
     "HttpExtras": HttpExtras,
     "JsonSchemaRegistry": JsonSchemaRegistry,
     "MARKING": MARKING,

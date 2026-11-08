@@ -18,6 +18,7 @@ from rest_framework.request import Request, clone_request
 from rest_framework.response import Response
 
 from django_spec_rest.dispatch.kernel_edge import UNKNOWN_ARGUMENTS, judge_without_arguments
+from django_spec_rest.types.discriminated_action import DiscriminatedAction
 from django_spec_rest.views.utils import view_call_context, view_pool_seeds
 
 # DRF's ``SimpleMetadata`` describes these two and no other method.
@@ -25,7 +26,9 @@ _DESCRIBED_METHODS = ("POST", "PUT")
 
 
 def spec_options(
-    view: Any, request: Request, served: Mapping[str, KernelServiceSpec | KernelSelectorSpec]
+    view: Any,
+    request: Request,
+    served: Mapping[str, KernelServiceSpec | KernelSelectorSpec | DiscriminatedAction],
 ) -> Response:
     """Answer OPTIONS for ``view`` as DRF's ``APIView.options`` does, describing ``served``.
 
@@ -69,6 +72,10 @@ def spec_options(
     body sends, and the target selector's reads, which the edge never reads
     from the body. It is built under the edge's unknown-argument policy, so
     under ``IGNORE`` it states no ``additionalProperties``.
+
+    A method a ``DiscriminatedAction`` serves is described as ``{"oneOf": [...]}``
+    of each variant the caller may send, asked and described as above
+    (``_variants_described``), and left out where it may send none.
     """
     if view.metadata_class is None:
         return view.http_method_not_allowed(request)
@@ -80,7 +87,9 @@ def spec_options(
 class _SpecMetadata(SimpleMetadata):
     """DRF's ``SimpleMetadata`` with ``actions`` read off the specs a route serves."""
 
-    def __init__(self, served: Mapping[str, KernelServiceSpec | KernelSelectorSpec]) -> None:
+    def __init__(
+        self, served: Mapping[str, KernelServiceSpec | KernelSelectorSpec | DiscriminatedAction]
+    ) -> None:
         self.served = served
 
     def determine_actions(self, request: Request, view: Any) -> dict[str, Any]:
@@ -101,25 +110,68 @@ class _SpecMetadata(SimpleMetadata):
             # test_a_method_the_view_does_not_allow_is_not_described.
             if spec is None or method not in allowed:
                 continue
-            if not _grants(view, request, method, spec, call_context):
-                continue
-            try:
-                asked = spec_caller_input_schema(
-                    spec, pool_seeds=view_pool_seeds(view), unknown_arguments=UNKNOWN_ARGUMENTS
-                )
-            except (AttributeError, KeyError, TypeError):
-                # A Validator whose serializer cannot be built without the
-                # call's context (a ``get_fields`` reading a key the view's
-                # input layers add) is described outside any call, with DRF's
-                # context of no view and no request, and raises one of the
-                # three ``describe_serializer`` reads the same way. The real
-                # call builds it with that context, so the method stays
-                # routed and is left out here, where DRF's own metadata ended
-                # in a 500 (test_options_metadata's
-                # test_a_context_dependent_input_is_left_out_rather_than_a_500).
-                continue
-            actions[method] = _described(spec, asked, view)
+            described = (
+                _variants_described(view, request, method, spec, call_context)
+                if isinstance(spec, DiscriminatedAction)
+                else _spec_described(view, request, method, spec, call_context)
+            )
+            if described is not None:
+                actions[method] = described
         return actions
+
+
+def _variants_described(
+    view: Any,
+    request: Request,
+    method: str,
+    action: DiscriminatedAction,
+    call_context: dict[str, Any],
+) -> dict[str, Any] | None:
+    """``action``'s variants the caller may send, as ``{"oneOf": [...]}``, or ``None`` for none.
+
+    A variant with no body adds no member, since an empty object matches every
+    body, and ``oneOf`` is then never empty: where every variant the caller may
+    send takes no body the method is described as a plain body-less spec is, so
+    a method is still hidden exactly when its write is refused first
+    (test_discriminated_action_readers' TestOptions).
+    """
+    described = [
+        schema
+        for variant in action.specs.values()
+        if (schema := _spec_described(view, request, method, variant, call_context)) is not None
+    ]
+    if not described:
+        return None
+    members = [schema for schema in described if schema["properties"]]
+    return {"oneOf": members} if members else described[0]
+
+
+def _spec_described(
+    view: Any,
+    request: Request,
+    method: str,
+    spec: KernelServiceSpec | KernelSelectorSpec,
+    call_context: dict[str, Any],
+) -> dict[str, Any] | None:
+    """The JSON Schema of what the caller sends ``spec`` by ``method``, or ``None`` if it may not."""
+    if not _grants(view, request, method, spec, call_context):
+        return None
+    try:
+        asked = spec_caller_input_schema(
+            spec, pool_seeds=view_pool_seeds(view), unknown_arguments=UNKNOWN_ARGUMENTS
+        )
+    except (AttributeError, KeyError, TypeError):
+        # A Validator whose serializer cannot be built without the
+        # call's context (a ``get_fields`` reading a key the view's
+        # input layers add) is described outside any call, with DRF's
+        # context of no view and no request, and raises one of the
+        # three ``describe_serializer`` reads the same way. The real
+        # call builds it with that context, so the method stays
+        # routed and is left out here, where DRF's own metadata ended
+        # in a 500 (test_options_metadata's
+        # test_a_context_dependent_input_is_left_out_rather_than_a_500).
+        return None
+    return _described(spec, asked, view)
 
 
 def _grants(

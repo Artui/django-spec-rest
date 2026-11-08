@@ -15,8 +15,10 @@ import dataclasses
 from collections.abc import Callable
 from typing import Any, Literal
 
+from django.core.exceptions import ImproperlyConfigured
 from django.db.models import Model
 from django_service_specs.dispatch.present import present
+from django_service_specs.pool.resolve_callable_kwargs import resolve_callable_kwargs
 from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
 from django_service_specs.types.unset import UNSET
 from rest_framework import status as drf_status
@@ -25,10 +27,14 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from django_spec_rest.dispatch.kernel_edge import (
+    _DENIALS,
+    _RAISED_REFUSALS,
     answering_refusals,
     dispatch_kernel_spec,
+    judge_without_arguments,
 )
 from django_spec_rest.service_specs.kernel_spec_variant import kernel_spec_variant
+from django_spec_rest.types.discriminated_action import DiscriminatedAction
 from django_spec_rest.views.mutation.apply_response_finalizer import (
     apply_response_finalizer,
 )
@@ -73,6 +79,7 @@ def dispatch_mutation_for_spec(
     default_status: int,
     render_instance_on_none: bool,
     partial: bool = False,
+    variant: str | None = None,
 ) -> Response:
     """End-to-end dispatch for one ``ServiceSpec`` call over HTTP: the kernel's ``dispatch``, then DRF's response.
 
@@ -106,7 +113,8 @@ def dispatch_mutation_for_spec(
       The status is the view's ``success_status`` for the action it serves
       over ``default_status``, a body never going out under ``204``; then
       the view's ``response_finalizer`` for that action (``action_answer``,
-      ``MutationFlowMixin``).
+      ``MutationFlowMixin``). ``variant`` is the key a ``DiscriminatedAction``
+      chose, offered to both only there, or ``None`` on any plain spec.
     """
     resolved: Any = None if instance is UNSET else instance
     result = dispatch_kernel_spec(
@@ -149,6 +157,8 @@ def dispatch_mutation_for_spec(
     pool: dict[str, Any] = {"request": request, "view": view, "result": result.service_result}
     if result.instance is not None:
         pool["instance"] = result.instance
+    if variant is not None:
+        pool["variant"] = variant
     status = resolve_success_status(success_status, default=default_status, pool=pool)
     if presented is None:
         # Nothing to present is ``204`` unless the view set a status, which then
@@ -167,7 +177,121 @@ def dispatch_mutation_for_spec(
         result=result.service_result,
         instance=result.instance,
         data=result.data,
+        variant=variant,
     )
+
+
+def dispatch_discriminated_action(
+    view: Any,
+    request: Request,
+    action: DiscriminatedAction,
+    *,
+    default_status: int,
+    render_instance_on_none: bool,
+    partial: bool = False,
+) -> Response:
+    """Serve one request of a ``DiscriminatedAction``: refuse, choose, then run the chosen variant.
+
+    DRF's ``initial()`` has asked the view's own classes. A caller every variant
+    refuses stops here (``_refuse_a_caller_every_variant_refuses``), so it never
+    reaches the body or the discriminator, and OPTIONS shows it nothing. The
+    discriminator then chooses (``_chosen_key``) and the chosen variant runs
+    through ``dispatch_mutation_for_spec`` as a plain entry does, its own checks
+    deciding: its class-level check is asked twice, the cost of the first step
+    (test_discriminated_action's
+    test_the_chosen_variant_s_class_level_check_is_asked_twice_and_every_other_once).
+
+    The row is the chosen variant's own target selector's
+    (``resolve_mutation_instance``), and the keywords are
+    ``dispatch_mutation_for_spec``'s.
+    """
+    _refuse_a_caller_every_variant_refuses(view, request, action)
+    key = _chosen_key(view, request, action)
+    chosen = action.specs[key]
+    return dispatch_mutation_for_spec(
+        view,
+        request,
+        chosen,
+        instance=resolve_mutation_instance(view, chosen),
+        default_status=default_status,
+        render_instance_on_none=render_instance_on_none,
+        partial=partial,
+        variant=key,
+    )
+
+
+def _refuse_a_caller_every_variant_refuses(
+    view: Any, request: Request, action: DiscriminatedAction
+) -> None:
+    """Raise the first variant's denial where every variant refuses the caller, the body unread.
+
+    Each variant is judged on no arguments, as the OPTIONS answer judges it
+    (``judge_without_arguments``), so a caller shown no variant there is told
+    nothing here but its refusal, whatever it sends, unparseable JSON included.
+    Every variant is asked, with no stop at the first that admits, so a check is
+    asked the same number of times wherever its variant sits.
+
+    The denial is raised with ``RefusedCall.spec`` set to the variant judged,
+    never the wrapper, which compiles to nothing: ``_check_denied`` compares the
+    denial's spec with it, and only then asks an anonymous caller to sign in
+    rather than answering 403 (test_discriminated_action's
+    test_an_anonymous_caller_every_variant_refuses_is_401_whatever_it_sends). A
+    configuration error is no refusal and passes, as on a plain spec
+    (test_a_misconfigured_variant_fails_rather_than_refuses).
+    """
+    call_context = view_call_context(view, request)
+    denials: list[tuple[KernelServiceSpec, Exception]] = []
+    for spec in action.specs.values():
+        try:
+            judge_without_arguments(
+                spec,
+                principal=request.user,
+                call_context=call_context,
+                pool_seeds=view_pool_seeds(view),
+            )
+        except (*_DENIALS, *_RAISED_REFUSALS) as denial:
+            denials.append((spec, denial))
+    if len(denials) == len(action.specs):
+        first, denial = denials[0]
+        with answering_refusals(request) as refused:
+            refused.spec = first
+            raise denial
+
+
+def _chosen_key(view: Any, request: Request, action: DiscriminatedAction) -> str:
+    """The key ``action``'s discriminator answers for this request, one of its ``specs``.
+
+    Bound by the kernel's ``resolve_callable_kwargs``, so a ``call_context`` is
+    handed by name alone and a catch-all never sees it
+    (test_a_catch_all_is_handed_all_but_the_call_context). Inside the map, so a
+    ``ServiceError`` it raises is answered as a service's is, and a DRF exception
+    passes as raised; ``request.data`` is read there too, a body DRF cannot parse
+    answering its own 400. An answer that is no key is the author's mistake, a
+    500 naming the keys. One arc to coverage, so each conjunct is named by a
+    case of test_a_stray_answer_is_improperly_configured_naming_the_keys: the
+    ``str`` by ``["token"]``, which ``in`` raises ``TypeError`` over, and the key
+    by ``"nope"``.
+    """
+    discriminator = action.discriminator
+    with answering_refusals(request):
+        key = discriminator(
+            **resolve_callable_kwargs(
+                discriminator,
+                {
+                    "request": request,
+                    "data": request.data,
+                    "user": request.user,
+                    "view": view,
+                    "call_context": view_call_context(view, request),
+                },
+            )
+        )
+    if not isinstance(key, str) or key not in action.specs:
+        raise ImproperlyConfigured(
+            f"{type(view).__name__}: the discriminator of action {view.action!r} answered "
+            f"{key!r}, which is none of {sorted(action.specs)}."
+        )
+    return key
 
 
 def _object_permissions(view: Any, request: Request, found: Any) -> None:

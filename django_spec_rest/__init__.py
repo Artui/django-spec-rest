@@ -15,6 +15,7 @@ from django_spec_rest.service_specs.renderable_serializer_class import (
 from django_spec_rest.types import (
     DEFAULT_JSON_SCHEMA_REGISTRY,
     MARKING,
+    DiscriminatedAction,
     HttpExtras,
     JsonSchemaRegistry,
     OfflineContext,
@@ -50,6 +51,7 @@ __all__ = [
     "DEFAULT_JSON_SCHEMA_REGISTRY",
     "MARKING",
     "ActionSerializerResolver",
+    "DiscriminatedAction",
     "HttpExtras",
     "JsonSchemaRegistry",
     "MutationFlowMixin",

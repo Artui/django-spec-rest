@@ -8,7 +8,9 @@ from rest_framework import status as drf_status
 from rest_framework.request import Request
 from rest_framework.response import Response
 
+from django_spec_rest.types.discriminated_action import DiscriminatedAction
 from django_spec_rest.views.mutation.mutation_flow_mixin import MutationFlowMixin
+from django_spec_rest.views.mutation.utils import dispatch_discriminated_action
 from django_spec_rest.viewsets.utils import (
     _ActionSpecsMixin,
     dispatches_action_specs,
@@ -29,6 +31,14 @@ class ServiceCreateMixin(MutationFlowMixin, _ActionSpecsMixin):
     @dispatches_action_specs
     def create(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         spec = resolve_action_service_spec(self.action_specs, "create", "POST")
+        if isinstance(spec, DiscriminatedAction):
+            return dispatch_discriminated_action(
+                self,
+                request,
+                spec,
+                default_status=drf_status.HTTP_201_CREATED,
+                render_instance_on_none=False,
+            )
         return self._run_mutation(
             request,
             spec,
