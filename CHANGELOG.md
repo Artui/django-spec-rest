@@ -40,7 +40,10 @@ carries; releases up to 0.62.0 are in
   would, its own checks deciding, so drfs' `permission_strategy=` is gone. A
   callable `success_status` or `response_finalizer` on such an action may
   declare `variant`, the chosen key. OPTIONS describes the method as a `oneOf`
-  of the variants the caller may send.
+  of the variants the caller may send. A plain spec's
+  `success_status(result, variant=None)` passed `as_view()` on 0.9.0, since a
+  defaulted parameter was never checked; it is now refused, as only a
+  `DiscriminatedAction` offers `variant`.
 - **OpenAPI documents a `DiscriminatedAction`.** The request is one component,
   `{View}_{action}_Request`, a `oneOf` over each variant's body (a serializer's
   `$ref`, or the inline schema of any other Validator); a variant taking no
@@ -49,7 +52,11 @@ carries; releases up to 0.62.0 are in
   merged per status, one body where they agree and an inline `oneOf` where they
   differ, and a `400` always, since the discriminator may refuse. A variant with
   a body but no serializer (an array of rows) is now documented, which drfs left
-  out of its component.
+  out of its component. Variants of one body are one member, in OpenAPI and in
+  OPTIONS. Where two operations would give one component name two bodies (two
+  classes of one name in different modules, or a route capture that changes a
+  variant's body), the second is given inline as the same `oneOf` with a
+  drf-spectacular warning, rather than refused.
 
 ### Fixed
 

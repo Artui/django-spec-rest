@@ -132,14 +132,14 @@ drfs field maps onto one of its seats:
 so a project passing either to `extend()` or the constructor drops it.
 
 The example project's [views](https://github.com/Artui/django-spec-rest/blob/main/examples/invoices/views/__init__.py)
-declare every seat above.
+declare the seats they use.
 
 ### One argument namespace, in place of `ArgumentBinding`
 
 drfs' `ArgumentBinding` chose whether a callable's own parameters were the
 caller's input. The kernel has no such choice: the arguments a caller may send
-are the spec's `reads=` and `shapes=` and its Validator's parameters, and the
-set is closed. A name that is none of them is refused under
+are the spec's `reads=` and `shapes=`, its Validator's parameters and, on a
+selector, its `filter_set`'s names, and the set is closed. A name that is none of them is refused under
 `UnknownArguments.REJECT` and dropped under `IGNORE`, whatever the callable's
 signature names.
 
