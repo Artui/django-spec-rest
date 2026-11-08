@@ -130,9 +130,11 @@ def _variants_described(
     """``action``'s variants the caller may send, as ``{"oneOf": [...]}``, or ``None`` for none.
 
     A variant with no body adds no member, since an empty object matches every
-    body, and ``oneOf`` is then never empty: where every variant the caller may
-    send takes no body the method is described as a plain body-less spec is, so
-    a method is still hidden exactly when its write is refused first
+    body, and variants of one body add it once, since a body valid for two
+    identical members is valid for none. ``oneOf`` is then never empty: where
+    every variant the caller may send takes no body the method is described as
+    a plain body-less spec is, so a method is still hidden exactly when its
+    write is refused first
     (test_discriminated_action_readers' TestOptions).
     """
     described = [
@@ -142,7 +144,12 @@ def _variants_described(
     ]
     if not described:
         return None
-    members = [schema for schema in described if schema["properties"]]
+    members: list[dict[str, Any]] = []
+    for schema in described:
+        # Variants of one body are one member, as the OpenAPI request has it
+        # (test_discriminated_action_schema's TestTheRequestAgreesWithOptions).
+        if schema["properties"] and schema not in members:
+            members.append(schema)
     return {"oneOf": members} if members else described[0]
 
 

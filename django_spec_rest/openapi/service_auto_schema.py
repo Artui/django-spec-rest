@@ -284,9 +284,9 @@ class ServiceAutoSchema(AutoSchema):
         ``ValidationErrors`` is (``_validation_errors_response``), not as a
         ``PolymorphicProxySerializer``, which takes serializers only and drops
         a ``many`` one, where a variant's body may be a raw array. Each member
-        is ``_variant_body``'s; a variant taking no body adds none, and where
-        no variant takes one there is no request body and no component, never
-        an empty ``oneOf``
+        is ``_variant_body``'s, once however many variants share it; a variant
+        taking no body adds none, and where no variant takes one there is no
+        request body and no component, never an empty ``oneOf``
         (test_it_is_never_an_empty_one_of). A second operation of the same name
         whose members differ (two classes of one name in different modules, a
         route capture named as a variant's field, one action reached by a
@@ -294,11 +294,14 @@ class ServiceAutoSchema(AutoSchema):
         rather than the first's, since a name can be a component only once
         (test_discriminated_action_schema's TestOneNameForTwoBodies).
         """
-        members = [
-            member
-            for variant in action.specs.values()
-            if (member := self._variant_body(variant)) is not None
-        ]
+        members: list[dict[str, Any]] = []
+        for variant in action.specs.values():
+            member = self._variant_body(variant)
+            # Variants of one body are one member: a body valid for two
+            # identical ``oneOf`` members is valid for none
+            # (test_variants_taking_one_body_add_it_once).
+            if member is not None and member not in members:
+                members.append(member)
         if not members:
             return None
         view_name, action_name = type(self.view).__name__, getattr(self.view, "action", None)

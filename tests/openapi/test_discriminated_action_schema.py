@@ -144,6 +144,12 @@ HALF = _viewset(
     "create",
     _action(a=_spec(SerializerValidator(AIn), A_OUT), b=_spec(SerializerValidator(BIn))),
 )
+# Two variants taking one body: a ``oneOf`` of it twice would be valid for no body.
+SAME = _viewset(
+    "Same",
+    "create",
+    _action(a=_spec(SerializerValidator(AIn), A_OUT), b=_spec(SerializerValidator(AIn), B_OUT)),
+)
 # Every variant takes nothing, and none declares a Validator or a check.
 BARE = _viewset("Bare", "create", _action(a=_spec(), b=_spec()))
 # A variant with a body that is no serializer: a CSV upload's array of rows.
@@ -256,6 +262,7 @@ _router.register("decorated", Decorated, basename="decorated")
 urlpatterns = [
     path("mixed/", MIXED.as_view({"post": "create"})),
     path("agree/", AGREE.as_view({"post": "create"})),
+    path("same/", SAME.as_view({"post": "create"})),
     path("half/", HALF.as_view({"post": "create"})),
     path("bare/", BARE.as_view({"post": "create"})),
     path("csv/", CSV.as_view({"post": "create"})),
@@ -319,6 +326,9 @@ class TestTheRequestComponent:
 
     def test_it_is_a_one_of_over_the_variants_bodies(self, schema: dict[str, Any]) -> None:
         assert _request(schema, "/mixed/") == {"oneOf": [_ref("AIn"), _ref("BIn")]}
+
+    def test_variants_taking_one_body_add_it_once(self, schema: dict[str, Any]) -> None:
+        assert _request(schema, "/same/") == {"oneOf": [_ref("AIn")]}
 
     def test_a_variant_with_no_body_adds_no_member(self, schema: dict[str, Any]) -> None:
         # ``c`` takes nothing: an empty member would match every body.
@@ -449,6 +459,13 @@ class TestTheRequestAgreesWithOptions:
         assert [set(m["properties"]) for m in members] == [{"alpha"}, {"beta"}]
         assert [set(m["properties"]) for m in documented] == [{"alpha"}, {"beta"}]
         assert [m.get("required") for m in members] == [m.get("required") for m in documented]
+
+    def test_variants_taking_one_body_are_one_member_in_both(self, schema: dict[str, Any]) -> None:
+        # ``jsonschema`` is no dependency of this package's own, so the members
+        # are asserted: a body valid for two identical ``oneOf`` members is valid for none.
+        members = _options(SAME.as_view({"post": "create"}), "POST")["oneOf"]
+        assert [set(m["properties"]) for m in members] == [{"alpha"}]
+        assert _request(schema, "/same/")["oneOf"] == [_ref("AIn")]
 
     def test_a_variant_whose_every_field_is_a_route_capture_is_in_neither(
         self, schema: dict[str, Any]

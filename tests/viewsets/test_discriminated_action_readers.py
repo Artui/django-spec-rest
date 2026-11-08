@@ -271,7 +271,8 @@ class TestOptions:
         action = _action(one=variant("pk"), two=variant("pk", "tenant"))
         view = _viewset(action, key="update").as_view({"put": "update"})
         members = _members(_options(view, pk=1), "PUT")
-        assert [_keys(member) for member in members] == [{"alpha"}, {"alpha"}]
+        # Neither variant's reads are in the body, so the two are one body and one member.
+        assert [_keys(member) for member in members] == [{"alpha"}]
 
     def test_a_patch_action_is_never_described(self) -> None:
         row = SelectorSpec(
