@@ -11,6 +11,23 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+### Added
+
+- **A `get_queryset()` override beside a spec is reported.** A spec's rows are
+  its selector's, so tenant scoping left in a viewset's `get_queryset()` narrows
+  nothing, and a `PATCH` or `DELETE` reaches another tenant's row with no error.
+  `as_view()` now warns of a viewset overriding it while serving a write spec
+  or a list spec: a `GetQuerysetScopeWarning`, from
+  `django_spec_rest.viewsets`, whose text begins with the stable id
+  `django_spec_rest.W001` and names the class. Set
+  `spec_rows_scoped_by_selector = True` on a class to silence it once its
+  selectors scope their own rows; it is inherited, and covers only overrides on
+  that class and its bases. A project needs no `INSTALLED_APPS` entry to get
+  it, so it is a Python warning rather than a system check, and
+  `SILENCED_SYSTEM_CHECKS` does not apply. `filter_backends` are not reported,
+  and the [moving page](https://artui.github.io/django-spec-rest/moving-from-drfs/#views-and-viewsets) now says a
+  tenant backend loses its scoping the same way.
+
 ## [0.9.0] — 2026-11-05
 
 ### Changed

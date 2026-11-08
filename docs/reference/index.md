@@ -13,7 +13,7 @@ and documented there. This package documents what it adds over DRF.
   `MutationFlowMixin`, `resolve_mutation_instance`.
 - **[Viewsets](viewsets.md)**: `ServiceViewSet`, `SelectorViewSet`, the
   per-action mixins, `ActionSerializerResolver`, `@service_action`,
-  `@selector_action`.
+  `@selector_action`, `GetQuerysetScopeWarning`.
 - **[DRF seats](service-specs.md)**: `SerializerValidator`,
   `SerializerPresenter`, `DRFPermissionCheck`, the DRF refusal classes and the
   translators between the kernel's refusals and DRF's, and the offline context.

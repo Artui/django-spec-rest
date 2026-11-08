@@ -43,6 +43,62 @@ The schema documents a declared capture with the read's type and `help` where
 drf-spectacular finds no model to type it from, as on a viewset with no
 `queryset` (see [OpenAPI](../openapi.md#what-a-route-documents)).
 
+## The row-scoping warning
+
+A spec's rows are its selector's, so a `get_queryset()` override does not scope
+them, and tenant scoping left in one lets a `PATCH` or `DELETE` reach another
+tenant's row with no error. `as_view()` reports a viewset that overrides it
+beside a write spec or a list spec, with a `GetQuerysetScopeWarning` whose text
+begins with the stable id **`django_spec_rest.W001`** and names the class:
+
+```text
+django_spec_rest.W001: myapp.views.InvoiceViewSet overrides get_queryset() (on InvoiceViewSet) and serves a write or list spec, ...
+```
+
+An override counts on any class below this package's bases and DRF's, a mixin
+listed after them included, since its `super()` runs. A write spec or a list
+spec counts under `action_specs`, an `as_view(action_specs=...)` included, and
+under `@service_action` or `@selector_action`. A viewset with no override, or
+serving only retrieve specs and actions with no spec, is not reported, and
+neither is a backend in `filter_backends`, since most are plain list filters
+([Moving from djangorestframework-services](../moving-from-drfs.md#views-and-viewsets)
+says what changes for one that scoped a tenant).
+
+An override can be right to stay: DRF's `DjangoModelPermissions` asks
+`get_queryset()` for the model it checks. Once each selector scopes its own
+rows, say so on the class:
+
+```python
+class InvoiceViewSet(ServiceViewSet):
+    action_specs = {"list": INVOICES, "destroy": DELETE_INVOICE}
+    spec_rows_scoped_by_selector = True
+
+    def get_queryset(self) -> QuerySet[Invoice]:
+        return Invoice.objects.all()
+```
+
+The attribute is inherited, so a base class says it once for its own override.
+It covers only overrides on the class declaring it and that class's bases: one
+a subclass adds, or a mixin listed before it, is reported again, because nobody
+has yet said it scopes nothing. A subclass may set it to `False`.
+
+It is a Python warning at `as_view()`, not a system check: this package has no
+app config for a check to register on, and asks for no `INSTALLED_APPS` entry,
+so `SILENCED_SYSTEM_CHECKS` does not apply. It prints when the URLconf is
+imported, `manage.py check` included, and once per class under Python's default
+filter, however many routes a router mounts. Every request after that makes
+none. A project or a test suite may filter on the id, to fail on it say:
+
+```python
+warnings.filterwarnings("error", message=r"django_spec_rest\.W001")
+```
+
+A viewset of DRF's alone, serving `@service_action` or `@selector_action` with
+no base of this package's, has no such `as_view()` and is not reported, and
+neither is a standalone view.
+
+::: django_spec_rest.viewsets.get_queryset_scope_warning.GetQuerysetScopeWarning
+
 ## Per-action answers
 
 A kernel spec declares no HTTP answer, so a viewset's `success_status` and
