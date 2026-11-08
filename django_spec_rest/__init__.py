@@ -36,6 +36,7 @@ from django_spec_rest.views.mutation.mutation_flow_mixin import MutationFlowMixi
 from django_spec_rest.views.mutation.utils import resolve_mutation_instance
 from django_spec_rest.viewsets import (
     ActionSerializerResolver,
+    GetQuerysetScopeWarning,
     SelectorListMixin,
     SelectorRetrieveMixin,
     SelectorViewSet,
@@ -52,6 +53,7 @@ __all__ = [
     "MARKING",
     "ActionSerializerResolver",
     "DiscriminatedAction",
+    "GetQuerysetScopeWarning",
     "HttpExtras",
     "JsonSchemaRegistry",
     "MutationFlowMixin",

@@ -30,6 +30,7 @@ from rest_framework.test import APIRequestFactory
 from rest_framework.viewsets import GenericViewSet
 
 from django_spec_rest import (
+    DiscriminatedAction,
     SelectorListMixin,
     SelectorViewSet,
     ServiceUpdateMixin,
@@ -153,6 +154,58 @@ class TestAnOverrideBesideASpecIsReported:
             action_specs = {"list": _LIST}
 
         assert _reports(V, {"get": "list"})
+
+
+class TestADiscriminatedActionServesAWrite:
+    """Neither lane that built these could see the other's type, so the pair is held here.
+
+    Each variant is a write spec, and the guard reads the wrapper rather than resolving it:
+    no request exists at ``as_view()`` to choose a variant with.
+    """
+
+    @pytest.mark.parametrize(
+        ("action_name", "method", "variant"),
+        [
+            ("create", "post", _CREATE),
+            ("update", "put", _DESTROY),
+            ("partial_update", "patch", _DESTROY),
+            ("destroy", "delete", _DESTROY),
+        ],
+    )
+    def test_under_an_action_specs_entry(
+        self, action_name: str, method: str, variant: ServiceSpec
+    ) -> None:
+        class V(_Scoped, ServiceViewSet):
+            action_specs = {action_name: DiscriminatedAction(lambda: "only", {"only": variant})}
+
+        assert _reports(V, {method: action_name})
+
+    def test_under_a_service_action(self) -> None:
+        class V(_Scoped, ServiceViewSet):
+            @service_action(
+                DiscriminatedAction(lambda: "only", {"only": _DESTROY}),
+                detail=True,
+                methods=["post"],
+            )
+            def archive(self, request: Any, pk: Any = None) -> None:
+                """Stubbed: the decorator serves the spec."""
+
+        assert _reports(V, {"post": "archive"})
+
+    def test_it_is_asked_nothing_of_the_discriminator(self) -> None:
+        def refuse_to_choose() -> str:
+            raise AssertionError("as_view() has no request to choose a variant with")
+
+        class V(_Scoped, ServiceViewSet):
+            action_specs = {"create": DiscriminatedAction(refuse_to_choose, {"only": _CREATE})}
+
+        assert _reports(V, {"post": "create"})
+
+    def test_and_says_nothing_with_no_override(self) -> None:
+        class V(ServiceViewSet):
+            action_specs = {"create": DiscriminatedAction(lambda: "only", {"only": _CREATE})}
+
+        assert not _reports(V, {"post": "create"})
 
 
 class TestTheReportCarries:

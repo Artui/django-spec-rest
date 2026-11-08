@@ -41,6 +41,7 @@ from django_spec_rest.views.query.selector_retrieve_view import SelectorRetrieve
 from django_spec_rest.viewsets.action_serializer_resolver import ActionSerializerResolver
 from django_spec_rest.viewsets.decorators.selector_action import selector_action
 from django_spec_rest.viewsets.decorators.service_action import service_action
+from django_spec_rest.viewsets.get_queryset_scope_warning import GetQuerysetScopeWarning
 from django_spec_rest.viewsets.selector_list_mixin import SelectorListMixin
 from django_spec_rest.viewsets.selector_retrieve_mixin import SelectorRetrieveMixin
 from django_spec_rest.viewsets.selector_viewset import SelectorViewSet
@@ -54,6 +55,7 @@ _SURFACE = {
     "ActionSerializerResolver": ActionSerializerResolver,
     "DEFAULT_JSON_SCHEMA_REGISTRY": DEFAULT_JSON_SCHEMA_REGISTRY,
     "DiscriminatedAction": DiscriminatedAction,
+    "GetQuerysetScopeWarning": GetQuerysetScopeWarning,
     "HttpExtras": HttpExtras,
     "JsonSchemaRegistry": JsonSchemaRegistry,
     "MARKING": MARKING,
