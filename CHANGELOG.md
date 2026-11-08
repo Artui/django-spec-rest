@@ -11,6 +11,17 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+### Fixed
+
+- **The moving page and the codemod no longer say `OfflineContract` has no
+  counterpart.** Its parts have seats: `field_audiences` is
+  `SerializerPresenter(S, field_audiences=...)`, `url_kwargs` a `Parameter` in
+  the selector's `reads=` (or a server-supplied argument where the model must
+  never see the capture), `query_params` `shapes=` on the spec. The "Declaring
+  a spec" table carries a row for each, and one for `ArgumentBinding`, whose
+  choice the kernel's single argument namespace makes for the caller. The
+  codemod's marker on a use of `OfflineContract` names those seats.
+
 ## [0.9.0] — 2026-11-05
 
 ### Changed

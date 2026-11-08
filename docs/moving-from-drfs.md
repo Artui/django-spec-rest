@@ -118,6 +118,10 @@ spec is the kernel's, and each drfs field maps onto one of its seats:
 | `InputRequired`, `InputDescription("...")` on a key the selector reads | `reads=Parameters.of(Parameter(..., required=True, help="..."))`, as [worked below](#a-nested-routes-captures) |
 | `PolymorphicServiceSpec` | one kernel spec per route or action; the polymorphic request body and its `{View}_{action}_Request` OpenAPI component are gone |
 | `TargetGuard` | the kernel's preconditions and object permission, which see the row |
+| `OfflineContract.field_audiences` | `SerializerPresenter(S, field_audiences={...})`, layered over the serializer's own markings at the top level; a name the serializer does not output is refused when the output is read. HTTP names no audience, so a REST response is unchanged |
+| `OfflineContract.url_kwargs` | the selector's `reads=Parameters.of(Parameter("pk", "integer", required=True))`. A capture the model must never see is a server-supplied argument instead: `tool_server_arguments` on django-spec-agents' toolset, `server_arguments=` on a django-spec-mcp tool binding |
+| `OfflineContract.query_params` | `shapes=Parameters.of(...)` on the spec for a query that shapes what the presenter renders; a query the selector reads is a `reads=` `Parameter`, as above. A default that applies only off HTTP is [read from the call's transport](#a-default-for-off-http-calls) |
+| `ArgumentBinding` | none: a call has one argument namespace, [described below](#one-argument-namespace-in-place-of-argumentbinding) |
 
 `JsonSchemaRegistry` keeps its `fields` rules alone. Its `filters` and
 `python_types` rules are gone: a `filter_set` is described by the kernel's
@@ -126,6 +130,45 @@ so a project passing either to `extend()` or the constructor drops it.
 
 The example project's [views](https://github.com/Artui/django-spec-rest/blob/main/examples/invoices/views/__init__.py)
 declare every seat above.
+
+### One argument namespace, in place of `ArgumentBinding`
+
+drfs' `ArgumentBinding` chose whether a callable's own parameters were the
+caller's input. The kernel has no such choice: the arguments a caller may send
+are the spec's `reads=` and `shapes=` and its Validator's parameters, and the
+set is closed. A name that is none of them is refused under
+`UnknownArguments.REJECT` and dropped under `IGNORE`, whatever the callable's
+signature names.
+
+| drfs | Kernel |
+| --- | --- |
+| `BUNDLE`, and `AUTO` on a service | what the kernel always does: a service's own parameters, with no Validator in front of them, are never the caller's, and it receives `data={}` and its declared reads |
+| `SPREAD_AUTHOR_WINS`, and `AUTO` on a selector | declare each parameter the caller may send as a `Parameter` in the selector's `reads=`, or on the service's Validator. A value the spec's `kwargs` provider fills for a declared name still replaces the caller's, so an author-scoped `tenant_id` cannot be reset by the client |
+| `SPREAD_CALLER_WINS` | retired in drfs too. To let the caller's value win, leave the key out of the `kwargs` provider |
+
+A selector dispatched under drfs' `AUTO` took the caller's value for every
+parameter its signature named, so those parameters become the `reads=` the
+codemod writes into its markers.
+
+### A default for off-HTTP calls
+
+A default that should apply only when a call does not come over HTTP, such as
+a query an agent's tool call leaves out, reads which transport built the call's
+context. A presenter's `serializer_context` callable declares `call_context`
+and compares what the transport stamped under the `"transport"` key:
+
+```python
+from django_service_specs import call_transport
+
+
+def off_http_defaults(*, call_context):
+    if call_transport(call_context) in ("agent", "mcp"):
+        return {"default_query": "..."}
+    return {}
+```
+
+`call_transport` is in the kernel from 0.28.0, and a transport stamps its own
+name from the release that adopts the key.
 
 ### A nested route's captures
 

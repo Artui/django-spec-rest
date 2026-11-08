@@ -106,8 +106,10 @@ class TestImportsByModulePath:
             """
         )
         reason = (
-            "OfflineContract: no counterpart: a kernel spec dispatches off HTTP through "
-            "the kernel's dispatch"
+            "OfflineContract: declare its parts on their seats: field_audiences on "
+            "SerializerPresenter, url_kwargs as a Parameter in the selector's reads= (a capture "
+            "the model must never see is a server argument), query_params as shapes= on the "
+            "spec; see 'Declaring a spec' on the moving page"
         )
         assert findings == [reason, reason]
         assert "from rest_framework_services import OfflineContract\n" in output
