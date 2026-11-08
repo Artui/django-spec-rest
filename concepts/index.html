@@ -487,6 +487,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#which-transport-is-calling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Which transport is calling
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1162,6 +1173,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#which-transport-is-calling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Which transport is calling
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1502,6 +1524,28 @@ selector, provider, service, precondition or affordance condition.</p>
 <code>call_context</code> are handed that same dict, so a key one serializer's
 <code>validate()</code> writes is there for the service and for the serializer rendering
 the answer. See <a href="../recipes/serializer-context/">Serializer context</a>.</p>
+<h2 id="which-transport-is-calling">Which transport is calling<a class="headerlink" href="#which-transport-is-calling" title="Permanent link">&para;</a></h2>
+<p>That dict also carries the kernel's <code>"transport"</code> key, stamped <code>"rest"</code>
+(<code>REST_TRANSPORT</code>, from the package root), so a callable shared with another
+transport can tell them apart with the kernel's <code>call_transport</code>. Checks, a
+discriminator, hooks, the validator, the service, the presenter and an <code>OPTIONS</code>
+answer all read that one value. The dict is the view's, built by the kernel's
+<code>build_call_context</code>.</p>
+<ul>
+<li><strong>A serializer of this package under another transport keeps that transport's
+  stamp.</strong> Only a view stamps. A <code>SerializerValidator</code> or <code>SerializerPresenter</code>
+  dispatched by spec-mcp or spec-agents reads their value.</li>
+<li><strong>A context you write by hand reads as you wrote it.</strong> <code>build_offline_context</code>
+  returns a request and a view, not a context, so a dict built from them with
+  no <code>"transport"</code> key reads as an in-process call, where <code>call_transport</code>
+  answers <code>None</code>.</li>
+<li><strong>The key is the transport's to write.</strong> A view hook or a <code>serializer_context</code>
+  callable answering a <code>"transport"</code> key of its own replaces the stamp for the
+  rest of the call, in the dict every stage shares, so name such a key something else.</li>
+</ul>
+<p>What you override on this transport is DRF's and the view's: authenticators and
+<code>EXCEPTION_HANDLER</code>, the view's attributes and its <code>get_*</code> hooks
+(<a href="../recipes/serializer-context/">Serializer context</a>).</p>
 
 
 

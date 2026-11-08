@@ -1397,6 +1397,12 @@ action mixins, and <code>@service_action</code> / <code>@selector_action</code>:
   it where the view's first authenticator sends a <code>WWW-Authenticate</code>:
   DRF answers such a check's denial of a caller nobody authenticated 401
   there, and 403 where the authenticator sends none (<code>_caller_refusals</code>).</li>
+<li><strong>A</strong> <code>DiscriminatedAction</code> <strong>is one request component</strong>,
+  <code>{View}_{action}_Request</code>, an <code>anyOf</code> over the body of each variant
+  that takes one (<code>_discriminated_request_body</code>), and its responses are
+  the variants' merged per status: one body where they agree, an inline
+  <code>anyOf</code> where they differ, and a <code>400</code> always, since the
+  discriminator may refuse (<code>_discriminated_responses</code>).</li>
 <li><strong>A FilterSet's query parameters</strong> are the kernel's
   <code>filter_set_parameters</code>, on a list operation only.</li>
 <li><strong>A viewset method answered 405 for want of a spec</strong> is no operation:

@@ -954,18 +954,19 @@ and documented there. This package documents what it adds over DRF.</p>
   <code>MutationFlowMixin</code>, <code>resolve_mutation_instance</code>.</li>
 <li><strong><a href="viewsets/">Viewsets</a></strong>: <code>ServiceViewSet</code>, <code>SelectorViewSet</code>, the
   per-action mixins, <code>ActionSerializerResolver</code>, <code>@service_action</code>,
-  <code>@selector_action</code>.</li>
+  <code>@selector_action</code>, <code>GetQuerysetScopeWarning</code>.</li>
 <li><strong><a href="service-specs/">DRF seats</a></strong>: <code>SerializerValidator</code>,
   <code>SerializerPresenter</code>, <code>DRFPermissionCheck</code>, the DRF refusal classes and the
   translators between the kernel's refusals and DRF's, and the offline context.</li>
-<li><strong><a href="types/">Types</a></strong>: <code>ServiceView</code>, <code>ViewHooks</code>, <code>HttpExtras</code>, the offline
-  request and view, <code>MARKING</code> and the JSON Schema registry.</li>
+<li><strong><a href="types/">Types</a></strong>: <code>DiscriminatedAction</code>, <code>ServiceView</code>, <code>ViewHooks</code>,
+  <code>HttpExtras</code>, the offline request and view, <code>MARKING</code> and the JSON Schema
+  registry.</li>
 <li><strong><a href="openapi/">OpenAPI</a></strong>: <code>enable_openapi</code>, <code>ServiceAutoSchema</code>,
   <code>ServiceErrorSerializer</code>, <code>SERVICE_ERROR_METADATA_KEY</code> (the opt-in
   <code>drf-spectacular</code> adapter).</li>
 </ul>
 <h2 id="public-surface">Public surface<a class="headerlink" href="#public-surface" title="Permanent link">&para;</a></h2>
-<p>The top-level <code>django_spec_rest</code> package exports the 29 names below. The
+<p>The top-level <code>django_spec_rest</code> package exports the 32 names below. The
 subpackages <code>django_spec_rest.views</code>, <code>django_spec_rest.viewsets</code>,
 <code>django_spec_rest.types</code> and <code>django_spec_rest.openapi</code> export theirs from
 their <code>__init__</code>, and the seat adapters are imported from their leaf modules
@@ -985,11 +986,11 @@ page shows.</p>
 </tr>
 <tr>
 <td>Viewsets</td>
-<td><code>ServiceViewSet</code>, <code>SelectorViewSet</code>, <code>ServiceCreateMixin</code>, <code>ServiceUpdateMixin</code>, <code>ServiceDestroyMixin</code>, <code>SelectorListMixin</code>, <code>SelectorRetrieveMixin</code>, <code>ActionSerializerResolver</code>, <code>service_action</code>, <code>selector_action</code></td>
+<td><code>ServiceViewSet</code>, <code>SelectorViewSet</code>, <code>ServiceCreateMixin</code>, <code>ServiceUpdateMixin</code>, <code>ServiceDestroyMixin</code>, <code>SelectorListMixin</code>, <code>SelectorRetrieveMixin</code>, <code>ActionSerializerResolver</code>, <code>service_action</code>, <code>selector_action</code>, <code>GetQuerysetScopeWarning</code></td>
 </tr>
 <tr>
 <td>Types</td>
-<td><code>ServiceView</code>, <code>ViewHooks</code>, <code>HttpExtras</code>, <code>OfflineContext</code>, <code>OfflineHttpRequest</code>, <code>OfflineServiceView</code>, <code>MARKING</code>, <code>JsonSchemaRegistry</code>, <code>DEFAULT_JSON_SCHEMA_REGISTRY</code></td>
+<td><code>DiscriminatedAction</code>, <code>ServiceView</code>, <code>ViewHooks</code>, <code>HttpExtras</code>, <code>OfflineContext</code>, <code>OfflineHttpRequest</code>, <code>OfflineServiceView</code>, <code>MARKING</code>, <code>JsonSchemaRegistry</code>, <code>DEFAULT_JSON_SCHEMA_REGISTRY</code>, <code>REST_TRANSPORT</code></td>
 </tr>
 <tr>
 <td>Serializer helpers</td>

@@ -838,6 +838,28 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#the-row-scoping-warning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The row-scoping warning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_rest.viewsets.get_queryset_scope_warning.GetQuerysetScopeWarning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GetQuerysetScopeWarning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#per-action-answers" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1157,6 +1179,28 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#the-row-scoping-warning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The row-scoping warning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_rest.viewsets.get_queryset_scope_warning.GetQuerysetScopeWarning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GetQuerysetScopeWarning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#per-action-answers" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1400,7 +1444,82 @@ route that does carry one must have it declared by the selector itself.</p>
 <p>The schema documents a declared capture with the read's type and <code>help</code> where
 drf-spectacular finds no model to type it from, as on a viewset with no
 <code>queryset</code> (see <a href="../../openapi/#what-a-route-documents">OpenAPI</a>).</p>
-<h2 id="per-action-answers">Per-action answers<a class="headerlink" href="#per-action-answers" title="Permanent link">&para;</a></h2>
+<h2 id="the-row-scoping-warning">The row-scoping warning<a class="headerlink" href="#the-row-scoping-warning" title="Permanent link">&para;</a></h2>
+<p>A spec's rows are its selector's, so a <code>get_queryset()</code> override does not scope
+them, and tenant scoping left in one lets a <code>PATCH</code> or <code>DELETE</code> reach another
+tenant's row with no error. <code>as_view()</code> reports a viewset that overrides it
+beside a write spec or a list spec, with a <code>GetQuerysetScopeWarning</code> whose text
+begins with the stable id <strong><code>django_spec_rest.W001</code></strong> and names the class:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>django_spec_rest.W001: myapp.views.InvoiceViewSet overrides get_queryset() (on InvoiceViewSet) and serves a write or list spec, ...
+</span></code></pre></div>
+<p>An override counts on any class below this package's bases and DRF's, a mixin
+listed after them included, since its <code>super()</code> runs. A write spec or a list
+spec counts under <code>action_specs</code>, an <code>as_view(action_specs=...)</code> included, and
+under <code>@service_action</code> or <code>@selector_action</code>. A viewset with no override, or
+serving only retrieve specs and actions with no spec, is not reported, and
+neither is a backend in <code>filter_backends</code>, since most are plain list filters
+(<a href="../../moving-from-drfs/#views-and-viewsets">Moving from djangorestframework-services</a>
+says what changes for one that scoped a tenant).</p>
+<p>An override can be right to stay: DRF's <code>DjangoModelPermissions</code> asks
+<code>get_queryset()</code> for the model it checks. Once each selector scopes its own
+rows, say so on the class:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">InvoiceViewSet</span><span class="p">(</span><span class="n">ServiceViewSet</span><span class="p">):</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="n">action_specs</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;list&quot;</span><span class="p">:</span> <span class="n">INVOICES</span><span class="p">,</span> <span class="s2">&quot;destroy&quot;</span><span class="p">:</span> <span class="n">DELETE_INVOICE</span><span class="p">}</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>    <span class="n">spec_rows_scoped_by_selector</span> <span class="o">=</span> <span class="kc">True</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">get_queryset</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">QuerySet</span><span class="p">[</span><span class="n">Invoice</span><span class="p">]:</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>        <span class="k">return</span> <span class="n">Invoice</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+</span></code></pre></div>
+<p>The attribute is inherited, so a base class says it once for its own override.
+It covers only overrides on the class declaring it and that class's bases: one
+a subclass adds, or a mixin listed before it, is reported again, because nobody
+has yet said it scopes nothing. A subclass may set it to <code>False</code>.</p>
+<p>It is a Python warning at <code>as_view()</code>, not a system check: this package has no
+app config for a check to register on, and asks for no <code>INSTALLED_APPS</code> entry,
+so <code>SILENCED_SYSTEM_CHECKS</code> does not apply. It prints when the URLconf is
+imported, <code>manage.py check</code> included. Under Python's default filter a router
+shows it once for a class, however many routes it mounts, and a class mounted
+by hand shows it once per line mounting it. No request makes one. A project or a test suite may filter on the id, to fail on it say:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">warnings</span><span class="o">.</span><span class="n">filterwarnings</span><span class="p">(</span><span class="s2">&quot;error&quot;</span><span class="p">,</span> <span class="n">message</span><span class="o">=</span><span class="sa">r</span><span class="s2">&quot;django_spec_rest\.W001&quot;</span><span class="p">)</span>
+</span></code></pre></div>
+<p>A viewset of DRF's alone, serving <code>@service_action</code> or <code>@selector_action</code> with
+no base of this package's, has no such <code>as_view()</code> and is not reported, and
+neither is a standalone view.</p>
+
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_rest.viewsets.get_queryset_scope_warning.GetQuerysetScopeWarning" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">GetQuerysetScopeWarning</span>
+
+
+<a href="#django_spec_rest.viewsets.get_queryset_scope_warning.GetQuerysetScopeWarning" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="UserWarning">UserWarning</span></code></p>
+
+
+
+        <p>A viewset overrides <code>get_queryset()</code>, which scopes none of the rows its specs serve.</p>
+<p>A <code>UserWarning</code>, because Python hides a <code>DeprecationWarning</code> outside
+<code>__main__</code> and the failure this reports is silent otherwise. Its text
+begins with the stable id <code>django_spec_rest.W001</code>.</p>
+
+
+
+
+
+
+
+
+
+    </div>
+
+</div><h2 id="per-action-answers">Per-action answers<a class="headerlink" href="#per-action-answers" title="Permanent link">&para;</a></h2>
 <p>A kernel spec declares no HTTP answer, so a viewset's <code>success_status</code> and
 <code>response_finalizer</code> answer for every action it serves. An action that answers
 differently declares its own, and the most specific one answers:</p>
@@ -1414,17 +1533,17 @@ differently declares its own, and the most specific one answers:</p>
 <li>the action's default: 201 create, 200 update, 204 destroy, 200 a custom
    action.</li>
 </ol>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">MembershipViewSet</span><span class="p">(</span><span class="n">ServiceViewSet</span><span class="p">):</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="n">action_specs</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;create&quot;</span><span class="p">:</span> <span class="n">JOIN_SPEC</span><span class="p">,</span> <span class="s2">&quot;destroy&quot;</span><span class="p">:</span> <span class="n">LEAVE_SPEC</span><span class="p">}</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">get_create_success_status</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">result</span><span class="p">:</span> <span class="n">Membership</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>        <span class="k">return</span> <span class="mi">201</span> <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">is_new</span> <span class="k">else</span> <span class="mi">200</span>
-</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
-</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="n">get_destroy_success_status</span> <span class="o">=</span> <span class="mi">200</span>
-</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>
-</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>    <span class="nd">@service_action</span><span class="p">(</span><span class="n">CANCEL_SPEC</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">methods</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;post&quot;</span><span class="p">],</span> <span class="n">success_status</span><span class="o">=</span><span class="mi">204</span><span class="p">)</span>
-</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">cancel</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">pk</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Cancel a pending membership.&quot;&quot;&quot;</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">MembershipViewSet</span><span class="p">(</span><span class="n">ServiceViewSet</span><span class="p">):</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>    <span class="n">action_specs</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;create&quot;</span><span class="p">:</span> <span class="n">JOIN_SPEC</span><span class="p">,</span> <span class="s2">&quot;destroy&quot;</span><span class="p">:</span> <span class="n">LEAVE_SPEC</span><span class="p">}</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">get_create_success_status</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">result</span><span class="p">:</span> <span class="n">Membership</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>        <span class="k">return</span> <span class="mi">201</span> <span class="k">if</span> <span class="n">result</span><span class="o">.</span><span class="n">is_new</span> <span class="k">else</span> <span class="mi">200</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>    <span class="n">get_destroy_success_status</span> <span class="o">=</span> <span class="mi">200</span>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>    <span class="nd">@service_action</span><span class="p">(</span><span class="n">CANCEL_SPEC</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">methods</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;post&quot;</span><span class="p">],</span> <span class="n">success_status</span><span class="o">=</span><span class="mi">204</span><span class="p">)</span>
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">cancel</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">pk</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="w">        </span><span class="sd">&quot;&quot;&quot;Cancel a pending membership.&quot;&quot;&quot;</span>
 </span></code></pre></div>
 <p>Each takes the shapes the viewset's does. A status is an <code>int</code> or a callable
 declaring any of <code>result</code>, <code>instance</code>, <code>request</code> and <code>view</code>; a finalizer is a
@@ -1939,7 +2058,7 @@ other case falls back to DRF's <code>serializer_class</code>, raising the usual
 
 <a href="#django_spec_rest.viewsets.decorators.service_action.service_action" class="headerlink" title="Permanent link">&para;</a></h2>
 <div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">service_action</span><span class="p">(</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">spec</span><span class="p">:</span> <span class="n">ServiceSpec</span><span class="p">,</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">spec</span><span class="p">:</span> <span class="n">ServiceSpec</span> <span class="o">|</span> <span class="n">DiscriminatedAction</span><span class="p">,</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="o">*</span><span class="p">,</span>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">detail</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">methods</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -1986,6 +2105,10 @@ against the viewset's <code>pool_seeds</code>, unless a service-kwargs hook of t
 viewset's may fill what it would refuse. On DRF's own <code>GenericViewSet</code> or
 <code>ViewSet</code> nothing asks it, and a seed nobody registers is the first
 request's <code>TypeError</code>.</p>
+<p>A <code>DiscriminatedAction</code> in place of the spec is asked its own shape here
+and each of its variants as a spec is, and the request chooses which runs;
+a callable <code>success_status</code> or <code>response_finalizer</code> may then declare
+<code>variant</code>.</p>
 
 
     </div>

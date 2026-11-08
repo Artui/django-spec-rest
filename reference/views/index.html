@@ -1941,7 +1941,8 @@ outranks these: <code>@service_action</code>'s keywords, or a
 action's default (<code>201</code> create, <code>200</code> update, <code>204</code> delete). A body
 never goes out under <code>204</code>, so a status resolving to it answers <code>200</code>
 with one; set, it applies to an answer with nothing to present too
-(test_callable_success_status).</p>
+(test_callable_success_status). On a <code>DiscriminatedAction</code> a callable may
+also declare <code>variant</code>, the key the discriminator chose.</p>
 
     </div>
 
@@ -1968,7 +1969,8 @@ with one; set, it applies to an answer with nothing to present too
         <p>The post-presentation hook on a <code>2xx</code>: declares any of
 <code>response</code> / <code>result</code> / <code>request</code> / <code>view</code> / <code>instance</code> / <code>data</code>
 and returns a <code>Response</code> to replace the one built, or <code>None</code> to keep it
-(test_response_finalizer).</p>
+(test_response_finalizer). On a <code>DiscriminatedAction</code> it may also declare
+<code>variant</code>, the key the discriminator chose.</p>
 
     </div>
 
