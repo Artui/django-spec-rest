@@ -2463,8 +2463,12 @@ DROPPED: dict[tuple[str, str], str] = {
     ): "an input marker: fill the key from a typed kwargs provider",
     ("rest_framework_services", "NotClientInputType"): "drfs' own name, with no counterpart in "
     "django-spec-rest or the kernel",
-    ("rest_framework_services", "OfflineContract"): "no counterpart: a kernel spec dispatches off "
-    "HTTP through the kernel's dispatch",
+    ("rest_framework_services", "OfflineContract"): "declare its parts on their seats: "
+    "field_audiences on SerializerPresenter, "
+    "url_kwargs as a Parameter in the selector's "
+    "reads= (a capture the model must never see is a "
+    "server argument), query_params as shapes= on the "
+    "spec; see 'Declaring a spec' on the moving page",
     ("rest_framework_services", "PolymorphicServiceSpec"): "declare one kernel spec per route or "
     "action",
     (
@@ -3640,10 +3644,13 @@ DROPPED: dict[tuple[str, str], str] = {
         "rest_framework_services.types",
         "NotClientInputType",
     ): "drfs' own name, with no counterpart in django-spec-rest or the kernel",
-    (
-        "rest_framework_services.types",
-        "OfflineContract",
-    ): "no counterpart: a kernel spec dispatches off HTTP through the kernel's dispatch",
+    ("rest_framework_services.types", "OfflineContract"): "declare its parts on their seats: "
+    "field_audiences on SerializerPresenter, "
+    "url_kwargs as a Parameter in the "
+    "selector's reads= (a capture the model "
+    "must never see is a server argument), "
+    "query_params as shapes= on the spec; see "
+    "'Declaring a spec' on the moving page",
     (
         "rest_framework_services.types",
         "PolymorphicServiceSpec",
@@ -3713,10 +3720,18 @@ DROPPED: dict[tuple[str, str], str] = {
         "rest_framework_services.types.not_client_input",
         "NotClientInputType",
     ): "drfs' own name, with no counterpart in django-spec-rest or the kernel",
-    (
-        "rest_framework_services.types.offline_contract",
-        "OfflineContract",
-    ): "no counterpart: a kernel spec dispatches off HTTP through the kernel's dispatch",
+    ("rest_framework_services.types.offline_contract", "OfflineContract"): "declare its parts on "
+    "their seats: "
+    "field_audiences on "
+    "SerializerPresenter, "
+    "url_kwargs as a Parameter "
+    "in the selector's reads= "
+    "(a capture the model must "
+    "never see is a server "
+    "argument), query_params "
+    "as shapes= on the spec; "
+    "see 'Declaring a spec' on "
+    "the moving page",
     (
         "rest_framework_services.types.offline_contract",
         "QueryParam",
@@ -3778,10 +3793,19 @@ DROPPED: dict[tuple[str, str], str] = {
         "rest_framework_services.types.selector_spec",
         "ExtraT",
     ): "drfs' own name, with no counterpart in django-spec-rest or the kernel",
-    ("rest_framework_services.types.selector_spec", "OfflineContract"): "no counterpart: a kernel "
-    "spec dispatches off HTTP "
-    "through the kernel's "
-    "dispatch",
+    (
+        "rest_framework_services.types.selector_spec",
+        "OfflineContract",
+    ): "declare its parts on their "
+    "seats: field_audiences on "
+    "SerializerPresenter, "
+    "url_kwargs as a Parameter in "
+    "the selector's reads= (a "
+    "capture the model must never "
+    "see is a server argument), "
+    "query_params as shapes= on "
+    "the spec; see 'Declaring a "
+    "spec' on the moving page",
     ("rest_framework_services.types.selector_spec", "QueryParam"): "declare the read as a kernel "
     "Parameter in reads= (or shapes= "
     "where no callable names it)",
@@ -3823,10 +3847,16 @@ DROPPED: dict[tuple[str, str], str] = {
         "rest_framework_services.types.service_spec",
         "InputT",
     ): "drfs' own name, with no counterpart in django-spec-rest or the kernel",
-    (
-        "rest_framework_services.types.service_spec",
-        "OfflineContract",
-    ): "no counterpart: a kernel spec dispatches off HTTP through the kernel's dispatch",
+    ("rest_framework_services.types.service_spec", "OfflineContract"): "declare its parts on their "
+    "seats: field_audiences on "
+    "SerializerPresenter, "
+    "url_kwargs as a Parameter in "
+    "the selector's reads= (a "
+    "capture the model must never "
+    "see is a server argument), "
+    "query_params as shapes= on "
+    "the spec; see 'Declaring a "
+    "spec' on the moving page",
     ("rest_framework_services.types.service_spec", "QueryParam"): "declare the read as a kernel "
     "Parameter in reads= (or shapes= "
     "where no callable names it)",
@@ -3879,9 +3909,15 @@ DROPPED: dict[tuple[str, str], str] = {
         "rest_framework_services.types.utils",
         "NotClientInput",
     ): "an input marker: fill the key from a typed kwargs provider",
-    ("rest_framework_services.types.utils", "OfflineContract"): "no counterpart: a kernel spec "
-    "dispatches off HTTP through the "
-    "kernel's dispatch",
+    ("rest_framework_services.types.utils", "OfflineContract"): "declare its parts on their seats: "
+    "field_audiences on "
+    "SerializerPresenter, url_kwargs as a "
+    "Parameter in the selector's reads= "
+    "(a capture the model must never see "
+    "is a server argument), query_params "
+    "as shapes= on the spec; see "
+    "'Declaring a spec' on the moving "
+    "page",
     ("rest_framework_services.types.utils", "PER_CALL_POOL_NAMES"): "drfs' own name, with no "
     "counterpart in django-spec-rest "
     "or the kernel",
