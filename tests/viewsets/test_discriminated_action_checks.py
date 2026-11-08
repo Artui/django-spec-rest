@@ -95,11 +95,11 @@ class TestWhereItAttaches:
 
     def test_on_a_selector_viewset_it_is_refused_too(self) -> None:
         viewset = type("_ViewSet", (SelectorViewSet,), {"action_specs": {"list": _action()}})
-        with pytest.raises(ImproperlyConfigured, match="DiscriminatedAction"):
+        with pytest.raises(ImproperlyConfigured, match="serves a write action"):
             viewset.as_view({"get": "list"})
 
     def test_an_action_specs_keyword_is_asked_as_the_class_attribute_is(self) -> None:
-        with pytest.raises(ImproperlyConfigured, match="DiscriminatedAction"):
+        with pytest.raises(ImproperlyConfigured, match="serves a write action"):
             ServiceViewSet.as_view({"get": "list"}, action_specs={"list": _action()})
 
     @pytest.mark.parametrize(
@@ -252,6 +252,12 @@ class TestEachVariantIsAskedAsAPlainEntry:
         bad = ServiceSpec(service=_no_seed, permissions=_OPEN)
         with pytest.raises(ImproperlyConfigured, match=r"\['bad'\]: .*tenant"):
             _mount(_action(fine=_create(), bad=bad))
+
+    def test_a_plain_entry_s_seed_refusal_keeps_the_kernel_s_sentence(self) -> None:
+        bad = ServiceSpec(service=_no_seed, permissions=_OPEN)
+        with pytest.raises(ImproperlyConfigured) as refusal:
+            _mount(bad)
+        assert "_ViewSet" not in str(refusal.value)
 
     def test_a_seed_the_view_registers_fills_it_where_the_default_does_not(self) -> None:
         bad = ServiceSpec(service=_no_seed, permissions=_OPEN)

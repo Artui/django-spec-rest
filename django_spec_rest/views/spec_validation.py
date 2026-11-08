@@ -443,6 +443,8 @@ def validate_mutation_view_spec(
             # mounted, which a variant among several needs
             # (test_discriminated_action_checks'
             # test_a_keyword_nothing_fills_is_refused_labelled).
+            if not discriminated:
+                raise
             raise ImproperlyConfigured(f"{view_cls.__name__}: {refusal}") from refusal
 
 
