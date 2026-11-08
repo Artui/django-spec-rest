@@ -12,7 +12,6 @@ from dataclasses import dataclass
 from typing import Any
 
 import pytest
-from django.core.exceptions import ImproperlyConfigured
 from django.urls import path, re_path
 from django_service_specs import (
     DataclassValidator,
@@ -24,6 +23,7 @@ from django_service_specs import (
     ServiceSpec,
     Unrestricted,
 )
+from drf_spectacular.drainage import GENERATOR_STATS
 from drf_spectacular.generators import SchemaGenerator
 from rest_framework import serializers
 from rest_framework.routers import DefaultRouter
@@ -357,11 +357,83 @@ class TestTheRequestComponent:
     def test_a_decorated_action_is_documented_too(self, schema: dict[str, Any]) -> None:
         assert _request(schema, "/decorated/login/") == {"oneOf": [_ref("AIn"), _ref("BIn")]}
 
-    def test_one_action_reached_by_two_methods_with_different_bodies_is_refused(self) -> None:
+
+@pytest.fixture
+def warned(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """The warnings drf-spectacular is asked to emit, which it prints once and then caches."""
+    emitted: list[str] = []
+
+    def emit(message: str, severity: str) -> None:
+        if severity == "warning":
+            emitted.append(message)
+
+    monkeypatch.setattr(GENERATOR_STATS, "emit", emit)
+    return emitted
+
+
+@dataclass
+class Member:
+    org: str
+    name: str
+
+
+def _generate(*patterns: Any) -> dict[str, Any]:
+    return SchemaGenerator(patterns=list(patterns)).get_schema(request=None, public=True)
+
+
+class TestOneNameForTwoBodies:
+    """A component name two operations share, whose bodies differ, never takes the schema down."""
+
+    def test_two_classes_of_one_name_each_document_their_own_body(self, warned: list[str]) -> None:
+        first = _viewset("ProjectViewSet", "create", _action(a=_spec(SerializerValidator(AIn))))
+        second = _viewset("ProjectViewSet", "create", _action(a=_spec(SerializerValidator(BIn))))
+        first.__module__, second.__module__ = "api.v1", "api.v2"
+        schema = _generate(
+            path("v1/", first.as_view({"post": "create"})),
+            path("v2/", second.as_view({"post": "create"})),
+        )
+        assert _request(schema, "/v1/") == {"oneOf": [_ref("AIn")]}
+        assert _body(schema, "/v2/", "post") == {"oneOf": [_ref("BIn")]}
+        assert len(warned) == 1
+        assert "ProjectViewSet_create_Request" in warned[0]
+
+    def test_a_route_capture_named_as_a_field_changes_the_body_it_documents(
+        self, warned: list[str]
+    ) -> None:
+        view = _viewset("Nested", "create", _action(a=_spec(DataclassValidator(Member))))
+        schema = _generate(
+            path("q/", view.as_view({"post": "create"})),
+            path("orgs/<str:org>/q/", view.as_view({"post": "create"})),
+        )
+        # The route sorted first holds the component, and the other is inline.
+        held, inline = _body(schema, "/orgs/{org}/q/", "post"), _body(schema, "/q/", "post")
+        assert held == _ref("Nested_create_Request")
+        captured, bare = _component(schema, held)["oneOf"], inline["oneOf"]
+        assert [set(m["properties"]) for m in bare] == [{"org", "name"}]
+        assert [set(m["properties"]) for m in captured] == [{"name"}]
+        assert len(warned) == 1
+
+    def test_one_action_reached_by_put_and_patch_still_generates(self, warned: list[str]) -> None:
         router = DefaultRouter()
         router.register("clashing", Clashing, basename="clashing")
-        with pytest.raises(ImproperlyConfigured, match="Clashing_rename_Request"):
-            SchemaGenerator(patterns=router.urls).get_schema(request=None, public=True)
+        schema = _generate(*router.urls)
+        put = _op(schema, "/clashing/{id}/rename/", "put")["requestBody"]["content"]
+        patch = _op(schema, "/clashing/{id}/rename/", "patch")["requestBody"]["content"]
+        assert put["application/json"]["schema"] == _ref("Clashing_rename_Request")
+        assert patch["application/json"]["schema"] != put["application/json"]["schema"]
+        assert len(warned) == 1
+
+    def test_two_operations_of_one_body_share_the_component_without_a_warning(
+        self, warned: list[str]
+    ) -> None:
+        view = _viewset("Shared", "create", _action(a=_spec(SerializerValidator(AIn))))
+        schema = _generate(
+            path("one/", view.as_view({"post": "create"})),
+            path("two/", view.as_view({"post": "create"})),
+        )
+        assert _body(schema, "/one/", "post") == _ref("Shared_create_Request")
+        assert _body(schema, "/two/", "post") == _ref("Shared_create_Request")
+        assert warned == []
 
 
 class TestThePathParameters:

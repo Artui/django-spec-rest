@@ -27,6 +27,7 @@ from django_service_specs.parameters.parameters import Parameter, Parameters
 from django_service_specs.schema.can_present_nothing import can_present_nothing
 from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelectorSpec
 from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
+from drf_spectacular.drainage import warn
 from drf_spectacular.extensions import OpenApiSerializerExtension
 from drf_spectacular.openapi import AutoSchema
 from drf_spectacular.plumbing import (
@@ -287,9 +288,11 @@ class ServiceAutoSchema(AutoSchema):
         no variant takes one there is no request body and no component, never
         an empty ``oneOf``
         (test_it_is_never_an_empty_one_of). A second operation of the same name
-        whose members differ (one action reached by a ``PUT`` and a ``PATCH``)
-        is refused rather than documented by the first's
-        (test_one_action_reached_by_two_methods_with_different_bodies_is_refused).
+        whose members differ (two classes of one name in different modules, a
+        route capture named as a variant's field, one action reached by a
+        ``PUT`` and a ``PATCH``) warns and documents its own ``oneOf`` inline
+        rather than the first's, since a name can be a component only once
+        (test_discriminated_action_schema's TestOneNameForTwoBodies).
         """
         members = [
             member
@@ -308,11 +311,12 @@ class ServiceAutoSchema(AutoSchema):
         )
         self.registry.register_on_missing(component)
         if self.registry[component].schema != component.schema:
-            raise ImproperlyConfigured(
-                f"{view_name}.{action_name} is documented as the component "
-                f"{name!r} with two different bodies (a PATCH takes the partial form of each "
-                "variant). Serve it by one method, or split it into actions of their own."
+            warn(
+                f"{view_name}.{action_name} documents a different request than the component "
+                f"{name!r} already holds, so its request is given inline. Name the views "
+                "differently to give each its own component."
             )
+            return OpenApiRequest(component.schema)
         return OpenApiRequest(component.ref)
 
     def _variant_body(self, spec: KernelServiceSpec) -> dict[str, Any] | None:
