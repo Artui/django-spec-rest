@@ -291,10 +291,9 @@ class ServiceAutoSchema(AutoSchema):
         member's schema is open, since the edge drops a key it does not know, so
         a body two variants accept matches both, which a ``oneOf`` would call
         invalid (test_a_body_two_variants_accept_is_valid_for_what_both_document).
-        A second operation of the same name
-        whose members differ (two classes of one name in different modules, a
-        route capture named as a variant's field, one action reached by a
-        ``PUT`` and a ``PATCH``) warns and documents its own ``anyOf`` inline
+        A second operation of the same name whose members differ (two classes of
+        one name in different modules, a route capture named as a variant's
+        field, one action reached by a ``PUT`` and a ``PATCH``) warns and documents its own ``anyOf`` inline
         rather than the first's, since a name can be a component only once
         (test_discriminated_action_schema's TestOneNameForTwoBodies).
         """
@@ -552,7 +551,7 @@ class ServiceAutoSchema(AutoSchema):
 
         One body where the variants' bodies are the same schema; an inline
         ``anyOf`` of the distinct ones where they differ
-        (test_variants_that_differ_are_an_inline_one_of). A variant answering
+        (test_variants_that_differ_are_an_inline_any_of). A variant answering
         the status with no body adds no member, since an ``anyOf`` cannot say
         nothing, so a body beside a bodiless answer is documented
         (test_a_body_less_response_beside_a_body_keeps_the_body) and a status

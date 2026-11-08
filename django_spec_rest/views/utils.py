@@ -129,8 +129,8 @@ def view_call_context(view: Any, request: Request) -> dict[str, Any]:
     a serializer of this package running under another transport's ``dispatch``
     never comes through here, so that transport's stamp stands
     (test_the_transport_stamp's TestUnderAnotherTransport). Kept on the view, which
-    DRF builds afresh for every request, so a second request is a second dict (test_each_request_is_a_dict_of_its_own). Kept rather than
-    rebuilt: a dict per caller fails the identity assertions of
+    DRF builds afresh for every request, so a second request is a second dict
+    (test_each_request_is_a_dict_of_its_own). Kept rather than rebuilt: a dict per caller fails the identity assertions of
     test_every_callable_of_a_kernel_service_is_handed_the_view_s_dict. Two
     dispatches in one request, the retrieve spec finding an update's row and
     then the update spec, are one call and share it.

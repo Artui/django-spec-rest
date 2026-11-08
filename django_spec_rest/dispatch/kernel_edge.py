@@ -10,8 +10,8 @@ What a view hands it, and what it does with each:
 
 - **The call's context**, ``view_call_context(view, request)``, the one dict
   per request the view already builds with ``request``, ``view``, ``format``,
-  ``action`` and this package's transport stamp. It reaches the kernel's ``dispatch`` as ``call_context`` as
-  the very object, so the kernel seeds ``request`` and ``view`` from it by name
+  ``action`` and this package's transport stamp. It reaches the kernel's
+  ``dispatch`` as ``call_context`` as the very object, so the kernel seeds ``request`` and ``view`` from it by name
   (``CALL_SEEDS``) for every callable declaring either, and the spec's
   ``SerializerValidator`` and ``SerializerPresenter`` read both from it for
   the serializer context DRF builds. The view builds it rather than this
