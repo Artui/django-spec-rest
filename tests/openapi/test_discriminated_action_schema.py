@@ -1,6 +1,6 @@
 """``ServiceAutoSchema`` documenting a ``DiscriminatedAction``, end to end through drf-spectacular.
 
-The request is one component, ``{View}_{action}_Request``, a ``oneOf`` over the
+The request is one component, ``{View}_{action}_Request``, an ``anyOf`` over the
 bodies of the variants that take one; the responses are the variants' merged
 per status. Every route here is built from variants named for what they take,
 so the expected component reads off the test.
@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+import jsonschema
 import pytest
 from django.urls import path, re_path
 from django_service_specs import (
@@ -144,7 +145,7 @@ HALF = _viewset(
     "create",
     _action(a=_spec(SerializerValidator(AIn), A_OUT), b=_spec(SerializerValidator(BIn))),
 )
-# Two variants taking one body: a ``oneOf`` of it twice would be valid for no body.
+# Two variants taking one body: one member, since a second would say nothing more.
 SAME = _viewset(
     "Same",
     "create",
@@ -301,7 +302,7 @@ def _component(schema: dict[str, Any], ref: dict[str, Any]) -> dict[str, Any]:
 
 
 def _request(schema: dict[str, Any], route: str, method: str = "post") -> dict[str, Any]:
-    """The ``oneOf`` the operation's request body names."""
+    """The ``anyOf`` the operation's request body names."""
     return _component(schema, _body(schema, route, method))
 
 
@@ -324,48 +325,48 @@ class TestTheRequestComponent:
         assert _body(schema, "/decorated/login/", "post") == _ref("Decorated_login_Request")
         assert _body(schema, "/patched/{id}/", "patch") == _ref("Patched_partial_update_Request")
 
-    def test_it_is_a_one_of_over_the_variants_bodies(self, schema: dict[str, Any]) -> None:
-        assert _request(schema, "/mixed/") == {"oneOf": [_ref("AIn"), _ref("BIn")]}
+    def test_it_is_a_any_of_over_the_variants_bodies(self, schema: dict[str, Any]) -> None:
+        assert _request(schema, "/mixed/") == {"anyOf": [_ref("AIn"), _ref("BIn")]}
 
     def test_variants_taking_one_body_add_it_once(self, schema: dict[str, Any]) -> None:
-        assert _request(schema, "/same/") == {"oneOf": [_ref("AIn")]}
+        assert _request(schema, "/same/") == {"anyOf": [_ref("AIn")]}
 
     def test_a_variant_with_no_body_adds_no_member(self, schema: dict[str, Any]) -> None:
         # ``c`` takes nothing: an empty member would match every body.
-        assert len(_request(schema, "/mixed/")["oneOf"]) == 2
-        assert {} not in _request(schema, "/mixed/")["oneOf"]
+        assert len(_request(schema, "/mixed/")["anyOf"]) == 2
+        assert {} not in _request(schema, "/mixed/")["anyOf"]
 
-    def test_it_is_never_an_empty_one_of(self, schema: dict[str, Any]) -> None:
+    def test_it_is_never_an_empty_any_of(self, schema: dict[str, Any]) -> None:
         assert "requestBody" not in _op(schema, "/bare/", "post")
         assert not any(
-            component.get("oneOf") == [] for component in schema["components"]["schemas"].values()
+            component.get("anyOf") == [] for component in schema["components"]["schemas"].values()
         )
         assert "Bare_create_Request" not in schema["components"]["schemas"]
 
     def test_a_variant_with_a_body_and_no_serializer_is_documented(
         self, schema: dict[str, Any]
     ) -> None:
-        sheet, form = _request(schema, "/csv/")["oneOf"]
+        sheet, form = _request(schema, "/csv/")["anyOf"]
         assert sheet["type"] == "array"
         assert set(sheet["items"]["properties"]) == {"sku"}
         assert form == _ref("AIn")
 
     def test_a_many_serializer_variant_is_a_list_of_its_rows(self, schema: dict[str, Any]) -> None:
-        assert _request(schema, "/rows/")["oneOf"] == [
+        assert _request(schema, "/rows/")["anyOf"] == [
             {"type": "array", "items": _ref("AIn")},
             _ref("BIn"),
         ]
 
     def test_a_patch_names_the_partial_form_of_each_variant(self, schema: dict[str, Any]) -> None:
         assert _request(schema, "/patched/{id}/", "patch") == {
-            "oneOf": [_ref("PatchedAIn"), _ref("PatchedBIn")]
+            "anyOf": [_ref("PatchedAIn"), _ref("PatchedBIn")]
         }
 
     def test_a_delete_documents_the_body_it_takes(self, schema: dict[str, Any]) -> None:
-        assert _request(schema, "/destroyed/{id}/", "delete") == {"oneOf": [_ref("ReasonIn")]}
+        assert _request(schema, "/destroyed/{id}/", "delete") == {"anyOf": [_ref("ReasonIn")]}
 
     def test_a_decorated_action_is_documented_too(self, schema: dict[str, Any]) -> None:
-        assert _request(schema, "/decorated/login/") == {"oneOf": [_ref("AIn"), _ref("BIn")]}
+        assert _request(schema, "/decorated/login/") == {"anyOf": [_ref("AIn"), _ref("BIn")]}
 
 
 @pytest.fixture
@@ -402,8 +403,8 @@ class TestOneNameForTwoBodies:
             path("v1/", first.as_view({"post": "create"})),
             path("v2/", second.as_view({"post": "create"})),
         )
-        assert _request(schema, "/v1/") == {"oneOf": [_ref("AIn")]}
-        assert _body(schema, "/v2/", "post") == {"oneOf": [_ref("BIn")]}
+        assert _request(schema, "/v1/") == {"anyOf": [_ref("AIn")]}
+        assert _body(schema, "/v2/", "post") == {"anyOf": [_ref("BIn")]}
         assert len(warned) == 1
         assert "ProjectViewSet_create_Request" in warned[0]
 
@@ -418,7 +419,7 @@ class TestOneNameForTwoBodies:
         # The route sorted first holds the component, and the other is inline.
         held, inline = _body(schema, "/orgs/{org}/q/", "post"), _body(schema, "/q/", "post")
         assert held == _ref("Nested_create_Request")
-        captured, bare = _component(schema, held)["oneOf"], inline["oneOf"]
+        captured, bare = _component(schema, held)["anyOf"], inline["anyOf"]
         assert [set(m["properties"]) for m in bare] == [{"org", "name"}]
         assert [set(m["properties"]) for m in captured] == [{"name"}]
         assert len(warned) == 1
@@ -454,43 +455,62 @@ class TestThePathParameters:
 
 class TestTheRequestAgreesWithOptions:
     def test_each_member_is_a_variant_options_describes(self, schema: dict[str, Any]) -> None:
-        members = _options(MIXED.as_view({"post": "create"}), "POST")["oneOf"]
-        documented = [_component(schema, ref) for ref in _request(schema, "/mixed/")["oneOf"]]
+        members = _options(MIXED.as_view({"post": "create"}), "POST")["anyOf"]
+        documented = [_component(schema, ref) for ref in _request(schema, "/mixed/")["anyOf"]]
         assert [set(m["properties"]) for m in members] == [{"alpha"}, {"beta"}]
         assert [set(m["properties"]) for m in documented] == [{"alpha"}, {"beta"}]
         assert [m.get("required") for m in members] == [m.get("required") for m in documented]
 
+    @pytest.mark.django_db
+    def test_a_body_two_variants_accept_is_valid_for_what_both_document(
+        self, schema: dict[str, Any]
+    ) -> None:
+        # A member's schema is open, since the edge drops a key it does not
+        # know, so this body matches both. The wire accepts it; a ``oneOf``
+        # would document it as invalid.
+        body = {"alpha": "x", "beta": 1}
+        view = _viewset(
+            "AcceptsBoth",
+            "create",
+            DiscriminatedAction(
+                lambda: "a",
+                {"a": _spec(SerializerValidator(AIn)), "b": _spec(SerializerValidator(BIn))},
+            ),
+        ).as_view({"post": "create"})
+        assert view(APIRequestFactory().post("/", body, format="json")).status_code == 204
+        documented = {**_request(schema, "/mixed/"), "components": schema["components"]}
+        jsonschema.validate(body, documented)
+        jsonschema.validate(body, _options(MIXED.as_view({"post": "create"}), "POST"))
+
     def test_variants_taking_one_body_are_one_member_in_both(self, schema: dict[str, Any]) -> None:
-        # ``jsonschema`` is no dependency of this package's own, so the members
-        # are asserted: a body valid for two identical ``oneOf`` members is valid for none.
-        members = _options(SAME.as_view({"post": "create"}), "POST")["oneOf"]
+        members = _options(SAME.as_view({"post": "create"}), "POST")["anyOf"]
         assert [set(m["properties"]) for m in members] == [{"alpha"}]
-        assert _request(schema, "/same/")["oneOf"] == [_ref("AIn")]
+        assert _request(schema, "/same/")["anyOf"] == [_ref("AIn")]
 
     def test_a_variant_whose_every_field_is_a_route_capture_is_in_neither(
         self, schema: dict[str, Any]
     ) -> None:
         view = READS.as_view({"post": "create"})
-        described = _options(view, "POST", tenant="t")["oneOf"]
+        described = _options(view, "POST", tenant="t")["anyOf"]
         assert [set(m["properties"]) for m in described] == [{"alpha"}]
-        assert _request(schema, "/reads/{tenant}/") == {"oneOf": [_ref("AIn")]}
+        assert _request(schema, "/reads/{tenant}/") == {"anyOf": [_ref("AIn")]}
 
     def test_every_variant_taking_nothing_is_a_plain_body_less_spec_in_both(
         self, schema: dict[str, Any]
     ) -> None:
         described = _options(ONLY_READS.as_view({"post": "create"}), "POST", tenant="t")
         assert described["properties"] == {}
-        assert "oneOf" not in described
+        assert "anyOf" not in described
         assert "requestBody" not in _op(schema, "/only-reads/{tenant}/", "post")
         assert "OnlyReads_create_Request" not in schema["components"]["schemas"]
 
     def test_a_many_member_is_the_list_options_keeps_as_its_one_property(
         self, schema: dict[str, Any]
     ) -> None:
-        members = _options(ROWS.as_view({"post": "create"}), "POST")["oneOf"]
+        members = _options(ROWS.as_view({"post": "create"}), "POST")["anyOf"]
         listed = members[0]["properties"]
         assert list(listed) == ["items"]
-        assert _component(schema, _body(schema, "/rows/", "post"))["oneOf"][0] == {
+        assert _component(schema, _body(schema, "/rows/", "post"))["anyOf"][0] == {
             "type": "array",
             "items": _ref("AIn"),
         }
@@ -502,10 +522,10 @@ class TestTheResponses:
     def test_variants_that_agree_are_one_body(self, schema: dict[str, Any]) -> None:
         assert _response(schema, "/agree/", "post", "201") == _ref("AOut")
 
-    def test_variants_that_differ_are_an_inline_one_of(self, schema: dict[str, Any]) -> None:
+    def test_variants_that_differ_are_an_inline_any_of(self, schema: dict[str, Any]) -> None:
         # ``c`` answers ``AOut`` as ``a`` does, so it is named once.
         assert _response(schema, "/mixed/", "post", "201") == {
-            "oneOf": [_ref("AOut"), _ref("BOut")]
+            "anyOf": [_ref("AOut"), _ref("BOut")]
         }
 
     def test_a_status_one_variant_answers_is_that_variant_s(self, schema: dict[str, Any]) -> None:

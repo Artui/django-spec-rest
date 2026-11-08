@@ -73,7 +73,7 @@ def spec_options(
     from the body. It is built under the edge's unknown-argument policy, so
     under ``IGNORE`` it states no ``additionalProperties``.
 
-    A method a ``DiscriminatedAction`` serves is described as ``{"oneOf": [...]}``
+    A method a ``DiscriminatedAction`` serves is described as ``{"anyOf": [...]}``
     of each variant the caller may send, asked and described as above
     (``_variants_described``), and left out where it may send none.
     """
@@ -127,14 +127,14 @@ def _variants_described(
     action: DiscriminatedAction,
     call_context: dict[str, Any],
 ) -> dict[str, Any] | None:
-    """``action``'s variants the caller may send, as ``{"oneOf": [...]}``, or ``None`` for none.
+    """``action``'s variants the caller may send, as ``{"anyOf": [...]}``, or ``None`` for none.
 
     A variant with no body adds no member, since an empty object matches every
-    body, and variants of one body add it once, since a body valid for two
-    identical members is valid for none. ``oneOf`` is then never empty: where
-    every variant the caller may send takes no body the method is described as
-    a plain body-less spec is, so a method is still hidden exactly when its
-    write is refused first
+    body, and variants of one body add it once. ``anyOf`` as OpenAPI has it, since
+    a member is open and a body two variants accept matches both. Members are
+    never empty: where every variant the caller may send takes no body the
+    method is described as a plain body-less spec is, so a method is still
+    hidden exactly when its write is refused first
     (test_discriminated_action_readers' TestOptions).
     """
     described = [
@@ -150,7 +150,7 @@ def _variants_described(
         # (test_discriminated_action_schema's TestTheRequestAgreesWithOptions).
         if schema["properties"] and schema not in members:
             members.append(schema)
-    return {"oneOf": members} if members else described[0]
+    return {"anyOf": members} if members else described[0]
 
 
 def _spec_described(

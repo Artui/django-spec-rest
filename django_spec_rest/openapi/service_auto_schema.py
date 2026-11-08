@@ -133,10 +133,10 @@ class ServiceAutoSchema(AutoSchema):
       DRF answers such a check's denial of a caller nobody authenticated 401
       there, and 403 where the authenticator sends none (``_caller_refusals``).
     - **A** ``DiscriminatedAction`` **is one request component**,
-      ``{View}_{action}_Request``, a ``oneOf`` over the body of each variant
+      ``{View}_{action}_Request``, an ``anyOf`` over the body of each variant
       that takes one (``_discriminated_request_body``), and its responses are
       the variants' merged per status: one body where they agree, an inline
-      ``oneOf`` where they differ, and a ``400`` always, since the
+      ``anyOf`` where they differ, and a ``400`` always, since the
       discriminator may refuse (``_discriminated_responses``).
     - **A FilterSet's query parameters** are the kernel's
       ``filter_set_parameters``, on a list operation only.
@@ -278,7 +278,7 @@ class ServiceAutoSchema(AutoSchema):
         )
 
     def _discriminated_request_body(self, action: DiscriminatedAction) -> Any:
-        """The request of a ``DiscriminatedAction``: one component, a ``oneOf`` over its variants' bodies.
+        """The request of a ``DiscriminatedAction``: one component, an ``anyOf`` over its variants' bodies.
 
         Named ``{View}_{action}_Request`` and registered as the package's own
         ``ValidationErrors`` is (``_validation_errors_response``), not as a
@@ -286,20 +286,23 @@ class ServiceAutoSchema(AutoSchema):
         a ``many`` one, where a variant's body may be a raw array. Each member
         is ``_variant_body``'s, once however many variants share it; a variant
         taking no body adds none, and where no variant takes one there is no
-        request body and no component, never an empty ``oneOf``
-        (test_it_is_never_an_empty_one_of). A second operation of the same name
+        request body and no component, never an empty ``anyOf``
+        (test_it_is_never_an_empty_any_of). ``anyOf`` rather than ``oneOf``: a
+        member's schema is open, since the edge drops a key it does not know, so
+        a body two variants accept matches both, which a ``oneOf`` would call
+        invalid (test_a_body_two_variants_accept_is_valid_for_what_both_document).
+        A second operation of the same name
         whose members differ (two classes of one name in different modules, a
         route capture named as a variant's field, one action reached by a
-        ``PUT`` and a ``PATCH``) warns and documents its own ``oneOf`` inline
+        ``PUT`` and a ``PATCH``) warns and documents its own ``anyOf`` inline
         rather than the first's, since a name can be a component only once
         (test_discriminated_action_schema's TestOneNameForTwoBodies).
         """
         members: list[dict[str, Any]] = []
         for variant in action.specs.values():
             member = self._variant_body(variant)
-            # Variants of one body are one member: a body valid for two
-            # identical ``oneOf`` members is valid for none
-            # (test_variants_taking_one_body_add_it_once).
+            # Variants of one body are one member, since a second says nothing
+            # more (test_variants_taking_one_body_add_it_once).
             if member is not None and member not in members:
                 members.append(member)
         if not members:
@@ -310,7 +313,7 @@ class ServiceAutoSchema(AutoSchema):
             name=name,
             type=ResolvedComponent.SCHEMA,
             object=DiscriminatedAction,
-            schema={"oneOf": members},
+            schema={"anyOf": members},
         )
         self.registry.register_on_missing(component)
         if self.registry[component].schema != component.schema:
@@ -323,7 +326,7 @@ class ServiceAutoSchema(AutoSchema):
         return OpenApiRequest(component.ref)
 
     def _variant_body(self, spec: KernelServiceSpec) -> dict[str, Any] | None:
-        """One variant's member of the request ``oneOf``, or ``None`` where it takes no body.
+        """One variant's member of the request ``anyOf``, or ``None`` where it takes no body.
 
         ``_kernel_request_body``'s reading of the variant: a serializer's
         ``$ref`` (a list of them for a ``many`` variant) or the inline schema
@@ -548,9 +551,9 @@ class ServiceAutoSchema(AutoSchema):
         """The documented response of one status that several variants answer.
 
         One body where the variants' bodies are the same schema; an inline
-        ``oneOf`` of the distinct ones where they differ
+        ``anyOf`` of the distinct ones where they differ
         (test_variants_that_differ_are_an_inline_one_of). A variant answering
-        the status with no body adds no member, since a ``oneOf`` cannot say
+        the status with no body adds no member, since an ``anyOf`` cannot say
         nothing, so a body beside a bodiless answer is documented
         (test_a_body_less_response_beside_a_body_keeps_the_body) and a status
         no variant gives a body is the first's.
@@ -568,7 +571,7 @@ class ServiceAutoSchema(AutoSchema):
                 distinct.append(schema)
         if len(distinct) == 1:
             return bodies[0][0]
-        return OpenApiResponse(response={"oneOf": distinct})
+        return OpenApiResponse(response={"anyOf": distinct})
 
     def _response_schema(self, answer: Any) -> dict[str, Any] | None:
         """The schema a response in a ``_kernel_responses`` mapping documents, or ``None`` for no body."""

@@ -39,25 +39,28 @@ carries; releases up to 0.62.0 are in
   before the body is read; otherwise the chosen variant runs as a plain entry
   would, its own checks deciding, so drfs' `permission_strategy=` is gone. A
   callable `success_status` or `response_finalizer` on such an action may
-  declare `variant`, the chosen key. OPTIONS describes the method as a `oneOf`
+  declare `variant`, the chosen key. OPTIONS describes the method as an `anyOf`
   of the variants the caller may send. A plain spec's
   `success_status(result, variant=None)` or
   `response_finalizer(response, variant=None)` passed `as_view()` on 0.9.0,
   since a defaulted parameter was never checked; each is now refused, as only
   a `DiscriminatedAction` offers `variant`.
 - **OpenAPI documents a `DiscriminatedAction`.** The request is one component,
-  `{View}_{action}_Request`, a `oneOf` over each variant's body (a serializer's
+  `{View}_{action}_Request`, an `anyOf` over each variant's body (a serializer's
   `$ref`, or the inline schema of any other Validator); a variant taking no
   body adds no member, and where none takes one there is no request body, never
-  an empty `oneOf`, as OPTIONS describes it. The responses are the variants'
-  merged per status, one body where they agree and an inline `oneOf` where they
+  an empty `anyOf`, as OPTIONS describes it. The responses are the variants'
+  merged per status, one body where they agree and an inline `anyOf` where they
   differ, and a `400` always, since the discriminator may refuse. A variant with
   a body but no serializer (an array of rows) is now documented, which drfs left
   out of its component. Variants of one body are one member, in OpenAPI and in
   OPTIONS. Where two operations would give one component name two bodies (two
   classes of one name in different modules, or a route capture that changes a
-  variant's body), the second is given inline as the same `oneOf` with a
-  drf-spectacular warning, rather than refused.
+  variant's body), the second is given inline as the same `anyOf` with a
+  drf-spectacular warning, rather than refused. drfs' component was a `oneOf`;
+  this one is an `anyOf`, since a member is open (the edge drops a key it does
+  not know) and a body two variants accept is valid for both, which a `oneOf`
+  would document as invalid.
 
 ### Fixed
 

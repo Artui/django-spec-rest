@@ -200,7 +200,7 @@ class TestGetSerializerClass:
 
 
 def _members(answer: Any, method: str = "POST") -> list[dict[str, Any]]:
-    return answer.data["actions"][method]["oneOf"]
+    return answer.data["actions"][method]["anyOf"]
 
 
 def _keys(member: dict[str, Any]) -> set[str]:
@@ -208,7 +208,7 @@ def _keys(member: dict[str, Any]) -> set[str]:
 
 
 class TestOptions:
-    def test_each_variant_is_a_member_of_one_of(self) -> None:
+    def test_each_variant_is_a_member_of_any_of(self) -> None:
         answer = _options(_viewset(_action()).as_view({"post": "create"}))
         assert [_keys(member) for member in _members(answer)] == [{"alpha"}, {"beta"}]
         assert set(answer.data["actions"]) == {"POST"}
@@ -234,12 +234,12 @@ class TestOptions:
         assert [_keys(member) for member in _members(_options(view))] == [{"alpha"}]
 
     def test_every_variant_with_no_body_is_described_as_a_plain_body_less_spec_is(self) -> None:
-        """Never an empty ``oneOf``, and the method stays described: its write is not refused."""
+        """Never an empty ``anyOf``, and the method stays described: its write is not refused."""
         plain = _viewset(_bodyless()).as_view({"post": "create"})
         action = _action(one=_bodyless(), two=_bodyless())
         view = _viewset(action).as_view({"post": "create"})
         described = _options(view).data["actions"]["POST"]
-        assert "oneOf" not in described
+        assert "anyOf" not in described
         assert described == _options(plain).data["actions"]["POST"]
 
     def test_a_variant_that_cannot_be_described_adds_no_member(self) -> None:
@@ -338,7 +338,7 @@ def test_options_shows_exactly_the_variants_whose_write_is_not_refused_first(
     answer = view(options)
     assert answer.status_code == 200
     actions = answer.data.get("actions", {})
-    assert [_keys(member) for member in actions.get("POST", {}).get("oneOf", [])] == shown
+    assert [_keys(member) for member in actions.get("POST", {}).get("anyOf", [])] == shown
     assert ("POST" in actions) is bool(shown)
     assert view(posted).status_code == (400 if shown else 403)
 
