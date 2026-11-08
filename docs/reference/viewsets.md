@@ -85,9 +85,9 @@ has yet said it scopes nothing. A subclass may set it to `False`.
 It is a Python warning at `as_view()`, not a system check: this package has no
 app config for a check to register on, and asks for no `INSTALLED_APPS` entry,
 so `SILENCED_SYSTEM_CHECKS` does not apply. It prints when the URLconf is
-imported, `manage.py check` included, and once per class under Python's default
-filter, however many routes a router mounts. Every request after that makes
-none. A project or a test suite may filter on the id, to fail on it say:
+imported, `manage.py check` included. Under Python's default filter a router
+shows it once for a class, however many routes it mounts, and a class mounted
+by hand shows it once per line mounting it. No request makes one. A project or a test suite may filter on the id, to fail on it say:
 
 ```python
 warnings.filterwarnings("error", message=r"django_spec_rest\.W001")
