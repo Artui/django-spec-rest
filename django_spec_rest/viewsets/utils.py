@@ -24,6 +24,7 @@ from django_spec_rest.views.spec_validation import (
     validate_selector_view_spec,
 )
 from django_spec_rest.views.utils import MountedView, mounted_view, view_pool_seeds
+from django_spec_rest.viewsets.warn_unscoped_get_queryset import warn_unscoped_get_queryset
 
 ActionSpec = KernelServiceSpec | KernelSelectorSpec
 
@@ -516,6 +517,8 @@ class _ActionSpecsMixin(_ServesRaisedSchema):
         _validate_decorated_actions(mounted, pool_seeds=pool_seeds)
         actions = args[0] if args else initkwargs.get("actions")
         _validate_lookup_captures(mounted, actions, initkwargs)
+        # After every refusal, so a viewset refused above is told that alone.
+        warn_unscoped_get_queryset(mounted)
         return super().as_view(*args, **initkwargs)  # ty: ignore[unresolved-attribute]
 
     def options(self, request: Any, *args: Any, **kwargs: Any) -> Any:
