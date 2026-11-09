@@ -70,7 +70,7 @@ statement, giving the reason, and a line of its report, `path:line: reason`.
 A site stays in the report until its comment is deleted. `--check` writes
 nothing, reports the same moves and sites, and exits 1 while a file would still
 change. A file that cannot be parsed stops the run with exit 2 before anything is
-written.
+written, and a write that fails stops it with exit 2, naming the file.
 
 What it does not do:
 
