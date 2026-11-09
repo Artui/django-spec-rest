@@ -478,9 +478,11 @@ The query string is read by the kernel's flat reader:
   permission classes in `initial()`. The spec's checks are asked before its
   arguments' shape is checked, so a caller they refuse gets the 401 or 403
   above whatever it sends: an empty body, a missing field, a value of the
-  wrong type or a query string the read cannot parse answer the same as a
-  well-formed request, never the 400 that lists the fields. A request whose
-  body or query string fails its shape is judged with no arguments, the
+  wrong type, a query string the read cannot parse, a body DRF cannot parse, a
+  media type it does not accept or more form fields than Django reads answer
+  the same as a well-formed request, never the 400 that lists the fields. A
+  request whose body cannot be read, or whose body or query string fails its
+  shape, is judged with no arguments, the
   question the OPTIONS answer asks before it describes a method, so OPTIONS
   shows a method's schema exactly to the callers whose incomplete request is
   told what it lacks. A check that reads the call's arguments and cannot

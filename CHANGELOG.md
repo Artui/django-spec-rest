@@ -24,7 +24,6 @@ carries; releases up to 0.62.0 are in
   description that raises is left out of OPTIONS, as before. A
   `SerializerValidator`'s output does not move. Requires
   `django-service-specs>=0.30.0`.
-
 - **The docs and the example say what `DiscriminatedAction` does.** The viewsets
   reference has a section on it (where it attaches, who is refused before the body
   is read, the row, validation per variant, `variant` for a status or finalizer),
