@@ -485,6 +485,9 @@ def _read_call(
     # Read by the recording twin's ``kwargs`` seat, which lays them beneath the
     # spec's provider over the Validator's values (``recording_spec``).
     edge_call_state().author_values = extra_kwargs
+    # One arc to coverage, each side held by what fails without it: the form by
+    # test_a_live_view_validates_a_form_body_by_its_serializer_alone, the switch
+    # by test_the_view_attribute_turns_it_on.
     dispatched = recording_spec(spec, lenient=form_body or _lenient_json_body(view))
     refused.spec = dispatched
     # The twin's Validator, the one the view's input layers are for: a kernel

@@ -26,6 +26,7 @@ from django_service_specs import (
     ServiceSpec,
     Unrestricted,
 )
+from django_service_specs.dispatch.dispatch import dispatch
 from django_service_specs.mutations.update_from_input import update_from_input
 from rest_framework import serializers
 from rest_framework.test import APIRequestFactory
@@ -340,6 +341,14 @@ def _read_both(*, instance: Document, data: Any, upload: Any) -> Document:
     _HANDED["data"] = data
     _HANDED["upload"] = upload
     return instance
+
+
+def test_a_kernel_dispatch_off_http_clears_as_the_edge_does(settings: Any, tmp_path: Any) -> None:
+    """The Validator's answer, not the edge's: every transport over it is handed ``False``."""
+    document = _held(settings, tmp_path)
+    dispatch(_spec(_MayClear), principal=None, arguments={"pk": document.pk, "upload": None})
+    document.refresh_from_db()
+    assert document.upload.name == ""
 
 
 def test_a_form_s_blank_keeps_the_file(settings: Any, tmp_path: Any) -> None:

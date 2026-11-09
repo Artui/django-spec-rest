@@ -205,16 +205,32 @@ def test_a_many_spec_s_rows_are_the_serializer_s() -> None:
     assert str(refused.data["items"][1]["n"][0]) == "A valid integer is required."
 
 
-def test_a_form_body_on_a_many_spec_is_refused_as_it_was() -> None:
-    spec = ServiceSpec(
+def _many(**fields: Any) -> ServiceSpec:
+    return ServiceSpec(
         service=lambda *, items: [],
         validator=SerializerValidator(_Input),
         many=True,
         atomic=False,
         permissions=_OPEN,
+        **fields,
     )
-    response = _view(spec)(_factory.post("/", {"title": "t"}, format="multipart"))
+
+
+def test_a_many_spec_s_list_stays_capped() -> None:
+    """A JSON list's one bound on its count: the switch relaxes each row, never the list."""
+    rows = [{"title": "a"}, {"title": "b"}, {"title": "c"}]
+    with override_settings(SERVICE_SPECS_MAX_ARRAY_LENGTH=2):
+        response = _call(_view(_many(), lenient_json_body=True), rows)
     assert response.status_code == 400
+    assert "items" in response.data
+
+
+def test_a_form_body_on_a_many_spec_is_refused_as_it_was() -> None:
+    response = _view(_many())(_factory.post("/", {"title": "t"}, format="multipart"))
+    assert response.status_code == 400
+    assert {key: [str(item) for item in value] for key, value in response.data.items()} == {
+        "items": ["Expected an array."]
+    }
 
 
 class _Actions(ServiceViewSet):

@@ -363,8 +363,9 @@ The query string is read by the kernel's flat reader:
   serializer takes it, and every refusal is DRF's, while the spec's schema, its
   tool schema and every other transport stay typed. The kernel's checks of the
   declared types are what it turns off, its array cap
-  (`SERVICE_SPECS_MAX_ARRAY_LENGTH`) included: give a `ListField` under the
-  switch a `max_length` of its own.
+  (`SERVICE_SPECS_MAX_ARRAY_LENGTH`) on a field included: give a `ListField` or
+  a nested `many=True` serializer under the switch a `max_length` of its own. A
+  `many` spec's list of rows keeps its cap.
 - **A JSON field's refusal is worded by the kernel, not DRF.** `Date has wrong
   format. Use one of these formats instead: YYYY-MM-DD.` is `Enter a valid
   date.`, `A valid integer is required.` is `Expected an integer.`, and `This
