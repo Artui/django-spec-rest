@@ -35,6 +35,8 @@ from django_spec_rest import (
     DiscriminatedAction,
     SelectorListView,
     ServiceCreateMixin,
+    ServiceCreateView,
+    ServiceUpdateView,
     ServiceViewSet,
     service_action,
 )
@@ -49,12 +51,18 @@ from django_spec_rest.service_specs.serializer_presenter import SerializerPresen
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from invoices.models import Invoice
 from invoices.selectors import InvoiceFilter, get_invoice, list_invoices, sent_invoices
-from invoices.serializers import BlankInvoiceInput, InvoiceInput, InvoiceSerializer
+from invoices.serializers import (
+    BlankInvoiceInput,
+    InvoiceInput,
+    InvoiceSerializer,
+    ReceiptInput,
+)
 from invoices.services import (
     create_blank_invoice,
     create_invoice,
     send_invoice,
     sending_paused,
+    set_receipt,
     update_invoice,
 )
 
@@ -158,6 +166,16 @@ INTAKE = DiscriminatedAction(
 UPDATE_SPEC = ServiceSpec(
     service=update_invoice,
     validator=SerializerValidator(InvoiceInput),
+    instance_selector_spec=INVOICE_LOOKUP,
+    permissions=OPEN,
+    presenter=PRESENTER,
+)
+
+# A ``null`` for ``receipt`` clears the file: the serializer's field allows it,
+# and ``SerializerValidator`` hands the service the kernel's clear value.
+RECEIPT_SPEC = ServiceSpec(
+    service=set_receipt,
+    validator=SerializerValidator(ReceiptInput),
     instance_selector_spec=INVOICE_LOOKUP,
     permissions=OPEN,
     presenter=PRESENTER,
@@ -268,6 +286,23 @@ class InvoiceViewSet(ServiceViewSet):
     @service_action(SEND_SPEC, detail=True, methods=["post"], success_status=202)
     def send(self, request: Any, pk: Any = None) -> None:
         """Mark a draft as sent, answered 202."""
+
+
+class InvoiceImportView(ServiceCreateView):
+    """``POST /invoice-imports/``: ``CREATE_SPEC``, whose JSON body its serializer alone answers.
+
+    For a client sending ``5`` for a string, which ``POST /invoices/`` refuses.
+    The spec stays typed everywhere else, its schema included.
+    """
+
+    spec = CREATE_SPEC
+    lenient_json_body = True
+
+
+class InvoiceReceiptView(ServiceUpdateView):
+    """``PATCH /invoices/<pk>/receipt/``: a ``null`` clears the file the invoice holds."""
+
+    spec = RECEIPT_SPEC
 
 
 class SentInvoiceListView(SelectorListView):

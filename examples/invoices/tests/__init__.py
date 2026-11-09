@@ -3,10 +3,18 @@
 from __future__ import annotations
 
 import base64
+import tempfile
 
 from django.contrib.auth.models import AnonymousUser, User
 from django.core.exceptions import ImproperlyConfigured
-from django_service_specs import DEFAULT_POOL_SEEDS, NotPermitted, dispatch
+from django.core.files.base import ContentFile
+from django.test import override_settings
+from django_service_specs import (
+    DEFAULT_POOL_SEEDS,
+    NotPermitted,
+    dispatch,
+    spec_input_schema,
+)
 from drf_spectacular.generators import SchemaGenerator
 from drf_spectacular.settings import patched_settings
 from drf_spectacular.validation import validate_schema
@@ -15,6 +23,7 @@ from rest_framework.test import APITestCase
 
 from invoices.models import Invoice
 from invoices.views import (
+    CREATE_SPEC,
     LIST_SPEC,
     SEEDS,
     SEND_SPEC,
@@ -627,3 +636,49 @@ class AMixinViewSetTests(APITestCase):
         self.assertEqual(
             self.client.get(f"/drafts/{row.pk}/").status_code, status.HTTP_404_NOT_FOUND
         )
+
+
+class ALenientJsonBodyTests(APITestCase):
+    """``InvoiceImportView.lenient_json_body``: the serializer alone answers a JSON body."""
+
+    def test_the_serializer_takes_what_it_takes_on_that_view_alone(self) -> None:
+        body = {"customer": 5, "amount_cents": "10"}
+
+        response = self.client.post("/invoice-imports/", body, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(response.data["customer"], "5")
+
+        refused = self.client.post("/invoices/", body, format="json")
+        self.assertEqual(refused.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(str(refused.data["customer"][0]), "Expected a string.")
+
+    def test_a_refusal_is_in_drf_s_words(self) -> None:
+        response = self.client.post("/invoice-imports/", {"amount_cents": "x"}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(str(response.data["customer"][0]), "This field is required.")
+        self.assertEqual(str(response.data["amount_cents"][0]), "A valid integer is required.")
+
+    def test_the_spec_stays_typed_for_every_other_transport(self) -> None:
+        self.client.post("/invoice-imports/", {"customer": 5, "amount_cents": 1}, format="json")
+
+        schema = spec_input_schema(CREATE_SPEC)
+        self.assertEqual(schema["properties"]["customer"]["type"], "string")
+        self.assertEqual(schema["required"], ["customer", "amount_cents"])
+
+
+class ANullForAFileTests(APITestCase):
+    """``PATCH /invoices/<pk>/receipt/``: a JSON ``null`` clears the file the row holds."""
+
+    def test_a_null_clears_the_file(self) -> None:
+        with tempfile.TemporaryDirectory() as media, override_settings(MEDIA_ROOT=media):
+            invoice = _invoice()
+            invoice.receipt.save("receipt.txt", ContentFile(b"paid"))
+
+            response = self.client.patch(
+                f"/invoices/{invoice.pk}/receipt/", {"receipt": None}, format="json"
+            )
+
+            self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+            invoice.refresh_from_db()
+            self.assertEqual(invoice.receipt.name, "")

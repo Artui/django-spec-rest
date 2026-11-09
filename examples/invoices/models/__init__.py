@@ -21,6 +21,7 @@ class Invoice(models.Model):
     amount_cents = models.PositiveIntegerField()
     notes = models.TextField(default="")
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=STATUS_DRAFT)
+    receipt = models.FileField(upload_to="receipts", blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
