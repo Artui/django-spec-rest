@@ -172,7 +172,7 @@ UPDATE_SPEC = ServiceSpec(
 )
 
 # A ``null`` for ``receipt`` clears the file: the serializer's field allows it,
-# and ``SerializerValidator`` hands the service the kernel's clear value.
+# and ``SerializerValidator`` hands the service ``""``, the empty file.
 RECEIPT_SPEC = ServiceSpec(
     service=set_receipt,
     validator=SerializerValidator(ReceiptInput),
