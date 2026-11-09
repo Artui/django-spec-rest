@@ -359,15 +359,15 @@ wheels = [
 
 [[package]]
 name = "django-service-specs"
-version = "0.30.0"
+version = "0.31.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "django" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/60/c9/e52e9bf24f6b883c2cd8eca322e3dd8fe4d8afa9df4c55dfc64615767d53/django_service_specs-0.30.0.tar.gz", hash = "sha256:bb153b1566f6737ad366d3b0b3936f875d8c5384c719b05743baee7b299ffb5d", size = 1200766, upload-time = "2026-11-09T07:48:10.574Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c6/26/9ea0877f37745452e57b9527e73419b1780562125ec64c880f3f71e2e207/django_service_specs-0.31.0.tar.gz", hash = "sha256:282947e05f1b8b7fa4f1b0cb2d4c717be4d93ba8091996752c32bf50513b3f90", size = 1211435, upload-time = "2026-11-09T15:04:11.571Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/01/24/5ba7553de34f17b7cb339d7a3f8539f9f2d0d7294c4d09857d68237ab610/django_service_specs-0.30.0-py3-none-any.whl", hash = "sha256:e380f60b5436ccb54f2fd2c1ef595dfe9bbea6452fc111975fe94d3fc4b25fbb", size = 524763, upload-time = "2026-11-09T07:48:08.631Z" },
+    { url = "https://files.pythonhosted.org/packages/f5/18/be99a92b45bbc2947ded62296a2a7efca349ee542ce5676dda4923be1a61/django_service_specs-0.31.0-py3-none-any.whl", hash = "sha256:5b542c89e7838286b96d25d9bfefac0e90c79b5cbe6568e30c3aa651926a75df", size = 527638, upload-time = "2026-11-09T15:04:10.01Z" },
 ]
 
 [[package]]
@@ -415,7 +415,7 @@ docs = [
 requires-dist = [
     { name = "django", specifier = ">=4.2" },
     { name = "django-filter", marker = "extra == 'filter'", specifier = ">=23.1" },
-    { name = "django-service-specs", specifier = ">=0.30.0" },
+    { name = "django-service-specs", specifier = ">=0.31.0" },
     { name = "djangorestframework", specifier = ">=3.14" },
     { name = "djangorestframework-dataclasses", specifier = ">=1.3.1" },
     { name = "drf-spectacular", marker = "extra == 'spectacular'", specifier = ">=0.27,<1.0" },

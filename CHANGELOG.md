@@ -11,10 +11,54 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
-## [0.11.1] — 2026-11-09
+### Added
+
+- **`lenient_json_body` on a view or viewset**, also an `as_view()` and
+  `@service_action` keyword, and the `SPEC_REST_LENIENT_JSON_BODY` setting: a JSON
+  body is answered by the serializer alone, as a form body is, a `many` spec's rows
+  included, with every refusal in DRF's words. The view's value beats the setting
+  and the default is off. The spec's schema, its tool schema and every other
+  transport stay typed. The kernel's array cap no longer judges a `ListField` or a
+  nested `many=True` serializer under the switch, so give those a `max_length`.
+- **The off-HTTP recipe gains a DRF `request` seed** built with
+  `build_offline_context`, for a selector that keeps reading
+  `request.query_params` over MCP, and says what a view resource needs from
+  `django-spec-mcp` first.
+- **The codemod follows a spec's answers into a view in another module.** A kernel
+  spec has no seat for `success_status` or `response_finalizer`, and
+  `tools/drfs_codemod` moved them only to views in the spec's own module, so a
+  `specs/` plus `views/` layout was left with comments. The files of one run are
+  now read together: an answer follows the spec's import, relative or absolute, by
+  name or through a module, onto the view that serves it, bringing the import a
+  name in its value needs. It moves only when that is certain. A spec two modules
+  import, or one imported under an alias, keeps its comment, as does a value that
+  would not resolve in the view, and the comment ends in why. A view that already
+  declares the answer is marked and the spec keeps the value. A file that cannot be
+  parsed now stops the run with exit 2 before anything is written.
+
+### Changed
+
+- **The `django-service-specs` floor is 0.31.0.** It writes a choice filter's labels
+  into the schema, an `OrderingFilter`'s included, which the document fix below
+  lowers under OpenAPI 3.0.
 
 ### Fixed
 
+- **A JSON `null` for a file field declaring `allow_null` clears the file**, where
+  it answered 200 and kept it; without `allow_null` it is refused.
+  `SerializerValidator` hands `data` and the values `False`, the kernel's clear
+  value, on every transport, so a service reading the value itself sees `False`.
+  The bound serializer keeps `None`, so `serializer.save()` still clears. A form
+  body is unchanged.
+- **A form body's checked checkbox, `on`, is read as `True` for a boolean
+  parameter.** A kernel `FormValidator` over a form body went through the kernel's
+  `coerce_flat`, which spells a boolean `true`, `false`, `1` or `0` alone, so a
+  `forms.BooleanField` and the `<name>-clear` boolean an optional file field's
+  clearable input declares were refused for the `on` a browser sends. The edge now
+  reads `on` as `True` for a parameter declared `boolean`, or an array of them, in a
+  form body only; a query string's `?flag=on` and a JSON body's `"on"` are refused
+  as before, and no other truthy string is widened to. A `SerializerValidator` was
+  never affected.
 - **A nullable or labelled schema no longer makes an OpenAPI 3.0 document
   invalid.** The kernel writes JSON Schema: a nullable field's type is
   `[t, "null"]`, a labelled parameter choice an `anyOf` of `{"const", "title"}`,
@@ -28,13 +72,14 @@ carries; releases up to 0.62.0 are in
   `nullable: true` only where the field admits null: a plain `type` with a null
   choice stays non-nullable, as the server answers `400` for a null there. The
   titles are dropped, since 3.0 has no place for them. A route capture's `enum`
-  lists no `null` under any version, since a segment is always present. Inside a named component (a
-  `DiscriminatedAction`'s request), drf-spectacular's enum hook moves the values
+  lists no `null` under any version, since a segment is always present. Inside a
+  named component (a `DiscriminatedAction`'s request), drf-spectacular's enum hook moves the values
   to `*Enum` components, as it does for a serializer's choice field, which can
   rename a component they collide with. What an author writes in
   `json_schema_extra` reaches the document as written, so under 3.0 it must be
   valid 3.0. Under 3.1 and later the schema is kept as the kernel writes it.
-  What OPTIONS answers is unchanged.
+  What OPTIONS answers is unchanged. On the kernel floor below, every labelled
+  filter and every `OrderingFilter` is such a schema.
 
 ## [0.11.0] — 2026-11-09
 

@@ -165,7 +165,8 @@ class TestUnderOpenAPI3_0:
 
     def test_a_real_filter_is_an_enum(self, document_3_0: dict[str, Any]) -> None:
         # The kernel's own ``filter_set_parameters`` for ``PostFilter``: a
-        # choice filter, a multiple choice filter and an ordering filter.
+        # choice filter, a multiple choice filter and an ordering filter, each
+        # written with its labels (test_a_real_filter_keeps_its_labels).
         route = "/shapes/filtered/"
         assert _parameter(document_3_0, route, "kind") == {"type": "string", "enum": ["a", "b"]}
         assert _parameter(document_3_0, route, "several")["items"] == {
@@ -214,6 +215,18 @@ class TestUnderOpenAPI3_0:
 
 class TestUnderOpenAPI3_1:
     """The schema as the kernel writes it, titles and type lists included."""
+
+    def test_a_real_filter_keeps_its_labels(self, document_3_1: dict[str, Any]) -> None:
+        # What the lowering takes away under 3.0, so the 3.0 test above is about
+        # labels the kernel wrote and not a bare ``enum`` it passed through.
+        route = "/shapes/filtered/"
+        assert _parameter(document_3_1, route, "kind")["anyOf"] == [
+            {"const": "a", "title": "A"},
+            {"const": "b", "title": "B"},
+        ]
+        ordering = _parameter(document_3_1, route, "o")["items"]["anyOf"]
+        assert [member["const"] for member in ordering] == ["title", "-title", "id", "-id"]
+        assert all(member["title"] for member in ordering)
 
     def test_a_request_body_keeps_the_kernel_s_schema(self, document_3_1: dict[str, Any]) -> None:
         properties = _body(document_3_1, "/shapes/write/", "post")["properties"]

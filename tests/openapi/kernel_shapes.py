@@ -7,7 +7,8 @@ of the same (with ``{"const": None}``). The test app of ``test_service_auto_sche
 declares none of them, so these routes put each one in the document, in a
 request body, a response body, a route capture, a ``FilterSet``'s query
 parameter and a ``DiscriminatedAction``'s registered request component, for
-``test_the_document_validates``. ``test_labelled_parameters`` builds its own.
+``test_the_document_validates``. ``test_labelled_parameters`` builds its own
+route captures.
 """
 
 from __future__ import annotations
@@ -125,9 +126,9 @@ class Filters(Validator):
 class PostFilter(django_filters.FilterSet):
     """Real filters, read by the kernel's ``filter_set_parameters``.
 
-    The kernel at this package's floor writes a ``ChoiceFilter``'s choices
-    without their labels, so these are an ``enum`` under 3.0 whatever the
-    lowering does; ``test_labelled_parameters`` feeds the labelled shape.
+    The kernel writes each filter's labels as an ``anyOf`` of constants, an
+    ``OrderingFilter``'s included, so each reaches the lowering as it would in
+    a project's document.
     """
 
     kind = django_filters.ChoiceFilter(choices=DISPLAYED)

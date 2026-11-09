@@ -83,7 +83,7 @@ dependencies = [
     # ``permission_denied`` does.
     # 0.30.0 adds ``call_context=`` to ``spec_caller_input_schema``, which the
     # OPTIONS answer and the OpenAPI body hand under the ``rest`` stamp.
-    "django-service-specs>=0.30.0",
+    "django-service-specs>=0.31.0",
 ]
 
 [project.optional-dependencies]
