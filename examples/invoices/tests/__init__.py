@@ -457,6 +457,15 @@ class ADiscriminatedActionTests(APITestCase):
         self.assertEqual(set(blank.data), {"customer"})
         self.assertEqual(Invoice.objects.count(), 0)
 
+    def test_only_the_actions_it_composes_are_routed(self) -> None:
+        self.assertEqual(
+            self.client.get("/intake/").status_code, status.HTTP_405_METHOD_NOT_ALLOWED
+        )
+        row = _invoice()
+        self.assertEqual(
+            self.client.get(f"/intake/{row.pk}/").status_code, status.HTTP_404_NOT_FOUND
+        )
+
     def test_the_request_is_one_component_over_both_bodies(self) -> None:
         schema = SchemaGenerator().get_schema(request=None, public=True)
         operation = schema["paths"]["/intake/"]["post"]

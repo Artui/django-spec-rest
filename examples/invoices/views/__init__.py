@@ -299,14 +299,17 @@ class DraftInvoiceViewSet(ServiceCreateMixin, GenericViewSet):
     action_specs = {"create": CREATE_SPEC}
 
 
-class IntakeViewSet(ServiceViewSet):
+class IntakeViewSet(ServiceCreateMixin, GenericViewSet):
     """``POST /intake/``: one ``create`` action serving ``INTAKE``, a ``DiscriminatedAction``.
 
-    A body naming ``amount_cents`` is validated and created as ``CREATE_SPEC``
-    does; any other is ``BLANK_SPEC``'s, a customer and a zero amount. The
-    schema documents the request as the ``IntakeViewSet_create_Request``
-    component, an ``anyOf`` over both bodies. One spec per route stays the
-    default (``InvoiceViewSet``); this is for an endpoint that must keep one URL.
+    Composed from the create mixin alone, as ``DraftInvoiceViewSet`` is, so the
+    router mounts nothing it does not serve. A body naming ``amount_cents`` is
+    validated and created as ``CREATE_SPEC`` does; any other is ``BLANK_SPEC``'s,
+    a customer and a zero amount. The schema documents the request as the
+    ``IntakeViewSet_create_Request`` component, an ``anyOf`` over both bodies.
+    One spec per route stays the default (``InvoiceViewSet``); this is for an
+    endpoint that must keep one URL.
     """
 
+    queryset = Invoice.objects.all()
     action_specs = {"create": INTAKE}

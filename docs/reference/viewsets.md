@@ -171,7 +171,8 @@ INTAKE = DiscriminatedAction(
 )
 
 
-class IntakeViewSet(ServiceViewSet):
+class IntakeViewSet(ServiceCreateMixin, GenericViewSet):
+    queryset = Invoice.objects.all()
     action_specs = {"create": INTAKE}
 ```
 
