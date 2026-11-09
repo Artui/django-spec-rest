@@ -11,6 +11,18 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+### Fixed
+
+- **A labelled parameter no longer makes an OpenAPI 3.0 document invalid.** The
+  kernel states a labelled choice as an `anyOf` of `{"const", "title"}`, and 3.0,
+  drf-spectacular's default `OAS_VERSION`, has no `const`, so `validate_schema`
+  refused the document. A route capture a spec reads and a `filter_set`'s query
+  parameter now document such a choice as an `enum` of its values under 3.0, an
+  array's under `items`; the titles are dropped, since 3.0 has no place for them.
+  Under 3.1 and later the `anyOf` and its titles are kept. An `anyOf` holding
+  anything but constants, such as a nullable parameter's `{"type": "null"}`, is
+  left as the kernel wrote it.
+
 ## [0.11.0] — 2026-11-09
 
 ### Added

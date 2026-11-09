@@ -221,6 +221,11 @@ call `enable_openapi()` again after the reload.
   description. A viewset needs no `queryset` for its schema. A capture no spec
   declares, or that only a validator's field names (the request body's, not
   the route's), stays drf-spectacular's string, with its warning.
+- **A labelled choice** in a `filter_set`'s query parameter or in the read that
+  types a route capture is an `enum` of its values under OpenAPI 3.0,
+  drf-spectacular's default `OAS_VERSION`, which has no `const`; its titles are
+  dropped, since 3.0 has no place for them. Under 3.1 it keeps the kernel's
+  `anyOf` of `{"const", "title"}`, titles included.
 - **A viewset method with no spec behind it** is left out where `Allow` leaves
   it out: on a route serving some spec, a `create`, `update`,
   `partial_update` or `destroy` the router maps but the viewset declares no

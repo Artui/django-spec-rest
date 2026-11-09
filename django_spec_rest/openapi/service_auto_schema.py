@@ -959,8 +959,49 @@ def _declared_path_parameter(variable: str, read: Parameter) -> Any:
     )
     description = schema.pop("description", None)
     return build_parameter_type(
-        name=variable, schema=schema, location=OpenApiParameter.PATH, description=description
+        name=variable,
+        schema=_spelled_for_the_document(schema),
+        location=OpenApiParameter.PATH,
+        description=description,
     )
+
+
+def _spelled_for_the_document(schema: dict[str, Any]) -> dict[str, Any]:
+    """The kernel's parameter ``schema``, spelled so the document validates under its OpenAPI version.
+
+    The kernel states a labelled choice as an ``anyOf`` of ``{"const", "title"}``,
+    under ``items`` for an array. OpenAPI 3.0, drf-spectacular's default
+    ``OAS_VERSION``, has no ``const``, so under 3.0 such an ``anyOf`` becomes an
+    ``enum`` of the values in order, at the top of the schema and under its
+    ``items``; 3.0 has no place for the titles, so they are dropped. 3.1 and
+    later keep the ``anyOf`` and its titles
+    (test_labelled_parameters, test_spelled_for_the_document).
+    """
+    if not spectacular_settings.OAS_VERSION.startswith("3.0"):
+        return schema
+    spelled = _enum_of_constants(schema)
+    if "items" in spelled:
+        spelled = {**spelled, "items": _enum_of_constants(spelled["items"])}
+    return spelled
+
+
+def _enum_of_constants(schema: dict[str, Any]) -> dict[str, Any]:
+    """``schema`` with an ``anyOf`` made only of constants as an ``enum`` of their values.
+
+    An ``anyOf`` holding any other entry, such as the ``{"type": "null"}`` a
+    nullable parameter gains, admits more than its constants, so it stays.
+    Each conjunct of the guard has its own test in test_spelled_for_the_document:
+    the emptiness (test_an_empty_any_of_stays, since ``all`` over nothing is
+    true and an empty ``enum`` admits no value) and the constants
+    (test_an_any_of_holding_anything_but_constants_stays).
+    """
+    members = schema.get("anyOf")
+    if not members or not all("const" in member for member in members):
+        return schema
+    return {
+        **{key: value for key, value in schema.items() if key != "anyOf"},
+        "enum": [member["const"] for member in members],
+    }
 
 
 def _is_decorated_action(view: Any) -> bool:
@@ -1113,7 +1154,7 @@ def _kernel_filter_parameters(filter_set: Any) -> list[Any]:
         documented.append(
             build_parameter_type(
                 name=parameter.name,
-                schema=schema,
+                schema=_spelled_for_the_document(schema),
                 location=OpenApiParameter.QUERY,
                 required=parameter.required,
                 description=description,
