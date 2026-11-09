@@ -79,6 +79,10 @@ carries; releases up to 0.62.0 are in
   method from the same callers. A view hook that reads the body first is judged
   the same; hooks still run before the checks, and the body is not read ahead of
   them.
+  A hook raising one of those errors itself is judged the same way, which it cannot
+  be told from. A refused caller's too many form fields no longer writes to Django's
+  `django.security.TooManyFieldsSent` log, so a project alerting on it stops hearing
+  from callers it refuses; an admitted caller's still does.
 - **A `@service_action` `PATCH` is documented as the wire validates it.** The
   action runs its spec as declared, so its body is validated whole, and the
   document no longer calls it partial: its `required` list is the one the wire
