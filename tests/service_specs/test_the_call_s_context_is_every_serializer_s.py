@@ -21,7 +21,7 @@ from typing import Any
 import pytest
 from django.contrib.auth.models import AnonymousUser
 from django.test import RequestFactory
-from django_service_specs import ServiceSpec, Unrestricted
+from django_service_specs import TRANSPORT_KEY, ServiceSpec, Unrestricted
 from django_service_specs.dispatch.dispatch import dispatch
 from django_service_specs.dispatch.present import present
 from rest_framework import serializers
@@ -29,9 +29,10 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.test import APIRequestFactory
 
-from django_spec_rest import ServiceCreateView
+from django_spec_rest import REST_TRANSPORT, ServiceCreateView
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
+from django_spec_rest.service_specs.utils import serializer_context
 
 pytestmark = pytest.mark.django_db
 
@@ -203,3 +204,75 @@ class TestOffARequest:
         assert call_context["view"] is None
         assert seen.contexts["input"] is not call_context
         assert seen.contexts["input"]["request"] is not arrived
+
+
+class _StampingView(ServiceCreateView):
+    """A view whose ``get_serializer_context`` answers a ``transport`` of its own."""
+
+    def get_serializer_context(self) -> dict[str, Any]:
+        return {**super().get_serializer_context(), TRANSPORT_KEY: "the view's"}
+
+
+def _stages(seen: _Seen) -> dict[str, Any]:
+    return {
+        stage: seen.contexts[stage].get(TRANSPORT_KEY) for stage in ("input", "service", "output")
+    }
+
+
+def test_a_view_hook_answering_a_transport_key_leaves_the_stamp_to_every_stage() -> None:
+    seen = _Seen()
+
+    _post(_spec(seen), {"name": "Ada"}, base=_StampingView)
+
+    # The kernel's contract is that the transport stamps last: both hook layers
+    # (input and output) are written into the one dict and neither displaces the stamp.
+    assert _stages(seen) == {
+        "input": REST_TRANSPORT,
+        "service": REST_TRANSPORT,
+        "output": REST_TRANSPORT,
+    }
+
+
+def test_a_serializer_context_callable_answering_a_transport_key_leaves_the_stamp_to_every_stage() -> (
+    None
+):
+    seen = _Seen()
+
+    _post(
+        _spec(seen, serializer_context=lambda: {TRANSPORT_KEY: "mine", "tenant": "acme"}),
+        {"name": "Ada"},
+    )
+
+    # The callable's other keys still land: only the stamp is the transport's.
+    assert seen.contexts["service"]["tenant"] == "acme"
+    assert _stages(seen) == {
+        "input": REST_TRANSPORT,
+        "service": REST_TRANSPORT,
+        "output": REST_TRANSPORT,
+    }
+
+
+def test_a_serializer_s_own_dict_keeps_the_transport_key_its_layers_wrote() -> None:
+    """Off a request each serializer is built over a dict of its own, which nobody else reads."""
+    seen = _Seen()
+    spec = _spec(seen, serializer_context=lambda: {TRANSPORT_KEY: "mine"})
+    call_context: dict[str, Any] = {"request": None, "view": None, TRANSPORT_KEY: "mcp"}
+
+    dispatch(spec, principal=AnonymousUser(), arguments={"name": "Ada"}, call_context=call_context)
+
+    assert seen.contexts["input"] is not call_context
+    assert seen.contexts["input"][TRANSPORT_KEY] == "mine"
+    assert call_context[TRANSPORT_KEY] == "mcp"
+
+
+def test_a_hook_layer_s_transport_key_stays_in_a_serializer_s_own_dict() -> None:
+    """The layers' guard on the stamp is on the shared dict only: ``shared`` fails it here."""
+    context = serializer_context(
+        AnonymousUser(),
+        {},
+        {},
+        view_layers={TRANSPORT_KEY: "mine", "format": "csv"},
+    )
+
+    assert context[TRANSPORT_KEY] == "mine"
+    assert context.get("format") != "csv"
