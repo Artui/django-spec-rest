@@ -114,7 +114,9 @@ def service_action(
 
     Pass a [`ServiceSpec`][django_service_specs.specs.service_spec.ServiceSpec]
     for the service wiring. ``detail``, ``methods``, ``url_path``, ``url_name``,
-    and any extra ``**action_kwargs`` are forwarded to DRF's ``@action``.
+    and any extra ``**action_kwargs`` are forwarded to DRF's ``@action``, a
+    ``lenient_json_body`` among them, which outranks the viewset's for this
+    action (test_a_service_action_may_declare_its_own).
 
     The spec runs through the kernel's own ``dispatch``, as on the standalone
     mutation views: its ``permissions`` are asked there, after the view's own

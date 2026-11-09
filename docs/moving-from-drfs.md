@@ -351,12 +351,27 @@ The query string is read by the kernel's flat reader:
   is accepted as `10`, as drfs accepted it, while `{"title": 5}` is refused
   with `Expected a string.`: "as sent" is a check of the kind of value, and the
   kernel reads a numeric string as a number but not a number as a string.
+- **A `lenient=True` subclass of `SerializerValidator` has a better home: the
+  view.** Handing every call site a validator with `lenient=True` relaxes the
+  spec itself, so its tool schema reads `{"title": {}, "n": {}}` with no
+  `required`, on every transport. To have DRF answer a JSON body as drfs did, set
+  `lenient_json_body = True` on the view, on a viewset, as an `as_view()` or
+  `@service_action` keyword, or project-wide with
+  `SPEC_REST_LENIENT_JSON_BODY = True`; the view's own value beats the setting,
+  and `False` on a view keeps the strict check under the setting. It covers a
+  `many` spec's rows too. `{"title": 5}` for a `CharField` is then `"5"`, as the
+  serializer takes it, and every refusal is DRF's, while the spec's schema, its
+  tool schema and every other transport stay typed. The kernel's checks of the
+  declared types are what it turns off, its array cap
+  (`SERVICE_SPECS_MAX_ARRAY_LENGTH`) included: give a `ListField` under the
+  switch a `max_length` of its own.
 - **A JSON field's refusal is worded by the kernel, not DRF.** `Date has wrong
   format. Use one of these formats instead: YYYY-MM-DD.` is `Enter a valid
   date.`, `A valid integer is required.` is `Expected an integer.`, and `This
   field may not be null.` is `This field cannot be null.`. A client matching
   on a message must match the new one; the keys and the 400 are unchanged.
-  A form body keeps DRF's wording, since the serializer answers it.
+  A form body keeps DRF's wording, since the serializer answers it, and so does
+  a JSON body under `lenient_json_body`.
 - **A PATCH behind a `SerializerValidator` hands the service only the keys
   the client sent.** The serializer is partial on a PATCH, as DRF's is, so
   `{}`, or a body naming one field of several, validates and reaches the

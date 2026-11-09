@@ -56,7 +56,9 @@ The view turns the request into the one dict of arguments the kernel's
   absent, a typed array or a multiple-choice filter splits on a comma, and
   each value is coerced to its parameter's type.
 - **A JSON body** is read as it was sent, and checked against the declared
-  types as sent: a JSON `"true"` is a string, not a boolean.
+  types as sent: a JSON `"true"` is a string, not a boolean. A view's
+  `lenient_json_body`, or the project's `SPEC_REST_LENIENT_JSON_BODY`, has its
+  serializer alone answer one instead, as DRF does; the spec stays typed.
 - **A form body** is read as DRF reads one: `"on"` and a blank checkbox for a
   boolean, and the prefixed spellings `v.tenant` and `tags[0]` of a nested or
   list field.

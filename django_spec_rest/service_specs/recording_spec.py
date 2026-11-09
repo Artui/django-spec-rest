@@ -62,8 +62,8 @@ def recording_spec(spec: KernelSpec, *, lenient: bool = False) -> KernelSpec:
     ``kwargs``, whose answer naming a parameter of a ``SerializerValidator``
     is refused (``_refuse_parameters``) and which hands back a view hook's
     values beneath that answer (``_providing``). Where ``lenient``, for a form
-    body, the twin's ``SerializerValidator`` is a lenient copy of the spec's,
-    so the serializer alone parses the form's strings.
+    body or a view's lenient JSON body, the twin's ``SerializerValidator`` is a
+    lenient copy of the spec's, so the serializer alone answers the body.
 
     The serializer binds the request's body rather than the kernel's
     arguments, and the kernel merges the provider's answer into its arguments
@@ -142,14 +142,16 @@ def recording_spec(spec: KernelSpec, *, lenient: bool = False) -> KernelSpec:
     # one: its values are strings DRF's fields parse (a
     # checkbox's ``"on"``), which the kernel's typed check of the flat values
     # would refuse (test_kernel_spec_variant's
-    # test_a_live_view_validates_a_form_body_by_its_serializer_alone). Only a
+    # test_a_live_view_validates_a_form_body_by_its_serializer_alone). So is a
+    # JSON body a view says is its serializer's, a ``many`` spec's rows included
+    # (test_a_many_spec_s_rows_are_the_serializer_s); a form's body for a ``many``
+    # spec is no list, which the kernel refuses whichever Validator it holds
+    # (test_a_form_body_on_a_many_spec_is_refused_as_it_was). Only a
     # serializer's Validator has a check of its own to fall to: a spec with
     # none keeps the kernel's (test_kernel_views'
     # test_a_capture_outranks_a_form_body, which fails without the
-    # ``isinstance``). A ``many`` spec's body is a list, never a form's
-    # (test_a_spec_with_nothing_to_record_is_dispatched_as_it_is, which fails
-    # without the ``not spec.many``).
-    lenient = not spec.many and lenient and isinstance(spec.validator, SerializerValidator)
+    # ``isinstance``).
+    lenient = lenient and isinstance(spec.validator, SerializerValidator)
     if lenient:
         relaxed = copy.copy(cast(SerializerValidator, spec.validator))
         relaxed.lenient = True
