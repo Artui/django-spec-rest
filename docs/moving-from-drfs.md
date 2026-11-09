@@ -489,6 +489,8 @@ The query string is read by the kernel's flat reader:
   answer without them keeps the kernel's order: the caller is told the 400
   first, and the check is asked once the shape passes. A check that answers
   `False` with no arguments refuses every caller sending an incomplete body.
+  DRF's own `initial()` runs before any of this, so a `get_permissions()` or
+  `get_throttles()` override that reads the body answers what that read raises.
 - **`DRFPermissionCheck` can raise `DRFNotAuthenticated`**, not only
   `DRFNotPermitted`, when the call carries a real DRF request with
   authenticators and nobody was recognised. `DRFNotAuthenticated` is DRF's
