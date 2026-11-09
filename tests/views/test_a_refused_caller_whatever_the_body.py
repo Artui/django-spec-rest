@@ -37,7 +37,7 @@ from rest_framework import serializers
 from rest_framework.authentication import BasicAuthentication, SessionAuthentication
 from rest_framework.exceptions import NotFound, ParseError
 from rest_framework.exceptions import PermissionDenied as DRFPermissionDenied
-from rest_framework.permissions import AllowAny, BasePermission
+from rest_framework.permissions import AllowAny, BasePermission, IsAuthenticated
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from django_spec_rest import (
@@ -676,11 +676,24 @@ def _reads_the_body(self: Any, request: Any) -> dict[str, Any]:
     return {}
 
 
-HOOKS_READING = [
-    "get_input_data",
-    "get_service_kwargs",
-    "get_input_serializer_context",
-    "get_progress_reporter",
+def _reads_the_body_off_the_view(self: Any) -> dict[str, Any]:
+    """DRF's own ``get_serializer_context``, which takes no request and reads the view's."""
+    _ = self.request.data
+    return {}
+
+
+HOOKS_READING = {
+    "get_input_data": _reads_the_body,
+    "get_service_kwargs": _reads_the_body,
+    "get_input_serializer_context": _reads_the_body,
+    "get_serializer_context": _reads_the_body_off_the_view,
+    "get_progress_reporter": _reads_the_body,
+}
+ACTION_HOOKS_READING = [
+    "get_review_input_data",
+    "get_review_service_kwargs",
+    "get_review_input_serializer_context",
+    "get_review_progress_reporter",
 ]
 
 
@@ -726,8 +739,27 @@ def test_a_refused_caller_is_refused_where_a_view_hook_reads_the_body_first(
     with no spec for ``_check_denied`` to compare it with: 403, not 401.
     """
     authentication, username, expected = REFUSED[caller]
-    view = HOOKED_ROUTES[route](_check(refusal), authentication, **{hook: _reads_the_body})
+    view = HOOKED_ROUTES[route](_check(refusal), authentication, **{hook: HOOKS_READING[hook]})
     assert _answer(_post_raw(view, body, username=username)) == expected
+
+
+@pytest.mark.parametrize("hook", ACTION_HOOKS_READING)
+def test_a_refused_caller_is_refused_where_an_action_s_own_hook_reads_the_body_first(
+    hook: str,
+) -> None:
+    """A chain's action layer runs where its catch-all does, so it is judged the same."""
+    view = _hooked_action(_check("kernel-check"), [BasicAuthentication], **{hook: _reads_the_body})
+    assert _answer(_post_raw(view, "unparseable", username=None)) == (401, SIGN_IN, CHALLENGE)
+
+
+def test_a_refused_caller_is_refused_where_the_project_s_own_check_is_drf_s() -> None:
+    """``IsAuthenticated`` as the spec's check, a body cut short, and each hook reading it first."""
+    check = DRFPermissionCheck([IsAuthenticated])
+    for hook, reads in HOOKS_READING.items():
+        view = _hooked(check, [BasicAuthentication], **{hook: reads})
+        response = view(factory.post("/", b"{bad", content_type="application/json"))
+        response.render()
+        assert _answer(response) == (401, SIGN_IN, CHALLENGE), hook
 
 
 @pytest.mark.parametrize("hook", HOOKS_READING)
@@ -737,7 +769,7 @@ def test_an_admitted_caller_is_told_what_the_hook_s_read_raised(
     route: str, body: str, hook: str
 ) -> None:
     view = HOOKED_ROUTES[route](
-        _check("kernel-check"), [BasicAuthentication], **{hook: _reads_the_body}
+        _check("kernel-check"), [BasicAuthentication], **{hook: HOOKS_READING[hook]}
     )
     response = _post_raw(view, body, username="editor")
     assert response.status_code == UNREADABLE[body][2]
