@@ -155,6 +155,34 @@ class TestAnOverrideBesideASpecIsReported:
 
         assert _reports(V, {"get": "list"})
 
+    def test_beside_a_retrieve_spec_alone(self) -> None:
+        """A retrieve ignores ``get_queryset()`` as a write or a list does: a cross-tenant read."""
+
+        class V(_Scoped, SelectorViewSet):
+            action_specs = {"retrieve": _RETRIEVE}
+
+        assert _reports(V, {"get": "retrieve"})
+
+    def test_beside_a_selector_action_of_the_retrieve_kind(self) -> None:
+        class V(_Scoped, ServiceViewSet):
+            @selector_action(_RETRIEVE)
+            def one(self, request: Any, pk: Any = None) -> None:
+                """Stubbed: the decorator serves the spec."""
+
+        assert _reports(V, {"get": "one"})
+
+    def test_beside_a_retrieve_spec_handed_to_as_view(self) -> None:
+        class V(_Scoped, ServiceViewSet): ...
+
+        assert _reports(V, {"get": "retrieve"}, action_specs={"retrieve": _RETRIEVE})
+
+    def test_and_a_retrieve_only_viewset_is_silenced_as_the_others_are(self) -> None:
+        class V(_Scoped, SelectorViewSet):
+            action_specs = {"retrieve": _RETRIEVE}
+            spec_rows_scoped_by_selector = True
+
+        assert _reports(V, {"get": "retrieve"}) == []
+
 
 class TestADiscriminatedActionServesAWrite:
     """Neither lane that built these could see the other's type, so the pair is held here.
@@ -250,20 +278,6 @@ class TestSilent:
                 return Response({})
 
         assert _reports(V, {"get": "ping"}) == []
-
-    def test_for_a_retrieve_spec(self) -> None:
-        class V(_Scoped, SelectorViewSet):
-            action_specs = {"retrieve": _RETRIEVE}
-
-        assert _reports(V, {"get": "retrieve"}) == []
-
-    def test_for_a_selector_action_of_the_retrieve_kind(self) -> None:
-        class V(_Scoped, ServiceViewSet):
-            @selector_action(_RETRIEVE)
-            def one(self, request: Any, pk: Any = None) -> None:
-                """Stubbed: the decorator serves the spec."""
-
-        assert _reports(V, {"get": "one"}) == []
 
 
 class TestSilencingPerClass:
