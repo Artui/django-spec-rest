@@ -411,7 +411,10 @@ The query string is read by the kernel's flat reader:
   `OPTIONS` alone. A `list`, `retrieve` or `get_object()` of the project's own
   keeps its route, and a read that can fall back answers as it did.
 - **OPTIONS runs no stage of a spec** (no selector, provider, service or
-  affordance condition) and never answers 500. `Allow` names only the methods
+  affordance condition) and does not answer 500 for want of what DRF's metadata
+  reads. The exception is a Validator whose `parameters()` raises something other
+  than `AttributeError`, `KeyError` or `TypeError`, which is a 500, as
+  [the OpenAPI page](openapi.md) says. `Allow` names only the methods
   that can answer: a handler of this package's with no spec is left out, on its
   405 too, and a handler of the project's stays, undescribed where DRF's metadata
   cannot describe it for want of a serializer or rows.

@@ -26,6 +26,7 @@ from django.core.exceptions import ImproperlyConfigured, TooManyFieldsSent
 from django.core.exceptions import PermissionDenied as DjangoPermissionDenied
 from django.test import override_settings
 from django_service_specs import (
+    DEFAULT_POOL_SEEDS,
     Parameter,
     Parameters,
     PermissionCheck,
@@ -1010,3 +1011,24 @@ def test_an_override_reading_the_body_in_initial_answers_what_the_read_raises(
     # The same caller with no such override is told to sign in, so the read is what answered.
     no_override = _hooked(_check("kernel-check"), [BasicAuthentication])
     assert _post_raw(no_override, "unparseable", username=None).status_code == 401
+
+
+class _StampedCheck(PermissionCheck):
+    """A check opting into the ``stamp`` seed by naming it, so it needs the view's own seeds."""
+
+    message = EDITORS_ONLY
+
+    def has_permission(self, principal: Any, spec: Any, *, stamp: str) -> bool:
+        return False
+
+
+def test_a_hook_s_failed_read_judges_a_check_naming_a_seed_with_the_view_s_seeds() -> None:
+    """Without the view's seeds the check cannot be asked, and the read's 400 leaves instead."""
+    view = _hooked(
+        _StampedCheck(),
+        [],
+        get_input_data=_reads_the_body,
+        pool_seeds=DEFAULT_POOL_SEEDS.extend(stamp=lambda: "stamp"),
+    )
+    response = _post_raw(view, "unparseable", username="editor")
+    assert (response.status_code, response.data["detail"]) == (403, EDITORS_ONLY)
