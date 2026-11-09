@@ -35,8 +35,10 @@ from drfs_codemod.rewrite import (
     ImportSite,
     _Analysis,
     _source,
+    below,
     rewrite_module,
     scan_source,
+    subclass_reason,
 )
 from drfs_codemod.signatures import module_file
 
@@ -80,6 +82,7 @@ class _Plan:
     arrivals: dict[str, list[Arrival]] = field(default_factory=dict)
     left: dict[tuple[str, str], str] = field(default_factory=dict)
     moved: dict[tuple[str, str], str] = field(default_factory=dict)
+    shadowed: dict[str, str] = field(default_factory=dict)
 
 
 def read_sources(files: Iterable[Path]) -> dict[Path, str]:
@@ -87,7 +90,9 @@ def read_sources(files: Iterable[Path]) -> dict[Path, str]:
     sources: dict[Path, str] = {}
     for file in files:
         try:
-            sources[file] = file.read_text(encoding="utf-8")
+            # ``newline=""`` keeps a CRLF file's line ends as they are, for the write to keep.
+            with file.open(encoding="utf-8", newline="") as handle:
+                sources[file] = handle.read()
         except UnicodeDecodeError as error:
             raise Unreadable(f"{file}: not UTF-8 ({error.reason}); nothing was written") from error
     return sources
@@ -150,13 +155,18 @@ class _Index:
         return resolved if resolved in self.modules else None
 
     def _origin(
-        self, file: Path | None, name: str, seen: frozenset[_Spec] = frozenset()
+        self,
+        file: Path | None,
+        name: str,
+        seen: frozenset[_Spec] = frozenset(),
+        *,
+        classes: bool = False,
     ) -> _Spec | None:
-        """The spec ``name`` in ``file`` is, through any re-export made under the same name."""
+        """The spec (or, for ``classes``, the class) ``name`` in ``file`` is, through any re-export made under the same name."""
         if file is None or (file, name) in seen:
             return None
         analysis = self.modules[file].analysis
-        if name in analysis.answers:
+        if name in (analysis.classes if classes else analysis.answers):
             return file, name
         for site in analysis.imported:
             # Another name's re-export is not this one
@@ -166,7 +176,7 @@ class _Index:
             if site.local == name == site.carried.obj:
                 carried = site.carried
                 target = self._file(file, carried.relative, carried.module)
-                return self._origin(target, name, seen | {(file, name)})
+                return self._origin(target, name, seen | {(file, name)}, classes=classes)
         return None
 
     # --- who imports each spec --------------------------------------------------
@@ -192,8 +202,19 @@ class _Index:
         file = self._file(module.file, carried.relative, carried.module)
         if file is None or _is_test(where):
             return
-        for variable in self.modules[file].analysis.answers:
-            self.blocked.setdefault((file, variable), f"star-imported in {where}")
+        analysis = self.modules[file].analysis
+        names = [(file, variable) for variable in analysis.answers]
+        # A package re-exporting a spec binds it in whoever star-imports the package, under
+        # whatever name it re-exports it (``test_a_star_import_of_a_re_exporting_package_is_a_second_view``).
+        for imported in analysis.imported:
+            carried = imported.carried
+            if carried.obj not in (None, "*"):
+                assert carried.obj is not None
+                target = self._file(file, carried.relative, carried.module)
+                if (spec := self._origin(target, carried.obj)) is not None:
+                    names.append(spec)
+        for spec in names:
+            self.blocked.setdefault(spec, f"star-imported in {where}")
 
     def _by_name(self, module: _Module, site: ImportSite) -> None:
         carried = site.carried
@@ -269,11 +290,63 @@ class _Index:
         elif sites:
             self.servers.setdefault(spec, {})[module.file, key] = _Server(module.file, key, reach)
 
+    # --- classes whose answers a subclass would inherit -------------------------
+
+    def _base(self, module: _Module, dotted: str) -> _Spec | None:
+        """The class of this run a base spelled ``dotted`` in ``module`` names, else ``None``.
+
+        Seen: a class of the module itself, one imported by name (aliased, or through a package's
+        re-export), one reached through a module imported as a name, an alias or a dotted path.
+        Not seen: anything else, such as a base made by a call, one imported inside a function or
+        from outside the run. Every binding of the head counts, so a doubt only blocks.
+        """
+        parts = dotted.split(".")
+        analysis = module.analysis
+        if len(parts) == 1 and parts[0] in analysis.classes:
+            return module.file, parts[0]
+        for site in analysis.imported:
+            carried = site.carried
+            if site.local != parts[0] or not site.top_level:
+                continue
+            if len(parts) == 1:
+                if carried.obj is None:
+                    continue
+                file, name = self._file(module.file, carried.relative, carried.module), carried.obj
+            else:
+                if carried.obj is not None:
+                    base = ".".join(part for part in (carried.module, carried.obj) if part)
+                else:
+                    base = carried.module if carried.asname else carried.module.split(".")[0]
+                file = self._file(module.file, carried.relative, ".".join([base, *parts[1:-1]]))
+                name = parts[-1]
+            if (origin := self._origin(file, name, classes=True)) is not None:
+                return origin
+        return None
+
+    def _shadows(self) -> dict[Path, dict[str, str]]:
+        """Each class that a class of the run subclasses and gives its own seat, with why."""
+        children: dict[_Spec, list[_Spec]] = {}
+        for module in self.modules.values():
+            for name, shape in module.analysis.classes.items():
+                for base in shape.bases:
+                    if (parent := self._base(module, base)) is not None:
+                        children.setdefault(parent, []).append((module.file, name))
+        shadows: dict[Path, dict[str, str]] = {}
+        for parent in children:
+            for file, name in below(parent, children):
+                if declared := self.modules[file].analysis.classes[name].declared:
+                    reason = subclass_reason(name, declared, self.display(file))
+                    shadows.setdefault(parent[0], {})[parent[1]] = reason
+                    break
+        return shadows
+
     # --- what each spec's answers do --------------------------------------------
 
     def plan(self) -> dict[Path, _Plan]:
         self._census()
         plans = {file: _Plan() for file in self.modules}
+        for file, shadowed in self._shadows().items():
+            plans[file].shadowed = shadowed
         for file, module in self.modules.items():
             analysis = module.analysis
             for variable, answers in analysis.answers.items():
@@ -305,10 +378,27 @@ class _Index:
         return None
 
     def _two_modules(self, servers: Sequence[_Server]) -> str | None:
-        modules = sorted({self.display(server.file) for server in servers})
-        if len(modules) > 1:
-            return f"served from {len(modules)} modules ({', '.join(modules)})"
+        """Why a spec served from several files stays: they are counted as files, not by name.
+
+        Held by ``test_two_serving_modules_with_one_display_name_are_two``: ``display`` is only
+        the file's name for one no root contains, and two such files can share it.
+        """
+        files = sorted({server.file for server in servers})
+        if len(files) > 1:
+            return f"served from {len(files)} modules ({', '.join(self._distinct(files))})"
         return None
+
+    def _distinct(self, files: Sequence[Path]) -> list[str]:
+        """Each file's display name, with folders added to those that would read alike."""
+        shown = [self.display(file) for file in files]
+        names, depth = shown, 1
+        while len(set(names)) < len(names):
+            depth += 1
+            names = [
+                "/".join(file.parts[-depth:]) if shown.count(name) > 1 else name
+                for file, name in zip(files, shown, strict=True)
+            ]
+        return sorted(names)
 
     def _route(
         self,
@@ -394,7 +484,7 @@ def rewrite_files(sources: Mapping[Path, str], roots: Sequence[Path]) -> dict[Pa
     for path, source in sources.items():
         plan = plans[path.resolve()]
         if plan.arrivals:
-            followed = Followed(arrivals=plan.arrivals)
+            followed = Followed(arrivals=plan.arrivals, shadowed=plan.shadowed)
             for key, spelled in rewrite_module(source, path, roots, followed)[2].items():
                 placed.setdefault(key, []).extend(spelled)
     for file, plan in plans.items():
@@ -411,7 +501,7 @@ def rewrite_files(sources: Mapping[Path, str], roots: Sequence[Path]) -> dict[Pa
     results: dict[Path, Rewritten] = {}
     for path, source in sources.items():
         plan = plans[path.resolve()]
-        followed = Followed(plan.arrivals, plan.moved, plan.left)
+        followed = Followed(plan.arrivals, plan.moved, plan.left, plan.shadowed)
         output, findings, _ = rewrite_module(source, path, roots, followed)
         results[path] = Rewritten(output, findings, bool(plan.arrivals))
     return results

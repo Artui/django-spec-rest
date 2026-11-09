@@ -20,9 +20,10 @@ from __future__ import annotations
 
 import ast
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Hashable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TypeVar
 
 import libcst as cst
 from libcst.codemod import CodemodContext
@@ -183,6 +184,45 @@ class Followed:
     arrivals: Mapping[str, Sequence[Arrival]] = field(default_factory=dict)
     moved: Mapping[tuple[str, str], str] = field(default_factory=dict)
     left: Mapping[tuple[str, str], str] = field(default_factory=dict)
+    # Each class of this file that a class elsewhere in the run subclasses and gives its own
+    # ``spec`` or ``action_specs``, with why: an answer set on it would reach that subclass.
+    shadowed: Mapping[str, str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class ClassShape:
+    """A class bound at module level: the names it is based on, and which spec seats its body binds."""
+
+    bases: tuple[str, ...]
+    declared: tuple[str, ...]
+
+
+_SEATS = ("spec", "action_specs")
+
+_K = TypeVar("_K", bound=Hashable)
+
+
+def below(start: _K, children: Mapping[_K, Sequence[_K]]) -> list[_K]:
+    """Every class under ``start``, nearest first, each once: a subclass's subclass too."""
+    found: list[_K] = []
+    queue = list(children.get(start, ()))
+    while queue:
+        node = queue.pop(0)
+        if node not in found:
+            found.append(node)
+            queue.extend(children.get(node, ()))
+    return found
+
+
+def subclass_reason(name: str, declared: Sequence[str], where: str | None = None) -> str:
+    """Why a class's answer stays: ``name`` (in ``where``) subclasses it and binds its own seat."""
+    place = f" in {where}" if where else ""
+    return f"{name}{place} subclasses it and declares its own {' and '.join(declared)}"
+
+
+def _object(carried: Carried) -> tuple[int, str, str | None]:
+    """What an import brings in, whatever it is called there."""
+    return carried.relative, carried.module, carried.obj
 
 
 def _source(node: cst.CSTNode) -> str:
@@ -273,6 +313,7 @@ class _Analysis(cst.CSTVisitor):
         self.specs: dict[int, _SpecCall] = {}
         self.answers: dict[str, dict[str, cst.Arg]] = {}
         self.use_sites: dict[str, list[_UseSite]] = {}
+        self.classes: dict[str, ClassShape] = {}
         # The spec expressions given to ``register`` of a ``SpecRegistry``: not a view, and no
         # second use of the spec, since a registry is read for an agent and serves no route.
         self.registrations: set[int] = set()
@@ -326,7 +367,38 @@ class _Analysis(cst.CSTVisitor):
         return target is not None and target[0].startswith(KERNEL) and target[1] == "SpecRegistry"
 
     def visit_ClassDef(self, node: cst.ClassDef) -> None:
+        if isinstance(self.scopes[node], GlobalScope):
+            names = self.class_names(node)
+            self.classes[node.name.value] = ClassShape(
+                # A keyword (``metaclass=``) is read as a base too: a doubt only blocks.
+                bases=tuple(
+                    name for base in node.bases if (name := _named(base.value)) is not None
+                ),
+                declared=tuple(seat for seat in _SEATS if seat in names),
+            )
         self._class.append(node)
+
+    def class_names(self, node: cst.ClassDef) -> set[str]:
+        """Every name the class body binds, wherever in it: annotated, under an ``if``, a ``def``."""
+        scope = self.scopes[node.body.body[0]]
+        assert scope is not None
+        return {assignment.name for assignment in scope.assignments}
+
+    def subclass_declaring(self, view: str) -> str | None:
+        """Why ``view`` has a subclass in this module that would inherit an answer set on it.
+
+        A base is the class of its name here, however often that name is bound: the answer stays
+        on a doubt, never moves on one.
+        """
+        children: dict[str, list[str]] = {}
+        for name, shape in self.classes.items():
+            for base in shape.bases:
+                if base in self.classes:
+                    children.setdefault(base, []).append(name)
+        for name in below(view, children):
+            if self.classes[name].declared:
+                return subclass_reason(name, self.classes[name].declared)
+        return None
 
     def leave_ClassDef(self, original_node: cst.ClassDef) -> None:
         self._class.pop()
@@ -505,6 +577,10 @@ class _Rewrite(cst.CSTTransformer):
         self._insert_after: dict[int, list[cst.BaseStatement]] = {}
         self._decorator_keywords: dict[int, list[cst.Arg]] = {}
         self._renames: dict[int, str] = {}
+        # What the answers placed so far bring in, so a later one cannot bring in another thing
+        # under the same name, or the same thing under another: head to import, object to alias.
+        self._brought: dict[str, Carried] = {}
+        self._spelled: dict[tuple[int, str, str | None], str | None] = {}
         self._plan_answers()
         self._plan_renames()
         self._dropped_names = {id(node) for node in analysis.dropped_references}
@@ -672,65 +748,75 @@ class _Rewrite(cst.CSTTransformer):
 
     def _arrive(self, site: _UseSite, arrival: Arrival) -> None:
         """Place an answer from another module, and only then bring in the import it needs."""
-        if self._clashes(site, arrival):
+        reason = self._refusal(site, arrival)
+        if reason is not None:
             self._conflict(
-                site,
-                f"{arrival.name}={arrival.value} from {arrival.origin} not moved: "
-                f"{arrival.head} here is not the name it is there",
+                site, f"{arrival.name}={arrival.value} from {arrival.origin} not moved: {reason}"
             )
             return
         spelled = self._place(site, arrival.name, cst.parse_expression(arrival.value))
         if not spelled:
             return
         self.placed.setdefault((arrival.spec, arrival.name), []).append(spelled)
-        if arrival.carried is not None:
-            carried = arrival.carried
+        carried = arrival.carried
+        if carried is not None and arrival.head is not None:
+            self._brought[arrival.head] = carried
+            if carried.obj is not None:
+                self._spelled[_object(carried)] = carried.asname
             AddImportsVisitor.add_needed_import(
                 self.context, carried.module, carried.obj, carried.asname, carried.relative
             )
 
-    def _clashes(self, site: _UseSite, arrival: Arrival) -> bool:
-        """Whether the value's name would mean something else, or nothing yet, at ``site``.
+    def _refusal(self, site: _UseSite, arrival: Arrival) -> str | None:
+        """Why the value's name would mean something else, or nothing yet, at ``site``; else ``None``.
 
         A name the module already binds holds only as the very import the spec's
         module spelled, at module level (``test_a_function_local_import_of_the_name_is_not_read``)
         and above the class (``test_an_import_of_the_same_name_below_the_view_is_not_read``),
         with nothing else binding it (``test_a_second_binding_of_the_name_is_not_read``), and
         no other import of it (``test_a_name_the_view_binds_otherwise_is_not_carried``).
+        Each of the other refusals is a conjunct of its own:
+
+        * a star import at module level may bind the name
+          (``test_a_star_import_in_the_view_may_bind_the_name_the_answer_carries``);
+        * the class binds the name, in any way
+          (``test_an_annotated_name_the_class_binds_otherwise_is_not_carried``);
+        * an earlier answer of another spec brought in the name from elsewhere
+          (``test_two_arrivals_of_one_name_from_two_modules_do_not_share_it``);
+        * an earlier answer brought in the same name from a module under another spelling, which
+          ``AddImportsVisitor`` cannot write as one
+          (``test_one_object_imported_with_and_without_an_alias_is_left``), where a module itself
+          imported both ways is written as two lines
+          (``test_a_module_imported_with_and_without_an_alias_moves_both``).
         """
-        head = arrival.head
-        if head is None:
-            return False
-        if head in self._class_names(site.class_node):
-            return True
+        head, carried = arrival.head, arrival.carried
+        if head is None or carried is None:
+            return None
+        if any(imported.carried.obj == "*" for imported in self.a.imported):
+            return f"{head} here may be bound by a star import"
+        if head in self.a.class_names(site.class_node):
+            return f"{head} here is not the name it is there"
+        if self._brought.get(head, carried) != carried:
+            return f"{head} here is already brought in from another module by another answer"
+        if self._spelled.get(_object(carried), carried.asname) != carried.asname:
+            return f"{head} here would import what another answer imports under another name"
         bound = self.a.module_scope.assignments[head]
         if not bound:
-            return False
+            return None
         above = self._line(site.class_node)
         same = any(
-            imported.top_level
-            and imported.carried == arrival.carried
-            and self._line(imported.node) < above
+            imported.top_level and imported.carried == carried and self._line(imported.node) < above
             for imported in self.a.imported
         )
-        return not (same and len(bound) == 1)
-
-    def _class_names(self, node: cst.ClassDef) -> set[str]:
-        names: set[str] = set()
-        for statement in node.body.body:
-            if isinstance(statement, cst.SimpleStatementLine):
-                for small in statement.body:
-                    if isinstance(small, cst.Assign):
-                        names.update(
-                            t.target.value for t in small.targets if isinstance(t.target, cst.Name)
-                        )
-            elif isinstance(statement, cst.FunctionDef):
-                names.add(statement.name.value)
-        return names
+        return None if same and len(bound) == 1 else f"{head} here is not the name it is there"
 
     def _place(self, site: _UseSite, name: str, value: cst.BaseExpression) -> str | None:
-        declared = self._class_names(site.class_node)
+        declared = self.a.class_names(site.class_node)
         view = site.class_node.name.value
+        leak = self.a.subclass_declaring(view) or self.followed.shadowed.get(view)
+        if leak is not None:
+            self._conflict(site, f"{view}: {name} not moved: {leak}, and would inherit it")
+            return None
         if site.form == "decorator":
             hook = f"get_{site.action}_{name}"
             if hook in declared:

@@ -9,15 +9,25 @@ it has nothing left to do, and it reports what a run would move and leave.
 
 The files named are read as one run, since a spec's answers follow its import
 into the view serving it from another module. Nothing is written until every
-file has parsed; one that does not stops the run with exit 2. A view is written
-before a spec, so a failed write never takes an answer from a spec that has not
-reached its view.
+file has parsed; one that does not stops the run with exit 2.
+
+Every changed file is then staged to a temporary file beside it, and the temporary
+files are moved over their targets only when all are staged. A failure while
+staging (a file that is read-only, a disk that is full) changes no target and
+removes the temporary files, so an answer never leaves a spec without arriving.
+A failure among the moves themselves, which are one rename each, can still leave
+some files written and some not; the files that receive an answer are moved first,
+which narrows that and does not rule it out. A file's mode is kept, and a symlink
+is written through.
 """
 
 from __future__ import annotations
 
 import argparse
+import os
+import shutil
 import sys
+import tempfile
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -37,6 +47,41 @@ def python_files(paths: list[Path]) -> Iterator[Path]:
             parts = file.relative_to(path).parts
             if not any(part.startswith(".") or part in _SKIPPED for part in parts):
                 yield file
+
+
+def _stage(target: Path, text: str) -> Path:
+    """``text`` in a new file beside ``target``, with ``target``'s mode and line ends as given."""
+    if not os.access(target, os.W_OK):
+        raise PermissionError(f"{target}: not writable; nothing was written")
+    descriptor, name = tempfile.mkstemp(dir=target.parent, prefix=f".{target.name}.", suffix=".tmp")
+    staged = Path(name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="") as handle:
+            handle.write(text)
+        shutil.copymode(target, staged)
+    except BaseException:
+        staged.unlink(missing_ok=True)
+        raise
+    return staged
+
+
+def _write_all(outputs: list[tuple[Path, str]]) -> None:
+    """Write every file, or (when one cannot be staged) none: see the module docstring."""
+    staged: list[tuple[Path, Path]] = []
+    try:
+        for target, text in outputs:
+            staged.append((_stage(target, text), target))
+    except BaseException:
+        for temporary, _ in staged:
+            temporary.unlink(missing_ok=True)
+        raise
+    for index, (temporary, target) in enumerate(staged):
+        try:
+            os.replace(temporary, target)
+        except BaseException:
+            for rest, _ in staged[index:]:
+                rest.unlink(missing_ok=True)
+            raise
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -67,8 +112,13 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     changed = [file for file, result in results.items() if result.output != sources[file]]
     if not args.check:
-        for file in sorted(changed, key=lambda file: not results[file].receives):
-            file.write_text(results[file].output, encoding="utf-8")
+        # Through a symlink to the file it stands for, as a plain write would.
+        _write_all(
+            [
+                (file.resolve(), results[file].output)
+                for file in sorted(changed, key=lambda file: not results[file].receives)
+            ]
+        )
     findings: list[Finding] = []
     for file, result in results.items():
         left = result.findings

@@ -51,6 +51,18 @@ found under `--root`, the directory such imports start from, usually the parent 
 the top package; a wrong root finds no import, so every spec reads as having no
 view in the run. A second run changes nothing.
 
+An answer stays with its note, and says why, where moving it could change what a
+request answers: a class of the run that is based on the view and binds its own
+`spec` or `action_specs` would inherit it; a name the answer needs could mean
+something else in the view, from a star import there, a name the class binds, or
+another spec's answer in the same view that brings in a different object of that
+name; a spec reaches a second view through a star import of a package that
+re-exports it. A subclass the run cannot resolve (a base made by a call, imported
+inside a function, or from outside the run) is not seen. Files are written all or
+none while they are staged (a failure there changes nothing), and keep their
+mode and line ends; the codemod's README says exactly what a failure while moving
+them into place can leave.
+
 Every site it leaves gets a comment beginning `# drfs-codemod:` above its
 statement, giving the reason, and a line of its report, `path:line: reason`.
 A site stays in the report until its comment is deleted. `--check` writes

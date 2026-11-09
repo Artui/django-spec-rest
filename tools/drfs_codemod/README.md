@@ -35,6 +35,19 @@ The count of files changed goes to stderr. A file that cannot be parsed, or is
 not UTF-8, stops the run with exit 2 before anything is written, and stderr
 names it: name the paths around it.
 
+## What a write guarantees
+
+Every changed file is first written to a temporary file beside it
+(`.name.XXXX.tmp`), with its mode, and the temporary files are moved over their
+targets only once all are written. A failure while staging, such as a file that
+is not writable, a folder that is read-only or a full disk, changes no file and
+removes the temporary files, so an answer never leaves a spec without arriving
+in its view. The moves are one rename each, and a failure among them can still
+leave some files written and some not; the files receiving an answer are moved
+first, which narrows that window and does not close it, so run it on a clean
+tree and read `git status` after a failure. A symlinked file is written through.
+Line ends are kept: a CRLF file stays CRLF.
+
 ## The report
 
 One line per site left, `path:line: reason`, in the order of the files and
@@ -113,6 +126,28 @@ the spec's import into the view when all of this holds:
   name, or a dotted name such as `status.HTTP_201_CREATED`, brings its import:
   the spec module's own absolute import, or, for a name the spec module defines,
   an import of it from there (not through a re-export, which holds only the spec).
+- **No subclass serves another spec.** A view's answer is a class attribute, so a
+  subclass inherits it. Where a class of the run is based on the view and binds its
+  own `spec` or `action_specs` (in any form, annotated too), drfs read that
+  subclass's spec only, and the answer would reach it wrongly; the view gets a
+  comment naming the subclass and the spec keeps its note. A subclass that binds
+  neither inherits the spec and the answer, as it should, and does not block. The
+  same holds for a view in the spec's own module. A subclass is seen when its base
+  is a class of its module, imported by name (aliased, or through a package's
+  re-export) or reached through a module imported at the top of the module
+  (`from pkg import views`, `import pkg.views as v`, `import pkg.views`), in
+  any file of the run, and through any depth of subclasses. It is not seen when the
+  base is made by a call, imported inside a function, assigned from another name, or
+  from outside the run: the answer moves, and a subclass there serving another spec
+  still has to be checked by hand.
+- **No other module binds the value's name.** A name the value needs is not carried
+  into a view that star-imports anything at module level (the star import may
+  bind it), that binds it in the class in any way (an annotated name, a name under
+  an `if`), that imports it from elsewhere, or that another answer, from another
+  spec's module, has just brought in under that name: `finalize` defined in two
+  spec modules is two functions. The same object imported both with and without
+  an alias by two answers is left too. The first answer to arrive keeps the
+  name, in the order of the files.
 
 Anything else is left with the note, which ends in why: a spec imported by two
 modules, under an alias, by a star import or inside a function; one its own
@@ -124,7 +159,6 @@ count as a use; a view declared in one does.
 The view can refuse. If it already declares that answer, or a value's name means
 something else there, the view gets a comment saying so and the spec's note stays,
 so an answer is never removed from a spec without arriving or being named on it.
-A view is written before the spec it empties.
 
 A spec's note says where its answer went, and a module outside the run serving
 that spec still has to declare it. A name it imported for the value alone may be

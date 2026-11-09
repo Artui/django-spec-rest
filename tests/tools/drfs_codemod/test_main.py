@@ -117,3 +117,19 @@ def test_hidden_and_installed_trees_are_skipped(tmp_path: Path) -> None:
         (tmp_path / relative).write_text("")
     named = tmp_path / ".venv" / "lib" / "specs.py"
     assert list(python_files([tmp_path, named])) == [tmp_path / "app" / "specs.py", named]
+
+
+def test_a_crlf_file_comes_back_crlf_with_its_markers_and_imports(project: Path) -> None:
+    specs = project / "app" / "specs.py"
+    specs.write_bytes(SPECS.replace("\n", "\r\n").encode())
+    assert main([str(project / "app"), "--root", str(project)]) == 0
+    written = specs.read_bytes()
+    assert b"SerializerValidator" in written
+    assert b"# drfs-codemod:" in written
+    assert written.count(b"\n") == written.count(b"\r\n")
+    # Nothing is left to change, and a file already in the kernel's spelling stays as it was.
+    assert main([str(project / "app"), "--root", str(project), "--check"]) == 0
+    untouched = project / "app" / "untouched.py"
+    untouched.write_bytes(b"VALUE = 1\r\n")
+    assert main([str(project / "app"), "--root", str(project), "--check"]) == 0
+    assert untouched.read_bytes() == b"VALUE = 1\r\n"
