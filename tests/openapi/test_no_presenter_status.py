@@ -78,6 +78,24 @@ class Calling(ServiceCreateView):
     success_status = staticmethod(_status_callable)
 
 
+def _presenting_or_nothing() -> ServiceSpec:
+    return ServiceSpec(
+        service=_nothing,
+        permissions=_OPEN,
+        allow_none=True,
+        presenter=SerializerPresenter(Out),
+    )
+
+
+class MayPresentNothing(ServiceCreateView):
+    spec = _presenting_or_nothing()
+
+
+class MayPresentNothingAtAStatus(ServiceCreateView):
+    spec = _presenting_or_nothing()
+    success_status = 202
+
+
 class Plain(ServiceViewSet):
     queryset = Author.objects.all()
     action_specs = {"create": _bare()}
@@ -157,6 +175,8 @@ urlpatterns = [
     path("bare/", Bare.as_view()),
     path("declaring/", Declaring.as_view()),
     path("calling/", Calling.as_view()),
+    path("may-present-nothing/", MayPresentNothing.as_view()),
+    path("may-present-nothing-at-a-status/", MayPresentNothingAtAStatus.as_view()),
     path("plain/", Plain.as_view(_CREATE)),
     path("half/", Half.as_view(_CREATE)),
     path("silent/", Silent.as_view(_CREATE)),
@@ -212,6 +232,27 @@ class TestASpecWithNoPresenter:
     def test_a_callable_status_documents_the_action_s_default(self, schema: dict[str, Any]) -> None:
         # What it answers keys on the result, which no document can read.
         assert set(_responses(schema, "/calling/")) == {"201"}
+
+
+class TestASpecThatMayPresentNothing:
+    def test_with_no_status_set_it_documents_the_204_beside_the_body(
+        self, schema: dict[str, Any]
+    ) -> None:
+        assert _post(MayPresentNothing.as_view()).status_code == 204
+        responses = _responses(schema, "/may-present-nothing/")
+        assert set(responses) == {"201", "204"}
+        assert "content" in responses["201"]
+        assert "content" not in responses["204"]
+
+    def test_with_a_status_set_it_answers_that_status_and_never_a_204(
+        self, schema: dict[str, Any]
+    ) -> None:
+        response = _post(MayPresentNothingAtAStatus.as_view())
+        assert response.status_code == 202
+        assert response.data is None
+        responses = _responses(schema, "/may-present-nothing-at-a-status/")
+        assert set(responses) == {"202"}
+        assert "content" in responses["202"]
 
 
 class TestTheVariantsMerged:
