@@ -17,8 +17,10 @@ staging (a file that is read-only, a disk that is full) changes no target and
 removes the temporary files, so an answer never leaves a spec without arriving.
 A failure among the moves themselves, which are one rename each, can still leave
 some files written and some not; the files that receive an answer are moved first,
-which narrows that and does not rule it out. A file's mode is kept, and a symlink
-is written through.
+which narrows that and does not rule it out. Either failure stops the run with
+exit 2, and stderr names the file and how many were written before it. A file's
+mode is kept, and a symlink is written through; a rename makes a new file, so its
+owner and group become the runner's and a hard link to it no longer shares it.
 """
 
 from __future__ import annotations
@@ -78,9 +80,14 @@ def _write_all(outputs: list[tuple[Path, str]]) -> None:
     for index, (temporary, target) in enumerate(staged):
         try:
             os.replace(temporary, target)
-        except BaseException:
+        except BaseException as error:
             for rest, _ in staged[index:]:
                 rest.unlink(missing_ok=True)
+            if isinstance(error, OSError):
+                raise OSError(
+                    f"{target}: {error}; {index} of {len(staged)} changed files were"
+                    " written before it"
+                ) from error
             raise
 
 
@@ -113,12 +120,16 @@ def main(argv: list[str] | None = None) -> int:
     changed = [file for file, result in results.items() if result.output != sources[file]]
     if not args.check:
         # Through a symlink to the file it stands for, as a plain write would.
-        _write_all(
-            [
-                (file.resolve(), results[file].output)
-                for file in sorted(changed, key=lambda file: not results[file].receives)
-            ]
-        )
+        try:
+            _write_all(
+                [
+                    (file.resolve(), results[file].output)
+                    for file in sorted(changed, key=lambda file: not results[file].receives)
+                ]
+            )
+        except OSError as error:
+            sys.stderr.write(f"{error}\n")
+            return 2
     findings: list[Finding] = []
     for file, result in results.items():
         left = result.findings

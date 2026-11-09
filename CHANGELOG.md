@@ -21,8 +21,9 @@ carries; releases up to 0.62.0 are in
   included, with every field's refusal in DRF's words (a body that is no object is
   still refused as `{"detail": "The body must be an object; got list."}`). The view's
   value beats the setting and the default is off. The spec's schema, its tool schema
-  and every other transport stay typed. The kernel's array cap no longer judges a `ListField` or a
-  nested `many=True` serializer under the switch, so give those a `max_length`.
+  and every other transport stay typed. The kernel's array cap no longer judges a
+  `ListField` or a nested `many=True` serializer under the switch, so give those a
+  `max_length`.
 - **The off-HTTP recipe gains a DRF `request` seed** built with
   `build_offline_context`, for a selector that keeps reading
   `request.query_params` over MCP, and says what a view resource needs from
@@ -103,8 +104,10 @@ carries; releases up to 0.62.0 are in
 - **The codemod's writes are staged.** Every changed file goes to a temporary file
   beside its target and moves into place only when all are staged, so a failure while
   staging changes no file and leaves no temporary file; a failure among the moves can
-  still leave some written. A file that cannot be written is refused up front. A
-  file's mode, a symlink and CRLF line ends are kept.
+  still leave some written. Either stops the run with exit 2, naming the file and
+  how many were written before it, and a file that cannot be written is found
+  before any is. A file's mode, a symlink and CRLF line ends are kept; its owner
+  and group become the runner's, and a hard link to it no longer shares it.
 
 ## [0.11.0] — 2026-11-09
 

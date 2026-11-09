@@ -10,6 +10,7 @@ from __future__ import annotations
 import ast
 import importlib
 import os
+import re
 import shutil
 import stat
 import uuid
@@ -330,18 +331,25 @@ def _chain(project: Project) -> tuple[Path, Path, Path]:
     )
 
 
+def _stopped(project: Project, capsys: pytest.CaptureFixture[str]) -> str:
+    """Run the codemod over the package, which must stop on a write with exit 2: what it said."""
+    assert main([str(project.root / project.package), "--root", str(project.root)]) == 2
+    return capsys.readouterr().err
+
+
 @pytest.mark.skipif(os.geteuid() == 0, reason="root writes to a read-only file")
-def test_a_file_that_cannot_be_written_changes_no_file(project: Project) -> None:
+def test_a_file_that_cannot_be_written_changes_no_file(
+    project: Project, capsys: pytest.CaptureFixture[str]
+) -> None:
     _, _, n = _chain(project)
     n.chmod(0o444)
     before = _tree(project)
-    with pytest.raises(PermissionError):
-        project.run()
+    assert f"{n.resolve()}: not writable; nothing was written" in _stopped(project, capsys)
     assert _tree(project) == before
 
 
 def test_a_failure_while_staging_changes_no_file_and_leaves_no_temp_file(
-    project: Project, monkeypatch: pytest.MonkeyPatch
+    project: Project, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     _chain(project)
     before = _tree(project)
@@ -355,14 +363,13 @@ def test_a_failure_while_staging_changes_no_file_and_leaves_no_temp_file(
         real(src, dst)
 
     monkeypatch.setattr(shutil, "copymode", fail_the_second)
-    with pytest.raises(OSError, match="disk full"):
-        project.run()
+    assert "disk full" in _stopped(project, capsys)
     assert len(calls) == 2
     assert _tree(project) == before
 
 
 def test_a_failure_among_the_replaces_can_leave_some_written_and_no_temp_file(
-    project: Project, monkeypatch: pytest.MonkeyPatch
+    project: Project, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     _chain(project)
     before = _tree(project)
@@ -376,8 +383,9 @@ def test_a_failure_among_the_replaces_can_leave_some_written_and_no_temp_file(
         real(src, dst)
 
     monkeypatch.setattr(os, "replace", fail_the_second)
-    with pytest.raises(OSError, match="moving failed"):
-        project.run()
+    said = _stopped(project, capsys)
+    assert "moving failed" in said
+    assert re.search(r"; 1 of \d+ changed files were written before it", said)
     after = _tree(project)
     assert after.keys() == before.keys()
     assert [name for name in after if after[name] != before[name]] == ["views/m.py"]
@@ -403,6 +411,23 @@ def test_a_symlinked_file_is_written_through_and_stays_a_link(project: Project) 
     project.run()
     assert view.is_symlink()
     assert "success_status = 202" in kept.read_text()
+
+
+def test_a_file_named_twice_through_a_symlink_is_written_once(
+    project: Project, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # A link beside its target is one module to the analysis, which keys modules
+    # on the resolved path, so it is no second server; the run keys its files the
+    # same way, so the file is staged and counted once, not written twice over.
+    project.spec()
+    view = project.view()
+    (view.parent / "alias.py").symlink_to(view)
+    code, _ = project.run()
+    assert code == 0
+    assert capsys.readouterr().err == "2 files changed\n"
+    assert view.read_text().count("success_status = 202") == 1
+    assert (view.parent / "alias.py").is_symlink()
+    assert not [path for path in view.parent.iterdir() if path.suffix == ".tmp"]
 
 
 def test_a_crlf_file_stays_crlf(project: Project) -> None:

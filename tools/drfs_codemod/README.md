@@ -45,8 +45,11 @@ removes the temporary files, so an answer never leaves a spec without arriving
 in its view. The moves are one rename each, and a failure among them can still
 leave some files written and some not; the files receiving an answer are moved
 first, which narrows that window and does not close it, so run it on a clean
-tree and read `git status` after a failure. A symlinked file is written through.
-Line ends are kept: a CRLF file stays CRLF.
+tree and read `git status` after a failure. Either failure stops the run with exit
+2, and stderr names the file and how many were written before it. A symlinked file
+is written through. Line ends are kept: a CRLF file stays CRLF. A rename makes a
+new file, so a rewritten file's owner and group become the runner's, and a hard
+link to it no longer shares it.
 
 ## The report
 
