@@ -34,9 +34,15 @@ carries; releases up to 0.62.0 are in
   name or through a module, onto the view that serves it, bringing the import a
   name in its value needs. It moves only when that is certain. A spec two modules
   import, or one imported under an alias, keeps its comment, as does a value that
-  would not resolve in the view, and the comment ends in why. A view that already
-  declares the answer is marked and the spec keeps the value. A file that cannot be
-  parsed now stops the run with exit 2 before anything is written.
+  would not resolve in the view, and the comment ends in why. So does a spec another
+  file star-imports, a package's re-export included, a name another answer already
+  brought into that view from elsewhere, a name a star import in the view may bind,
+  and one object carried both with and without an alias. A registration on a
+  module-level `SpecRegistry` is no second use; any other use, such as
+  `admin.site.register(x)`, is. A view that already declares the answer is marked
+  and the spec keeps the value. A file that cannot be parsed now stops the run with
+  exit 2 before anything is written, and `--root`, the directory absolute imports
+  start from, is documented.
 
 ### Changed
 
@@ -82,6 +88,18 @@ carries; releases up to 0.62.0 are in
   valid 3.0. Under 3.1 and later the schema is kept as the kernel writes it.
   What OPTIONS answers is unchanged. On the kernel floor below, every labelled
   filter and every `OrderingFilter` is such a schema.
+- **The codemod no longer sets an answer a subclass would inherit.** A class of the
+  run that subclasses the serving view and binds its own `spec` or `action_specs`
+  would have answered with the other spec's status, so the answer stays on the spec
+  with its reason. A subclass the run cannot resolve is not seen, as the README says.
+  A class-level name that is annotated or conditional now counts as declared, so an
+  annotated `success_status` is marked rather than given a second, losing line above
+  or below it.
+- **The codemod's writes are staged.** Every changed file goes to a temporary file
+  beside its target and moves into place only when all are staged, so a failure while
+  staging changes no file and leaves no temporary file; a failure among the moves can
+  still leave some written. A file that cannot be written is refused up front. A
+  file's mode, a symlink and CRLF line ends are kept.
 
 ## [0.11.0] — 2026-11-09
 
