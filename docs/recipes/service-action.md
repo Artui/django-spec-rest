@@ -4,9 +4,19 @@
 
 `ServiceViewSet` serves `list`, `retrieve`, `create`, `update`,
 `partial_update` and `destroy`, each from its entry in `action_specs`.
-`SelectorViewSet` serves `list` and `retrieve`. An action with no entry falls
-back to DRF's own behaviour for the reads (`get_queryset()`, `get_object()`)
-and answers 405 for the writes, and `Allow` leaves an unserved write out.
+`SelectorViewSet` serves `list` and `retrieve`. A write with no entry answers
+405, and `Allow` leaves it out. A read with no entry falls back to DRF's own
+behaviour (`get_queryset()`, `get_object()`), which needs rows and a serializer:
+on a viewset with no `queryset` or `get_queryset()`, or no `serializer_class`,
+`get_serializer_class()` or `get_serializer()`, that read answers 405 too, and
+`Allow` and the schema leave it out. A `list`, a `retrieve` or a `get_object()`
+of your own keeps the route yours.
+
+So a create-only `ServiceViewSet` answers `POST` and nothing else. A router
+still mounts its detail route, where every method answers 405, `Allow` names
+`OPTIONS` alone and the schema has no path. For no detail route at all, declare
+`ServiceCreateMixin` over `GenericViewSet`.
+
 `get_queryset()` answers the `list` spec's set on `list` alone, from the one
 dispatch the list presents; every other action, a custom `@action` included,
 reads the viewset's `queryset`. So a viewset under DRF's

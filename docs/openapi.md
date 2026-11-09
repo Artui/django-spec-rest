@@ -226,9 +226,14 @@ call `enable_openapi()` again after the reload.
   `partial_update` or `destroy` the router maps but the viewset declares no
   spec for answers 405, so it is no operation. A `ServiceViewSet` with no
   `destroy` spec documents no `DELETE`, and one with a `partial_update` spec
-  alone documents `PATCH` and no `PUT`. The `list` and `retrieve` handlers,
-  which fall back to DRF's queryset, and a handler the viewset defines itself,
-  stay documented.
+  alone documents `PATCH` and no `PUT`. The `list` and `retrieve` handlers stay
+  documented where their fallback to DRF can run, on a viewset with rows to read
+  (a `queryset` or `get_queryset()`) and a serializer (a `serializer_class`,
+  `get_serializer_class()` or `get_serializer()`). Where it cannot they answer
+  405 and are left out, with every other method no spec serves, on any route of
+  that viewset: a create-only `ServiceViewSet` documents `POST` on its list route
+  and no path for its detail route. A handler the viewset defines itself stays
+  documented, and so does a `retrieve` beside its own `get_object()`.
 
 `ServiceErrorSerializer`, a `detail` field and the optional `schema` object, is
 the body of that 422 and of the 400's `{"detail": ...}` alternative, under the

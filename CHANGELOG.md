@@ -63,6 +63,19 @@ carries; releases up to 0.62.0 are in
 
 ### Fixed
 
+- **A viewset read with nothing to fall back to answers 405, not DRF's assertion
+  as a 500.** A `list` or `retrieve` with no spec on a viewset with no rows
+  (`queryset`, `get_queryset()`) or no serializer (`serializer_class`,
+  `get_serializer_class()`, `get_serializer()`) raises `MethodNotAllowed` as an
+  unserved write does, and `Allow`, OPTIONS and the schema follow from one
+  predicate. So a create-only `ServiceViewSet` on a router answers 405 on `GET`
+  and `HEAD`, documents `POST` alone, and keeps a detail route, which a router
+  mounts, with `Allow: OPTIONS` and no schema path. A project's own `list`,
+  `retrieve`, `get_object()`, `get_queryset()`, `get_serializer_class()` or
+  `get_serializer()` still answers, each for the half it supplies, and the rule
+  that a `list` or `retrieve` fallback stays documented narrows to one that can
+  run. OPTIONS of a project's own write on such a viewset answers with that method
+  undescribed, where DRF's metadata asserted.
 - **`@selector_action` refuses a spec that is not a `SelectorSpec` where it is
   decorated.** A `ServiceSpec`, a `DiscriminatedAction` or anything else failed
   as an `AttributeError` at `spec.kind`, saying nothing of what to do. It is now

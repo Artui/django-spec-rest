@@ -404,9 +404,17 @@ The query string is read by the kernel's flat reader:
 - **A `many` spec with an `output_selector_spec` presents what the re-read
   returns**, where drfs presented the service's rows.
 - **Bulk and row refusals are worded by the kernel.**
+- **A read with no spec and nothing to fall back to answers 405**, not DRF's
+  assertion as a 500. A `list` or `retrieve` a router maps on a viewset with no
+  rows or no serializer leaves `Allow` and the schema, so a create-only
+  `ServiceViewSet` documents `POST` alone and its detail route `Allow`s
+  `OPTIONS` alone. A `list`, `retrieve` or `get_object()` of the project's own
+  keeps its route, and a read that can fall back answers as it did.
 - **OPTIONS runs no stage of a spec** (no selector, provider, service or
   affordance condition) and never answers 500. `Allow` names only the methods
-  a spec serves: a handler with no spec is left out, on its 405 too.
+  that can answer: a handler of this package's with no spec is left out, on its
+  405 too, and a handler of the project's stays, undescribed where DRF's metadata
+  cannot describe it for want of a serializer or rows.
   `actions[METHOD]` is a JSON Schema object rather than DRF's per-field
   dictionary, and leaves out the keys the server fills, the route's captures
   and the target lookup's parameters; a key a provider may fill is described

@@ -30,8 +30,8 @@ _SILENCED_BY = "spec_rows_scoped_by_selector"
 _OWN_PACKAGES = frozenset({"django_spec_rest", "rest_framework"})
 
 
-def _overriding_classes(view_cls: type) -> list[type]:
-    """Every class above ``view_cls`` defining ``get_queryset``, other than this package's or DRF's.
+def _overriding_classes(view_cls: type, name: str = "get_queryset") -> list[type]:
+    """Every class above ``view_cls`` defining ``name``, other than this package's or DRF's.
 
     Read off the MRO rather than through ``view_cls.get_queryset``: a project's mixin listed
     after ``SelectorListMixin`` resolves to the package's method, whose ``super()`` runs it
@@ -40,7 +40,7 @@ def _overriding_classes(view_cls: type) -> list[type]:
     return [
         klass
         for klass in view_cls.__mro__
-        if "get_queryset" in vars(klass) and klass.__module__.partition(".")[0] not in _OWN_PACKAGES
+        if name in vars(klass) and klass.__module__.partition(".")[0] not in _OWN_PACKAGES
     ]
 
 
