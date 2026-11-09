@@ -209,7 +209,10 @@ def kernel_arguments(
     through ``coerce_flat``, so ``?published=true`` reaches the shape check as
     ``True``; a JSON body's do not, since the client typed them, so a JSON
     ``"true"`` is a string there, as on every typed transport
-    (test_a_json_body_is_not_read_as_flat_strings). A form body's fields are
+    (test_a_json_body_is_not_read_as_flat_strings). A form body's checked
+    checkbox, ``"on"``, is read as ``True`` first for a parameter declared
+    ``boolean``, which ``coerce_flat`` would refuse; a query string's is not
+    (``_checked_boxes``). A form body's fields are
     its serializer's to parse: the spec dispatched for one carries a lenient
     ``SerializerValidator`` (``recording_spec``), which declares each field
     ``any``, so a checkbox's ``"on"`` reaches DRF's field as sent, and a
@@ -267,7 +270,7 @@ def kernel_arguments(
         # (test_kernel_views' test_a_capture_outranks_a_form_body).
         if isinstance(spec.validator, SerializerValidator):
             flat = read_form_spellings(spec.validator, body, flat, call_context=call_context)
-        sent = coerce_flat(parameters, {**flat, **scope})
+        sent = coerce_flat(parameters, {**_checked_boxes(parameters, flat), **scope})
     elif isinstance(body, Mapping):
         sent = {**_unscoped(body, reads), **coerce_flat(parameters, scope)}
     else:
@@ -332,6 +335,41 @@ def _target_reads(spec: KernelServiceSpec) -> Parameters:
     if target is None:
         return Parameters()
     return target.parameters()
+
+
+def _checked_boxes(parameters: Parameters, flat: Mapping[str, Any]) -> dict[str, Any]:
+    """A form body's flat values, with a checked checkbox's ``"on"`` read as ``True``.
+
+    A browser sends ``on`` for a checked box, which ``coerce_flat`` does not
+    spell as a boolean (it takes ``true``, ``false``, ``1`` and ``0``), so a
+    kernel ``FormValidator``'s ``BooleanField``, and the ``<name>-clear``
+    boolean it declares for an optional file field, would be refused. Only a
+    form body's, since a query string or a capture is typed by its client; only
+    ``on``, no other truthy string; and only for a parameter declared
+    ``boolean``, or an array of them, so a string field holding ``"on"`` is
+    left as sent. A ``SerializerValidator`` declares each form field ``any``
+    (``recording_spec``), so none of its fields is read here.
+
+    Each arm is held by its own test, in test_a_form_checkbox_over_http: a key
+    naming no parameter by test_an_undeclared_key_is_left_for_the_closed_set,
+    the boolean by test_a_boolean_field_posted_as_on_arrives_as_true (and its
+    declared type by test_a_string_field_keeps_a_value_of_on), the array
+    by test_an_array_of_booleans_reads_each_on and its element type by
+    test_an_array_of_strings_keeps_a_value_of_on.
+    """
+    read: dict[str, Any] = {}
+    for name, value in flat.items():
+        param = parameters.get(name)
+        if param is None:
+            read[name] = value
+        elif param.type == "boolean":
+            read[name] = True if value == "on" else value
+        elif param.items == "boolean":
+            # An array of booleans, whose value ``flat_arguments`` always reads as a list.
+            read[name] = [True if element == "on" else element for element in value]
+        else:
+            read[name] = value
+    return read
 
 
 def _unscoped(sent: Mapping[str, Any], reads: Parameters) -> dict[str, Any]:

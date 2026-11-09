@@ -237,7 +237,9 @@ class SerializerValidator(Validator):
         ``lenient`` declares each field by name alone - any value, optional,
         nullable - so the kernel's shape check passes every value through and
         the serializer is the one to answer it, as a live DRF view's request
-        always was answered (``kernel_spec_variant(lenient=True)``).
+        always was answered. The edge dispatches a lenient copy of a spec's Validator
+        (``recording_spec``) for a form body, and for a JSON body where the view's
+        ``lenient_json_body`` says so.
         """
         seeded = self._seeded()
         walked = Parameters.of(

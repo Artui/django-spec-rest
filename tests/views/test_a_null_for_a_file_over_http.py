@@ -368,7 +368,15 @@ def test_a_form_s_clear_checkbox_means_nothing_to_a_serializer(
     assert document.upload.name.startswith("documents/held")
 
 
-def test_a_form_validator_s_clear_checkbox_still_clears(settings: Any, tmp_path: Any) -> None:
+@pytest.mark.parametrize("sent", ["true", "on"])
+def test_a_form_validator_s_clear_checkbox_still_clears(
+    settings: Any, tmp_path: Any, sent: str
+) -> None:
+    """A browser's checked box sends ``on``, which the edge reads as ``True`` for a form body alone.
+
+    The ``on`` case fails with a 400 on ``upload-clear`` (``Enter true, false, 1 or 0.``)
+    without ``_checked_boxes`` in ``kernel_edge``.
+    """
     spec = ServiceSpec(
         service=_update,
         validator=FormValidator(_Form),
@@ -376,7 +384,8 @@ def test_a_form_validator_s_clear_checkbox_still_clears(settings: Any, tmp_path:
         permissions=_OPEN,
     )
     document = _held(settings, tmp_path)
-    assert _patch(spec, document, {"upload-clear": "true"}, "multipart").status_code == 200
+    response = _patch(spec, document, {"upload-clear": sent}, "multipart")
+    assert response.status_code == 200, response.data
     assert document.upload.name == ""
 
 

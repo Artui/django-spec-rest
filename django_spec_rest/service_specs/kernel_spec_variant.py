@@ -46,10 +46,12 @@ def kernel_spec_variant(
       dataclass's) is validated whole, so the variant is the spec itself.
     - ``lenient``: the spec's ``SerializerValidator`` declared lenient, every
       other keyword of it carried over, so the kernel's shape check passes each
-      value through to the serializer. The edge asks this for a request a live
-      DRF view dispatches, which DRF's serializer has always answered alone: a
+      value through to the serializer, as DRF's has always answered alone: a
       form's ``"on"`` for a boolean, ``123`` for a string, every field's refusal
-      at once, in DRF's words. A caller off HTTP keeps the kernel's typed check.
+      at once, in DRF's words. The edge does not ask this of a request: it
+      builds its lenient copy in ``recording_spec``, which relaxes the
+      Validator the same way, for a form body or a lenient JSON body, and asks
+      this only for ``partial``. A caller off HTTP keeps the kernel's typed check.
       A ``many`` spec keeps its ``many_min_length`` and ``many_max_length``: a
       kernel spec declares them itself, so the kernel's cap stays the one its
       author left in place (test_a_lenient_variant_keeps_a_many_spec_s_bounds).

@@ -346,7 +346,10 @@ The query string is read by the kernel's flat reader:
 - **A form body is read as DRF reads one** (`"on"`, a blank checkbox, the
   prefixed spellings `v.tenant` and `tags[0]` of a nested or list field), and a
   JSON body is checked against the spec's declared types as sent: `"true"` is
-  no boolean in JSON.
+  no boolean in JSON. A kernel `FormValidator` is no serializer, so a form
+  body's boolean (a `BooleanField`, or a file field's clear checkbox) reads
+  `true`, `false`, `1`, `0` and, for a form body alone, a checkbox's `on`; a
+  query string's `?flag=on` is refused.
 - **A JSON integer field still takes a numeric string.** `{"start_hour": "10"}`
   is accepted as `10`, as drfs accepted it, while `{"title": 5}` is refused
   with `Expected a string.`: "as sent" is a check of the kind of value, and the
