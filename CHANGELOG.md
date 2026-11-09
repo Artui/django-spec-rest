@@ -75,7 +75,9 @@ carries; releases up to 0.62.0 are in
   answers `204` for one unless the view sets a status, and the document named the
   action's default, `201` on a create and `200` on a custom action. A
   `DiscriminatedAction` with one variant presenting and one not now lists both
-  statuses, where the second's `204` went undocumented.
+  statuses, where the second's `204` went undocumented. A spec that may present
+  nothing under a status the view sets no longer lists a `204` it never answers:
+  the bodyless answer goes out at that status.
 - **`requestBody.required` where the body is a schema given whole.** drf-spectacular
   reads such a body as optional, so a `DiscriminatedAction`, and a plain spec over
   any Validator but a `SerializerValidator`, stated nothing while the wire answered

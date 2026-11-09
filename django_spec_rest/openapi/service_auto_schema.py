@@ -568,7 +568,10 @@ class ServiceAutoSchema(AutoSchema):
         ``presenter_for_output()``. With no presenter there is no body, and the
         edge answers ``204`` unless the view sets a status, the action's default
         never entering into it (test_no_presenter_status). The ``204`` beside a
-        body is where the spec may present nothing; its operands are held here by
+        body is where the spec may present nothing and the view sets no status,
+        since one it sets is what that answer goes out at too
+        (test_with_a_status_set_it_answers_that_status_and_never_a_204); its
+        operands are held here by
         test_no_presenter_documents_no_content_at_the_204_it_answers (the body)
         and test_a_create_answers_201_with_its_presenter_s_serializer (the
         question), and the branch by
@@ -588,7 +591,9 @@ class ServiceAutoSchema(AutoSchema):
             else {no_content: OpenApiResponse(description="")}
         )
         if body is not None and can_present_nothing(spec):
-            responses[204] = OpenApiResponse(description="")
+            # Answered where the bodyless answer goes out, which is the body's own
+            # status where the view set one: that one keeps the body.
+            responses.setdefault(no_content, OpenApiResponse(description=""))
         # A Validator's refusal is a 400 of DRF's field errors, whichever kind
         # of Validator refused
         # (test_the_documented_400_describes_the_body_the_edge_sends,

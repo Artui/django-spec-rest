@@ -137,7 +137,9 @@ call `enable_openapi()` again after the reload.
 - **The status** is the view's `success_status` where it is an `int`, over the
   action's default. On a viewset it is the action's own where one is declared
   ([Per-action answers](reference/viewsets.md#per-action-answers)). A body documented under 204 is documented as the 200 it is
-  served as, with a 204 beside it where the spec can present nothing. A spec with
+  served as, with a 204 beside it where the spec can present nothing. A spec that
+  can present nothing under a status the view sets answers that status with no
+  body, so it lists no 204 beside the body. A spec with
   no presenter answers no content at 204 whatever the action's default, unless
   the view sets a status, so that is what it documents. A `DiscriminatedAction`
   lists each status any of its variants answers.
