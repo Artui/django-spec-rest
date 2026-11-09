@@ -273,6 +273,10 @@ class _Analysis(cst.CSTVisitor):
         self.specs: dict[int, _SpecCall] = {}
         self.answers: dict[str, dict[str, cst.Arg]] = {}
         self.use_sites: dict[str, list[_UseSite]] = {}
+        # The spec expressions given to ``register`` of a ``SpecRegistry``: not a view, and no
+        # second use of the spec, since a registry is read for an agent and serves no route.
+        self.registrations: set[int] = set()
+        self._registries: dict[str, cst.CSTNode] = {}
         self.consumed: set[int] = set()
         self.dropped_imports: dict[str, cst.ImportAlias] = {}
         self.live_dropped: set[str] = set()
@@ -285,8 +289,8 @@ class _Analysis(cst.CSTVisitor):
 
     # --- spec construction ---------------------------------------------------
 
-    def spec_kind(self, func: cst.BaseExpression) -> str | None:
-        """``ServiceSpec`` or ``SelectorSpec`` if ``func`` names drfs' or the kernel's, else ``None``."""
+    def _target(self, func: cst.BaseExpression) -> tuple[str, str] | None:
+        """The (module, name) a called class is, once drfs' is mapped onto the kernel's, else ``None``."""
         origin: tuple[str, str] | None = None
         if isinstance(func, cst.Name):
             origin = self.origins.get(func.value)
@@ -299,10 +303,27 @@ class _Analysis(cst.CSTVisitor):
                 origin = (module, func.attr.value)
         if origin is None:
             return None
-        target = IMPORTS.get(origin, origin)
-        if target[0].startswith(KERNEL) and target[1] in ("ServiceSpec", "SelectorSpec"):
+        return IMPORTS.get(origin, origin)
+
+    def spec_kind(self, func: cst.BaseExpression) -> str | None:
+        """``ServiceSpec`` or ``SelectorSpec`` if ``func`` names drfs' or the kernel's, else ``None``."""
+        target = self._target(func)
+        if (
+            target is not None
+            and target[0].startswith(KERNEL)
+            and target[1]
+            in (
+                "ServiceSpec",
+                "SelectorSpec",
+            )
+        ):
             return target[1]
         return None
+
+    def _is_registry(self, func: cst.BaseExpression) -> bool:
+        target = self._target(func)
+        # Held by ``unknown class`` (not the kernel's) and ``other class`` (not a registry).
+        return target is not None and target[0].startswith(KERNEL) and target[1] == "SpecRegistry"
 
     def visit_ClassDef(self, node: cst.ClassDef) -> None:
         self._class.append(node)
@@ -319,6 +340,10 @@ class _Analysis(cst.CSTVisitor):
                 continue
             if not self._class and isinstance(small.value, cst.Call):
                 self._module_level_targets[id(small.value)] = target.value
+                if self._is_registry(small.value.func) and isinstance(
+                    self.scopes[node], GlobalScope
+                ):
+                    self._registries[target.value] = target
             if self._class and len(self._class) == 1:
                 self._class_assignment(node, target.value, small.value)
 
@@ -381,7 +406,30 @@ class _Analysis(cst.CSTVisitor):
                     )
                 )
 
+    def _registration(self, node: cst.Call) -> None:
+        """Note the spec expressions ``<registry>.register(...)`` is given, when ``<registry>`` is certain.
+
+        Each conjunct is held by a case of ``test_a_use_that_is_not_a_registration_still_blocks``,
+        named here by its id: the method (``other method``), the receiver bound once, at module
+        level, to a construction (``bound twice``, ``built in a function``, ``shadowed in a
+        function``, ``not a construction``, ``unknown receiver``), the argument being the spec
+        itself (``unpacked``; ``wrapped`` and ``called`` hold the reference check in ``follow.py``).
+        The class constructed is held in ``_is_registry``.
+        """
+        func = node.func
+        if not (isinstance(func, cst.Attribute) and func.attr.value == "register"):
+            return
+        # A dotted receiver (``admin.site``) is no key of ``_registries``, which holds plain names.
+        name = get_full_name_for_node(func.value) or ""
+        scope = self.scopes[node]
+        assert scope is not None
+        # Only the one module-level construction: a rebinding or a local of the same name is not it.
+        if [a.node for a in scope[name]] != [self._registries.get(name)]:
+            return
+        self.registrations.update(id(arg.value) for arg in node.args if not arg.star)
+
     def visit_Call(self, node: cst.Call) -> None:
+        self._registration(node)
         kind = self.spec_kind(node.func)
         if kind is None:
             return

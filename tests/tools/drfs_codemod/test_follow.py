@@ -573,6 +573,212 @@ def test_an_earlier_run_s_note_is_not_followed(project: Project) -> None:
     _assert_left(spec, "")
 
 
+# --- a registration is no server and no blocker ---------------------------------
+
+REGISTRY = """\
+from rest_framework_services import SpecRegistry
+{importing}
+
+enrolment_spec_registry = SpecRegistry()
+enrolment_spec_registry.register("ENROL", {named})
+"""
+
+
+def _registry(project: Project, body: str | None = None) -> Path:
+    """A registry module importing the spec; ``body`` replaces the whole text when given."""
+    source = body or REGISTRY.replace("{importing}", ABSOLUTE).replace("{named}", "enrol")
+    return project.write("specs/registry.py", source)
+
+
+@pytest.mark.django_db
+def test_a_spec_registered_beside_its_one_view_moves(project: Project) -> None:
+    spec, view = project.spec(), project.view()
+    registry = _registry(project)
+    project.run()
+    assert _answers(view) == ["success_status", "response_finalizer"]
+    assert "success_status=202," not in spec.read_text()
+    # The registration is left as the tool writes it today: the spec is still imported and registered.
+    written = registry.read_text()
+    assert f"from {project.package}.specs.enrolment import enrol\n" in written
+    assert 'enrolment_spec_registry.register("ENROL", enrol)\n' in written
+    assert _markers(registry) == []
+    response = _post(project.module().Enrol.as_view())
+    assert response.status_code == 202, response.data
+
+
+def test_a_spec_registered_through_its_module_moves(project: Project) -> None:
+    project.spec()
+    view = project.view()
+    _registry(
+        project,
+        REGISTRY.replace("{importing}", "from ..specs import enrolment").replace(
+            "{named}", "enrolment.enrol"
+        ),
+    )
+    project.run()
+    assert _answers(view) == ["success_status", "response_finalizer"]
+
+
+def test_a_registry_built_from_the_kernel_is_one(project: Project) -> None:
+    project.spec()
+    view = project.view()
+    registry = _registry(project)
+    registry.write_text(
+        registry.read_text().replace(
+            "from rest_framework_services import SpecRegistry",
+            "from django_service_specs import SpecRegistry",
+        )
+    )
+    project.run()
+    assert _answers(view) == ["success_status", "response_finalizer"]
+
+
+def test_a_spec_only_registered_keeps_the_plain_note(project: Project) -> None:
+    spec = project.spec()
+    _registry(project)
+    project.run()
+    assert (
+        "success_status=202 is the view's or the action's: set success_status on the view, "
+        "@service_action(..., success_status=...), or get_<action>_success_status on the viewset"
+    ) in _markers(spec)
+    assert "used otherwise" not in " ".join(_markers(spec))
+
+
+def test_a_registration_beside_two_serving_modules_reports_two(project: Project) -> None:
+    spec, view = project.spec(), project.view()
+    other = project.view(relative="views/second.py")
+    _registry(project)
+    project.run()
+    assert _answers(view) == [] == _answers(other)
+    _assert_left(spec, "served from 2 modules (")
+    assert "registry" not in " ".join(_markers(spec))
+
+
+def test_a_module_registering_and_serving_the_spec_is_one_server(project: Project) -> None:
+    project.spec()
+    view = project.view()
+    view.write_text(
+        view.read_text()
+        + "\nfrom rest_framework_services import SpecRegistry\n\n"
+        + 'registry = SpecRegistry()\nregistry.register("ENROL", enrol)\n'
+    )
+    project.run()
+    assert _answers(view) == ["success_status", "response_finalizer"]
+
+
+# Each of these keeps the spec blocked. Beside ``test_a_spec_registered_beside_its_one_view_moves``
+# every one is the registration with one conjunct of ``_Analysis._registration`` taken away:
+# the method is ``register``, the receiver is a name, bound once at module level to a call of
+# ``SpecRegistry`` imported from drfs or the kernel, and the spec is itself the argument.
+NOT_A_REGISTRATION = {
+    # not the ``register`` method
+    "other method": (
+        "from rest_framework_services import SpecRegistry",
+        "r = SpecRegistry()",
+        "r.add(enrol)",
+    ),
+    # not a name: ``admin.site`` is an attribute
+    "admin site": ("from django.contrib import admin", "r = None", "admin.site.register(enrol)"),
+    # a name of unknown origin
+    "unknown class": (
+        "from elsewhere import SpecRegistry",
+        "r = SpecRegistry()",
+        "r.register(enrol)",
+    ),
+    "unknown receiver": ("from elsewhere import r", "", "r.register(enrol)"),
+    # not a name at all
+    "call receiver": (
+        "from rest_framework_services import SpecRegistry",
+        "def make():\n    return SpecRegistry()",
+        "make().register(enrol)",
+    ),
+    # a construction of another class, even the kernel's
+    "other class": (
+        "from django_service_specs import Affordance",
+        "r = Affordance()",
+        "r.register(enrol)",
+    ),
+    # a name that is not bound to a construction
+    "not a construction": (
+        "from rest_framework_services import SpecRegistry",
+        "r = SpecRegistry",
+        "r.register(enrol)",
+    ),
+    "built by a function": (
+        "from rest_framework_services import SpecRegistry",
+        "r = make(SpecRegistry)",
+        "r.register(enrol)",
+    ),
+    # bound more than once
+    "bound twice": (
+        "from rest_framework_services import SpecRegistry",
+        "r = SpecRegistry()\nr = SpecRegistry()",
+        "r.register(enrol)",
+    ),
+    # bound in a function, not the module
+    "built in a function": (
+        "from rest_framework_services import SpecRegistry",
+        "def build():\n    r = SpecRegistry()\n    r.register(enrol)",
+        "",
+    ),
+    "shadowed in a function": (
+        "from rest_framework_services import SpecRegistry",
+        "r = SpecRegistry()\n\n\ndef build(r):\n    r.register(enrol)",
+        "",
+    ),
+    # the spec is part of the argument, not the argument
+    "wrapped": (
+        "from rest_framework_services import SpecRegistry",
+        "r = SpecRegistry()",
+        "r.register(wrap(enrol))",
+    ),
+    "unpacked": (
+        "from rest_framework_services import SpecRegistry",
+        "r = SpecRegistry()",
+        "r.register(*enrol)",
+    ),
+    "called": (
+        "from rest_framework_services import SpecRegistry",
+        "r = SpecRegistry()",
+        "r.register(enrol.service)",
+    ),
+}
+
+
+@pytest.mark.parametrize("shape", NOT_A_REGISTRATION)
+def test_a_use_that_is_not_a_registration_still_blocks(project: Project, shape: str) -> None:
+    importing, setup, use = NOT_A_REGISTRATION[shape]
+    spec, view = project.spec(), project.view()
+    project.write("specs/registry.py", f"{importing}\n{ABSOLUTE}\n\n{setup}\n{use}\n")
+    project.run()
+    assert _answers(view) == []
+    _assert_left(spec, f"used otherwise in {project.package}/specs/registry.py")
+
+
+def test_a_registry_imported_from_another_module_still_blocks(project: Project) -> None:
+    spec, view = project.spec(), project.view()
+    project.write(
+        "specs/registries.py",
+        "from rest_framework_services import SpecRegistry\n\nr = SpecRegistry()\n",
+    )
+    project.write(
+        "specs/registry.py",
+        f"from .registries import r\n{ABSOLUTE}\n\nr.register(enrol)\n",
+    )
+    project.run()
+    assert _answers(view) == []
+    _assert_left(spec, f"used otherwise in {project.package}/specs/registry.py")
+
+
+def test_a_registration_beside_another_use_still_blocks(project: Project) -> None:
+    spec, view = project.spec(), project.view()
+    registry = _registry(project)
+    registry.write_text(registry.read_text() + "\nALL = [enrol]\n")
+    project.run()
+    assert _answers(view) == []
+    _assert_left(spec, f"used otherwise in {project.package}/specs/registry.py")
+
+
 # --- what is left, by the view -------------------------------------------------
 
 

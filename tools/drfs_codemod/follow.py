@@ -251,7 +251,10 @@ class _Index:
         guard), ``test_a_function_local_import_leaves_it``,
         ``test_a_spec_imported_under_an_alias_is_left``,
         ``test_a_use_beside_the_serving_one_leaves_it``,
-        ``test_an_import_nothing_reads_is_no_second_view``.
+        ``test_an_import_nothing_reads_is_no_second_view``. A registration is neither a
+        server nor a blocker (``test_a_spec_registered_beside_its_one_view_moves``,
+        ``test_a_registration_beside_two_serving_modules_reports_two``); what makes one is
+        ``_Analysis._registration``.
         """
         where = self.display(module.file)
         sites = module.analysis.use_sites.get(key, [])
@@ -261,7 +264,7 @@ class _Index:
             self.blocked.setdefault(spec, f"imported inside a function in {where}")
         elif aliased:
             self.blocked.setdefault(spec, f"imported as {site.local} in {where}")
-        elif references - {id(use.reference) for use in sites}:
+        elif references - {id(use.reference) for use in sites} - module.analysis.registrations:
             self.blocked.setdefault(spec, f"used otherwise in {where}")
         elif sites:
             self.servers.setdefault(spec, {})[module.file, key] = _Server(module.file, key, reach)

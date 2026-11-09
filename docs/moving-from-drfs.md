@@ -44,8 +44,12 @@ a module-level name; one built inline in a view is marked. A view in the same
 module takes them first. Otherwise all the files of a run are read together and
 the answer follows the spec's import into `views/` or `viewsets/`, bringing the
 import a name in it needs, when that is certain: exactly one module serves the
-spec, importing it by its own name, and both files are in the run. An absolute
-import is found under `--root`. A second run changes nothing.
+spec, importing it by its own name, and both files are in the run. A module
+that only passes the spec to the `.register(...)` of a `SpecRegistry` it builds
+is not a second server and does not block the move. An absolute import is
+found under `--root`, the directory such imports start from, usually the parent of
+the top package; a wrong root finds no import, so every spec reads as having no
+view in the run. A second run changes nothing.
 
 Every site it leaves gets a comment beginning `# drfs-codemod:` above its
 statement, giving the reason, and a line of its report, `path:line: reason`.

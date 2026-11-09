@@ -23,6 +23,10 @@ PYTHONPATH=tools python -m drfs_codemod path/to/project --root path/to/project
   to read a selector's signature, so the `reads=` it would take can be
   spelled, and to follow a view's absolute import of its spec. The module is
   parsed, never imported.
+  The root is the directory absolute imports start from, usually the parent of
+  the top package: for `from backend.shop.specs import x`, the directory
+  holding `backend/`. A wrong root gives no error: no import is found, so the
+  run reads as "no view in this run" for every spec.
 - `--check`: write nothing; exit 1 while any file would change. It reports what
   a run would move and leave, at each file's lines as they stand.
 - `--report FILE`: write the report there instead of to stdout.
@@ -95,6 +99,15 @@ the spec's import into the view when all of this holds:
   module, however that module is named: `from specs import x`,
   `import specs.x as s`, `import specs.x`. An absolute import is found under
   `--root`.
+- **A registration is not a use.** A module may also pass the spec to
+  `<registry>.register(...)`, where `<registry>` is a name bound once at module
+  level to a `SpecRegistry(...)` call, with `SpecRegistry` imported from drfs
+  (or the kernel). A registry is read for an agent, never to route a request, so
+  that module neither serves the spec nor blocks it. A module that only
+  registers a spec leaves the plain note when nothing else serves it. Any other
+  `.register(...)` (`admin.site.register(x)`, a registry built or imported
+  from somewhere else, the spec inside a larger expression) is a use like any
+  other and blocks.
 - **No view is in the spec's own module.** Then the answer stays with that view.
 - **The value resolves in the view.** One naming nothing moves as written. A
   name, or a dotted name such as `status.HTTP_201_CREATED`, brings its import:
