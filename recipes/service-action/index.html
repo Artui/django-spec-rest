@@ -1091,10 +1091,18 @@
 <h2 id="the-standard-actions">The standard actions<a class="headerlink" href="#the-standard-actions" title="Permanent link">&para;</a></h2>
 <p><code>ServiceViewSet</code> serves <code>list</code>, <code>retrieve</code>, <code>create</code>, <code>update</code>,
 <code>partial_update</code> and <code>destroy</code>, each from its entry in <code>action_specs</code>.
-<code>SelectorViewSet</code> serves <code>list</code> and <code>retrieve</code>. An action with no entry falls
-back to DRF's own behaviour for the reads (<code>get_queryset()</code>, <code>get_object()</code>)
-and answers 405 for the writes, and <code>Allow</code> leaves an unserved write out.
-<code>get_queryset()</code> answers the <code>list</code> spec's set on <code>list</code> alone, from the one
+<code>SelectorViewSet</code> serves <code>list</code> and <code>retrieve</code>. A write with no entry answers
+405, and <code>Allow</code> leaves it out. A read with no entry falls back to DRF's own
+behaviour (<code>get_queryset()</code>, <code>get_object()</code>), which needs rows and a serializer:
+on a viewset with no <code>queryset</code> or <code>get_queryset()</code>, or no <code>serializer_class</code>,
+<code>get_serializer_class()</code> or <code>get_serializer()</code>, that read answers 405 too, and
+<code>Allow</code> and the schema leave it out. A <code>list</code>, a <code>retrieve</code> or a <code>get_object()</code>
+of your own keeps the route yours.</p>
+<p>So a create-only <code>ServiceViewSet</code> answers <code>POST</code> and nothing else. A router
+still mounts its detail route, where every method answers 405, <code>Allow</code> names
+<code>OPTIONS</code> alone and the schema has no path. For no detail route at all, declare
+<code>ServiceCreateMixin</code> over <code>GenericViewSet</code>.</p>
+<p><code>get_queryset()</code> answers the <code>list</code> spec's set on <code>list</code> alone, from the one
 dispatch the list presents; every other action, a custom <code>@action</code> included,
 reads the viewset's <code>queryset</code>. So a viewset under DRF's
 <code>DjangoModelPermissions</code>, which asks <code>get_queryset()</code> on every action, sets

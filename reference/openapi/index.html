@@ -1358,8 +1358,10 @@ action mixins, and <code>@service_action</code> / <code>@selector_action</code>:
 <ul>
 <li><strong>The request body</strong> is a <code>SerializerValidator</code>'s serializer, built
   partial exactly where the route dispatches the spec's partial variant
-  (<code>kernel_spec_variant</code>): a <code>PATCH</code>, unless the Validator cannot take a
-  partial call, and a spec declaring <code>partial</code>. Its component is
+  (<code>kernel_spec_variant</code>): an update route's <code>PATCH</code>, unless the
+  Validator cannot take a partial call, and a spec declaring <code>partial</code>. A
+  <code>@service_action</code> <code>PATCH</code> dispatches its spec as declared, so it is
+  validated, and documented, whole (<code>_dispatched</code>). Its component is
   drf-spectacular's name for the author's class, except where the spec's
   <code>input_data</code> reaches a field: then a subclass less the fields it fills,
   with those it may fill not required, under a name of its own
@@ -1367,17 +1369,25 @@ action mixins, and <code>@service_action</code> / <code>@selector_action</code>:
   rows. Any other Validator is the kernel's
   <code>spec_caller_input_schema</code> less what the body does not carry
   (<code>_parameters_body</code>): what the server fills is not asked for, and a
-  key a provider may fill is not required.</li>
+  key a provider may fill is not required. It is read under the <code>rest</code>
+  stamp with no request, so a field a Validator declares to this transport
+  is offered and one declared to another is not (<code>_caller_schema</code>). A
+  body the wire refuses to go without says <code>required</code>, which
+  drf-spectacular leaves off a schema given whole (<code>_DemandedBody</code>).</li>
 <li><strong>The response body</strong> is a <code>SerializerPresenter</code>'s serializer, or any
   other presenter's <code>output_schema</code>, a list of rows where the spec
   presents rows (<code>_presents_rows</code>). A spec with no presenter documents
-  the no-content response, and a selector spec with none keeps the base's
-  reading of the view's <code>serializer_class</code>, which renders it.</li>
+  no body, at the statuses <code>_kernel_responses</code> lists, and a selector spec
+  with none keeps the base's reading of the view's <code>serializer_class</code>,
+  which renders it.</li>
 <li><strong>The status</strong> is the view's <code>success_status</code> for the action, per
   action where one is declared, where it is an <code>int</code>,
   since a kernel spec declares none, over the action's default; a body is
   documented as the <code>200</code> it is served as where that is <code>204</code>, and the
-  <code>204</code> beside it where <code>can_present_nothing</code>.</li>
+  <code>204</code> beside it where <code>can_present_nothing</code>. With no presenter and no
+  <code>success_status</code> both the action's default and the <code>204</code> are listed,
+  since the service's return decides between them (a destroy's default is
+  the <code>204</code>, so it lists that alone).</li>
 <li><strong>A</strong> <code>400</code> is documented wherever the spec declares a Validator: its
   refusal is DRF's field errors, whichever seat refused, so the body is the
   <code>ValidationErrors</code> component. Beside it, any of what else the edge
@@ -1401,8 +1411,9 @@ action mixins, and <code>@service_action</code> / <code>@selector_action</code>:
   <code>{View}_{action}_Request</code>, an <code>anyOf</code> over the body of each variant
   that takes one (<code>_discriminated_request_body</code>), and its responses are
   the variants' merged per status: one body where they agree, an inline
-  <code>anyOf</code> where they differ, and a <code>400</code> always, since the
-  discriminator may refuse (<code>_discriminated_responses</code>).</li>
+  <code>anyOf</code> where they differ, each status any variant answers, and a
+  <code>400</code> always, since the discriminator may refuse
+  (<code>_discriminated_responses</code>).</li>
 <li><strong>A FilterSet's query parameters</strong> are the kernel's
   <code>filter_set_parameters</code>, on a list operation only.</li>
 <li><strong>A viewset method answered 405 for want of a spec</strong> is no operation:

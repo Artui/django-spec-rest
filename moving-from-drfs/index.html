@@ -1586,7 +1586,7 @@ drfs field maps onto one of its seats:</p>
 </tr>
 <tr>
 <td><code>PolymorphicServiceSpec</code></td>
-<td>one kernel spec per route or action stays the default. For an endpoint that must keep one URL, an <code>action_specs</code> entry (or <code>@service_action</code>) of <code>DiscriminatedAction(discriminator=, specs=)</code>, which is this package's alone: agents and MCP register each variant on its own. Its <code>{View}_{action}_Request</code> OpenAPI component comes back under that name, as an <code>anyOf</code> where drfs' was a <code>oneOf</code>: a body two variants accept is valid for both. <code>permission_strategy=</code> is gone: the chosen variant's checks always decide. A callable <code>success_status</code> or <code>response_finalizer</code> on such an action may declare <code>variant</code>, the chosen key, to answer per variant</td>
+<td>one kernel spec per route or action stays the default. For an endpoint that must keep one URL, an <code>action_specs</code> entry (or <code>@service_action</code>) of <code>DiscriminatedAction(discriminator=, specs=)</code>, which is this package's alone: agents and MCP register each variant on its own. Its <code>{View}_{action}_Request</code> OpenAPI component comes back under that name, as an <code>anyOf</code> where drfs' was a <code>oneOf</code>: a body two variants accept is valid for both. A <code>@service_action</code> <code>PATCH</code> over it runs the chosen variant as declared, so it is validated whole and documented whole; a variant declaring <code>partial</code> is the way to a partial call. <code>permission_strategy=</code> is gone: the chosen variant's checks always decide. A callable <code>success_status</code> or <code>response_finalizer</code> on such an action may declare <code>variant</code>, the chosen key, to answer per variant</td>
 </tr>
 <tr>
 <td><code>TargetGuard</code></td>
@@ -1655,12 +1655,68 @@ context. A presenter's <code>serializer_context</code> callable declares <code>c
 and compares what the transport stamped under the <code>"transport"</code> key:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_service_specs</span><span class="w"> </span><span class="kn">import</span> <span class="n">call_transport</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="k">def</span><span class="w"> </span><span class="nf">off_http_defaults</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">call_context</span><span class="p">):</span>
-</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="k">if</span> <span class="n">call_transport</span><span class="p">(</span><span class="n">call_context</span><span class="p">)</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">&quot;agent&quot;</span><span class="p">,</span> <span class="s2">&quot;mcp&quot;</span><span class="p">):</span>
-</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;default_query&quot;</span><span class="p">:</span> <span class="s2">&quot;...&quot;</span><span class="p">}</span>
-</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="k">return</span> <span class="p">{}</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># The transports that serve HTTP: this package&#39;s views, and django-spec-html&#39;s.</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">OVER_HTTP</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;rest&quot;</span><span class="p">,</span> <span class="s2">&quot;html&quot;</span><span class="p">)</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="k">def</span><span class="w"> </span><span class="nf">off_http_defaults</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">call_context</span><span class="p">):</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="k">if</span> <span class="n">call_transport</span><span class="p">(</span><span class="n">call_context</span><span class="p">)</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">OVER_HTTP</span><span class="p">:</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;default_query&quot;</span><span class="p">:</span> <span class="s2">&quot;...&quot;</span><span class="p">}</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="k">return</span> <span class="p">{}</span>
 </span></code></pre></div>
+<p>Naming the HTTP transports rather than the others is what makes the default hold
+for every one that is not:</p>
+<table>
+<thead>
+<tr>
+<th><code>call_transport(call_context)</code></th>
+<th>Served by</th>
+<th>Over HTTP</th>
+<th>The example's default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>"rest"</code></td>
+<td>this package's views and viewsets (<code>REST_TRANSPORT</code>)</td>
+<td>yes</td>
+<td>not applied</td>
+</tr>
+<tr>
+<td><code>"html"</code></td>
+<td><code>django-spec-html</code></td>
+<td>yes</td>
+<td>not applied</td>
+</tr>
+<tr>
+<td><code>"agent"</code></td>
+<td><code>django-spec-agents</code>' toolset</td>
+<td>no</td>
+<td>applied</td>
+</tr>
+<tr>
+<td><code>"mcp"</code></td>
+<td><code>django-spec-mcp</code></td>
+<td>no</td>
+<td>applied</td>
+</tr>
+<tr>
+<td><code>"cli"</code></td>
+<td><code>django-spec-cli</code>' management commands</td>
+<td>no</td>
+<td>applied</td>
+</tr>
+<tr>
+<td><code>None</code></td>
+<td>a call no transport stamped, such as the kernel's own <code>dispatch</code></td>
+<td>no</td>
+<td>applied</td>
+</tr>
+</tbody>
+</table>
+<p>A transport added later counts as off HTTP, so one that serves HTTP is added to
+the tuple. Comparing the other way (<code>in ("agent", "mcp")</code>) would leave out
+<code>"cli"</code> and <code>None</code>, and every off-HTTP transport added later.</p>
 <p><code>call_transport</code> is in the kernel from 0.28.0, and a transport stamps its own
 name from the release that adopts the key. A view of this package stamps
 <code>"rest"</code> from 0.10.0 (<code>REST_TRANSPORT</code>).</p>
@@ -1739,8 +1795,8 @@ over:</p>
   <code>user</code>): left where it was, a <code>PATCH</code> or <code>DELETE</code> reaches another tenant's
   row with no error. DRF's <code>get_object()</code> ran the backends, so a backend that
   scoped a tenant's rows there no longer does, and nothing reports it, since
-  most backends are plain list filters. A <code>get_queryset()</code> override beside a
-  write or list spec is reported at <code>as_view()</code>
+  most backends are plain list filters. A <code>get_queryset()</code> override beside
+  any spec, a retrieve included, is reported at <code>as_view()</code>
   (<a href="../reference/viewsets/#the-row-scoping-warning"><code>django_spec_rest.W001</code></a>).
   The reverse holds for an action with no spec: DRF's
   fallback <code>retrieve</code> and a custom <code>@action</code> reading <code>self.get_queryset()</code>
@@ -1863,9 +1919,20 @@ over:</p>
 <li><strong>A <code>many</code> spec with an <code>output_selector_spec</code> presents what the re-read
   returns</strong>, where drfs presented the service's rows.</li>
 <li><strong>Bulk and row refusals are worded by the kernel.</strong></li>
+<li><strong>A read with no spec and nothing to fall back to answers 405</strong>, not DRF's
+  assertion as a 500. A <code>list</code> or <code>retrieve</code> a router maps on a viewset with no
+  rows or no serializer leaves <code>Allow</code> and the schema, so a create-only
+  <code>ServiceViewSet</code> documents <code>POST</code> alone and its detail route <code>Allow</code>s
+  <code>OPTIONS</code> alone. A <code>list</code>, <code>retrieve</code> or <code>get_object()</code> of the project's own
+  keeps its route, and a read that can fall back answers as it did.</li>
 <li><strong>OPTIONS runs no stage of a spec</strong> (no selector, provider, service or
-  affordance condition) and never answers 500. <code>Allow</code> names only the methods
-  a spec serves: a handler with no spec is left out, on its 405 too.
+  affordance condition) and does not answer 500 for want of what DRF's metadata
+  reads. The exception is a Validator whose <code>parameters()</code> raises something other
+  than <code>AttributeError</code>, <code>KeyError</code> or <code>TypeError</code>, which is a 500, as
+  <a href="../openapi/">the OpenAPI page</a> says. <code>Allow</code> names only the methods
+  that can answer: a handler of this package's with no spec is left out, on its
+  405 too, and a handler of the project's stays, undescribed where DRF's metadata
+  cannot describe it for want of a serializer or rows.
   <code>actions[METHOD]</code> is a JSON Schema object rather than DRF's per-field
   dictionary, and leaves out the keys the server fills, the route's captures
   and the target lookup's parameters; a key a provider may fill is described
@@ -1937,15 +2004,19 @@ over:</p>
   permission classes in <code>initial()</code>. The spec's checks are asked before its
   arguments' shape is checked, so a caller they refuse gets the 401 or 403
   above whatever it sends: an empty body, a missing field, a value of the
-  wrong type or a query string the read cannot parse answer the same as a
-  well-formed request, never the 400 that lists the fields. A request whose
-  body or query string fails its shape is judged with no arguments, the
+  wrong type, a query string the read cannot parse, a body DRF cannot parse, a
+  media type it does not accept or more form fields than Django reads answer
+  the same as a well-formed request, never the 400 that lists the fields. A
+  request whose body cannot be read, or whose body or query string fails its
+  shape, is judged with no arguments, the
   question the OPTIONS answer asks before it describes a method, so OPTIONS
   shows a method's schema exactly to the callers whose incomplete request is
   told what it lacks. A check that reads the call's arguments and cannot
   answer without them keeps the kernel's order: the caller is told the 400
   first, and the check is asked once the shape passes. A check that answers
-  <code>False</code> with no arguments refuses every caller sending an incomplete body.</li>
+  <code>False</code> with no arguments refuses every caller sending an incomplete body.
+  DRF's own <code>initial()</code> runs before any of this, so a <code>get_permissions()</code> or
+  <code>get_throttles()</code> override that reads the body answers what that read raises.</li>
 <li><strong><code>DRFPermissionCheck</code> can raise <code>DRFNotAuthenticated</code></strong>, not only
   <code>DRFNotPermitted</code>, when the call carries a real DRF request with
   authenticators and nobody was recognised. <code>DRFNotAuthenticated</code> is DRF's

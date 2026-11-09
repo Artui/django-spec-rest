@@ -871,6 +871,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#one-url-several-specs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        One URL, several specs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#full-crud" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1212,6 +1223,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#one-url-several-specs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        One URL, several specs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#full-crud" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1447,19 +1469,27 @@ drf-spectacular finds no model to type it from, as on a viewset with no
 <h2 id="the-row-scoping-warning">The row-scoping warning<a class="headerlink" href="#the-row-scoping-warning" title="Permanent link">&para;</a></h2>
 <p>A spec's rows are its selector's, so a <code>get_queryset()</code> override does not scope
 them, and tenant scoping left in one lets a <code>PATCH</code> or <code>DELETE</code> reach another
-tenant's row with no error. <code>as_view()</code> reports a viewset that overrides it
-beside a write spec or a list spec, with a <code>GetQuerysetScopeWarning</code> whose text
-begins with the stable id <strong><code>django_spec_rest.W001</code></strong> and names the class:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>django_spec_rest.W001: myapp.views.InvoiceViewSet overrides get_queryset() (on InvoiceViewSet) and serves a write or list spec, ...
+tenant's row, and a <code>GET</code> read it, with no error. <code>as_view()</code> reports a viewset
+that overrides it beside any spec (a write, a list or a retrieve) with a
+<code>GetQuerysetScopeWarning</code> whose text begins with the stable id
+<strong><code>django_spec_rest.W001</code></strong> and names the class:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>django_spec_rest.W001: myapp.views.InvoiceViewSet overrides get_queryset() (on InvoiceViewSet) and serves a spec, ...
 </span></code></pre></div>
 <p>An override counts on any class below this package's bases and DRF's, a mixin
-listed after them included, since its <code>super()</code> runs. A write spec or a list
-spec counts under <code>action_specs</code>, an <code>as_view(action_specs=...)</code> included, and
-under <code>@service_action</code> or <code>@selector_action</code>. A viewset with no override, or
-serving only retrieve specs and actions with no spec, is not reported, and
-neither is a backend in <code>filter_backends</code>, since most are plain list filters
+listed after them included, since its <code>super()</code> runs. A spec counts under
+<code>action_specs</code>, an <code>as_view(action_specs=...)</code> included, and under
+<code>@service_action</code> or <code>@selector_action</code>, whatever its kind: a viewset serving
+only a <code>retrieve</code> spec is reported as one serving a write or a list is. A
+viewset with no override, or serving only actions with no spec, is not
+reported (those take their rows from <code>get_queryset()</code>), and neither is a
+backend in <code>filter_backends</code>, since most are plain list filters
 (<a href="../../moving-from-drfs/#views-and-viewsets">Moving from djangorestframework-services</a>
 says what changes for one that scoped a tenant).</p>
+<p>The warning's <code>file:line</code> is the line that called <code>as_view()</code>. A viewset
+mounted by hand is reported at your <code>urls.py</code> line. One mounted through a
+router is reported at DRF's <code>rest_framework/routers.py</code>, which is where the
+router calls <code>as_view()</code>, so read the class the text names rather than the
+location.</p>
 <p>An override can be right to stay: DRF's <code>DjangoModelPermissions</code> asks
 <code>get_queryset()</code> for the model it checks. Once each selector scopes its own
 rows, say so on the class:</p>
@@ -1559,6 +1589,54 @@ this package's viewsets' <code>as_view()</code>: on a viewset of DRF's alone the
 decorator's value answers and the hook is never read. The decorator's own
 values are asked when it runs. The OpenAPI schema documents the status of the
 action, where it is an <code>int</code>; a callable documents the action's default.</p>
+<h2 id="one-url-several-specs">One URL, several specs<a class="headerlink" href="#one-url-several-specs" title="Permanent link">&para;</a></h2>
+<p>One spec per route or action stays the default. An endpoint that must keep one
+URL while the request chooses what runs takes a
+<a href="../types/#discriminated-actions"><code>DiscriminatedAction</code></a>: a <code>discriminator</code>
+answering a key, and <code>specs</code> mapping each key to the kernel <code>ServiceSpec</code> serving
+it. It is an <code>action_specs</code> entry under <code>create</code>, <code>update</code>, <code>partial_update</code> or
+<code>destroy</code>, or the spec of a <code>@service_action</code>; <code>as_view()</code> refuses it under any
+other action (<code>list</code>, <code>retrieve</code> or a custom one's name), on a <code>SelectorViewSet</code>, and as a
+standalone view's <code>spec</code>, each refusal saying where it goes.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">INTAKE</span> <span class="o">=</span> <span class="n">DiscriminatedAction</span><span class="p">(</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>    <span class="n">discriminator</span><span class="o">=</span><span class="k">lambda</span> <span class="o">*</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="s2">&quot;draft&quot;</span> <span class="k">if</span> <span class="s2">&quot;amount_cents&quot;</span> <span class="ow">in</span> <span class="n">data</span> <span class="k">else</span> <span class="s2">&quot;blank&quot;</span><span class="p">,</span>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>    <span class="n">specs</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;draft&quot;</span><span class="p">:</span> <span class="n">CREATE_SPEC</span><span class="p">,</span> <span class="s2">&quot;blank&quot;</span><span class="p">:</span> <span class="n">BLANK_SPEC</span><span class="p">},</span>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="p">)</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="k">class</span><span class="w"> </span><span class="nc">IntakeViewSet</span><span class="p">(</span><span class="n">ServiceCreateMixin</span><span class="p">,</span> <span class="n">GenericViewSet</span><span class="p">):</span>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>    <span class="n">queryset</span> <span class="o">=</span> <span class="n">Invoice</span><span class="o">.</span><span class="n">objects</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>    <span class="n">action_specs</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;create&quot;</span><span class="p">:</span> <span class="n">INTAKE</span><span class="p">}</span>
+</span></code></pre></div>
+<p>(<code>examples/invoices</code> serves this as <code>POST /intake/</code> and asserts it over HTTP and
+in the schema.) The discriminator is a sync callable declaring any of <code>request</code>,
+<code>data</code> (the raw <code>request.data</code>), <code>user</code>, <code>view</code> and <code>call_context</code>, or <code>**kwargs</code>,
+which is handed all but the last. An answer that is no key of <code>specs</code> is the
+author's mistake: a 500 naming the keys.</p>
+<p>Each variant is asked what a plain entry of that action is asked (its seeds, its
+lookup capture, its answers), and the chosen one runs as a plain entry would, its
+own checks deciding. So:</p>
+<ul>
+<li><strong>A caller every variant refuses</strong> is refused before the body is read and
+  before the discriminator runs, the first variant's denial answered: a 401 with
+  the authenticator's challenge where nobody signed in, otherwise a 403. A caller
+  some variant admits reaches the discriminator, and the chosen variant's checks
+  then decide.</li>
+<li><strong>The row</strong> is the chosen variant's own target selector's, as for any update or
+  destroy.</li>
+<li><strong>Validation is the variant's.</strong> A <code>PATCH</code> on the router's update route
+  (an <code>update</code> or <code>partial_update</code> entry) is validated partially, as for a plain
+  spec. A <code>@service_action</code> <code>PATCH</code> runs the chosen variant as declared, so it is
+  validated whole; a variant declaring <code>partial</code> is the way to a partial call
+  there.</li>
+<li><strong>A callable <code>success_status</code> or <code>response_finalizer</code></strong> on such an action may
+  declare <code>variant</code>, the chosen key, to answer per variant
+  (<a href="#per-action-answers">Per-action answers</a>).</li>
+</ul>
+<p>It is this transport's alone and never a kernel spec: <code>as_kernel_spec()</code> raises,
+and an agent or an MCP client registers each variant on its own. The OpenAPI
+schema documents the action as one request component over every variant's body
+(see <a href="../../openapi/#what-a-route-documents">OpenAPI</a>).</p>
 <h2 id="full-crud">Full CRUD<a class="headerlink" href="#full-crud" title="Permanent link">&para;</a></h2>
 
 
@@ -1855,8 +1933,9 @@ entry raises <code>ImproperlyConfigured</code>.</p>
 
 
         <p>Compose with <code>GenericViewSet</code>.</p>
-<p>An absent <code>"list"</code> key falls through to DRF's default <code>get_queryset()</code>.
-Any entry that is not a kernel
+<p>An absent <code>"list"</code> key falls through to DRF's default <code>get_queryset()</code>
+where the viewset has rows and a serializer for it, and otherwise answers 405,
+leaving <code>Allow</code> and the schema (test_a_read_with_no_fallback). Any entry that is not a kernel
 <a class="autorefs autorefs-external" href="https://artui.github.io/django-service-specs/reference/#django_service_specs.specs.selector_spec.SelectorSpec"><code>SelectorSpec</code></a>
 raises <code>ImproperlyConfigured</code>.</p>
 <p>A kernel <code>SelectorSpec</code> under <code>"list"</code> runs through the kernel's own
@@ -1918,8 +1997,9 @@ list spec answers as its own spec says, never the list's refusal
 
 
         <p>Compose with <code>GenericViewSet</code>.</p>
-<p>An absent <code>"retrieve"</code> key falls through to DRF's default <code>get_object()</code>.
-Any entry that is not a kernel
+<p>An absent <code>"retrieve"</code> key falls through to DRF's default <code>get_object()</code>
+where the viewset has rows and a serializer for it, and otherwise answers 405,
+leaving <code>Allow</code> and the schema (test_a_read_with_no_fallback). Any entry that is not a kernel
 <a class="autorefs autorefs-external" href="https://artui.github.io/django-service-specs/reference/#django_service_specs.specs.selector_spec.SelectorSpec"><code>SelectorSpec</code></a>
 raises <code>ImproperlyConfigured</code>.</p>
 <p>A kernel <code>SelectorSpec</code> under <code>"retrieve"</code> runs through the kernel's
@@ -2082,7 +2162,10 @@ and any extra <code>**action_kwargs</code> are forwarded to DRF's <code>@action<
 <p>The spec runs through the kernel's own <code>dispatch</code>, as on the standalone
 mutation views: its <code>permissions</code> are asked there, after the view's own
 classes, a detail action's row is its own target selector's (never
-<code>get_object()</code>), and the answer is its presenter's.</p>
+<code>get_object()</code>), and the answer is its presenter's. The spec runs as
+declared: a <code>PATCH</code> here is validated whole, and documented so, unless the
+spec declares <code>partial</code>, which is the way to a partial call
+(test_decorated_patch).</p>
 <p><code>success_status</code> and <code>response_finalizer</code> are this action's answer, in
 the shapes the viewset's take (<code>MutationFlowMixin</code>), and outrank the
 viewset's, an <code>as_view()</code> keyword included. Left <code>None</code>, the action
@@ -2164,6 +2247,8 @@ the viewset registers serves and a keyword nothing fills is refused there
 (test_a_decorated_action_s_seeds). On DRF's own <code>GenericViewSet</code> or
 <code>ViewSet</code> nothing asks it, and such a keyword is the first request's
 <code>TypeError</code>.</p>
+<p>Anything but a <code>SelectorSpec</code> is refused where it is decorated, saying
+which decorator serves it (test_selector_action's TestAtDecoration).</p>
 
 
     </div>
