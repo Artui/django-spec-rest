@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from rest_framework.exceptions import MethodNotAllowed
 from rest_framework.mixins import RetrieveModelMixin
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -19,8 +20,9 @@ from django_spec_rest.viewsets.utils import (
 class SelectorRetrieveMixin(RetrieveModelMixin, _ActionSpecsMixin):
     """Compose with ``GenericViewSet``.
 
-    An absent ``"retrieve"`` key falls through to DRF's default ``get_object()``.
-    Any entry that is not a kernel
+    An absent ``"retrieve"`` key falls through to DRF's default ``get_object()``
+    where the viewset has rows and a serializer for it, and otherwise answers 405,
+    leaving ``Allow`` and the schema (test_a_read_with_no_fallback). Any entry that is not a kernel
     [`SelectorSpec`][django_service_specs.specs.selector_spec.SelectorSpec]
     raises ``ImproperlyConfigured``.
 
@@ -40,6 +42,8 @@ class SelectorRetrieveMixin(RetrieveModelMixin, _ActionSpecsMixin):
     def retrieve(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         spec = resolve_action_selector_spec(self.action_specs, "retrieve")
         if spec is None:
+            if self._has_no_fallback("retrieve"):
+                raise MethodNotAllowed(self.request.method)
             return super().retrieve(request, *args, **kwargs)
         row, data = present_kernel_row(self, spec)
         return _JsonNullResponse() if row is None else Response(data)

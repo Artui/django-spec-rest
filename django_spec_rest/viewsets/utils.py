@@ -27,7 +27,10 @@ from django_spec_rest.views.spec_validation import (
     validate_selector_view_spec,
 )
 from django_spec_rest.views.utils import MountedView, mounted_view, view_pool_seeds
-from django_spec_rest.viewsets.warn_unscoped_get_queryset import warn_unscoped_get_queryset
+from django_spec_rest.viewsets.warn_unscoped_get_queryset import (
+    _overriding_classes,
+    warn_unscoped_get_queryset,
+)
 
 ActionSpec = KernelServiceSpec | KernelSelectorSpec | DiscriminatedAction
 
@@ -553,6 +556,15 @@ def _validate_lookup_captures(
             )
 
 
+# Each read handler that falls back to DRF, and what of a project's own takes that read over.
+_READ_HANDLERS = {"list": ("list",), "retrieve": ("retrieve", "get_object")}
+
+
+def _defined_by_the_project(view_cls: type, *names: str) -> bool:
+    """Whether any class above ``view_cls`` but this package's or DRF's defines one of ``names``."""
+    return any(_overriding_classes(view_cls, name) for name in names)
+
+
 class _ActionSpecsMixin(_ServesRaisedSchema):
     """Declares the ``action_specs`` class attribute shared by all viewset mixins.
 
@@ -620,13 +632,20 @@ class _ActionSpecsMixin(_ServesRaisedSchema):
 
         A route serving any spec is described from its specs (``spec_options``):
         no spec stage runs, and only a method a spec serves is described. A
-        route serving none answers as DRF does. A view overriding ``options()``
-        without calling ``super()`` gets DRF's own answers.
+        route serving none answers as DRF does, and where DRF's metadata asserts,
+        asking ``get_serializer()`` or ``get_object()`` of a viewset lacking what they
+        read for a handler of the project's, it answers with that method
+        undescribed, as ``spec_options`` leaves out a description that raises
+        (test_a_read_with_no_fallback's TestOptionsOfAProjectsOwnWrite). A view
+        overriding ``options()`` without calling ``super()`` gets DRF's own answers.
         """
         served = self._kernel_specs_served()
         if served:
             return spec_options(self, request, served)
-        return super().options(request, *args, **kwargs)  # ty: ignore[unresolved-attribute]
+        try:
+            return super().options(request, *args, **kwargs)  # ty: ignore[unresolved-attribute]
+        except AssertionError:
+            return spec_options(self, request, served)
 
     def _kernel_specs_served(self) -> dict[str, ActionSpec]:
         """Each method the route maps to an action served by a kernel spec, and that spec.
@@ -649,17 +668,16 @@ class _ActionSpecsMixin(_ServesRaisedSchema):
 
     @property
     def allowed_methods(self) -> list[str]:
-        """DRF's, less a method this package's own handler would refuse, on a spec route.
+        """DRF's, less a method this package's own handler would refuse.
 
         DRF lists every method the action map binds a handler to, so a router
         mapping PUT to ``update`` on a viewset with no ``update`` spec put PUT
-        in ``Allow`` while the handler answers 405. On a route serving a
-        spec, a method bound to a handler marked
-        ``dispatches_action_specs`` with no spec behind it is left out, which
-        ``Allow`` on every response and OPTIONS' ``actions`` both read
+        in ``Allow`` while the handler answers 405. Such a method is left out
+        by ``_refuses_without_a_spec``, which ``Allow`` on every response and
+        OPTIONS' ``actions`` both read
         (test_options_metadata's test_allow_names_only_the_methods_a_spec_serves).
-        A handler the view defines itself, and the list and retrieve handlers,
-        which fall back to DRF's own queryset, stay.
+        A handler the view defines itself, and a list or retrieve handler whose
+        fallback to DRF can run, stay.
         """
         methods: list[str] = super().allowed_methods  # ty: ignore[unresolved-attribute]
         return [method for method in methods if not self._refuses_without_a_spec(method)]
@@ -667,17 +685,31 @@ class _ActionSpecsMixin(_ServesRaisedSchema):
     def _refuses_without_a_spec(self, method: str) -> bool:
         """Whether ``method`` is left out of ``Allow``: one rule, read by the schema too.
 
-        True on a route serving a spec, for a method reaching one of this
-        package's dispatchers with no spec behind it. ``ServiceAutoSchema``
-        leaves such a method out of the schema by this same predicate, because
-        drf-spectacular reads the router's action map and never ``Allow``
-        (test_spec_less_actions).
+        True for a method reaching one of this package's handlers with nothing
+        to serve it, on a route serving a spec or on a viewset whose fallback
+        cannot run. A route serving no spec on a viewset that can fall back keeps
+        DRF's own answer. ``ServiceAutoSchema`` leaves such a method out of the
+        schema by this same predicate, because drf-spectacular reads the
+        router's action map and never ``Allow`` (test_spec_less_actions). And
+        OPTIONS answers by it: a PUT out of ``allowed_methods`` is one DRF's
+        metadata never asks ``get_object()`` for.
+
+        A read ``_has_no_fallback`` refuses is one this leaves out, since both
+        ask ``_fallback_cannot_run``, so the handler's 405 and ``Allow`` cannot part.
         """
         # The cheap per-method question first: ``Allow`` asks this on every response.
-        return self._refuses(method.lower()) and bool(self._kernel_specs_served())
+        # The route's spec is held by test_spec_less_actions'
+        # test_a_destroy_with_no_spec_is_left_out_and_the_rest_stays, whose viewset can fall
+        # back, so only the spec can open this; the viewset's fallback by
+        # test_a_read_with_no_fallback's
+        # test_every_method_of_the_detail_route_is_a_405, and each leaving the method in
+        # by test_service_viewset's test_options_of_a_route_serving_no_spec_is_drf_s_own_answer.
+        return self._refuses(method.lower()) and (
+            bool(self._kernel_specs_served()) or self._fallback_cannot_run()
+        )
 
     def _refuses(self, method: str) -> bool:
-        """Whether ``method`` reaches one of this package's dispatchers with no spec to serve it."""
+        """Whether ``method`` reaches one of this package's handlers with nothing to serve it."""
         # ``""`` for a method the action map does not bind (``options``, which
         # DRF serves itself), so the lookups below answer "not refused"
         # without a branch of its own. One arc to coverage, so each condition
@@ -685,4 +717,48 @@ class _ActionSpecsMixin(_ServesRaisedSchema):
         # the missing spec by test_allow_names_only_the_methods_a_spec_serves.
         action = getattr(self, "action_map", {}).get(method, "")
         marked = getattr(getattr(self, action, None), "_dispatches_action_specs", False)
-        return marked and resolve_action_spec(self, action) is None
+        unserved = marked and resolve_action_spec(self, action) is None
+        return unserved or self._has_no_fallback(action)
+
+    def _has_no_fallback(self, action: str) -> bool:
+        """Whether a read has no spec, no handler of the project's, and a fallback that cannot run.
+
+        The list and retrieve handlers ask this before they fall through to DRF
+        and raise ``MethodNotAllowed`` as an unserved write does. An own ``list``,
+        ``retrieve`` or ``get_object`` keeps the route the project's business.
+        """
+        # One arc to coverage, so each conjunct is named, all in test_a_read_with_no_fallback:
+        # the read by the exact ``Allow`` of test_a_read_of_the_list_route_is_a_405, which
+        # names OPTIONS; the spec by test_spec_less_actions'
+        # test_a_list_spec_alone_documents_no_detail_route; the handler by
+        # test_an_own_list_keeps_its_route, test_an_own_retrieve_keeps_its_route and
+        # test_an_own_get_object_keeps_the_retrieve; the fallback by TestAFallbackThatCanRun.
+        return (
+            action in _READ_HANDLERS
+            and resolve_action_spec(self, action) is None
+            and not _defined_by_the_project(type(self), *_READ_HANDLERS[action])
+            and self._fallback_cannot_run()
+        )
+
+    def _fallback_cannot_run(self) -> bool:
+        """Whether DRF's reads lack rows or a serializer, so could only raise their assertion.
+
+        Read off the instance, so ``as_view(queryset=...)`` counts. A project's own
+        ``get_queryset`` answers for the rows and its ``get_serializer_class`` or
+        ``get_serializer`` for the serializer, each for that half alone.
+        """
+        # Each half and each stand-in is held by test_a_read_with_no_fallback. The rows: the
+        # attribute by test_rows_handed_to_as_view_are_read, the override by
+        # test_both_routes_answer[own-get-queryset], the half by
+        # test_the_read_is_refused[serializer-no-rows-rows]. The serializer: the attribute by
+        # test_both_routes_answer[rows-and-serializer], the overrides by its
+        # own-serializer-class and own-get-serializer rows, the half by
+        # test_the_read_is_refused[rows-no-serializer-serializer].
+        view_cls = type(self)
+        has_rows = getattr(self, "queryset", None) is not None or _defined_by_the_project(
+            view_cls, "get_queryset"
+        )
+        has_serializer = getattr(self, "serializer_class", None) is not None or (
+            _defined_by_the_project(view_cls, "get_serializer_class", "get_serializer")
+        )
+        return not has_rows or not has_serializer

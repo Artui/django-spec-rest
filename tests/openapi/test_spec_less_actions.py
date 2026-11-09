@@ -4,9 +4,11 @@ A router binds every method of a ``ServiceViewSet``'s routes to a handler, and
 the handler answers 405 where no spec serves its action, so ``Allow`` leaves
 that method out on a route serving any spec. drf-spectacular reads the
 router's action map, never ``Allow``, and documented each such method; the
-schema now omits exactly what ``Allow`` omits. The list and retrieve handlers,
-which fall back to DRF's own queryset, a handler the view defines itself, a
-route serving no spec and a standalone view stay as they were.
+schema now omits exactly what ``Allow`` omits. The list and retrieve handlers
+stay where their fallback to DRF can run, and go with the rest where a viewset
+has no rows or no serializer for it. A handler the view defines itself, a route
+serving no spec on a viewset that can fall back, and a standalone view stay as
+they were.
 
 Each viewset here is asked for its ``Allow`` too, so a test also fails where
 the schema and the header part, not only where a method is missing; the one
@@ -27,6 +29,7 @@ from django_service_specs import (
     ServiceSpec,
     Unrestricted,
 )
+from drf_spectacular.drainage import GENERATOR_STATS
 from drf_spectacular.generators import SchemaGenerator
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import serializers
@@ -34,7 +37,7 @@ from rest_framework.decorators import action
 from rest_framework.routers import SimpleRouter
 from rest_framework.test import APIRequestFactory
 
-from django_spec_rest import ServiceUpdateView, ServiceViewSet
+from django_spec_rest import SelectorViewSet, ServiceUpdateView, ServiceViewSet
 from django_spec_rest.openapi import enable_openapi
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
@@ -257,3 +260,132 @@ class TestWhereNothingIsLeftOut:
 
     def test_a_standalone_view_is_documented_whole(self, schema: dict[str, Any]) -> None:
         assert _documented(schema, "/standalone/{id}/") == {"PUT", "PATCH"}
+
+
+def _make() -> Any: ...
+
+
+_CREATE = ServiceSpec(service=_make, permissions=_OPEN, presenter=_PRESENTER)
+
+
+class _CreateOnly(ServiceViewSet):
+    action_specs = {"create": _CREATE}
+
+
+class _RowsNoSerializer(ServiceViewSet):
+    action_specs = {"create": _CREATE}
+    queryset = Author.objects.all()
+
+
+class _ListSpecAlone(ServiceViewSet):
+    action_specs = {"list": _list()}
+
+
+class _SelectorRetrieveAlone(SelectorViewSet):
+    action_specs = {"retrieve": _retrieve()}
+
+
+class _SelectorListAlone(SelectorViewSet):
+    action_specs = {"list": _list()}
+
+
+class _CreateBesideAFallback(ServiceViewSet):
+    """A create spec beside a ``queryset`` and a ``serializer_class``: the reads can fall back."""
+
+    action_specs = {"create": _CREATE}
+    queryset = Author.objects.all()
+    serializer_class = AuthorSerializer
+
+
+class _OwnGetQueryset(ServiceViewSet):
+    action_specs = {"create": _CREATE}
+    serializer_class = AuthorSerializer
+
+    def get_queryset(self) -> Any: ...
+
+
+class _OwnGetObject(ServiceViewSet):
+    action_specs = {"create": _CREATE}
+    serializer_class = AuthorSerializer
+
+    def get_object(self) -> Any: ...
+
+
+class TestAViewSetWhoseFallbackCannotRun:
+    """A read with nothing to fall back to answers 405, so it is no operation either."""
+
+    @pytest.fixture
+    def errors(self, monkeypatch: pytest.MonkeyPatch) -> list[str]:
+        """What drf-spectacular reports as ``Error [...]``, which it prints and then caches."""
+        emitted: list[str] = []
+
+        def emit(message: str, severity: str) -> None:
+            if severity == "error":
+                emitted.append(message)
+
+        monkeypatch.setattr(GENERATOR_STATS, "emit", emit)
+        return emitted
+
+    @staticmethod
+    def _schema(viewset: type) -> dict[str, Any]:
+        router = SimpleRouter()
+        router.register("x", viewset, basename="x")
+        return SchemaGenerator(patterns=router.urls).get_schema(request=None, public=True)
+
+    @pytest.mark.parametrize("viewset", [_CreateOnly, _RowsNoSerializer])
+    def test_a_create_spec_alone_documents_post_alone(self, viewset: type) -> None:
+        schema = self._schema(viewset)
+        assert _documented(schema, "/x/") == {"POST"}
+        assert "/x/{id}/" not in schema["paths"]
+
+    def test_generation_reports_no_error(self, errors: list[str]) -> None:
+        self._schema(_CreateOnly)
+        assert errors == []
+
+    def test_a_list_spec_alone_documents_no_detail_route(self) -> None:
+        schema = self._schema(_ListSpecAlone)
+        assert _documented(schema, "/x/") == {"GET"}
+        assert "/x/{id}/" not in schema["paths"]
+
+    def test_a_selector_retrieve_alone_documents_no_list_route(self) -> None:
+        schema = self._schema(_SelectorRetrieveAlone)
+        assert _documented(schema, "/x/{id}/") == {"GET"}
+        assert "/x/" not in schema["paths"]
+
+    def test_a_selector_list_alone_documents_no_detail_route(self) -> None:
+        schema = self._schema(_SelectorListAlone)
+        assert _documented(schema, "/x/") == {"GET"}
+        assert "/x/{id}/" not in schema["paths"]
+
+    def test_an_own_get_object_keeps_its_read_documented(self) -> None:
+        schema = self._schema(_OwnGetObject)
+        assert _documented(schema, "/x/") == {"POST"}
+        assert _documented(schema, "/x/{id}/") == {"GET"}
+
+    @pytest.mark.django_db
+    @pytest.mark.parametrize(
+        ("viewset", "actions", "route"),
+        [
+            (_CreateOnly, _LIST, "/x/"),
+            (_RowsNoSerializer, _LIST, "/x/"),
+            (_ListSpecAlone, _LIST, "/x/"),
+            (_SelectorListAlone, {"get": "list"}, "/x/"),
+            (_SelectorRetrieveAlone, {"get": "retrieve"}, "/x/{id}/"),
+            (_OwnGetObject, _LIST, "/x/"),
+            (_OwnGetObject, _DETAIL, "/x/{id}/"),
+        ],
+    )
+    def test_the_schema_documents_what_allow_names(
+        self, viewset: type, actions: dict[str, str], route: str
+    ) -> None:
+        assert _documented(self._schema(viewset), route) == _allow(viewset, actions)
+
+
+class TestAFallbackThatCanRunStaysDocumented:
+    @pytest.mark.parametrize("viewset", [_CreateBesideAFallback, _OwnGetQueryset])
+    def test_the_reads_stay_beside_the_create(self, viewset: type) -> None:
+        router = SimpleRouter()
+        router.register("x", viewset, basename="x")
+        schema = SchemaGenerator(patterns=router.urls).get_schema(request=None, public=True)
+        assert _documented(schema, "/x/") == {"GET", "POST"}
+        assert _documented(schema, "/x/{id}/") == {"GET", "PUT", "PATCH", "DELETE"}
