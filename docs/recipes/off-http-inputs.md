@@ -96,6 +96,6 @@ so a selector reading a value there falls to its default; pass `query_params=` t
 **Not yet for a UI view.** A view resource, an MCP Apps UI resource among them,
 holds a bare selector whose pool `django-spec-mcp` builds by spreading its own
 `request` beside the server's seeds, and the kernel refuses the two with a
-`TypeError` when one is read. The fix is in `django-spec-mcp` and is not released.
+`TypeError` when one is read. Only a change to `django-spec-mcp` can fix it, and that change is not released.
 Until it is, keep this seed off a server serving view resources, and mount the
 specs reading it on a server of their own.

@@ -22,8 +22,10 @@ clients see change. drfs' history is in its
 | the `startserviceapp` management command | none |
 | `djangorestframework-services[spectacular]` | `django-spec-rest[spectacular]` |
 
-The package reads no setting of its own. `SPEC_REST` is reserved as the name
-of the first one.
+The package reads one setting of its own, `SPEC_REST_LENIENT_JSON_BODY`, which
+drfs had no counterpart of: it is off unless the project sets it, and it asks
+for a JSON body to be answered by the serializer alone (see `lenient_json_body`
+under *Bodies and arguments*).
 
 ## The codemod
 
@@ -392,7 +394,9 @@ The query string is read by the kernel's flat reader:
   `SPEC_REST_LENIENT_JSON_BODY = True`; the view's own value beats the setting,
   and `False` on a view keeps the strict check under the setting. It covers a
   `many` spec's rows too. `{"title": 5}` for a `CharField` is then `"5"`, as the
-  serializer takes it, and every refusal is DRF's, while the spec's schema, its
+  serializer takes it, and every field's refusal is DRF's (a body that is no
+  object is still refused by the package: `{"detail": "The body must be an
+  object; got list."}`), while the spec's schema, its
   tool schema and every other transport stay typed. The kernel's checks of the
   declared types are what it turns off, its array cap
   (`SERVICE_SPECS_MAX_ARRAY_LENGTH`) on a field included: give a `ListField` or

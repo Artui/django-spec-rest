@@ -34,7 +34,7 @@ make docs-build     # mkdocs build --strict (fails on broken links)
 
 These are non-negotiable. They are what keep the package navigable.
 
-1. **One exported class or function per file.** The file is named after the exported symbol in `snake_case`. `MyClass` lives in `my_class.py`; `do_thing` lives in `do_thing.py`.
+1. **One exported class or function per file.** The file is named after the exported symbol in `snake_case`. `MyClass` lives in `my_class.py`; `do_thing` lives in `do_thing.py`. The one exception is `django_spec_rest/settings.py`, which holds the reads of this package's Django settings (today `lenient_json_body()`, for `SPEC_REST_LENIENT_JSON_BODY`) and is named for the settings it reads, not for a function.
 2. **Private helpers used only in one file** stay in that file with a `_name` prefix.
 3. **Non-exported helpers shared across files in a package** go in that package's `utils.py`. Classes are allowed in `utils.py` if they're internal infrastructure; one that becomes public moves to its own file.
 4. **Top-level imports only.** Lazy / function-local imports are forbidden unless a circular import is diagnosed and proven, *or* the import targets a proven optional dependency (declared in `[project.optional-dependencies]` and gated behind an explicit `enable_*()` opt-in helper). In either case document the reason inline. Canonical optional-dep example: `django_spec_rest/openapi/enable_openapi.py`.

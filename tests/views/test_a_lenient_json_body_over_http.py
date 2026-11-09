@@ -144,7 +144,7 @@ def test_a_null_is_refused_in_drf_s_words() -> None:
 def test_a_body_that_is_no_object_is_still_refused_at_the_edge() -> None:
     response = _call(_view(lenient_json_body=True), [{"title": "t"}])
     assert response.status_code == 400
-    assert "must be an object" in str(response.data)
+    assert response.data == {"detail": "The body must be an object; got list."}
 
 
 def test_the_kernel_s_array_cap_no_longer_judges_a_list_field() -> None:

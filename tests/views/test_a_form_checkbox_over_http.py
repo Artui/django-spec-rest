@@ -27,7 +27,7 @@ from django_service_specs import (
 )
 from rest_framework.test import APIRequestFactory
 
-from django_spec_rest import SelectorListView, ServiceCreateView
+from django_spec_rest import SelectorListView, ServiceCreateView, ServiceUpdateView
 from tests.testapp.models import Author
 from tests.testapp.serializers import AuthorSerializer
 
@@ -150,3 +150,28 @@ def test_a_query_string_s_on_is_still_refused() -> None:
     assert refused.status_code == 400, refused.data
     assert list(refused.data) == ["published"]
     assert view(_factory.get("/", {"published": "true"})).status_code == 200
+
+
+def test_a_query_string_s_on_beside_a_form_body_is_still_refused() -> None:
+    """Fails with the query string's ``on`` read as ``True``, were ``_checked_boxes`` handed the scope beside the body.
+
+    ``flag`` is a target read, so the body's own ``flag`` is dropped and the query
+    string's is what scopes the call: typed by its client, as it is on a ``GET``.
+    """
+    _SEEN.clear()
+    spec = ServiceSpec(
+        service=_service,
+        validator=FormValidator(_Form),
+        instance_selector_spec=SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=lambda *, flag: Author.objects.first(),
+            reads=Parameters.of(Parameter("flag", "boolean", required=True)),
+        ),
+        permissions=_OPEN,
+    )
+    view = ServiceUpdateView.as_view(spec=spec)
+
+    refused = view(_factory.patch("/?flag=on", {"title": "t"}, format="multipart"), pk=1)
+    assert refused.status_code == 400, refused.data
+    assert list(refused.data) == ["flag"]
+    assert _SEEN == {}

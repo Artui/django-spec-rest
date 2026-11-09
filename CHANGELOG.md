@@ -18,9 +18,10 @@ carries; releases up to 0.62.0 are in
 - **`lenient_json_body` on a view or viewset**, also an `as_view()` and
   `@service_action` keyword, and the `SPEC_REST_LENIENT_JSON_BODY` setting: a JSON
   body is answered by the serializer alone, as a form body is, a `many` spec's rows
-  included, with every refusal in DRF's words. The view's value beats the setting
-  and the default is off. The spec's schema, its tool schema and every other
-  transport stay typed. The kernel's array cap no longer judges a `ListField` or a
+  included, with every field's refusal in DRF's words (a body that is no object is
+  still refused as `{"detail": "The body must be an object; got list."}`). The view's
+  value beats the setting and the default is off. The spec's schema, its tool schema
+  and every other transport stay typed. The kernel's array cap no longer judges a `ListField` or a
   nested `many=True` serializer under the switch, so give those a `max_length`.
 - **The off-HTTP recipe gains a DRF `request` seed** built with
   `build_offline_context`, for a selector that keeps reading
@@ -975,8 +976,7 @@ lists each with what a project rewrites.
   templates, static files or URLs, so it needs no `INSTALLED_APPS` entry.
 
 [Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.12.0...HEAD
-[0.12.0]: https://github.com/Artui/django-spec-rest/compare/v0.11.1...v0.12.0
-[0.11.1]: https://github.com/Artui/django-spec-rest/compare/v0.11.0...v0.11.1
+[0.12.0]: https://github.com/Artui/django-spec-rest/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/Artui/django-spec-rest/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/Artui/django-spec-rest/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/Artui/django-spec-rest/compare/v0.8.1...v0.9.0

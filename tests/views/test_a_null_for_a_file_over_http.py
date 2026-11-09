@@ -396,6 +396,24 @@ def test_an_upload_replaces_the_file(settings: Any, tmp_path: Any) -> None:
     assert document.upload.name.startswith("documents/new")
 
 
+def test_an_upload_off_http_arrives_as_the_file_itself(settings: Any, tmp_path: Any) -> None:
+    """Fails with ``False`` handed for the file, were the clear value returned for every file field's value.
+
+    Off HTTP only: a multipart body is a ``MultiValueDict``, which never reaches
+    the clear (test_a_form_s_blank_keeps_the_file), so a dict of arguments holding
+    the file is the Validator's non-``None`` arm.
+    """
+    document = _held(settings, tmp_path)
+    upload = SimpleUploadedFile("new.txt", b"new")
+    dispatch(
+        _spec(_MayClear, _read_upload),
+        principal=None,
+        arguments={"pk": document.pk, "upload": upload},
+    )
+    assert _HANDED["upload"].name == "new.txt"
+    assert _HANDED["upload"].read() == b"new"
+
+
 def test_a_bulk_row_s_null_is_handed_the_clear_value(settings: Any, tmp_path: Any) -> None:
     def create(*, items: list[dict[str, Any]], data: list[Any]) -> list[Any]:
         _HANDED["items"] = items
