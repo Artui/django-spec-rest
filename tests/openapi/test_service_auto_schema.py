@@ -808,12 +808,13 @@ class TestTheResponse:
         assert set(responses) == {"201", "204", "400"}
         assert "content" not in responses["204"]
 
-    def test_no_presenter_documents_no_content_at_the_status(self, schema: dict[str, Any]) -> None:
-        # The spec may present nothing, and the no-content response is already
-        # the one documented, at its status: no 204 beside it.
+    def test_no_presenter_documents_no_content_at_the_204_it_answers(
+        self, schema: dict[str, Any]
+    ) -> None:
+        # The wire is pinned beside the document in test_no_presenter_status.
         responses = _op(schema, "/create-bare/", "post")["responses"]
-        assert set(responses) == {"201", "400"}
-        assert "content" not in responses["201"]
+        assert set(responses) == {"204", "400"}
+        assert "content" not in responses["204"]
 
     def test_another_presenter_is_its_output_schema(self, schema: dict[str, Any]) -> None:
         body = _response(schema, "/create-dataclass-out/", "post", "201")

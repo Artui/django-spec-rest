@@ -89,7 +89,11 @@ call `enable_openapi()` again after the reload.
 
 - **The request body** is a `SerializerValidator`'s serializer, under
   drf-spectacular's component name for the class, built partial where the
-  route validates partially (a `PATCH`, or a spec declaring `partial`).
+  route validates partially: an update route's `PATCH`, or a spec declaring
+  `partial`. A `@service_action` `PATCH` runs its spec as declared, so it is
+  validated whole and documented whole; a spec declaring `partial` is the way
+  to a partial call there, and the same holds for each variant of a decorated
+  `DiscriminatedAction`.
   Where the spec's `input_data` fills or may fill one of its fields, the body
   is a component of its own (see below). A `many` spec takes a list of its
   rows. Any other validator is the kernel's
@@ -97,7 +101,21 @@ call `enable_openapi()` again after the reload.
   route's captures, which never come from the body: a key the server fills is
   not offered, and one a provider may fill or decline is offered and not
   required. A `many` spec's rows are read the same way, by what its
-  `input_data` fills in every row.
+  `input_data` fills in every row. `requestBody.required` is stated wherever
+  the wire refuses an empty body: every spec the route may run takes a body with
+  a required field. A `DiscriminatedAction` with a variant taking no body, or
+  none of whose fields is required, leaves it out.
+- **A Validator declaring `call_context`** is asked under the `rest` stamp, as
+  dispatch asks it, so a field declared only to `rest` is in the body and a field
+  declared only to another transport is not. A document describes the transport
+  and never one caller, so `call_context["request"]` is `None` here, and a
+  Validator declaring `call_context` guards `request` before reading it. One that
+  reads an attribute of that `None` raises `AttributeError` out of generation: a
+  document silently missing a body is worse than a failure you see at once.
+  OPTIONS is asked under the request it answers, so a field keyed on the caller
+  may be offered there and stays out of the document; there, a description that
+  raises leaves the method out of `actions`. A `SerializerValidator` reads none
+  of this.
 - **The response body** is a `SerializerPresenter`'s serializer, or another
   presenter's output schema, a list where the spec presents rows. A spec with
   no presenter documents no content; a selector spec with none keeps the
@@ -105,7 +123,10 @@ call `enable_openapi()` again after the reload.
 - **The status** is the view's `success_status` where it is an `int`, over the
   action's default. On a viewset it is the action's own where one is declared
   ([Per-action answers](reference/viewsets.md#per-action-answers)). A body documented under 204 is documented as the 200 it is
-  served as, with a 204 beside it where the spec can present nothing.
+  served as, with a 204 beside it where the spec can present nothing. A spec with
+  no presenter answers no content at 204 whatever the action's default, unless
+  the view sets a status, so that is what it documents. A `DiscriminatedAction`
+  lists each status any of its variants answers.
 - **A 400** is documented wherever the spec declares a validator, because that
   is the status a validator's refusal gets, whichever kind refused
   (`SerializerValidator`, `DataclassValidator` or another validator raising the

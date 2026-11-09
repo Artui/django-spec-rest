@@ -27,6 +27,7 @@ from django_service_specs.parameters.parameters import Parameter, Parameters
 from django_service_specs.schema.can_present_nothing import can_present_nothing
 from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelectorSpec
 from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
+from django_service_specs.types.build_call_context import build_call_context
 from drf_spectacular.drainage import warn
 from drf_spectacular.extensions import OpenApiSerializerExtension
 from drf_spectacular.openapi import AutoSchema
@@ -47,6 +48,7 @@ from drf_spectacular.utils import (
 )
 from rest_framework.serializers import Serializer
 from rest_framework.settings import api_settings
+from rest_framework.status import HTTP_204_NO_CONTENT
 
 from django_spec_rest.dispatch.kernel_edge import UNKNOWN_ARGUMENTS
 from django_spec_rest.openapi._caller_serializer_class import caller_serializer_class
@@ -79,6 +81,7 @@ from django_spec_rest.service_specs.renderable_serializer_class import renderabl
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from django_spec_rest.types.discriminated_action import DiscriminatedAction
+from django_spec_rest.types.rest_transport import REST_TRANSPORT
 from django_spec_rest.views.mutation.utils import status_for_a_body
 from django_spec_rest.views.utils import action_answer, view_pool_seeds
 
@@ -93,8 +96,10 @@ class ServiceAutoSchema(AutoSchema):
 
     - **The request body** is a ``SerializerValidator``'s serializer, built
       partial exactly where the route dispatches the spec's partial variant
-      (``kernel_spec_variant``): a ``PATCH``, unless the Validator cannot take a
-      partial call, and a spec declaring ``partial``. Its component is
+      (``kernel_spec_variant``): an update route's ``PATCH``, unless the
+      Validator cannot take a partial call, and a spec declaring ``partial``. A
+      ``@service_action`` ``PATCH`` dispatches its spec as declared, so it is
+      validated, and documented, whole (``_dispatched``). Its component is
       drf-spectacular's name for the author's class, except where the spec's
       ``input_data`` reaches a field: then a subclass less the fields it fills,
       with those it may fill not required, under a name of its own
@@ -102,7 +107,11 @@ class ServiceAutoSchema(AutoSchema):
       rows. Any other Validator is the kernel's
       ``spec_caller_input_schema`` less what the body does not carry
       (``_parameters_body``): what the server fills is not asked for, and a
-      key a provider may fill is not required.
+      key a provider may fill is not required. It is read under the ``rest``
+      stamp with no request, so a field a Validator declares to this transport
+      is offered and one declared to another is not (``_caller_schema``). A
+      body the wire refuses to go without says ``required``, which
+      drf-spectacular leaves off a schema given whole (``_DemandedBody``).
     - **The response body** is a ``SerializerPresenter``'s serializer, or any
       other presenter's ``output_schema``, a list of rows where the spec
       presents rows (``_presents_rows``). A spec with no presenter documents
@@ -112,7 +121,9 @@ class ServiceAutoSchema(AutoSchema):
       action where one is declared, where it is an ``int``,
       since a kernel spec declares none, over the action's default; a body is
       documented as the ``200`` it is served as where that is ``204``, and the
-      ``204`` beside it where ``can_present_nothing``.
+      ``204`` beside it where ``can_present_nothing``. With no presenter and no
+      ``success_status`` the status is the ``204`` the edge answers, whatever
+      the action's default.
     - **A** ``400`` is documented wherever the spec declares a Validator: its
       refusal is DRF's field errors, whichever seat refused, so the body is the
       ``ValidationErrors`` component. Beside it, any of what else the edge
@@ -136,8 +147,9 @@ class ServiceAutoSchema(AutoSchema):
       ``{View}_{action}_Request``, an ``anyOf`` over the body of each variant
       that takes one (``_discriminated_request_body``), and its responses are
       the variants' merged per status: one body where they agree, an inline
-      ``anyOf`` where they differ, and a ``400`` always, since the
-      discriminator may refuse (``_discriminated_responses``).
+      ``anyOf`` where they differ, each status any variant answers, and a
+      ``400`` always, since the discriminator may refuse
+      (``_discriminated_responses``).
     - **A FilterSet's query parameters** are the kernel's
       ``filter_set_parameters``, on a list operation only.
     - **A viewset method answered 405 for want of a spec** is no operation:
@@ -185,10 +197,9 @@ class ServiceAutoSchema(AutoSchema):
     def _kernel_request_body(self, spec: KernelServiceSpec) -> Any:
         """What a kernel ``spec``'s request body is documented by, or ``None`` for no body.
 
-        Read off the variant the route dispatches for this method, so the
-        documented body is the one validated: a ``PATCH`` asks for the partial
-        variant, which is the spec itself where its Validator cannot take a
-        partial call. A ``SerializerValidator`` is its serializer, built
+        Read off the variant the route dispatches for this method
+        (``_dispatched``), so the documented body is the one validated. A
+        ``SerializerValidator`` is its serializer, built
         partial as the variant is and over a list for a ``many`` spec
         (test_a_patch_is_documented_partial,
         test_a_patch_a_dataclass_validates_whole_is_documented_whole,
@@ -204,7 +215,7 @@ class ServiceAutoSchema(AutoSchema):
         (test_a_spec_reaching_nothing_keeps_the_author_s_component). Any other Validator, or
         none, is ``_parameters_body`` (test_another_validator_is_its_parameters_schema).
         """
-        variant = _partial_variant(spec) if self.method == "PATCH" else spec
+        variant = self._dispatched(spec)
         validator = variant.validator
         if isinstance(validator, SerializerValidator):
             # A ``SerializerValidator`` takes a ``Serializer`` subclass or a
@@ -225,6 +236,23 @@ class ServiceAutoSchema(AutoSchema):
                 )
             return serializer(many=variant.many, partial=variant.partial)
         return self._parameters_body(variant)
+
+    def _dispatched(self, spec: KernelServiceSpec) -> KernelServiceSpec:
+        """The variant of ``spec`` this route dispatches for this method.
+
+        A ``PATCH`` on an update route asks for the partial variant, which is
+        the spec itself where its Validator cannot take a partial call
+        (test_a_patch_is_documented_partial,
+        test_a_patch_a_dataclass_validates_whole_is_documented_whole). A
+        ``@service_action`` asks for nothing, so its ``PATCH`` runs the spec as
+        declared: whole, unless the spec declares ``partial``
+        (test_decorated_patch's
+        test_a_serializer_is_documented_whole_as_the_wire_demands,
+        test_a_spec_declaring_partial_is_the_way_to_a_partial_call).
+        """
+        if self.method == "PATCH" and not _is_decorated_action(self.view):
+            return _partial_variant(spec)
+        return spec
 
     def _parameters_body(self, spec: KernelServiceSpec) -> Any:
         """The kernel's caller schema of ``spec``, less what the body does not choose, or ``None``.
@@ -250,14 +278,18 @@ class ServiceAutoSchema(AutoSchema):
 
         Handed to drf-spectacular as an ``OpenApiRequest``, which it renders as
         the schema given: a bare ``dict`` would be read as a mapping of media
-        types.
+        types. Marked ``_DemandedBody`` where a key is required, since a schema
+        given whole is otherwise documented optional
+        (test_request_body_required's TestAPlainSpecOverARawSchema). Whether a
+        ``many`` spec's list is required is read before it is unwrapped.
         """
         schema = self._caller_schema(spec)
         if not schema["properties"]:
             return None
+        demanded = bool(schema.get("required"))
         if spec.many:
             schema = schema["properties"][spec.many_argument]
-        return OpenApiRequest(schema)
+        return OpenApiRequest(_DemandedBody(schema) if demanded else schema)
 
     def _caller_schema(self, spec: KernelServiceSpec) -> dict[str, Any]:
         """What a caller sends ``spec`` as an object schema: the kernel's less what stays this transport's.
@@ -267,11 +299,26 @@ class ServiceAutoSchema(AutoSchema):
         route's captures. The same reading OPTIONS makes (``spec_options``'
         ``_described``), so ``properties`` is empty exactly where OPTIONS
         finds a variant takes no body.
+
+        Asked under a dict naming this transport, as dispatch is, with the view
+        and no request, since a document describes the transport and never one
+        caller: never ``view_call_context``, which keeps its dict on the view.
+        So a field a Validator declares under ``rest`` is offered, one under
+        another transport is not, and a field keyed on the request stays out,
+        as OPTIONS, holding a request, may offer it
+        (test_caller_schema_context). A Validator reading an attribute of that
+        ``None`` request raises out of generation, with no ``except`` here: a
+        document silently missing a body is worse than a failure its author
+        sees at once (test_it_raises_out_of_generation). OPTIONS leaves such a
+        method out instead, so the agreement above does not cover a raise.
         """
         target = spec.target_selector_spec()
         return _without(
             spec_caller_input_schema(
-                spec, pool_seeds=view_pool_seeds(self.view), unknown_arguments=UNKNOWN_ARGUMENTS
+                spec,
+                pool_seeds=view_pool_seeds(self.view),
+                unknown_arguments=UNKNOWN_ARGUMENTS,
+                call_context=build_call_context(REST_TRANSPORT, view=self.view),
             ),
             (target.parameters().names() if target is not None else frozenset())
             | frozenset(self._route_captures()),
@@ -293,9 +340,15 @@ class ServiceAutoSchema(AutoSchema):
         invalid (test_a_body_two_variants_accept_is_valid_for_what_both_document).
         A second operation of the same name whose members differ (two classes of
         one name in different modules, a route capture named as a variant's
-        field, one action reached by a ``PUT`` and a ``PATCH``) warns and documents its own ``anyOf`` inline
-        rather than the first's, since a name can be a component only once
+        field) warns and documents its own ``anyOf`` inline rather than the
+        first's, since a name can be a component only once
         (test_discriminated_action_schema's TestOneNameForTwoBodies).
+
+        Marked ``_DemandedBody`` where any variant the discriminator may choose
+        refuses an empty body, which is every one taking a body with a required
+        field, as the variant dispatched for this method reads it
+        (test_request_body_required). A variant with no body, or none of whose
+        fields is required, lets an empty body through.
         """
         members: list[dict[str, Any]] = []
         for variant in action.specs.values():
@@ -306,13 +359,18 @@ class ServiceAutoSchema(AutoSchema):
                 members.append(member)
         if not members:
             return None
+        demanded = all(
+            self._caller_schema(self._dispatched(variant)).get("required")
+            for variant in action.specs.values()
+        )
         view_name, action_name = type(self.view).__name__, getattr(self.view, "action", None)
         name = f"{view_name}_{action_name}_Request"
+        any_of = {"anyOf": members}
         component = ResolvedComponent(
             name=name,
             type=ResolvedComponent.SCHEMA,
             object=DiscriminatedAction,
-            schema={"anyOf": members},
+            schema=any_of,
         )
         self.registry.register_on_missing(component)
         if self.registry[component].schema != component.schema:
@@ -321,8 +379,8 @@ class ServiceAutoSchema(AutoSchema):
                 f"{name!r} already holds, so its request is given inline. Name the views "
                 "differently to give each its own component."
             )
-            return OpenApiRequest(component.schema)
-        return OpenApiRequest(component.ref)
+            return OpenApiRequest(_DemandedBody(any_of) if demanded else any_of)
+        return OpenApiRequest(_DemandedBody(component.ref) if demanded else component.ref)
 
     def _variant_body(self, spec: KernelServiceSpec) -> dict[str, Any] | None:
         """One variant's member of the request ``anyOf``, or ``None`` where it takes no body.
@@ -362,11 +420,13 @@ class ServiceAutoSchema(AutoSchema):
             # body depends on (test_a_delete_with_a_validator_documents_its_body,
             # test_a_spec_taking_nothing_documents_no_body).
             return self._as_method("POST", direction)
-        if spec is not None and self.method == "PATCH" and not _partial_variant(spec).partial:
+        if spec is not None and self.method == "PATCH" and not self._dispatched(spec).partial:
             # drf-spectacular re-stamps a ``PATCH``'s serializer partial,
             # where the route validates this one whole: its Validator cannot
-            # take a partial call. Presented as the ``PUT`` it is validated
-            # as (test_a_patch_a_dataclass_validates_whole_is_documented_whole);
+            # take a partial call, or a ``@service_action`` asks for none.
+            # Presented as the ``PUT`` it is validated as
+            # (test_a_patch_a_dataclass_validates_whole_is_documented_whole,
+            # test_decorated_patch);
             # a discriminated action's body is a schema given whole, which
             # drf-spectacular stamps nothing of; every other ``PATCH`` keeps
             # the stamp, so an
@@ -375,6 +435,18 @@ class ServiceAutoSchema(AutoSchema):
             # (test_an_extend_schema_request_is_documented_partial_on_a_patch).
             return self._as_method("PUT", direction)
         return super()._get_request_body(direction)
+
+    def _get_request_for_media_type(self, serializer: Any, direction: Any = "request") -> Any:
+        """The base's schema of one media type, stating ``required`` where a body is demanded.
+
+        The base reads a ``dict`` as a schema it knows nothing about, and marks
+        the body optional (test_request_body_required). A mark of this class
+        says otherwise, and goes no further: generation rebuilds every mapping
+        plain, which each renderer takes
+        (test_what_it_documents_is_a_plain_mapping_the_yaml_renderer_takes).
+        """
+        schema, required = super()._get_request_for_media_type(serializer, direction)
+        return schema, required or isinstance(serializer, _DemandedBody)
 
     def _as_method(self, method: str, direction: str) -> Any:
         """The base's request body, asked as if the operation were ``method``."""
@@ -419,9 +491,11 @@ class ServiceAutoSchema(AutoSchema):
             return super()._get_response_bodies(direction)
         declared = self.get_response_serializers()
         if not isinstance(declared, dict):
-            # The spec's own responses lead with its success status.
-            lead = next(iter(own))
-            declared = {} if _status(lead) == "204" else {lead: declared}
+            # The first success that goes out with a body, ahead of a
+            # ``DiscriminatedAction``'s variant presenting nothing
+            # (test_a_declared_success_body_goes_to_the_status_a_variant_answers_a_body_at).
+            lead = next((code for code in own if _success_with_a_body(code)), None)
+            declared = {} if lead is None else {lead: declared}
         responses: dict[str, Any] = {}
         # drf-spectacular's own rendering of a mapping, since its
         # ``_get_response_bodies`` reads the mapping off an attribute that
@@ -491,10 +565,12 @@ class ServiceAutoSchema(AutoSchema):
         test_a_callable_status_documents_the_action_s_default,
         test_per_action_status). The body is
         the presenter the kernel's ``present`` renders with,
-        ``presenter_for_output()``. The ``204`` beside a body is where the spec
-        may present nothing; its operands are held here by
-        test_no_presenter_documents_no_content_at_the_status (the body) and
-        test_a_create_answers_201_with_its_presenter_s_serializer (the
+        ``presenter_for_output()``. With no presenter there is no body, and the
+        edge answers ``204`` unless the view sets a status, the action's default
+        never entering into it (test_no_presenter_status). The ``204`` beside a
+        body is where the spec may present nothing; its operands are held here by
+        test_no_presenter_documents_no_content_at_the_204_it_answers (the body)
+        and test_a_create_answers_201_with_its_presenter_s_serializer (the
         question), and the branch by
         test_a_spec_that_may_present_nothing_documents_its_204.
         """
@@ -505,10 +581,11 @@ class ServiceAutoSchema(AutoSchema):
         # drf-spectacular never reads a write as a list operation, so a raw
         # schema of rows is wrapped here.
         body = None if presenter is None else _presented(presenter, rows=rows, wrap=rows)
+        no_content = HTTP_204_NO_CONTENT if declared is None else status
         responses: dict[Any, Any] = (
             {status_for_a_body(status): body}
             if body is not None
-            else {status: OpenApiResponse(description="")}
+            else {no_content: OpenApiResponse(description="")}
         )
         if body is not None and can_present_nothing(spec):
             responses[204] = OpenApiResponse(description="")
@@ -529,8 +606,9 @@ class ServiceAutoSchema(AutoSchema):
         """A ``DiscriminatedAction``'s responses: each variant's, merged per status.
 
         The variants answer what a plain spec does (``_kernel_responses``) and
-        any of them may be the one chosen, so a status is documented as every
-        variant answering it does (``_one_response``). A ``400`` is always
+        any of them may be the one chosen, so each status any of them answers
+        is listed (test_each_status_a_variant_answers_is_listed), and documented
+        as every variant answering it does (``_one_response``). A ``400`` is always
         there: the discriminator may refuse, as a ``ServiceValidationError``,
         which the ``ValidationErrors`` component admits whatever the variants
         declare (test_a_400_is_documented_whatever_the_variants_declare).
@@ -554,7 +632,7 @@ class ServiceAutoSchema(AutoSchema):
         (test_variants_that_differ_are_an_inline_any_of). A variant answering
         the status with no body adds no member, since an ``anyOf`` cannot say
         nothing, so a body beside a bodiless answer is documented
-        (test_a_body_less_response_beside_a_body_keeps_the_body) and a status
+        (test_a_body_beside_no_body_at_one_status_keeps_the_body) and a status
         no variant gives a body is the first's.
         """
         bodies = [
@@ -857,6 +935,17 @@ def _declared_path_parameter(variable: str, read: Parameter) -> Any:
     )
 
 
+def _is_decorated_action(view: Any) -> bool:
+    """Whether ``view`` serves this operation by a ``@service_action``, which asks for no partial call.
+
+    Its handler carries the stamp ``_served`` reads; a router's own
+    ``partial_update`` handler and a standalone view carry none
+    (test_the_route_that_asks_for_a_partial_call_stays_documented_partial).
+    """
+    action = getattr(view, "action", None)
+    return isinstance(action, str) and hasattr(getattr(view, action, None), "_service_spec")
+
+
 def _partial_variant(spec: KernelServiceSpec) -> KernelServiceSpec:
     """The variant the route dispatches ``spec`` as for a ``PATCH``: partial where it can be.
 
@@ -906,6 +995,16 @@ def _without(schema: dict[str, Any], names: Iterable[str]) -> dict[str, Any]:
     if required:
         kept["required"] = required
     return kept
+
+
+class _DemandedBody(dict[str, Any]):
+    """A request schema the wire refuses an empty body for, which the document states as ``required``.
+
+    The answer's mark rather than a question asked after the base has rendered
+    it: only a body this schema built carries it, so an
+    ``@extend_schema(request=...)`` reads no spec and states what the project
+    declared (test_a_request_a_project_declares_is_theirs).
+    """
 
 
 _MESSAGES: dict[str, Any] = {"type": "array", "items": {"type": "string"}}
@@ -1043,6 +1142,12 @@ def _under_extend_schema(schema_type: type) -> type[AutoSchema] | None:
     if not _is_extend_schema(answering[0]):
         return None
     return cast("type[AutoSchema]", next(cls for cls in answering if not _is_extend_schema(cls)))
+
+
+def _success_with_a_body(code: Any) -> bool:
+    """Whether a key of a ``responses`` mapping is a success the edge sends a body with: never a ``204``."""
+    status = _status(code)
+    return status.startswith("2") and status != str(HTTP_204_NO_CONTENT)
 
 
 def _status(code: Any) -> str:

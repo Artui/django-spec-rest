@@ -233,6 +233,27 @@ SHELVED = type(
 )
 
 
+# No ``queryset`` here either, and both variants read ``shelf``: the first's type stands.
+SHELVED_TWICE = type(
+    "ShelvedTwice",
+    (ServiceViewSet,),
+    {
+        "action_specs": {
+            "create": _action(
+                a=_spec(
+                    SerializerValidator(AIn),
+                    reads=Parameters.of(Parameter("shelf", "integer", required=True)),
+                ),
+                b=_spec(
+                    SerializerValidator(BIn),
+                    reads=Parameters.of(Parameter("shelf", "string", required=True)),
+                ),
+            )
+        }
+    },
+)
+
+
 class Decorated(GenericViewSet):
     queryset = Author.objects.all()
 
@@ -242,19 +263,6 @@ class Decorated(GenericViewSet):
         methods=["post"],
     )
     def login(self, request: Any) -> Any: ...
-
-
-class Clashing(GenericViewSet):
-    """One action reached by a ``PUT`` and a ``PATCH``, whose bodies differ."""
-
-    queryset = Author.objects.all()
-
-    @service_action(
-        _action(a=_on_a_row(SerializerValidator(AIn))),
-        detail=True,
-        methods=["put", "patch"],
-    )
-    def rename(self, request: Any, pk: int) -> Any: ...
 
 
 _router = DefaultRouter()
@@ -275,6 +283,7 @@ urlpatterns = [
     path("guarded/", GUARDED.as_view({"post": "create"})),
     path("unprocessable/", UNPROCESSABLE.as_view({"post": "create"})),
     re_path(r"^shelved/(?P<shelf>[^/.]+)/$", SHELVED.as_view({"post": "create"})),
+    re_path(r"^shelved-twice/(?P<shelf>[^/.]+)/$", SHELVED_TWICE.as_view({"post": "create"})),
     *_router.urls,
 ]
 
@@ -424,16 +433,6 @@ class TestOneNameForTwoBodies:
         assert [set(m["properties"]) for m in captured] == [{"name"}]
         assert len(warned) == 1
 
-    def test_one_action_reached_by_put_and_patch_still_generates(self, warned: list[str]) -> None:
-        router = DefaultRouter()
-        router.register("clashing", Clashing, basename="clashing")
-        schema = _generate(*router.urls)
-        put = _op(schema, "/clashing/{id}/rename/", "put")["requestBody"]["content"]
-        patch = _op(schema, "/clashing/{id}/rename/", "patch")["requestBody"]["content"]
-        assert put["application/json"]["schema"] == _ref("Clashing_rename_Request")
-        assert patch["application/json"]["schema"] != put["application/json"]["schema"]
-        assert len(warned) == 1
-
     def test_two_operations_of_one_body_share_the_component_without_a_warning(
         self, warned: list[str]
     ) -> None:
@@ -450,6 +449,12 @@ class TestOneNameForTwoBodies:
 class TestThePathParameters:
     def test_a_capture_is_typed_by_the_read_of_any_variant(self, schema: dict[str, Any]) -> None:
         (parameter,) = _op(schema, "/shelved/{shelf}/", "post")["parameters"]
+        assert (parameter["name"], parameter["schema"]) == ("shelf", {"type": "integer"})
+
+    def test_a_capture_two_variants_read_is_typed_by_the_first(
+        self, schema: dict[str, Any]
+    ) -> None:
+        (parameter,) = _op(schema, "/shelved-twice/{shelf}/", "post")["parameters"]
         assert (parameter["name"], parameter["schema"]) == ("shelf", {"type": "integer"})
 
 
@@ -544,12 +549,17 @@ class TestTheResponses:
         assert bare["400"] == mixed["400"]
         assert "anyOf" in bare["400"]["content"]["application/json"]["schema"]
 
-    def test_a_body_less_response_beside_a_body_keeps_the_body(
+    def test_a_variant_presenting_nothing_answers_its_own_204_beside_the_body(
         self, schema: dict[str, Any]
     ) -> None:
+        responses = _op(schema, "/half/", "post")["responses"]
         assert _response(schema, "/half/", "post", "201") == _ref("AOut")
+        assert set(responses) == {"201", "204", "400"}
+        assert "content" not in responses["204"]
 
-    def test_nothing_presented_by_any_variant_is_no_content_at_the_status(
+    def test_nothing_presented_by_any_variant_is_no_content_at_the_204(
         self, schema: dict[str, Any]
     ) -> None:
-        assert "content" not in _op(schema, "/bare/", "post")["responses"]["201"]
+        responses = _op(schema, "/bare/", "post")["responses"]
+        assert set(responses) == {"204", "400"}
+        assert "content" not in responses["204"]

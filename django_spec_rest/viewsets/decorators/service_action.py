@@ -119,7 +119,10 @@ def service_action(
     The spec runs through the kernel's own ``dispatch``, as on the standalone
     mutation views: its ``permissions`` are asked there, after the view's own
     classes, a detail action's row is its own target selector's (never
-    ``get_object()``), and the answer is its presenter's.
+    ``get_object()``), and the answer is its presenter's. The spec runs as
+    declared: a ``PATCH`` here is validated whole, and documented so, unless the
+    spec declares ``partial``, which is the way to a partial call
+    (test_decorated_patch).
 
     ``success_status`` and ``response_finalizer`` are this action's answer, in
     the shapes the viewset's take (``MutationFlowMixin``), and outrank the

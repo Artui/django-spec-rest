@@ -11,6 +11,39 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+### Added
+
+- **OPTIONS and the OpenAPI body read a spec under the `rest` stamp.** Each asks
+  `spec_caller_input_schema` with a `call_context`, so a field a Validator
+  declares only to `rest` is offered by both and required where dispatch requires
+  it, and one declared only to another transport is offered by neither. OPTIONS
+  hands the call's own dict; a document describes the transport and never one
+  caller, so OpenAPI hands `build_call_context("rest", view=view)`, with
+  `request` `None`. A Validator declaring `call_context` guards `request`: one
+  reading an attribute of a `None` request raises out of generation, and a
+  description that raises is left out of OPTIONS, as before. A
+  `SerializerValidator`'s output does not move. Requires
+  `django-service-specs>=0.30.0`.
+
+### Fixed
+
+- **A `@service_action` `PATCH` is documented as the wire validates it.** The
+  action runs its spec as declared, so its body is validated whole, and the
+  document no longer calls it partial: its `required` list is the one the wire
+  demands, on each variant of a decorated `DiscriminatedAction` too. Nothing on
+  the wire changes. A spec declaring `partial` is the way to a partial call.
+- **A spec with no presenter is documented at the status it answers.** The edge
+  answers `204` for one unless the view sets a status, and the document named the
+  action's default, `201` on a create and `200` on a custom action. A
+  `DiscriminatedAction` with one variant presenting and one not now lists both
+  statuses, where the second's `204` went undocumented.
+- **`requestBody.required` where the body is a schema given whole.** drf-spectacular
+  reads such a body as optional, so a `DiscriminatedAction`, and a plain spec over
+  any Validator but a `SerializerValidator`, stated nothing while the wire answered
+  `400` for an empty body. It is stated wherever every spec the route may run takes
+  a body with a required field, and stays absent where one takes no body or
+  requires none of its fields.
+
 ## [0.10.0] — 2026-11-08
 
 ### Added

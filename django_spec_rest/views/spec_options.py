@@ -61,7 +61,8 @@ def spec_options(
     a 403: OPTIONS describes, and the method is still routed.
 
     The description is the kernel's ``spec_caller_input_schema``, what a
-    caller is asked to send: ``spec.parameters()`` less what the server fills
+    caller is asked to send, read under the view's call context as dispatch
+    reads the spec (test_caller_schema_context): ``spec.parameters()`` less what the server fills
     (the view's seeds, test_options_metadata's
     test_a_read_named_for_a_seed_the_view_registers_is_not_described, and every
     key a typed provider fills), a key a provider may
@@ -165,7 +166,10 @@ def _spec_described(
         return None
     try:
         asked = spec_caller_input_schema(
-            spec, pool_seeds=view_pool_seeds(view), unknown_arguments=UNKNOWN_ARGUMENTS
+            spec,
+            pool_seeds=view_pool_seeds(view),
+            unknown_arguments=UNKNOWN_ARGUMENTS,
+            call_context=call_context,
         )
     except (AttributeError, KeyError, TypeError):
         # A Validator whose serializer cannot be built without the
@@ -177,6 +181,8 @@ def _spec_described(
         # routed and is left out here, where DRF's own metadata ended
         # in a 500 (test_options_metadata's
         # test_a_context_dependent_input_is_left_out_rather_than_a_500).
+        # So too a Validator declaring ``call_context`` that reads what this
+        # call's request lacks (test_it_is_left_out_of_options).
         return None
     return _described(spec, asked, view)
 

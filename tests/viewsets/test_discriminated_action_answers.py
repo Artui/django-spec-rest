@@ -204,6 +204,45 @@ class TestVariantOffered:
         with pytest.raises(ImproperlyConfigured, match=r"\['tenant'\].*'variant'"):
             _ViewSet.as_view({"post": "create"})
 
+    def test_a_refusal_offers_variant_where_a_discriminated_action_hands_it(self) -> None:
+        # The ``keys`` arm the message reads: test_a_key_the_pool_still_lacks_is_refused_beside_it
+        # holds the admitting half, and this that the message names it.
+        class _ViewSet(ServiceViewSet):
+            success_status = staticmethod(lambda *, tenant: 200)
+            action_specs = {"create": _action()}
+
+        with pytest.raises(ImproperlyConfigured, match="subset of .*'variant'"):
+            _ViewSet.as_view({"post": "create"})
+
+    def test_a_finalizer_s_refusal_offers_variant_too(self) -> None:
+        class _ViewSet(ServiceViewSet):
+            response_finalizer = staticmethod(lambda *, tenant: None)
+            action_specs = {"create": _action()}
+
+        with pytest.raises(ImproperlyConfigured, match="subset of .*'variant'"):
+            _ViewSet.as_view({"post": "create"})
+
+    def test_a_refusal_never_offers_variant_where_nothing_hands_it(self) -> None:
+        # ``refuse_a_stray_variant`` has answered a callable declaring it, so the
+        # conditional no longer decides what is refused here: only what the
+        # message tells the author they may declare instead.
+        class _ViewSet(ServiceViewSet):
+            success_status = staticmethod(lambda *, tenant: 200)
+            action_specs = {"create": _plain()}
+
+        with pytest.raises(ImproperlyConfigured, match="subset of") as refused:
+            _ViewSet.as_view({"post": "create"})
+        assert "variant" not in str(refused.value)
+
+    def test_a_finalizer_s_refusal_never_offers_variant_where_nothing_hands_it(self) -> None:
+        class _ViewSet(ServiceViewSet):
+            response_finalizer = staticmethod(lambda *, tenant: None)
+            action_specs = {"create": _plain()}
+
+        with pytest.raises(ImproperlyConfigured, match="subset of") as refused:
+            _ViewSet.as_view({"post": "create"})
+        assert "variant" not in str(refused.value)
+
 
 ANSWERS = {
     "a status": ("success_status", _status),
