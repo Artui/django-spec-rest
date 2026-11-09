@@ -63,8 +63,9 @@ carries; releases up to 0.62.0 are in
   anonymous caller gets the 401 with the challenge, or a 403 where the first
   authenticator gives none, and a signed-in one the check's 403. A caller the
   checks admit is told what the read raised, as before, and OPTIONS hides a
-  method from the same callers. A view hook that reads the body runs before the
-  edge, so what that read raises still leaves first.
+  method from the same callers. A view hook that reads the body first is judged
+  the same; hooks still run before the checks, and the body is not read ahead of
+  them.
 - **A `@service_action` `PATCH` is documented as the wire validates it.** The
   action runs its spec as declared, so its body is validated whole, and the
   document no longer calls it partial: its `required` list is the one the wire

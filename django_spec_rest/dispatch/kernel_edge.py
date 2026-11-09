@@ -75,7 +75,8 @@ stated:
   before ``dispatch``, and judges a call whose arguments fail their shape on
   no arguments, so a caller the checks refuse is answered 401 or 403 whatever
   the body (``_admitted``, ``judge_without_arguments``), a body that cannot be
-  read at all among them (``_is_form_body``). A check that cannot answer
+  read at all among them (``_is_form_body``, and the mutation views'
+  ``_view_hooks`` where a view hook reads it first). A check that cannot answer
   without the arguments keeps the kernel's order.
 
 Every refusal the kernel raises leaves as a DRF exception, by
