@@ -43,6 +43,12 @@ carries; releases up to 0.62.0 are in
   `400` for an empty body. It is stated wherever every spec the route may run takes
   a body with a required field, and stays absent where one takes no body or
   requires none of its fields.
+- **A project's own `transport` key no longer replaces the stamp.** A view hook or a
+  `serializer_context` callable answering a `"transport"` key wrote it into the
+  call's one dict, so every later stage read the project's value in place of
+  `"rest"`, against the kernel's contract that the transport stamps last. The key is
+  now dropped from that shared dict, as `format` already was, without an error. A
+  serializer built over a dict of its own keeps what its layers wrote.
 
 ## [0.10.0] — 2026-11-08
 

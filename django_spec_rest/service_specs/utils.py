@@ -28,6 +28,7 @@ from typing import Any, Final
 from django.core.exceptions import ImproperlyConfigured
 from django.db.models import QuerySet
 from django.http import HttpRequest, QueryDict
+from django_service_specs import TRANSPORT_KEY
 from django_service_specs.output.output import OutputField
 from django_service_specs.parameters.parameters import Parameter, Parameters
 from django_service_specs.pool.resolve_callable_kwargs import resolve_callable_kwargs
@@ -331,7 +332,7 @@ def _context_for(call_context: dict[str, Any] | None, *, view: Any, request: Any
     call's own entries, and whatever a stage of the call wrote, keep one value
     for every stage (test_a_key_the_view_s_get_serializer_context_adds_is_in_the_one_dict).
     The view's hook layers are laid over this dict afterwards, all but ``format``
-    (``serializer_context``).
+    and the ``transport`` stamp (``serializer_context``).
     """
     base = call_base_context(view=view, request=request)
     if call_context is None:
@@ -557,7 +558,9 @@ def serializer_context(
        output half from the result's presentation context, under
        ``SERIALIZER_CONTEXT_SEED``. Written into the call's one dict, they
        leave its ``format`` alone: that is the route's suffix, which an
-       override of the view's ``get_serializer_context()`` does not displace.
+       override of the view's ``get_serializer_context()`` does not displace;
+       and its ``transport``, the kernel's stamp, which a hook answering a key
+       of that name does not replace (dropped silently, not refused).
     4. **The spec's own callable**, ``provider``, which has the final say. It
        is called through the kernel's declared-kwargs resolver, as every other
        spec callable is, from a pool of the call's ``arguments`` (a mapping's
@@ -570,6 +573,8 @@ def serializer_context(
        (test_an_argument_never_stands_in_for_the_request_the_callable_declares).
        A key it answers with ``UNSET`` is declined, leaving the layer beneath,
        on every transport (test_an_unset_value_declines_the_key_and_keeps_the_layer_beneath).
+       It too cannot replace the shared dict's ``transport``; a dict of a
+       serializer's own keeps whatever it answers.
        ``call_context`` is the call's own dict, so a callable reads what an
        earlier stage left there (test_the_output_callable_may_name_the_call_s_context)
        and writes to the one object the call shares. It is offered only when
@@ -640,7 +645,18 @@ def serializer_context(
     # for every stage of the call
     # (test_the_route_s_suffix_outranks_an_overriding_get_serializer_context_for_format).
     # A dict of a serializer's own already took ``format`` from that very answer.
-    context.update({key: value for key, value in (view_layers or {}).items() if key != "format"})
+    # The kernel's transport stamp is the call's one dict's alone: a hook layer answering
+    # a ``transport`` of its own is dropped from the shared dict, so every later stage reads
+    # the stamp. A dict of a serializer's own is nobody else's and keeps what its layers wrote
+    # (test_a_view_hook_answering_a_transport_key_leaves_the_stamp_to_every_stage,
+    # test_a_serializer_s_own_dict_keeps_the_transport_key_its_layers_wrote).
+    context.update(
+        {
+            key: value
+            for key, value in (view_layers or {}).items()
+            if key != "format" and not (shared and key == TRANSPORT_KEY)
+        }
+    )
     if provider is not None:
         pool: dict[str, Any] = {
             **(arguments if isinstance(arguments, Mapping) else {}),
@@ -664,7 +680,15 @@ def serializer_context(
         # (test_a_description_with_no_call_context_does_not_ask_a_callable_naming_it).
         if not describing or _answerable(provider, pool):
             resolved = context_answer(provider, resolve_callable_kwargs(provider, pool))
-            context.update({key: value for key, value in resolved.items() if value is not UNSET})
+            # The stamp is the transport's here too, the callable having the final say on
+            # everything else (test_a_serializer_context_callable_answering_a_transport_key_leaves_the_stamp_to_every_stage).
+            context.update(
+                {
+                    key: value
+                    for key, value in resolved.items()
+                    if value is not UNSET and not (shared and key == TRANSPORT_KEY)
+                }
+            )
     return context
 
 
