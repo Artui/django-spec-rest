@@ -27,6 +27,15 @@ carries; releases up to 0.62.0 are in
 
 ### Fixed
 
+- **A caller a plain spec refuses is refused whatever it sends, a body that cannot
+  be read included.** An unparseable body answered DRF's 400, an unsupported media
+  type its 415 and too many form fields Django's 400, with no challenge, ahead of
+  the spec's checks. The edge now judges a failed read on no arguments, as it
+  judges a failed shape and as a `DiscriminatedAction` route already did, so an
+  anonymous caller gets the 401 with the challenge, or a 403 where the first
+  authenticator gives none, and a signed-in one the check's 403. A caller the
+  checks admit is told what the read raised, as before, and OPTIONS hides a
+  method from the same callers.
 - **A `@service_action` `PATCH` is documented as the wire validates it.** The
   action runs its spec as declared, so its body is validated whole, and the
   document no longer calls it partial: its `required` list is the one the wire

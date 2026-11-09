@@ -21,8 +21,9 @@ from typing import Any
 
 import pytest
 from django.contrib.auth.models import User
-from django.core.exceptions import ImproperlyConfigured
+from django.core.exceptions import ImproperlyConfigured, TooManyFieldsSent
 from django.core.exceptions import PermissionDenied as DjangoPermissionDenied
+from django.test import override_settings
 from django_service_specs import (
     Parameter,
     Parameters,
@@ -176,6 +177,103 @@ def test_a_refused_caller_sending_a_complete_body_is_answered_the_same(
     assert _answer(_post(view, body, username=username)) == expected
 
 
+UNREADABLE = {
+    # (the bytes, their content type, what DRF answers a caller the checks admit)
+    "unparseable": (b"{", "application/json", 400),
+    "an unsupported media type": (b"hello", "text/plain", 415),
+}
+
+
+def _post_raw(view: Any, body: str, *, username: str | None) -> Any:
+    raw, content_type, _ = UNREADABLE[body]
+    request = factory.post("/", raw, content_type=content_type)
+    if username is not None:
+        force_authenticate(request, User.objects.create(username=username))
+    response = view(request)
+    response.render()
+    return response
+
+
+@pytest.mark.parametrize("body", UNREADABLE)
+@pytest.mark.parametrize("caller", REFUSED)
+@pytest.mark.parametrize("refusal", REFUSALS)
+@pytest.mark.parametrize("route", ROUTES)
+def test_a_refused_caller_is_refused_whatever_it_sends(
+    route: str, refusal: str, caller: str, body: str
+) -> None:
+    """A body DRF cannot read is judged on no arguments too, as a discriminated route's is.
+
+    Fails where the read's own refusal leaves first: DRF's 400 or 415, with no
+    challenge. The kernel check's row fails too where the denial is raised
+    with no spec for ``_check_denied`` to compare it with: 403, not 401.
+    """
+    authentication, username, expected = REFUSED[caller]
+    view = ROUTES[route](_check(refusal), authentication)
+    assert _answer(_post_raw(view, body, username=username)) == expected
+
+
+@pytest.mark.parametrize("body", UNREADABLE)
+@pytest.mark.parametrize("refusal", REFUSALS)
+@pytest.mark.parametrize("route", ROUTES)
+def test_an_admitted_caller_is_told_its_body_cannot_be_read(
+    route: str, refusal: str, body: str
+) -> None:
+    """DRF's own refusal, never a second read of the empty body DRF leaves behind.
+
+    Fails where the edge carries on past the failed read: an unparseable body
+    reads as an empty form then, and is told the fields it lacks.
+    """
+    view = ROUTES[route](_check(refusal), [BasicAuthentication])
+    response = _post_raw(view, body, username="editor")
+    assert response.status_code == UNREADABLE[body][2]
+    assert set(response.data) == {"detail"}
+
+
+@override_settings(DATA_UPLOAD_MAX_NUMBER_FIELDS=1)
+@pytest.mark.parametrize("caller", REFUSED)
+def test_a_refused_caller_sending_a_body_django_refuses_to_read_is_refused(caller: str) -> None:
+    """Not every failed read is DRF's: too many form fields raises Django's own.
+
+    Fails where only DRF's exceptions are judged: ``TooManyFieldsSent`` leaves
+    as it was raised, for Django's 400.
+    """
+    authentication, username, expected = REFUSED[caller]
+    request = factory.post("/", b"a=1&b=2", content_type="application/x-www-form-urlencoded")
+    if username is not None:
+        force_authenticate(request, User.objects.create(username=username))
+    response = _view(_check("kernel-check"), authentication)(request)
+    response.render()
+    assert _answer(response) == expected
+
+
+@override_settings(DATA_UPLOAD_MAX_NUMBER_FIELDS=1)
+def test_an_admitted_caller_sending_a_body_django_refuses_to_read_is_refused_by_django() -> None:
+    request = factory.post("/", b"a=1&b=2", content_type="application/x-www-form-urlencoded")
+    force_authenticate(request, User.objects.create(username="editor"))
+    with pytest.raises(TooManyFieldsSent):
+        _view(_check("kernel-check"), [BasicAuthentication])(request)
+
+
+@pytest.mark.parametrize("caller", REFUSED)
+def test_a_read_s_refused_caller_is_refused_whatever_body_it_sends(caller: str) -> None:
+    """A selector spec's route reads the request's body as well, so a read is judged the same."""
+    authentication, username, expected = REFUSED[caller]
+    request = factory.generic("GET", "/", b"{", content_type="application/json")
+    if username is not None:
+        force_authenticate(request, User.objects.create(username=username))
+    response = _list_view(authentication)(request)
+    response.render()
+    assert _answer(response) == expected
+
+
+def test_an_admitted_caller_s_unreadable_body_asks_the_check_once() -> None:
+    """Judged once on the failed read, and nothing is dispatched to ask it again."""
+    check = _Counting()
+    response = _post_raw(_view(check, [BasicAuthentication]), "unparseable", username="ada")
+    assert response.status_code == 400
+    assert check.asked == 1
+
+
 @pytest.mark.parametrize("refusal", REFUSALS)
 @pytest.mark.parametrize("route", ROUTES)
 def test_an_admitted_caller_is_told_what_its_body_lacks(route: str, refusal: str) -> None:
@@ -264,6 +362,13 @@ def test_a_check_reading_the_arguments_keeps_the_kernel_s_order() -> None:
     response = _post(_owner_view(), {}, username="ada")
     assert response.status_code == 400
     assert set(response.data) == {"submission_id", "outcome"}
+
+
+def test_a_check_reading_the_arguments_is_told_the_body_cannot_be_read() -> None:
+    """It cannot be judged on no arguments, so the read's own refusal is told, as a shape's is."""
+    response = _post_raw(_owner_view(), "unparseable", username="ada")
+    assert response.status_code == 400
+    assert set(response.data) == {"detail"}
 
 
 def test_a_check_reading_the_arguments_judges_a_well_formed_body() -> None:
@@ -511,19 +616,38 @@ def test_options_hides_a_method_exactly_when_its_write_is_refused_first(case: st
     checks refuse, and the POST's 400 then listed its fields. Fails for the
     scope check where OPTIONS asks ``authorize`` alone, and for the check
     reading the arguments, which raises asked with none, where it does not
-    judge as the edge judges.
+    judge as the edge judges. A body DRF cannot parse is told its 400 to the same
+    callers, and fails where the read is answered before the checks: every
+    caller is told it then, whatever OPTIONS shows them.
     """
     build, username, described = OPTIONS_CASES[case]
     view = _view(build(), [SessionAuthentication])
     user = None if username is None else User.objects.create(username=username)
-    options, posted = factory.options("/"), factory.post("/", {}, format="json")
+    options = factory.options("/")
+    posted = factory.post("/", {}, format="json")
+    unparseable = factory.post("/", b"{", content_type="application/json")
     if user is not None:
-        force_authenticate(options, user)
-        force_authenticate(posted, user)
+        for request in (options, posted, unparseable):
+            force_authenticate(request, user)
     answer = view(options)
     assert answer.status_code == 200
     assert ("POST" in answer.data.get("actions", {})) is described
     assert (view(posted).status_code == 400) is described
+    assert (view(unparseable).status_code == 400) is described
+
+
+def test_a_misconfigured_spec_fails_on_a_body_that_cannot_be_read() -> None:
+    """A configuration error, as every well-formed call raises, never the read's 400.
+
+    Fails where the read's refusal leaves before the judgment.
+    """
+    spec = ServiceSpec(
+        service=lambda *, submission_id, outcome: None, validator=SerializerValidator(_Review)
+    )
+    attrs = {"spec": spec, "permission_classes": [], "authentication_classes": []}
+    view = type("_View", (ServiceCreateView,), attrs).as_view()
+    with pytest.raises(ImproperlyConfigured, match="declares no permissions"):
+        view(factory.post("/", b"{", content_type="application/json"))
 
 
 @pytest.mark.parametrize("method", ["options", "post"])
