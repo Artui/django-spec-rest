@@ -128,11 +128,13 @@ call `enable_openapi()` again after the reload.
   document silently missing a body is worse than a failure you see at once.
   OPTIONS is asked under the request it answers, so a field keyed on the caller
   may be offered there and stays out of the document; there, a description that
-  raises leaves the method out of `actions`. A `SerializerValidator` reads none
+  raises `AttributeError`, `KeyError` or `TypeError` leaves the method out of
+  `actions`, and any other exception, a Validator's `ValueError` included, is a
+  500. A `SerializerValidator` reads none
   of this.
 - **The response body** is a `SerializerPresenter`'s serializer, or another
   presenter's output schema, a list where the spec presents rows. A spec with
-  no presenter documents no content; a selector spec with none keeps the
+  no presenter documents no body (see the status below); a selector spec with none keeps the
   view's `serializer_class`, which renders it.
 - **The status** is the view's `success_status` where it is an `int`, over the
   action's default. On a viewset it is the action's own where one is declared
@@ -140,8 +142,13 @@ call `enable_openapi()` again after the reload.
   served as, with a 204 beside it where the spec can present nothing. A spec that
   can present nothing under a status the view sets answers that status with no
   body, so it lists no 204 beside the body. A spec with
-  no presenter answers no content at 204 whatever the action's default, unless
-  the view sets a status, so that is what it documents. A `DiscriminatedAction`
+  no presenter answers 204 where its service returns `None` and the action's
+  default, with the value, where it returns anything else; `allow_none` is a
+  declaration and no document can read what a call returns, so the document lists
+  both with no schema: `201` and `204` on a create, `200` and `204` on a custom
+  action. A destroy lists `204` alone, its default being the `204`, and a status
+  the view sets is the one status. A declared success body replaces both and goes
+  to the first, the default. A `DiscriminatedAction`
   lists each status any of its variants answers.
 - **A 400** is documented wherever the spec declares a validator, because that
   is the status a validator's refusal gets, whichever kind refused

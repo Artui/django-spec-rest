@@ -557,9 +557,12 @@ class TestTheResponses:
         assert set(responses) == {"201", "204", "400"}
         assert "content" not in responses["204"]
 
-    def test_nothing_presented_by_any_variant_is_no_content_at_the_204(
+    def test_nothing_presented_by_any_variant_is_no_body_at_either_status(
         self, schema: dict[str, Any]
     ) -> None:
+        # A variant's service may return a value as well as nothing, and
+        # with no presenter a document cannot tell which one a call answers.
         responses = _op(schema, "/bare/", "post")["responses"]
-        assert set(responses) == {"204", "400"}
+        assert set(responses) == {"201", "204", "400"}
+        assert "content" not in responses["201"]
         assert "content" not in responses["204"]

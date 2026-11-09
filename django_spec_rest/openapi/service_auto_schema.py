@@ -115,15 +115,17 @@ class ServiceAutoSchema(AutoSchema):
     - **The response body** is a ``SerializerPresenter``'s serializer, or any
       other presenter's ``output_schema``, a list of rows where the spec
       presents rows (``_presents_rows``). A spec with no presenter documents
-      the no-content response, and a selector spec with none keeps the base's
-      reading of the view's ``serializer_class``, which renders it.
+      no body, at the statuses ``_kernel_responses`` lists, and a selector spec
+      with none keeps the base's reading of the view's ``serializer_class``,
+      which renders it.
     - **The status** is the view's ``success_status`` for the action, per
       action where one is declared, where it is an ``int``,
       since a kernel spec declares none, over the action's default; a body is
       documented as the ``200`` it is served as where that is ``204``, and the
       ``204`` beside it where ``can_present_nothing``. With no presenter and no
-      ``success_status`` the status is the ``204`` the edge answers, whatever
-      the action's default.
+      ``success_status`` both the action's default and the ``204`` are listed,
+      since the service's return decides between them (a destroy's default is
+      the ``204``, so it lists that alone).
     - **A** ``400`` is documented wherever the spec declares a Validator: its
       refusal is DRF's field errors, whichever seat refused, so the body is the
       ``ValidationErrors`` component. Beside it, any of what else the edge
@@ -565,9 +567,14 @@ class ServiceAutoSchema(AutoSchema):
         test_a_callable_status_documents_the_action_s_default,
         test_per_action_status). The body is
         the presenter the kernel's ``present`` renders with,
-        ``presenter_for_output()``. With no presenter there is no body, and the
-        edge answers ``204`` unless the view sets a status, the action's default
-        never entering into it (test_no_presenter_status). The ``204`` beside a
+        ``presenter_for_output()``. With no presenter the edge answers ``204``
+        where the service returns ``None``, unless the view sets a status, and
+        otherwise the action's default with the value as it is, which no schema
+        describes. A document cannot read which one a call answers
+        (``allow_none`` is a declaration only), so it lists both with no
+        schema: a create ``{201, 204}``, a custom action ``{200, 204}``, a
+        destroy ``{204}`` alone, its default being the ``204``, and the one
+        status a view sets (test_no_presenter_status). The ``204`` beside a
         body is where the spec may present nothing and the view sets no status,
         since one it sets is what that answer goes out at too
         (test_with_a_status_set_it_answers_that_status_and_never_a_204); its
@@ -585,10 +592,19 @@ class ServiceAutoSchema(AutoSchema):
         # schema of rows is wrapped here.
         body = None if presenter is None else _presented(presenter, rows=rows, wrap=rows)
         no_content = HTTP_204_NO_CONTENT if declared is None else status
+        # No body to document is both statuses, with no schema: the edge answers
+        # ``no_content`` only where the service returned ``None`` and ``status``
+        # (with the value, which no schema describes) where it returned
+        # anything else, and ``allow_none`` is a declaration a document cannot
+        # read. Where the two are one status (a destroy's default, or a status
+        # the view sets) the mapping holds that one.
         responses: dict[Any, Any] = (
             {status_for_a_body(status): body}
             if body is not None
-            else {no_content: OpenApiResponse(description="")}
+            else {
+                status: OpenApiResponse(description=""),
+                no_content: OpenApiResponse(description=""),
+            }
         )
         if body is not None and can_present_nothing(spec):
             # Answered where the bodyless answer goes out, which is the body's own
