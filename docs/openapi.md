@@ -121,7 +121,9 @@ call `enable_openapi()` again after the reload.
   [One URL, several specs](reference/viewsets.md#one-url-several-specs).
 - **A Validator declaring `call_context`** is asked under the `rest` stamp, as
   dispatch asks it, so a field declared only to `rest` is in the body and a field
-  declared only to another transport is not. A document describes the transport
+  declared only to another transport is not. `call_context["action"]` is the
+  action the route dispatches the method as in the document and in OPTIONS alike,
+  and `None` on a standalone view, as dispatch stamps it. A document describes the transport
   and never one caller, so `call_context["request"]` is `None` here, and a
   Validator declaring `call_context` guards `request` before reading it. One that
   reads an attribute of that `None` raises `AttributeError` out of generation: a

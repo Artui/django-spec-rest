@@ -280,16 +280,19 @@ class TestWhatTheVariantsDoNotAnswer:
         assert "required" not in body
 
 
-def _named_alike(entry: Any) -> Any:
-    return path(f"{id(entry)}/", _viewset("Alike", "create", entry).as_view(_CREATE))
+def _named_alike(entry: Any, route: str) -> Any:
+    # A fixed route, not ``id(entry)``: the generator orders operations by path, and
+    # the first of one name is the one that holds the component, so an address-
+    # dependent route flipped which was "held" with the heap's layout.
+    return path(f"{route}/", _viewset("Alike", "create", entry).as_view(_CREATE))
 
 
 class TestAnAnyOfGivenInline:
     """A second operation of one name documents its own ``anyOf``, and states ``required`` of it."""
 
     def _inline_body(self, entry: Any) -> dict[str, Any]:
-        held = _named_alike(_choosing("a", a=_spec(SerializerValidator(AIn))))
-        inline = _named_alike(entry)
+        held = _named_alike(_choosing("a", a=_spec(SerializerValidator(AIn))), "held")
+        inline = _named_alike(entry, "inline")
         paths = SchemaGenerator(patterns=[held, inline]).get_schema(request=None, public=True)
         bodies = [operation["post"]["requestBody"] for operation in paths["paths"].values()]
         (body,) = [b for b in bodies if "anyOf" in b["content"]["application/json"]["schema"]]

@@ -24,6 +24,13 @@ carries; releases up to 0.62.0 are in
   of OPTIONS, as before, and any other exception is a 500. A
   `SerializerValidator`'s output does not move. Requires
   `django-service-specs>=0.30.0`.
+- **Both seats name the action the wire names.** A Validator keyed on
+  `call_context["action"]` saw `None` in the document, `"metadata"` in OPTIONS and
+  the action's name in dispatch, so a field it requires only for that action was
+  missing from both descriptions and the wire answered `400` for it. The document
+  now hands the view's action, and OPTIONS a copy of the call's dict naming the
+  action each described method dispatches as (the route's `action_map` entry, none on a
+  standalone view); the view's own dict is untouched.
 - **The docs and the example say what `DiscriminatedAction` does.** The viewsets
   reference has a section on it (where it attaches, who is refused before the body
   is read, the row, validation per variant, `variant` for a status or finalizer),

@@ -303,7 +303,7 @@ class ServiceAutoSchema(AutoSchema):
         finds a variant takes no body.
 
         Asked under a dict naming this transport, as dispatch is, with the view
-        and no request, since a document describes the transport and never one
+        and its action and no request, since a document describes the transport and never one
         caller: never ``view_call_context``, which keeps its dict on the view.
         So a field a Validator declares under ``rest`` is offered, one under
         another transport is not, and a field keyed on the request stays out,
@@ -320,7 +320,14 @@ class ServiceAutoSchema(AutoSchema):
                 spec,
                 pool_seeds=view_pool_seeds(self.view),
                 unknown_arguments=UNKNOWN_ARGUMENTS,
-                call_context=build_call_context(REST_TRANSPORT, view=self.view),
+                call_context=build_call_context(
+                    REST_TRANSPORT,
+                    view=self.view,
+                    # The action dispatch stamps, so a Validator keyed on it is
+                    # asked what the wire asks
+                    # (test_caller_schema_context' TestAFieldKeyedOnTheAction).
+                    action=getattr(self.view, "action", None),
+                ),
             ),
             (target.parameters().names() if target is not None else frozenset())
             | frozenset(self._route_captures()),

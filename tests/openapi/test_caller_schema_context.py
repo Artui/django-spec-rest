@@ -28,7 +28,7 @@ from rest_framework.request import Request
 from rest_framework.test import APIRequestFactory
 from rest_framework.views import APIView
 
-from django_spec_rest import REST_TRANSPORT, ServiceCreateView, ServiceViewSet
+from django_spec_rest import REST_TRANSPORT, ServiceCreateView, ServiceViewSet, service_action
 from django_spec_rest.openapi import enable_openapi
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from django_spec_rest.types.discriminated_action import DiscriminatedAction
@@ -58,6 +58,16 @@ class _ByTransport(_Echo):
         return Parameters.of(_NAME)
 
 
+class _ByAction(_Echo):
+    """``via_<action>`` is required where the call names an action, as a Validator keyed on it may."""
+
+    def parameters(self, *, call_context: dict[str, Any] | None = None) -> Parameters:
+        action = call_context["action"] if call_context is not None else None
+        if action is None:
+            return Parameters.of(_NAME)
+        return Parameters.of(_NAME, Parameter(f"via_{action}", "string", required=True))
+
+
 class _Unguarded(_Echo):
     """Guards the context and then reads an attribute of its ``request``, unguarded."""
 
@@ -66,6 +76,13 @@ class _Unguarded(_Echo):
             return Parameters.of(_NAME)
         tenant = call_context["request"].tenant
         return Parameters.of(_NAME, Parameter(tenant, "string"))
+
+
+class _Refusing(_Echo):
+    """Raises an exception OPTIONS does not read as 'cannot be described'."""
+
+    def parameters(self, *, call_context: dict[str, Any] | None = None) -> Parameters:
+        raise ValueError("not describable")
 
 
 class _Guarded(_Echo):
@@ -114,6 +131,19 @@ def _schema_of(document: dict[str, Any], route: str) -> dict[str, Any]:
 
 
 BY_TRANSPORT = _view(_spec(_ByTransport()))
+
+
+class ByAction(ServiceViewSet):
+    """``create`` and a ``PUT`` action, each a spec naming the action its call is dispatched under."""
+
+    queryset = Author.objects.all()
+    action_specs = {"create": _spec(_ByAction())}
+
+    @service_action(_spec(_ByAction()), detail=False, methods=["put"])
+    def replace(self, request: Any) -> Any: ...
+
+
+_BY_ACTION_ROUTES = {"post": "create", "put": "replace"}
 
 
 class Discriminated(ServiceViewSet):
@@ -182,6 +212,60 @@ class TestAFieldDeclaredToAnotherTransport:
         assert [set(m["properties"]) for m in members] == [{"name", "ticket"}]
 
 
+class TestAFieldKeyedOnTheAction:
+    """The wire names the action its call is dispatched under, so each describing seat does too."""
+
+    def test_a_standalone_view_dispatches_no_action_so_neither_seat_names_one(self) -> None:
+        _HANDED.clear()
+        view = _view(_spec(_ByAction()))
+        assert set(_options(view.as_view())["properties"]) == {"name"}
+        assert set(_schema_of(_document(_route(view, "s/")), "/s/")["properties"]) == {"name"}
+        response = view.as_view()(APIRequestFactory().post("/", {"name": "n"}, format="json"))
+        assert response.status_code == 204
+
+    def test_the_document_names_the_action_the_post_dispatches(self) -> None:
+        view = ByAction.as_view(_BY_ACTION_ROUTES)
+        document = _document(path("a/", view))
+        body = document["paths"]["/a/"]["post"]["requestBody"]["content"]["application/json"]
+        assert set(body["schema"]["properties"]) == {"name", "via_create"}
+        assert sorted(body["schema"]["required"]) == ["name", "via_create"]
+        put = document["paths"]["/a/"]["put"]["requestBody"]["content"]["application/json"]
+        assert sorted(put["schema"]["required"]) == ["name", "via_replace"]
+
+    def test_options_names_the_action_each_method_dispatches(self) -> None:
+        actions = ByAction.as_view(_BY_ACTION_ROUTES)(APIRequestFactory().options("/")).data[
+            "actions"
+        ]
+        assert sorted(actions["POST"]["required"]) == ["name", "via_create"]
+        assert sorted(actions["PUT"]["required"]) == ["name", "via_replace"]
+
+    def test_the_wire_requires_the_field_the_seats_name(self) -> None:
+        view = ByAction.as_view(_BY_ACTION_ROUTES)
+        response = view(APIRequestFactory().post("/", {"name": "n"}, format="json"))
+        assert response.status_code == 400
+        assert set(response.data) == {"via_create"}
+        response = view(APIRequestFactory().put("/", {"name": "n"}, format="json"))
+        assert set(response.data) == {"via_replace"}
+
+    def test_options_leaves_the_view_s_own_dict_alone(self) -> None:
+        seen: list[Any] = []
+
+        class Looking(_ByAction):
+            def parameters(self, *, call_context: dict[str, Any] | None = None) -> Parameters:
+                seen.append(call_context)
+                return super().parameters(call_context=call_context)
+
+        class Viewset(ByAction):
+            action_specs = {"create": _spec(Looking())}
+
+        view = Viewset.as_view({"post": "create"})
+        response = view(APIRequestFactory().options("/"))
+        assert response.status_code == 200
+        assert {context["action"] for context in seen if context is not None} == {"create"}
+        # The dict the view keeps, which dispatch and other stages share, still names OPTIONS.
+        assert response.renderer_context["view"]._call_context["action"] == "metadata"
+
+
 class TestASerializerValidatorDoesNotMove:
     """``describe_serializer`` takes its unbound arm on both seats, whatever dict it is handed."""
 
@@ -212,6 +296,12 @@ class TestADescriptionThatRaises:
         response = _view(_spec(_Unguarded())).as_view()(APIRequestFactory().options("/"))
         assert response.status_code == 200
         assert "POST" not in response.data.get("actions", {})
+
+    def test_any_other_exception_is_not_left_out_of_options(self) -> None:
+        # Only AttributeError, KeyError and TypeError leave a method out; a
+        # ValueError is a 500, as the docs say.
+        with pytest.raises(ValueError, match="not describable"):
+            _view(_spec(_Refusing())).as_view()(APIRequestFactory().options("/"))
 
     def test_a_validator_guarding_request_is_read_on_both_seats(self) -> None:
         view = _view(_spec(_Guarded()))
