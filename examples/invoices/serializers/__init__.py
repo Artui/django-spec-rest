@@ -27,6 +27,12 @@ class InvoiceInput(serializers.Serializer):
         return attrs
 
 
+class BlankInvoiceInput(serializers.Serializer):
+    """The body of the intake's second variant: a customer and nothing else."""
+
+    customer = serializers.CharField(max_length=200)
+
+
 class InvoiceSerializer(serializers.ModelSerializer):
     """An invoice as every route answers it, with the call's warnings beside it."""
 

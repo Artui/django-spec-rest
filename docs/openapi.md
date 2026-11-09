@@ -105,6 +105,20 @@ call `enable_openapi()` again after the reload.
   the wire refuses an empty body: every spec the route may run takes a body with
   a required field. A `DiscriminatedAction` with a variant taking no body, or
   none of whose fields is required, leaves it out.
+- **A `DiscriminatedAction`'s request** is one component, named
+  `{View}_{action}_Request`, whose schema is an `anyOf` over the body of each
+  variant that takes one, a body two variants share listed once. It is an `anyOf`
+  where drfs' `PolymorphicServiceSpec` documented a `oneOf`, because the edge drops
+  a key a variant does not declare: a body one variant takes is also valid for
+  another that declares fewer fields. Where no variant takes a body there is no
+  request body and no component. Each member is the body its variant would be
+  documented with on a plain route of the same method, so a decorated `PATCH`'s
+  variants are whole and a variant declaring `partial` is partial. Its responses
+  are the variants' merged per status: one body where the variants agree, an inline
+  `anyOf` where they differ, and a 400 always, since the discriminator may refuse.
+  Two operations whose component name is the same but whose members differ warn
+  and document their own `anyOf` inline. See
+  [One URL, several specs](reference/viewsets.md#one-url-several-specs).
 - **A Validator declaring `call_context`** is asked under the `rest` stamp, as
   dispatch asks it, so a field declared only to `rest` is in the body and a field
   declared only to another transport is not. A document describes the transport

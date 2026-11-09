@@ -153,6 +153,59 @@ decorator's value answers and the hook is never read. The decorator's own
 values are asked when it runs. The OpenAPI schema documents the status of the
 action, where it is an `int`; a callable documents the action's default.
 
+## One URL, several specs
+
+One spec per route or action stays the default. An endpoint that must keep one
+URL while the request chooses what runs takes a
+[`DiscriminatedAction`](types.md#discriminated-actions): a `discriminator`
+answering a key, and `specs` mapping each key to the kernel `ServiceSpec` serving
+it. It is an `action_specs` entry under `create`, `update`, `partial_update` or
+`destroy`, or the spec of a `@service_action`; `as_view()` refuses it under any
+other action (`list`, `retrieve` or a custom one's name), on a `SelectorViewSet`, and as a
+standalone view's `spec`, each refusal saying where it goes.
+
+```python
+INTAKE = DiscriminatedAction(
+    discriminator=lambda *, data: "draft" if "amount_cents" in data else "blank",
+    specs={"draft": CREATE_SPEC, "blank": BLANK_SPEC},
+)
+
+
+class IntakeViewSet(ServiceViewSet):
+    action_specs = {"create": INTAKE}
+```
+
+(`examples/invoices` serves this as `POST /intake/` and asserts it over HTTP and
+in the schema.) The discriminator is a sync callable declaring any of `request`,
+`data` (the raw `request.data`), `user`, `view` and `call_context`, or `**kwargs`,
+which is handed all but the last. An answer that is no key of `specs` is the
+author's mistake: a 500 naming the keys.
+
+Each variant is asked what a plain entry of that action is asked (its seeds, its
+lookup capture, its answers), and the chosen one runs as a plain entry would, its
+own checks deciding. So:
+
+- **A caller every variant refuses** is refused before the body is read and
+  before the discriminator runs, the first variant's denial answered: a 401 with
+  the authenticator's challenge where nobody signed in, otherwise a 403. A caller
+  some variant admits reaches the discriminator, and the chosen variant's checks
+  then decide.
+- **The row** is the chosen variant's own target selector's, as for any update or
+  destroy.
+- **Validation is the variant's.** A `PATCH` on the router's update route
+  (an `update` or `partial_update` entry) is validated partially, as for a plain
+  spec. A `@service_action` `PATCH` runs the chosen variant as declared, so it is
+  validated whole; a variant declaring `partial` is the way to a partial call
+  there.
+- **A callable `success_status` or `response_finalizer`** on such an action may
+  declare `variant`, the chosen key, to answer per variant
+  ([Per-action answers](#per-action-answers)).
+
+It is this transport's alone and never a kernel spec: `as_kernel_spec()` raises,
+and an agent or an MCP client registers each variant on its own. The OpenAPI
+schema documents the action as one request component over every variant's body
+(see [OpenAPI](../openapi.md#what-a-route-documents)).
+
 ## Full CRUD
 
 ::: django_spec_rest.viewsets.service_viewset.ServiceViewSet

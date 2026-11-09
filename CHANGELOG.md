@@ -25,6 +25,16 @@ carries; releases up to 0.62.0 are in
   `SerializerValidator`'s output does not move. Requires
   `django-service-specs>=0.30.0`.
 
+- **The docs and the example say what `DiscriminatedAction` does.** The viewsets
+  reference has a section on it (where it attaches, who is refused before the body
+  is read, the row, validation per variant, `variant` for a status or finalizer),
+  the OpenAPI page names its `{View}_{action}_Request` `anyOf` component and its
+  merged responses, and `examples/invoices` serves one as `POST /intake/`, asserted
+  over HTTP and in the schema by `make examples`. The moving page's off-HTTP
+  default now names the HTTP transports (`"rest"`, `"html"`) and says what it means
+  for each of `"agent"`, `"mcp"`, `"cli"` and an unstamped call, where it compared
+  `("agent", "mcp")` and left out spec-cli's value.
+
 ### Changed
 
 - **`django_spec_rest.W001` also reports a retrieve-only viewset.** A retrieve
