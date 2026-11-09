@@ -13,15 +13,19 @@ carries; releases up to 0.62.0 are in
 
 ### Fixed
 
-- **A labelled parameter no longer makes an OpenAPI 3.0 document invalid.** The
-  kernel states a labelled choice as an `anyOf` of `{"const", "title"}`, and 3.0,
-  drf-spectacular's default `OAS_VERSION`, has no `const`, so `validate_schema`
-  refused the document. A route capture a spec reads and a `filter_set`'s query
-  parameter now document such a choice as an `enum` of its values under 3.0, an
-  array's under `items`; the titles are dropped, since 3.0 has no place for them.
-  Under 3.1 and later the `anyOf` and its titles are kept. An `anyOf` holding
-  anything but constants, such as a nullable parameter's `{"type": "null"}`, is
-  left as the kernel wrote it.
+- **A nullable or labelled schema no longer makes an OpenAPI 3.0 document
+  invalid.** The kernel writes JSON Schema: a nullable field's type is
+  `[t, "null"]`, a labelled parameter choice an `anyOf` of `{"const", "title"}`,
+  and a labelled output choice a `oneOf` of the same. 3.0, drf-spectacular's
+  default `OAS_VERSION`, has neither a type list nor `const`, so
+  `validate_schema` refused the whole document. Under 3.0 such a schema is now
+  written as `nullable` and `enum` wherever the kernel's schema enters the
+  document: a request body, a response body, a route capture a spec reads and a
+  `filter_set`'s query parameter, nested under `properties` and `items` as
+  deep as they go. A choice and a null are one `enum` listing `null` beside
+  `nullable: true`. The titles are dropped, since 3.0 has no place for them.
+  Under 3.1 and later the schema is kept as the kernel writes it. What OPTIONS
+  answers is unchanged.
 
 ## [0.11.0] — 2026-11-09
 

@@ -52,6 +52,7 @@ from rest_framework.status import HTTP_204_NO_CONTENT
 
 from django_spec_rest.dispatch.kernel_edge import UNKNOWN_ARGUMENTS
 from django_spec_rest.openapi._caller_serializer_class import caller_serializer_class
+from django_spec_rest.openapi._lowered_for_the_document import lowered_for_the_document
 from django_spec_rest.openapi._resolve import (
     resolve_discriminated_action,
     resolve_selector_spec,
@@ -112,6 +113,10 @@ class ServiceAutoSchema(AutoSchema):
       is offered and one declared to another is not (``_caller_schema``). A
       body the wire refuses to go without says ``required``, which
       drf-spectacular leaves off a schema given whole (``_DemandedBody``).
+      Every schema the kernel writes reaches the document through
+      ``lowered_for_the_document``, so under OpenAPI 3.0 a nullable or labelled
+      one is ``nullable`` and ``enum``, in a request body, a response body and
+      a parameter alike.
     - **The response body** is a ``SerializerPresenter``'s serializer, or any
       other presenter's ``output_schema``, a list of rows where the spec
       presents rows (``_presents_rows``). A spec with no presenter documents
@@ -283,7 +288,9 @@ class ServiceAutoSchema(AutoSchema):
         types. Marked ``_DemandedBody`` where a key is required, since a schema
         given whole is otherwise documented optional
         (test_request_body_required's TestAPlainSpecOverARawSchema). Whether a
-        ``many`` spec's list is required is read before it is unwrapped.
+        ``many`` spec's list is required is read before it is unwrapped. The
+        schema is lowered for the document's OpenAPI version after it is
+        unwrapped (test_the_document_validates).
         """
         schema = self._caller_schema(spec)
         if not schema["properties"]:
@@ -291,6 +298,7 @@ class ServiceAutoSchema(AutoSchema):
         demanded = bool(schema.get("required"))
         if spec.many:
             schema = schema["properties"][spec.many_argument]
+        schema = lowered_for_the_document(schema)
         return OpenApiRequest(_DemandedBody(schema) if demanded else schema)
 
     def _caller_schema(self, spec: KernelServiceSpec) -> dict[str, Any]:
@@ -951,7 +959,12 @@ def _documented_as(capture: str) -> str:
 
 
 def _declared_path_parameter(variable: str, read: Parameter) -> Any:
-    """``variable`` as a path parameter, typed by the ``read`` a spec declares for it."""
+    """``variable`` as a path parameter, typed by the ``read`` a spec declares for it.
+
+    Its schema is lowered for the document's OpenAPI version, and drf-spectacular
+    drops ``nullable`` and ``default`` from a path parameter's schema itself
+    (test_the_document_validates).
+    """
     schema = dict(
         parameters_schema(Parameters.of(read), unknown_arguments=UNKNOWN_ARGUMENTS)["properties"][
             read.name
@@ -960,48 +973,10 @@ def _declared_path_parameter(variable: str, read: Parameter) -> Any:
     description = schema.pop("description", None)
     return build_parameter_type(
         name=variable,
-        schema=_spelled_for_the_document(schema),
+        schema=lowered_for_the_document(schema),
         location=OpenApiParameter.PATH,
         description=description,
     )
-
-
-def _spelled_for_the_document(schema: dict[str, Any]) -> dict[str, Any]:
-    """The kernel's parameter ``schema``, spelled so the document validates under its OpenAPI version.
-
-    The kernel states a labelled choice as an ``anyOf`` of ``{"const", "title"}``,
-    under ``items`` for an array. OpenAPI 3.0, drf-spectacular's default
-    ``OAS_VERSION``, has no ``const``, so under 3.0 such an ``anyOf`` becomes an
-    ``enum`` of the values in order, at the top of the schema and under its
-    ``items``; 3.0 has no place for the titles, so they are dropped. 3.1 and
-    later keep the ``anyOf`` and its titles
-    (test_labelled_parameters, test_spelled_for_the_document).
-    """
-    if not spectacular_settings.OAS_VERSION.startswith("3.0"):
-        return schema
-    spelled = _enum_of_constants(schema)
-    if "items" in spelled:
-        spelled = {**spelled, "items": _enum_of_constants(spelled["items"])}
-    return spelled
-
-
-def _enum_of_constants(schema: dict[str, Any]) -> dict[str, Any]:
-    """``schema`` with an ``anyOf`` made only of constants as an ``enum`` of their values.
-
-    An ``anyOf`` holding any other entry, such as the ``{"type": "null"}`` a
-    nullable parameter gains, admits more than its constants, so it stays.
-    Each conjunct of the guard has its own test in test_spelled_for_the_document:
-    the emptiness (test_an_empty_any_of_stays, since ``all`` over nothing is
-    true and an empty ``enum`` admits no value) and the constants
-    (test_an_any_of_holding_anything_but_constants_stays).
-    """
-    members = schema.get("anyOf")
-    if not members or not all("const" in member for member in members):
-        return schema
-    return {
-        **{key: value for key, value in schema.items() if key != "anyOf"},
-        "enum": [member["const"] for member in members],
-    }
 
 
 def _is_decorated_action(view: Any) -> bool:
@@ -1126,12 +1101,13 @@ def _presented(presenter: Presenter, *, rows: bool, wrap: bool) -> Any:
 
     A ``SerializerPresenter`` is its serializer class, over a list where it
     presents ``rows``. Any other presenter is the kernel's ``output_schema`` of
-    one row, an array of them where ``wrap`` asks, inside an
-    ``OpenApiResponse``: a bare ``dict`` would be read as a mapping of statuses.
+    one row, lowered for the document's OpenAPI version, an array of them where
+    ``wrap`` asks, inside an ``OpenApiResponse``: a bare ``dict`` would be read
+    as a mapping of statuses.
     """
     if isinstance(presenter, SerializerPresenter):
         return presenter.serializer_class(many=True) if rows else presenter.serializer_class
-    item = output_schema(presenter.output())
+    item = lowered_for_the_document(output_schema(presenter.output()))
     return OpenApiResponse(response=build_array_type(item) if wrap else item)
 
 
@@ -1141,7 +1117,8 @@ def _kernel_filter_parameters(filter_set: Any) -> list[Any]:
     One per ``filter_set_parameters`` entry, a range filter's two bounds
     included, each with the schema ``parameters_schema`` gives it under the
     edge's unknown-argument policy and its ``help`` as the parameter's
-    description. An array parameter keeps OpenAPI's default ``form`` style,
+    description, the schema lowered for the document's OpenAPI version. An
+    array parameter keeps OpenAPI's default ``form`` style,
     a repeated key, which the kernel's flat reader takes as it takes a comma
     list.
     """
@@ -1154,7 +1131,7 @@ def _kernel_filter_parameters(filter_set: Any) -> list[Any]:
         documented.append(
             build_parameter_type(
                 name=parameter.name,
-                schema=_spelled_for_the_document(schema),
+                schema=lowered_for_the_document(schema),
                 location=OpenApiParameter.QUERY,
                 required=parameter.required,
                 description=description,
