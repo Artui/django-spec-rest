@@ -963,7 +963,11 @@ def _declared_path_parameter(variable: str, read: Parameter) -> Any:
 
     Its schema is lowered for the document's OpenAPI version, and drf-spectacular
     drops ``nullable`` and ``default`` from a path parameter's schema itself
-    (test_the_document_validates).
+    (test_the_document_validates). A captured segment is always present, so
+    ``null`` is dropped from an ``enum`` too: left in, it would list a value
+    the segment cannot be where its ``nullable`` is no longer there to say so
+    (test_a_route_capture_is_an_enum), and an ``enum`` left with no value
+    would admit none (test_an_enum_of_nothing_but_null_is_no_enum).
     """
     schema = dict(
         parameters_schema(Parameters.of(read), unknown_arguments=UNKNOWN_ARGUMENTS)["properties"][
@@ -971,9 +975,16 @@ def _declared_path_parameter(variable: str, read: Parameter) -> Any:
         ]
     )
     description = schema.pop("description", None)
+    schema = dict(lowered_for_the_document(schema))
+    if "enum" in schema:
+        present = [value for value in schema["enum"] if value is not None]
+        if present:
+            schema["enum"] = present
+        else:
+            del schema["enum"]
     return build_parameter_type(
         name=variable,
-        schema=lowered_for_the_document(schema),
+        schema=schema,
         location=OpenApiParameter.PATH,
         description=description,
     )

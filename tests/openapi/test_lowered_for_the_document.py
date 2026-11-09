@@ -45,6 +45,10 @@ SHAPES: dict[str, tuple[dict[str, Any], dict[str, Any]]] = {
         {"type": ["string", "null"], "anyOf": [*_TITLED, {"type": "null"}]},
         {"type": "string", "nullable": True, "enum": ["a", "b", None]},
     ),
+    "labelled null of a non-nullable type": (
+        {"type": "string", "anyOf": [*_TITLED, {"type": "null"}]},
+        {"type": "string", "enum": ["a", "b", None]},
+    ),
     "labelled one of": (
         {"type": "string", "oneOf": _TITLED},
         {"type": "string", "enum": ["a", "b"]},
@@ -52,6 +56,10 @@ SHAPES: dict[str, tuple[dict[str, Any], dict[str, Any]]] = {
     "labelled one of null": (
         {"type": ["string", "null"], "oneOf": [*_TITLED, {"const": None}]},
         {"type": "string", "nullable": True, "enum": ["a", "b", None]},
+    ),
+    "labelled one of null of a non-nullable type": (
+        {"type": "string", "oneOf": [*_TITLED, {"const": None}]},
+        {"type": "string", "enum": ["a", "b", None]},
     ),
 }
 
@@ -163,23 +171,32 @@ class TestTheConstants:
         assert lowered_for_the_document(schema) == {"type": "string", "enum": ["b", "a"]}
 
     @pytest.mark.parametrize("nothing", [{"type": "null"}, {"const": None}])
-    def test_a_null_is_a_constant_of_null_and_makes_the_schema_nullable(
+    def test_a_null_is_a_constant_of_null_and_a_typeless_schema_gains_nullable(
         self, nothing: dict[str, Any]
     ) -> None:
+        # No ``type`` beside the choices: the schema admits null only through
+        # the ``enum`` the null is listed in, which 3.0 reads with ``nullable``.
+        # Without the ``"type" not in node`` conjunct this has no ``nullable``.
+        schema = {"anyOf": [{"const": "a"}, nothing]}
+        assert lowered_for_the_document(schema) == {"nullable": True, "enum": ["a", None]}
+
+    @pytest.mark.parametrize("nothing", [{"type": "null"}, {"const": None}])
+    def test_a_null_choice_does_not_make_a_plain_type_nullable(
+        self, nothing: dict[str, Any]
+    ) -> None:
+        # The ``type`` refuses null, so the field does: ``nullable`` would tell
+        # a client a value is fine that the server answers with 400. Without
+        # the ``"type" not in node`` conjunct this gains ``nullable``.
         schema = {"type": "string", "anyOf": [{"const": "a"}, nothing]}
-        assert lowered_for_the_document(schema) == {
-            "type": "string",
-            "nullable": True,
-            "enum": ["a", None],
-        }
+        assert lowered_for_the_document(schema) == {"type": "string", "enum": ["a", None]}
 
     def test_a_titled_null_is_a_constant_too(self) -> None:
         schema = {"type": "string", "anyOf": [{"const": "a"}, {"type": "null", "title": "None"}]}
-        assert lowered_for_the_document(schema) == {
-            "type": "string",
-            "nullable": True,
-            "enum": ["a", None],
-        }
+        assert lowered_for_the_document(schema) == {"type": "string", "enum": ["a", None]}
+
+    def test_a_titled_null_in_a_typeless_schema_makes_it_nullable(self) -> None:
+        schema = {"oneOf": [{"const": "a"}, {"const": None, "title": "Nothing"}]}
+        assert lowered_for_the_document(schema) == {"nullable": True, "enum": ["a", None]}
 
     def test_a_schema_made_nullable_by_its_type_and_its_constants_is_so_once(self) -> None:
         schema = {"type": ["string", "null"], "anyOf": [{"const": "a"}, {"type": "null"}]}
@@ -189,10 +206,13 @@ class TestTheConstants:
             "enum": ["a", None],
         }
 
-    def test_constants_without_a_null_do_not_make_it_nullable(self) -> None:
+    @pytest.mark.parametrize("typed", [{"type": "integer"}, {}])
+    def test_constants_without_a_null_do_not_make_it_nullable(self, typed: dict[str, Any]) -> None:
         # A constant of ``false`` or ``0`` is no null: the test is ``is None``.
-        schema = {"type": "integer", "anyOf": [{"const": 0}, {"const": 1}]}
-        assert lowered_for_the_document(schema) == {"type": "integer", "enum": [0, 1]}
+        # The typeless schema is the one the ``type`` conjunct lets through, so
+        # only the null operand keeps it non-nullable.
+        schema = {**typed, "anyOf": [{"const": 0}, {"const": 1}]}
+        assert lowered_for_the_document(schema) == {**typed, "enum": [0, 1]}
 
     def test_every_other_key_of_the_schema_stays(self) -> None:
         schema = {"type": "string", "description": "d", "default": "a", "anyOf": _TITLED}

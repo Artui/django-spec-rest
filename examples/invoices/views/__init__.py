@@ -15,9 +15,12 @@ from typing import Any
 from django_service_specs import (
     DEFAULT_POOL_SEEDS,
     Affordance,
+    Output,
+    OutputField,
     Parameter,
     Parameters,
     PermissionCheck,
+    Presenter,
     SelectorKind,
     SelectorSpec,
     ServiceSpec,
@@ -57,6 +60,38 @@ from invoices.services import (
 
 OPEN = (Unrestricted(),)
 PRESENTER = SerializerPresenter(InvoiceSerializer)
+
+# What an invoice has reached: nothing yet while it is a draft.
+STAGES = (("billed", "Billed"), ("settled", "Settled"))
+
+
+class InvoiceSummaryPresenter(Presenter):
+    """A presenter that is no serializer: the document's response is the kernel's ``output_schema``.
+
+    ``stage`` is a labelled choice that admits null, the shape the kernel writes
+    as JSON Schema (a type list, a ``oneOf`` of constants). Under OpenAPI 3.0,
+    drf-spectacular's default, the package writes it as ``nullable`` and an
+    ``enum``; ``OpenAPISchemaTests`` validates the project's default document.
+    """
+
+    def output(self) -> Output:
+        return Output(
+            (
+                OutputField("customer", "string"),
+                OutputField("status", "string", choices=Invoice.STATUS_CHOICES),
+                OutputField("stage", "string", choices=STAGES, nullable=True),
+            )
+        )
+
+    def present(self, value: Invoice) -> dict[str, Any]:
+        stage = {
+            Invoice.STATUS_DRAFT: None,
+            Invoice.STATUS_SENT: "billed",
+            Invoice.STATUS_PAID: "settled",
+            Invoice.STATUS_VOID: "settled",
+        }[value.status]
+        return {"customer": value.customer, "status": value.status, "stage": stage}
+
 
 # The seeds the viewset registers (``InvoiceViewSet.pool_seeds``). A callable
 # declaring ``sending_paused`` is handed its value. ``SEND_SPEC`` is served by
@@ -188,6 +223,13 @@ AUDIT_SPEC = SelectorSpec(
     presenter=PRESENTER,
 )
 
+SUMMARY_SPEC = SelectorSpec(
+    kind=SelectorKind.LIST,
+    selector=list_invoices,
+    permissions=OPEN,
+    presenter=InvoiceSummaryPresenter(),
+)
+
 SENT_SPEC = SelectorSpec(
     kind=SelectorKind.LIST,
     selector=sent_invoices,
@@ -232,6 +274,12 @@ class SentInvoiceListView(SelectorListView):
     """``GET /sent-invoices/``: one selector spec on a standalone view."""
 
     spec = SENT_SPEC
+
+
+class SummaryInvoiceListView(SelectorListView):
+    """``GET /invoice-summaries/``: rows presented by a presenter that is no serializer."""
+
+    spec = SUMMARY_SPEC
 
 
 class StaffInvoiceListView(SelectorListView):

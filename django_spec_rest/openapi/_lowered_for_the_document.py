@@ -22,10 +22,13 @@ def lowered_for_the_document(schema: dict[str, Any]) -> dict[str, Any]:
     - an ``anyOf`` or a ``oneOf`` made only of constants (a labelled choice) as
       an ``enum`` of their values in order, the titles dropped since 3.0 has no
       place for them. A ``{"type": "null"}`` or ``{"const": None}`` member is a
-      constant of ``null``: the ``enum`` lists ``None`` and the schema gains
-      ``nullable``, because 3.0 needs both to admit it. An empty one, or one
-      with any other member, is not an ``enum`` and stays, its members lowered
-      in turn. Nor is one beside an ``enum`` the schema already has.
+      constant of ``null``: the ``enum`` lists ``None``, and the schema gains
+      ``nullable`` only where it admits null, which a schema with a ``type``
+      does through the type list alone (already ``nullable`` by the first
+      rule), so a plain ``type`` beside a null choice stays non-nullable, as
+      the server refuses null for it. An empty one, or one with any other
+      member, is not an ``enum`` and stays, its members lowered in turn. Nor is
+      one beside an ``enum`` the schema already has.
 
     The walk goes where a schema holds a schema: the values of ``properties``,
     ``items``, ``additionalProperties`` when it is a mapping, and the members
@@ -51,7 +54,12 @@ def _lowered(schema: dict[str, Any]) -> dict[str, Any]:
             if values is not None:
                 del node[keyword]
                 node["enum"] = values
-                if any(value is None for value in values):
+                # Two operands, named by the tests that fail without each: a
+                # null among the values (test_constants_without_a_null_do_not_make_it_nullable),
+                # and no ``type`` (test_a_null_choice_does_not_make_a_plain_type_nullable).
+                # A ``type`` of ``t`` refuses null whatever the ``enum`` lists,
+                # and ``[t, "null"]`` is already ``nullable`` after ``_nullable``.
+                if any(value is None for value in values) and "type" not in node:
                     node["nullable"] = True
     if isinstance(node.get("properties"), dict):
         node["properties"] = {name: _walked(value) for name, value in node["properties"].items()}

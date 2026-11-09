@@ -8,6 +8,8 @@ from django.contrib.auth.models import AnonymousUser, User
 from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import DEFAULT_POOL_SEEDS, NotPermitted, dispatch
 from drf_spectacular.generators import SchemaGenerator
+from drf_spectacular.settings import patched_settings
+from drf_spectacular.validation import validate_schema
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -142,6 +144,21 @@ class FilterOffTheQueryStringTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("status", response.data)
+
+
+class APresenterThatIsNoSerializerTests(APITestCase):
+    """``InvoiceSummaryPresenter`` renders a row as a plain dict the kernel declares."""
+
+    def test_a_draft_has_no_stage_and_a_sent_invoice_is_billed(self) -> None:
+        _invoice(customer="Draft Co")
+        _invoice(customer="Sent Co", status=Invoice.STATUS_SENT)
+
+        rows = {row["customer"]: row for row in self.client.get("/invoice-summaries/").data}
+
+        self.assertEqual(
+            rows["Draft Co"], {"customer": "Draft Co", "status": "draft", "stage": None}
+        )
+        self.assertEqual(rows["Sent Co"]["stage"], "billed")
 
 
 class OptionsOnADetailRouteTests(APITestCase):
@@ -347,6 +364,46 @@ class OpenAPISchemaTests(APITestCase):
         for method, operation in operations.items():
             (parameter,) = [p for p in operation["parameters"] if p["in"] == "path"]
             self.assertEqual((method, parameter["schema"]), (method, {"type": "integer"}))
+
+    def _summary_properties(self, schema: dict) -> dict:
+        response = schema["paths"]["/invoice-summaries/"]["get"]["responses"]["200"]
+        return response["content"]["application/json"]["schema"]["items"]["properties"]
+
+    def test_the_default_document_validates(self) -> None:
+        # drf-spectacular's default ``OAS_VERSION`` is 3.0, which has neither a
+        # type list nor ``const``: the kernel's nullable, labelled output field
+        # of ``InvoiceSummaryPresenter`` is written as ``nullable`` and ``enum``
+        # for it, or ``validate_schema`` refuses the whole document.
+        validate_schema(self.schema)
+
+    def test_a_presenter_that_is_no_serializer_documents_a_nullable_choice_as_an_enum(
+        self,
+    ) -> None:
+        properties = self._summary_properties(self.schema)
+
+        self.assertEqual(
+            properties["stage"],
+            {"type": "string", "nullable": True, "enum": ["billed", "settled", None]},
+        )
+        self.assertEqual(
+            properties["status"], {"type": "string", "enum": ["draft", "sent", "paid", "void"]}
+        )
+
+    def test_a_json_schema_document_keeps_the_kernel_s_nullable_choice(self) -> None:
+        with patched_settings({"OAS_VERSION": "3.1.0"}):
+            schema = SchemaGenerator().get_schema(request=None, public=True)
+
+        validate_schema(schema)
+        stage = self._summary_properties(schema)["stage"]
+        self.assertEqual(stage["type"], ["string", "null"])
+        self.assertEqual(
+            stage["oneOf"],
+            [
+                {"const": "billed", "title": "Billed"},
+                {"const": "settled", "title": "Settled"},
+                {"const": None},
+            ],
+        )
 
     def test_a_permission_checked_route_documents_its_403(self) -> None:
         self.assertEqual(

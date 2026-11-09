@@ -229,10 +229,21 @@ call `enable_openapi()` again after the reload.
   has no type list and no `const`, so under it a nullable schema is written
   with `nullable: true`, and a labelled choice as an `enum` of its values in
   order, with `null` listed and `nullable: true` where it admits null. Titles
-  are dropped, since 3.0 has no place for them. This holds in a request body,
-  a response body, a `filter_set`'s query parameter and the read that types a
-  route capture (drf-spectacular leaves `nullable` off a path parameter
-  itself), nested as deep as they go.
+  are dropped, since 3.0 has no place for them. A choice that lists `null`
+  makes a schema `nullable` only where its `type` is not already one that
+  refuses it: a plain `type` beside a null choice stays non-nullable, as the
+  server answers `400` for a null there. This holds in a request body, a
+  response body, a `filter_set`'s query parameter and the read that types a
+  route capture, nested as deep as they go. drf-spectacular leaves `nullable`
+  off a path parameter itself, since a captured segment is always there, so a
+  capture's `enum` lists no `null` either (an `enum` left with no other value
+  is dropped). Inside a named component (a `DiscriminatedAction`'s
+  `{View}_{action}_Request`), drf-spectacular's enum hook moves the values to
+  `*Enum` components, as it does for a serializer's choice field, which can
+  rename a component they collide with. What an author writes in
+  `json_schema_extra` reaches the document as written, since no kernel adapter
+  writes those keys: under 3.0 it must be valid 3.0 (a `{"type": "null"}`
+  member or a numeric `exclusiveMinimum` is not).
 - **A viewset method with no spec behind it** is left out where `Allow` leaves
   it out: on a route serving some spec, a `create`, `update`,
   `partial_update` or `destroy` the router maps but the viewset declares no

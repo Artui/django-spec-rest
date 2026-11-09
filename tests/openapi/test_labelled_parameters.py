@@ -43,7 +43,7 @@ class _PostFilter(django_filters.FilterSet):
         fields: list[str] = []
 
 
-def _retrieve() -> Any:
+def _retrieve(**choices: Any) -> Any:
     return type(
         "_ByKind",
         (SelectorRetrieveView,),
@@ -52,7 +52,9 @@ def _retrieve() -> Any:
             "spec": SelectorSpec(
                 kind=SelectorKind.RETRIEVE,
                 selector=lambda *, kind: Author.objects.first(),
-                reads=Parameters.of(Parameter("kind", "string", required=True, **_LABELLED)),
+                reads=Parameters.of(
+                    Parameter("kind", "string", required=True, **(choices or _LABELLED))
+                ),
                 permissions=_OPEN,
                 presenter=SerializerPresenter(AuthorSerializer),
             ),
@@ -108,14 +110,40 @@ class TestALabelledPathParameter:
         }
         validate_schema(document)
 
+    def test_a_null_choice_is_no_value_of_a_segment(self) -> None:
+        # A captured segment is always present. drf-spectacular drops ``nullable``
+        # from a path parameter, so a ``null`` left in its ``enum`` would list a
+        # value nothing can send.
+        view = _retrieve(choices=["a", "b", None], choice_labels={"a": "A", "b": "B", None: "None"})
+        document = _document("3.0.3", ("by/<kind>/", view))
+        validate_schema(document)
+        assert _parameter(document, "/by/{kind}/", "kind")["schema"] == {
+            "type": "string",
+            "enum": ["a", "b"],
+        }
+
+    def test_an_enum_of_nothing_but_null_is_no_enum(self) -> None:
+        # An ``enum`` of no value admits none; the segment is a plain string.
+        document = _document("3.0.3", ("by/<kind>/", _retrieve(choices=[None])))
+        validate_schema(document)
+        assert _parameter(document, "/by/{kind}/", "kind")["schema"] == {"type": "string"}
+
 
 class TestALabelledFilter:
-    """A FilterSet's parameters are the kernel's: the next kernel labels a
-    ``ChoiceFilter`` and gives an ``OrderingFilter`` its choices, so this feeds
-    ``_kernel_filter_parameters`` that shape, as the kernel's own ``Parameter``s."""
+    """The one test here that feeds ``_kernel_filter_parameters`` a parameter the
+    kernel did not write.
 
-    @pytest.fixture(autouse=True)
-    def _labelled_filters(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    On the kernel this package floors on, a ``FilterSet``'s parameters carry no
+    labels (``ChoiceFilter`` is a bare ``enum``), so the real filters of
+    ``kernel_shapes.PostFilter`` never reach the lowering of an ``anyOf`` of
+    constants. This stays, monkeypatched, because nothing else kills the mutant
+    that removes ``lowered_for_the_document`` from ``_kernel_filter_parameters``;
+    ``test_the_document_validates`` holds the real filters.
+    """
+
+    def test_a_labelled_choice_and_ordering_are_enums_and_the_document_validates_under_3_0(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setattr(
             service_auto_schema,
             "filter_set_parameters",
@@ -124,10 +152,6 @@ class TestALabelledFilter:
                 Parameter("o", "array", items="string", **_LABELLED),
             ),
         )
-
-    def test_a_choice_and_an_ordering_are_enums_and_the_document_validates_under_3_0(
-        self,
-    ) -> None:
         document = _document("3.0.3", ("posts/", _list()))
         validate_schema(document)
         assert _parameter(document, "/posts/", "kind")["schema"] == {
@@ -138,9 +162,3 @@ class TestALabelledFilter:
             "type": "string",
             "enum": ["a", "b"],
         }
-
-    def test_they_keep_their_titles_under_3_1(self) -> None:
-        document = _document("3.1.0", ("posts/", _list()))
-        assert _parameter(document, "/posts/", "kind")["schema"]["anyOf"] == _ANY_OF
-        assert _parameter(document, "/posts/", "o")["schema"]["items"]["anyOf"] == _ANY_OF
-        validate_schema(document)

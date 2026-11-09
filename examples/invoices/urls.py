@@ -13,6 +13,7 @@ from invoices.views import (
     ReviewInvoiceListView,
     SentInvoiceListView,
     StaffInvoiceListView,
+    SummaryInvoiceListView,
 )
 
 router = DefaultRouter()
@@ -22,6 +23,7 @@ router.register("drafts", DraftInvoiceViewSet, basename="draft")
 
 urlpatterns = [
     path("sent-invoices/", SentInvoiceListView.as_view(), name="sent-invoices"),
+    path("invoice-summaries/", SummaryInvoiceListView.as_view(), name="invoice-summaries"),
     path("staff-invoices/", StaffInvoiceListView.as_view(), name="staff-invoices"),
     path("audited-invoices/", AuditInvoiceListView.as_view(), name="audited-invoices"),
     path("review-invoices/", ReviewInvoiceListView.as_view(), name="review-invoices"),
