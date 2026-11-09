@@ -26,8 +26,7 @@ carries; releases up to 0.62.0 are in
   `nullable: true` only where the field admits null: a plain `type` with a null
   choice stays non-nullable, as the server answers `400` for a null there. The
   titles are dropped, since 3.0 has no place for them. A route capture's `enum`
-  lists no `null`, since drf-spectacular drops `nullable` from a path parameter
-  and a segment is always present. Inside a named component (a
+  lists no `null` under any version, since a segment is always present. Inside a named component (a
   `DiscriminatedAction`'s request), drf-spectacular's enum hook moves the values
   to `*Enum` components, as it does for a serializer's choice field, which can
   rename a component they collide with. What an author writes in

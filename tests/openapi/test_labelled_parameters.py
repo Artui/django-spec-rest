@@ -122,6 +122,16 @@ class TestALabelledPathParameter:
             "enum": ["a", "b"],
         }
 
+    def test_a_null_choice_is_no_value_of_a_segment_under_3_1_either(self) -> None:
+        # The one place 3.1 is not the kernel's schema as written: the reason
+        # is the segment, not the version.
+        document = _document("3.1.0", ("by/<kind>/", _retrieve(choices=["a", "b", None])))
+        validate_schema(document)
+        assert _parameter(document, "/by/{kind}/", "kind")["schema"] == {
+            "type": "string",
+            "enum": ["a", "b"],
+        }
+
     def test_an_enum_of_nothing_but_null_is_no_enum(self) -> None:
         # An ``enum`` of no value admits none; the segment is a plain string.
         document = _document("3.0.3", ("by/<kind>/", _retrieve(choices=[None])))
