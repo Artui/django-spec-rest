@@ -15,7 +15,14 @@ from typing import Any
 
 import pytest
 from django.urls import path
-from django_service_specs import ServiceSpec, Unrestricted
+from django_service_specs import (
+    Parameter,
+    Parameters,
+    SelectorKind,
+    SelectorSpec,
+    ServiceSpec,
+    Unrestricted,
+)
 from drf_spectacular.generators import SchemaGenerator
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import serializers
@@ -435,3 +442,33 @@ def test_a_validator_s_400_stays_beside_the_success_statuses(schema: dict[str, A
         request=None, public=True
     )
     assert set(_responses(document, "/v/")) == {"201", "204", "400"}
+
+
+def test_a_destroy_returning_a_value_answers_a_200_its_document_leaves_out() -> None:
+    # The limit the docs state: a destroy's default is the 204, so that is what it
+    # documents, and a bodyless 200 on every one would mislead more than it tells.
+    def _returns_a_value(**_: Any) -> dict[str, bool]:
+        return {"raw": True}
+
+    class ValuedDestroy(ServiceViewSet):
+        queryset = Author.objects.all()
+        action_specs = {
+            "destroy": ServiceSpec(
+                service=_returns_a_value,
+                permissions=_OPEN,
+                instance_selector_spec=SelectorSpec(
+                    kind=SelectorKind.RETRIEVE,
+                    selector=lambda *, pk: Author.objects.filter(pk=pk).first(),
+                    reads=Parameters.of(Parameter("pk", "integer", required=True)),
+                ),
+            )
+        }
+
+    view = ValuedDestroy.as_view({"delete": "destroy"})
+    author = Author.objects.create(name="a")
+    response = view(APIRequestFactory().delete("/"), pk=author.pk)
+    assert (response.status_code, response.data) == (200, {"raw": True})
+    document = SchemaGenerator(patterns=[path("d/<int:pk>/", view)]).get_schema(
+        request=None, public=True
+    )
+    assert set(document["paths"]["/d/{id}/"]["delete"]["responses"]) == {"204"}

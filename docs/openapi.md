@@ -148,8 +148,9 @@ call `enable_openapi()` again after the reload.
   default, with the value, where it returns anything else; `allow_none` is a
   declaration and no document can read what a call returns, so the document lists
   both with no schema: `201` and `204` on a create, `200` and `204` on a custom
-  action. A destroy lists `204` alone, its default being the `204`, and a status
-  the view sets is the one status. A declared success body replaces both and goes
+  action. A destroy lists `204` alone, its default being the `204`; one whose
+  service returns a value with no presenter answers an undocumented `200`, so give
+  it a presenter or declare the response. A status the view sets is the one status. A declared success body replaces both and goes
   to the first, the default. A `DiscriminatedAction`
   lists each status any of its variants answers.
 - **A 400** is documented wherever the spec declares a validator, because that
