@@ -119,7 +119,7 @@ drfs field maps onto one of its seats:
 | a `QueryParam` no callable names | `shapes=Parameters.of(...)` |
 | `NotClientInput`, a hidden lookup key | a typed `kwargs` provider filling the key, which the kernel then keeps out of the caller's arguments (`server_owned_keys`) |
 | `InputRequired`, `InputDescription("...")` on a key the selector reads | `reads=Parameters.of(Parameter(..., required=True, help="..."))`, as [worked below](#a-nested-routes-captures) |
-| `PolymorphicServiceSpec` | one kernel spec per route or action stays the default. For an endpoint that must keep one URL, an `action_specs` entry (or `@service_action`) of `DiscriminatedAction(discriminator=, specs=)`, which is this package's alone: agents and MCP register each variant on its own. Its `{View}_{action}_Request` OpenAPI component comes back under that name, as an `anyOf` where drfs' was a `oneOf`: a body two variants accept is valid for both. `permission_strategy=` is gone: the chosen variant's checks always decide. A callable `success_status` or `response_finalizer` on such an action may declare `variant`, the chosen key, to answer per variant |
+| `PolymorphicServiceSpec` | one kernel spec per route or action stays the default. For an endpoint that must keep one URL, an `action_specs` entry (or `@service_action`) of `DiscriminatedAction(discriminator=, specs=)`, which is this package's alone: agents and MCP register each variant on its own. Its `{View}_{action}_Request` OpenAPI component comes back under that name, as an `anyOf` where drfs' was a `oneOf`: a body two variants accept is valid for both. A `@service_action` `PATCH` over it runs the chosen variant as declared, so it is validated whole and documented whole; a variant declaring `partial` is the way to a partial call. `permission_strategy=` is gone: the chosen variant's checks always decide. A callable `success_status` or `response_finalizer` on such an action may declare `variant`, the chosen key, to answer per variant |
 | `TargetGuard` | the kernel's preconditions and object permission, which see the row |
 | `OfflineContract.field_audiences` | `SerializerPresenter(S, field_audiences={...})`, layered over the serializer's own markings at the top level; a name the serializer does not output is refused when the output is read. HTTP names no audience, so a REST response is unchanged |
 | `OfflineContract.url_kwargs` | the selector's `reads=Parameters.of(Parameter("pk", "integer", required=True))`. A capture the model must never see is a server-supplied argument instead: `tool_server_arguments` on django-spec-agents' toolset, `server_arguments=` on a django-spec-mcp tool binding |
@@ -163,12 +163,31 @@ and compares what the transport stamped under the `"transport"` key:
 ```python
 from django_service_specs import call_transport
 
+# The transports that serve HTTP: this package's views, and django-spec-html's.
+OVER_HTTP = ("rest", "html")
+
 
 def off_http_defaults(*, call_context):
-    if call_transport(call_context) in ("agent", "mcp"):
+    if call_transport(call_context) not in OVER_HTTP:
         return {"default_query": "..."}
     return {}
 ```
+
+Naming the HTTP transports rather than the others is what makes the default hold
+for every one that is not:
+
+| `call_transport(call_context)` | Served by | Over HTTP | The example's default |
+| --- | --- | --- | --- |
+| `"rest"` | this package's views and viewsets (`REST_TRANSPORT`) | yes | not applied |
+| `"html"` | `django-spec-html` | yes | not applied |
+| `"agent"` | `django-spec-agents`' toolset | no | applied |
+| `"mcp"` | `django-spec-mcp` | no | applied |
+| `"cli"` | `django-spec-cli`' management commands | no | applied |
+| `None` | a call no transport stamped, such as the kernel's own `dispatch` | no | applied |
+
+A transport added later counts as off HTTP, so one that serves HTTP is added to
+the tuple. Comparing the other way (`in ("agent", "mcp")`) would leave out
+`"cli"` and `None`, and every off-HTTP transport added later.
 
 `call_transport` is in the kernel from 0.28.0, and a transport stamps its own
 name from the release that adopts the key. A view of this package stamps

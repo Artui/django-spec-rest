@@ -14,6 +14,11 @@ def create_invoice(*, data: dict[str, Any]) -> Invoice:
     return Invoice.objects.create(**data)
 
 
+def create_blank_invoice(*, data: dict[str, Any]) -> Invoice:
+    """A draft for nothing yet: the amount is filled in by a later update."""
+    return Invoice.objects.create(customer=data["customer"], amount_cents=0)
+
+
 def update_invoice(*, instance: Invoice, data: dict[str, Any]) -> Invoice:
     if instance.status != Invoice.STATUS_DRAFT:
         # 409: the request is well formed, but the row's state forbids it.

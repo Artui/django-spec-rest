@@ -426,6 +426,66 @@ class OpenAPISchemaTests(APITestCase):
         self.assertEqual(operation["responses"]["201"], created["responses"]["201"])
 
 
+class ADiscriminatedActionTests(APITestCase):
+    """``IntakeViewSet``: one ``create`` URL, the body choosing between two specs."""
+
+    def test_a_body_naming_an_amount_is_the_draft_variant(self) -> None:
+        response = self.client.post(
+            "/intake/", {"customer": "Acme", "amount_cents": 4200}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(response.data["amount_cents"], 4200)
+
+    def test_any_other_body_is_the_blank_variant(self) -> None:
+        response = self.client.post("/intake/", {"customer": "Acme"}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertEqual(response.data["amount_cents"], 0)
+        self.assertEqual(Invoice.objects.get(pk=response.data["id"]).customer, "Acme")
+
+    def test_the_chosen_variant_validates_the_body(self) -> None:
+        # The draft variant refuses what the blank one would have taken.
+        draft = self.client.post(
+            "/intake/", {"customer": "Acme", "amount_cents": -1}, format="json"
+        )
+        blank = self.client.post("/intake/", {}, format="json")
+
+        self.assertEqual(draft.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(set(draft.data), {"amount_cents"})
+        self.assertEqual(blank.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(set(blank.data), {"customer"})
+        self.assertEqual(Invoice.objects.count(), 0)
+
+    def test_only_the_actions_it_composes_are_routed(self) -> None:
+        self.assertEqual(
+            self.client.get("/intake/").status_code, status.HTTP_405_METHOD_NOT_ALLOWED
+        )
+        row = _invoice()
+        self.assertEqual(
+            self.client.get(f"/intake/{row.pk}/").status_code, status.HTTP_404_NOT_FOUND
+        )
+
+    def test_the_request_is_one_component_over_both_bodies(self) -> None:
+        schema = SchemaGenerator().get_schema(request=None, public=True)
+        operation = schema["paths"]["/intake/"]["post"]
+
+        body = operation["requestBody"]
+        self.assertTrue(body["required"])
+        ref = body["content"]["application/json"]["schema"]["$ref"]
+        self.assertEqual(ref.rsplit("/", 1)[-1], "IntakeViewSet_create_Request")
+        component = schema["components"]["schemas"]["IntakeViewSet_create_Request"]
+        # ``anyOf``, not ``oneOf``: a full draft's body is valid for the blank
+        # variant's too, since the edge drops a key a variant does not declare.
+        self.assertEqual(
+            [member["$ref"].rsplit("/", 1)[-1] for member in component["anyOf"]],
+            ["InvoiceInput", "BlankInvoiceInput"],
+        )
+        self.assertIn("201", operation["responses"])
+        # Always documented: the discriminator may refuse.
+        self.assertIn("400", operation["responses"])
+
+
 class SharedSerializerContextTests(APITestCase):
     """The input serializer writes a key the output serializer reads."""
 
