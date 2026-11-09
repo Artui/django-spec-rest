@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import dataclasses
+import operator
 from collections.abc import Callable, Iterable, Mapping, MutableMapping
 from typing import Any
 
 from django.core.exceptions import ImproperlyConfigured
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.utils.datastructures import MultiValueDict
 from django_service_specs.parameters.parameters import Parameter, Parameters
 from django_service_specs.pool.reserved_pool_seeds import RESERVED_POOL_SEEDS
 from django_service_specs.validation.validated import Validated
@@ -106,7 +108,7 @@ class SerializerValidator(Validator):
     ``validated()`` hands the service ``data``, the serializer's
     ``validated_data`` - the validated mapping, or the dataclass instance a
     ``DataclassSerializer`` builds - and the bound serializer is bound for the
-    call as ``serializer``. ``values`` follow what ``validated_data`` is: a
+    call as ``serializer``, its ``save()`` the DRF one. ``values`` follow what ``validated_data`` is: a
     mapping's entries, keyed as DRF keys them, by each field's ``source``; a dataclass
     instance's ``__init__`` fields, whether a dataclass was declared or a
     ``DataclassSerializer`` subclass was; and nothing for any other object a
@@ -130,6 +132,10 @@ class SerializerValidator(Validator):
     back over the key in a
     mapping ``data`` (see ``_lay_back``). A dataclass instance is ``data`` as
     built, and a ``many`` call's rows are neither validated apart nor laid back.
+    **A validated ``None`` for a file field is the kernel's clear value,**
+    ``False``, in ``data`` and the values, where the input is no form (see
+    ``_cleared``), so a ``null`` a field's ``allow_null`` lets through clears the
+    file a service writes with ``update_from_input``.
 
     **A partial call over a dataclass is refused**, a ``DataclassSerializer``
     subclass included: one builds its instance from every field, and a field
@@ -332,7 +338,7 @@ class SerializerValidator(Validator):
         )
         if not serializer.is_valid():
             raise DRFInvalidArguments(_by_row(serializer.errors, indices))
-        data: list[Any] = list(serializer.validated_data)
+        data: list[Any] = _cleared(serializer, list(serializer.validated_data))
         return Validated(
             values={many_argument: [_values(row) for row in data]},
             data=data,
@@ -349,6 +355,14 @@ class SerializerValidator(Validator):
         data: Any = serializer.validated_data
         held = _server_values(serializer, server_values(self, context.principal))
         _lay_back(data, serializer, held)
+        # After the lay-back, so the server's ``None`` for a file field clears
+        # as the client's does (test_a_view_hook_s_null_clears_the_file_too). A
+        # form sends no null: DRF reads its blank as ``None``, which keeps the
+        # file as it always did (test_a_form_s_blank_keeps_the_file, which fails
+        # without the check).
+        if not isinstance(serializer.initial_data, MultiValueDict):
+            data = _cleared(serializer, data)
+            held = {name: _cleared(serializer.fields[name], value) for name, value in held.items()}
         values = _values(data)
         # Each server value is its parameter's, whatever ``data`` became: a
         # ``validate()`` that dropped the key
@@ -604,8 +618,9 @@ def _lay_back(data: Any, serializer: serializers.Serializer, held: Mapping[str, 
     """Each of ``held`` written back over its field's ``source`` key in ``data``, where it still is.
 
     So the server's value for a field is that field's value in the call's
-    ``data`` and the bound serializer's ``validated_data``, which ``data`` is,
-    as it is for the service's parameter (``_handed``)
+    ``data`` and the bound serializer's ``validated_data``, which ``data`` is
+    but where a file is cleared (``_cleared``), as it is for the service's
+    parameter (``_handed``)
     (test_a_view_hook_s_value_outranks_a_second_route_over_http and its
     form-body and either-core twins). A dotted ``source`` is written where it nests
     (test_a_dotted_source_is_laid_back_where_it_nests), and not at all where a
@@ -632,6 +647,60 @@ def _lay_back(data: Any, serializer: serializers.Serializer, held: Mapping[str, 
             target = target.get(key) if isinstance(target, Mapping) else None
         if isinstance(target, MutableMapping) and last in target:
             target[last] = value
+
+
+def _cleared(field: serializers.Field | None, value: Any) -> Any:
+    """``value`` as ``field`` validated it, each file field's ``None`` the kernel's ``False``.
+
+    The kernel writes a file field as a ``ModelForm`` does: ``None`` keeps the
+    file the row holds and ``False`` clears it (``update_from_input``). So
+    ``False`` is what a ``null`` an ``allow_null`` field took means to a service
+    writing ``data``, or a parameter, through it (test_a_null_clears_the_file).
+
+    A new mapping where a file is cleared, and ``value`` itself where none is
+    (test_data_with_nothing_to_clear_is_the_bound_serializer_s_own), so the bound
+    serializer's ``validated_data`` keeps DRF's ``None``: its ``save()`` writes
+    ``None`` as no file, and raises on ``False``
+    (test_serializer_save_clears_the_file_as_it_did). A nested serializer's file
+    is read through the nesting (test_a_nested_serializer_s_file_is_cleared), a
+    ``source="*"`` one's in the mapping it flattens into
+    (test_a_flattened_serializer_s_file_is_cleared), and a nested list's and a
+    ``many`` call's in each row (test_each_row_of_a_nested_many_is_cleared,
+    test_a_bulk_row_s_null_is_handed_the_clear_value), a ``null`` for the list
+    itself left one (test_a_null_nested_many_stays_null). Anything else a
+    serializer validated into is as built, a dataclass instance
+    (test_a_dataclass_s_field_keeps_its_none), whose declared field ``False`` is
+    no value of, among them.
+    """
+    if isinstance(field, serializers.FileField):
+        return False if value is None else value
+    if isinstance(field, serializers.ListSerializer):
+        if not isinstance(value, list):
+            return value
+        rows = [_cleared(field.child, row) for row in value]
+        return value if all(map(operator.is_, rows, value)) else rows
+    if isinstance(field, serializers.Serializer):
+        for child in field.fields.values():
+            attrs = child.source_attrs
+            value = _cleared_at(value, attrs, child) if attrs else _cleared(child, value)
+    return value
+
+
+def _cleared_at(value: Any, attrs: list[str], field: serializers.Field) -> Any:
+    """``value`` with what ``field`` validated at ``attrs`` cleared, or itself if nothing changed.
+
+    One arc to coverage, so each condition is named by the test that fails
+    without it: the mapping by test_a_nesting_a_validate_replaced_is_left_as_built
+    and test_an_object_a_validate_returns_is_data_as_built, which read a key of no
+    mapping, and the key by test_a_patch_leaving_the_file_out_keeps_it, a partial
+    call's unsent key.
+    """
+    if not isinstance(value, Mapping) or attrs[0] not in value:
+        return value
+    head, *rest = attrs
+    held = value[head]
+    cleared = _cleared_at(held, rest, field) if rest else _cleared(field, held)
+    return value if cleared is held else {**value, head: cleared}
 
 
 def _by_row(errors: Any, indices: list[int]) -> dict[Any, Any]:

@@ -181,3 +181,13 @@ class Annotation(models.Model):
 
     class Meta:
         app_label = "testapp"
+
+
+class Document(models.Model):
+    """A row holding a file, for what a client's ``null`` for it writes."""
+
+    title = models.CharField(max_length=100, default="")
+    upload = models.FileField(upload_to="documents", blank=True)
+
+    class Meta:
+        app_label = "testapp"

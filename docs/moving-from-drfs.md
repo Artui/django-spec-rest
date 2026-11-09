@@ -369,6 +369,14 @@ The query string is read by the kernel's flat reader:
   `DataclassValidator` is validated whole on a PATCH and answers 400 for a
   missing field. Plain DRF answers a PATCH of `{}` to a `ModelSerializer` with
   200 and leaves the row as it was, so the 500 is the service's, not DRF's.
+- **A JSON `null` for a file field clears the file where the field declares
+  `allow_null`, and is refused where it does not.** The service's `data` and
+  parameter hold `False`, the kernel's clear value, which `update_from_input`
+  writes as no file; the bound serializer keeps DRF's `None`, so
+  `serializer.save()` clears it too. A service reading the value itself must
+  read `False` as "no file". A form body is unchanged: DRF's blank for the field
+  keeps the file, and a `FormValidator`'s clear checkbox clears it. A dataclass's
+  field stays `None`, as declared, so a service writing one keeps the file.
 - **A body that is no object answers `{"detail": "The body must be an object;
   got list."}`**, where drfs answered `{"non_field_errors": ["Invalid data.
   Expected a dictionary, but got list."]}`. Both are a 400.
