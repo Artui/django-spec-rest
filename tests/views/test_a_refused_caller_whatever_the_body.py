@@ -990,3 +990,23 @@ def test_a_hook_raising_what_a_read_raises_is_judged_like_a_read() -> None:
     assert _post(view, {}, username=None).status_code == 401
     admitted = _post(view, {}, username="editor")
     assert (admitted.status_code, admitted.data["detail"]) == (400, "Bad.")
+
+
+def _reads_the_body_in_initial(self: Any) -> list[Any]:
+    _ = self.request.data
+    return []
+
+
+@pytest.mark.parametrize("override", ["get_permissions", "get_throttles"])
+def test_an_override_reading_the_body_in_initial_answers_what_the_read_raises(
+    override: str,
+) -> None:
+    """DRF's ``initial()`` runs before the edge asks the checks, so nothing judges this read."""
+    view = _hooked(
+        _check("kernel-check"), [BasicAuthentication], **{override: _reads_the_body_in_initial}
+    )
+    response = _post_raw(view, "unparseable", username=None)
+    assert (response.status_code, response.data["detail"].code) == (400, "parse_error")
+    # The same caller with no such override is told to sign in, so the read is what answered.
+    no_override = _hooked(_check("kernel-check"), [BasicAuthentication])
+    assert _post_raw(no_override, "unparseable", username=None).status_code == 401
