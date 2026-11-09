@@ -27,6 +27,11 @@ carries; releases up to 0.62.0 are in
 
 ### Fixed
 
+- **`@selector_action` refuses a spec that is not a `SelectorSpec` where it is
+  decorated.** A `ServiceSpec`, a `DiscriminatedAction` or anything else failed
+  as an `AttributeError` at `spec.kind`, saying nothing of what to do. It is now
+  an `ImproperlyConfigured` naming the action and the way out: a write goes to
+  `@service_action`, anything else wants the `SelectorSpec` the action reads through.
 - **A `@service_action` `PATCH` is documented as the wire validates it.** The
   action runs its spec as declared, so its body is validated whole, and the
   document no longer calls it partial: its `required` list is the one the wire
