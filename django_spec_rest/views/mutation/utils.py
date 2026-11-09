@@ -15,14 +15,15 @@ import dataclasses
 from collections.abc import Callable
 from typing import Any, Literal
 
-from django.core.exceptions import ImproperlyConfigured
+from django.core.exceptions import ImproperlyConfigured, SuspiciousOperation
 from django.db.models import Model
+from django.http.request import UnreadablePostError
 from django_service_specs.dispatch.present import present
 from django_service_specs.pool.resolve_callable_kwargs import resolve_callable_kwargs
 from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
 from django_service_specs.types.unset import UNSET
 from rest_framework import status as drf_status
-from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import NotFound, ParseError, UnsupportedMediaType
 from rest_framework.request import Request
 from rest_framework.response import Response
 
@@ -35,6 +36,7 @@ from django_spec_rest.dispatch.kernel_edge import (
 )
 from django_spec_rest.service_specs.kernel_spec_variant import kernel_spec_variant
 from django_spec_rest.types.discriminated_action import DiscriminatedAction
+from django_spec_rest.types.view_hooks import ViewHooks
 from django_spec_rest.views.mutation.apply_response_finalizer import (
     apply_response_finalizer,
 )
@@ -48,6 +50,16 @@ from django_spec_rest.views.utils import (
     view_call_context,
     view_pool_seeds,
 )
+
+_FAILED_BODY_READS = (ParseError, UnsupportedMediaType, SuspiciousOperation, UnreadablePostError)
+"""What reading ``request.data`` raises for what a client sent, and a view hook may read it.
+
+DRF's two, and Django's own: too many form fields or an oversized body, a
+``SuspiciousOperation``, and a client gone mid-read. Each held by a case of
+test_a_refused_caller_whatever_the_body's
+test_a_refused_caller_is_refused_where_a_view_hook_reads_the_body_first (the
+first two), test_a_refused_caller_is_refused_where_a_hook_s_read_raises_django_s_own
+and test_a_refused_caller_is_refused_where_a_hook_s_read_finds_the_client_gone."""
 
 
 def status_for_a_body(status: int) -> int:
@@ -126,7 +138,7 @@ def dispatch_mutation_for_spec(
         request=request,
         call_context=view_call_context(view, request),
         target=UNSET if instance is None else instance,
-        view_hooks=resolve_view_hooks(view, request, instance=resolved),
+        view_hooks=_view_hooks(view, request, spec, instance=resolved),
         on_target=lambda found: _object_permissions(view, request, found),
         pool_seeds=view_pool_seeds(view),
     )
@@ -179,6 +191,43 @@ def dispatch_mutation_for_spec(
         data=result.data,
         variant=variant,
     )
+
+
+def _view_hooks(
+    view: Any, request: Request, spec: KernelServiceSpec, *, instance: Any
+) -> ViewHooks:
+    """The view's hook chains for this call, a failed read of the body judged where a hook made it.
+
+    The hooks run before the edge, since what they answer is shown to the
+    spec's checks (test_a_hook_runs_before_the_checks_and_its_value_is_shown_to_them),
+    so the edge's own judgment of an unreadable body (``_is_form_body``) comes too
+    late for a read one of them makes. So that read is judged here, on no
+    arguments, and a caller the checks refuse is told that, whatever it sent
+    (test_a_refused_caller_is_refused_where_a_view_hook_reads_the_body_first). An
+    admitted caller is told what the read raised, the same exception.
+
+    Only on the failure. The body is not read ahead of the hooks, where a hook
+    reading the raw bytes of a multipart request would find them gone
+    (test_a_hook_may_read_the_raw_body_of_a_multipart_request), and a hook's other
+    exceptions leave as they did, unjudged
+    (test_a_hook_s_own_refusal_is_answered_before_the_checks_as_before). Told apart
+    by class, so a hook raising ``ParseError`` itself is judged as a read that did
+    (test_a_hook_raising_what_a_read_raises_is_judged_like_a_read). ``spec`` is the
+    view's declaration, the one OPTIONS asks of and a denial is compared with
+    (``_check_denied``), since no twin of it is built until the edge runs.
+    """
+    try:
+        return resolve_view_hooks(view, request, instance=instance)
+    except _FAILED_BODY_READS:
+        with answering_refusals(request) as refused:
+            refused.spec = spec
+            judge_without_arguments(
+                spec,
+                principal=request.user,
+                call_context=view_call_context(view, request),
+                pool_seeds=view_pool_seeds(view),
+            )
+        raise
 
 
 def dispatch_discriminated_action(
