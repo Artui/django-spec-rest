@@ -25,6 +25,20 @@ carries; releases up to 0.62.0 are in
   `SerializerValidator`'s output does not move. Requires
   `django-service-specs>=0.30.0`.
 
+### Changed
+
+- **`django_spec_rest.W001` also reports a retrieve-only viewset.** A retrieve
+  ignores `get_queryset()` as a write or a list does, so tenant scoping left in an
+  override let a `GET` read another tenant's row with no error, and the guard said
+  nothing. `as_view()` now reports an override beside any spec, whatever its kind,
+  and `spec_rows_scoped_by_selector = True` silences it as it does the others. A
+  viewset that overrides `get_queryset()` and serves only `retrieve` specs, which
+  built silent before, now warns once at `as_view()`; set the attribute once each
+  selector scopes its own rows. The warning's text now reads "serves a spec", and
+  the reference page says that a router-mounted viewset's `file:line` is DRF's
+  `rest_framework/routers.py`, since the router calls `as_view()`; the text names
+  the class.
+
 ### Fixed
 
 - **`@selector_action` refuses a spec that is not a `SelectorSpec` where it is

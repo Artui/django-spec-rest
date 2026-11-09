@@ -259,8 +259,8 @@ over:
   `user`): left where it was, a `PATCH` or `DELETE` reaches another tenant's
   row with no error. DRF's `get_object()` ran the backends, so a backend that
   scoped a tenant's rows there no longer does, and nothing reports it, since
-  most backends are plain list filters. A `get_queryset()` override beside a
-  write or list spec is reported at `as_view()`
+  most backends are plain list filters. A `get_queryset()` override beside
+  any spec, a retrieve included, is reported at `as_view()`
   ([`django_spec_rest.W001`](reference/viewsets.md#the-row-scoping-warning)).
   The reverse holds for an action with no spec: DRF's
   fallback `retrieve` and a custom `@action` reading `self.get_queryset()`

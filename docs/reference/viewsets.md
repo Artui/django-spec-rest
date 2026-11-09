@@ -47,22 +47,31 @@ drf-spectacular finds no model to type it from, as on a viewset with no
 
 A spec's rows are its selector's, so a `get_queryset()` override does not scope
 them, and tenant scoping left in one lets a `PATCH` or `DELETE` reach another
-tenant's row with no error. `as_view()` reports a viewset that overrides it
-beside a write spec or a list spec, with a `GetQuerysetScopeWarning` whose text
-begins with the stable id **`django_spec_rest.W001`** and names the class:
+tenant's row, and a `GET` read it, with no error. `as_view()` reports a viewset
+that overrides it beside any spec (a write, a list or a retrieve) with a
+`GetQuerysetScopeWarning` whose text begins with the stable id
+**`django_spec_rest.W001`** and names the class:
 
 ```text
-django_spec_rest.W001: myapp.views.InvoiceViewSet overrides get_queryset() (on InvoiceViewSet) and serves a write or list spec, ...
+django_spec_rest.W001: myapp.views.InvoiceViewSet overrides get_queryset() (on InvoiceViewSet) and serves a spec, ...
 ```
 
 An override counts on any class below this package's bases and DRF's, a mixin
-listed after them included, since its `super()` runs. A write spec or a list
-spec counts under `action_specs`, an `as_view(action_specs=...)` included, and
-under `@service_action` or `@selector_action`. A viewset with no override, or
-serving only retrieve specs and actions with no spec, is not reported, and
-neither is a backend in `filter_backends`, since most are plain list filters
+listed after them included, since its `super()` runs. A spec counts under
+`action_specs`, an `as_view(action_specs=...)` included, and under
+`@service_action` or `@selector_action`, whatever its kind: a viewset serving
+only a `retrieve` spec is reported as one serving a write or a list is. A
+viewset with no override, or serving only actions with no spec, is not
+reported (those take their rows from `get_queryset()`), and neither is a
+backend in `filter_backends`, since most are plain list filters
 ([Moving from djangorestframework-services](../moving-from-drfs.md#views-and-viewsets)
 says what changes for one that scoped a tenant).
+
+The warning's `file:line` is the line that called `as_view()`. A viewset
+mounted by hand is reported at your `urls.py` line. One mounted through a
+router is reported at DRF's `rest_framework/routers.py`, which is where the
+router calls `as_view()`, so read the class the text names rather than the
+location.
 
 An override can be right to stay: DRF's `DjangoModelPermissions` asks
 `get_queryset()` for the model it checks. Once each selector scopes its own
