@@ -33,6 +33,12 @@ class BlankInvoiceInput(serializers.Serializer):
     customer = serializers.CharField(max_length=200)
 
 
+class ReceiptInput(serializers.Serializer):
+    """The body of a receipt's route: a file, or a ``null`` that clears the one held."""
+
+    receipt = serializers.FileField(allow_null=True)
+
+
 class InvoiceSerializer(serializers.ModelSerializer):
     """An invoice as every route answers it, with the call's warnings beside it."""
 

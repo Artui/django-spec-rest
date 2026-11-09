@@ -67,6 +67,16 @@ class MutationFlowMixin(_ServesRaisedSchema):
     (test_response_finalizer). On a ``DiscriminatedAction`` it may also declare
     ``variant``, the key the discriminator chose."""
 
+    lenient_json_body: bool | None = None
+    """Whether this view's serializer alone answers a JSON body, as it answers a
+    form body: ``{"title": 5}`` for a ``CharField`` is ``"5"``, and every refusal
+    is DRF's, in DRF's words. ``None`` reads ``SPEC_REST_LENIENT_JSON_BODY``, which
+    is ``False`` unset, so the spec's declared types are checked first. Only what
+    this view dispatches changes: the spec's schema, its tool schema and every
+    other transport stay typed (test_a_lenient_json_body_over_http). A
+    ``@service_action`` may declare its own, as a keyword of the decorator.
+    """
+
     pool_seeds: PoolSeeds = DEFAULT_POOL_SEEDS
     """The seeds the spec's callables are resolved with: the kernel's
     ``DEFAULT_POOL_SEEDS`` unless the view registers others, as a class

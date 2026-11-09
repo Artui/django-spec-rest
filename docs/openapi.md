@@ -221,6 +221,29 @@ call `enable_openapi()` again after the reload.
   description. A viewset needs no `queryset` for its schema. A capture no spec
   declares, or that only a validator's field names (the request body's, not
   the route's), stays drf-spectacular's string, with its warning.
+- **A nullable or labelled schema** is written for the document's OpenAPI
+  version. The kernel's schemas are JSON Schema, which 3.1 and later is, so
+  there the document keeps them as the kernel writes them, a route capture's
+  `enum` apart (below): `{"type": [t, "null"]}`, and a labelled choice as an
+  `anyOf` (a `oneOf` in a response) of `{"const", "title"}`. OpenAPI 3.0, drf-spectacular's default `OAS_VERSION`,
+  has no type list and no `const`, so under it a nullable schema is written
+  with `nullable: true`, and a labelled choice as an `enum` of its values in
+  order, with `null` listed and `nullable: true` where it admits null. Titles
+  are dropped, since 3.0 has no place for them. A choice that lists `null`
+  makes a schema `nullable` only where its `type` is not already one that
+  refuses it: a plain `type` beside a null choice stays non-nullable, as the
+  server answers `400` for a null there. This holds in a request body, a
+  response body, a `filter_set`'s query parameter and the read that types a
+  route capture, nested as deep as they go. A captured segment is always
+  there, so under every version a capture's `enum` lists no `null` (an `enum`
+  left with no other value is dropped), and under 3.0 drf-spectacular leaves
+  `nullable` off a path parameter itself. Inside a named component (a `DiscriminatedAction`'s
+  `{View}_{action}_Request`), drf-spectacular's enum hook moves the values to
+  `*Enum` components, as it does for a serializer's choice field, which can
+  rename a component they collide with. What an author writes in
+  `json_schema_extra` reaches the document as written, since no kernel adapter
+  writes those keys: under 3.0 it must be valid 3.0 (a `{"type": "null"}`
+  member or a numeric `exclusiveMinimum` is not).
 - **A viewset method with no spec behind it** is left out where `Allow` leaves
   it out: on a route serving some spec, a `create`, `update`,
   `partial_update` or `destroy` the router maps but the viewset declares no

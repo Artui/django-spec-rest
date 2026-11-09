@@ -135,6 +135,7 @@ from django_spec_rest.service_specs.utils import (
     serializer_context,
     write_form_value,
 )
+from django_spec_rest.settings import lenient_json_body
 from django_spec_rest.types.view_hooks import ViewHooks
 
 # This package has no ``AppConfig`` to register from, and the edge is where a
@@ -208,12 +209,17 @@ def kernel_arguments(
     through ``coerce_flat``, so ``?published=true`` reaches the shape check as
     ``True``; a JSON body's do not, since the client typed them, so a JSON
     ``"true"`` is a string there, as on every typed transport
-    (test_a_json_body_is_not_read_as_flat_strings). A form body's fields are
+    (test_a_json_body_is_not_read_as_flat_strings). A form body's checked
+    checkbox, ``"on"``, is read as ``True`` first for a parameter declared
+    ``boolean``, which ``coerce_flat`` would refuse; a query string's is not
+    (``_checked_boxes``). A form body's fields are
     its serializer's to parse: the spec dispatched for one carries a lenient
     ``SerializerValidator`` (``recording_spec``), which declares each field
     ``any``, so a checkbox's ``"on"`` reaches DRF's field as sent, and a
     nested, dict or list field the form spells as prefixed keys (``v.tenant``,
-    ``tags[0]``) is read as its field reads them (``read_form_spellings``).
+    ``tags[0]``) is read as its field reads them (``read_form_spellings``). A
+    JSON body's are too where the view's ``lenient_json_body`` says so
+    (``_lenient_json_body``, test_a_lenient_json_body_over_http).
 
     The second value is ``(validator, body)`` for a single object over a
     ``SerializerValidator``: the request's body, with what the edge put over
@@ -264,7 +270,7 @@ def kernel_arguments(
         # (test_kernel_views' test_a_capture_outranks_a_form_body).
         if isinstance(spec.validator, SerializerValidator):
             flat = read_form_spellings(spec.validator, body, flat, call_context=call_context)
-        sent = coerce_flat(parameters, {**flat, **scope})
+        sent = coerce_flat(parameters, {**_checked_boxes(parameters, flat), **scope})
     elif isinstance(body, Mapping):
         sent = {**_unscoped(body, reads), **coerce_flat(parameters, scope)}
     else:
@@ -329,6 +335,41 @@ def _target_reads(spec: KernelServiceSpec) -> Parameters:
     if target is None:
         return Parameters()
     return target.parameters()
+
+
+def _checked_boxes(parameters: Parameters, flat: Mapping[str, Any]) -> dict[str, Any]:
+    """A form body's flat values, with a checked checkbox's ``"on"`` read as ``True``.
+
+    A browser sends ``on`` for a checked box, which ``coerce_flat`` does not
+    spell as a boolean (it takes ``true``, ``false``, ``1`` and ``0``), so a
+    kernel ``FormValidator``'s ``BooleanField``, and the ``<name>-clear``
+    boolean it declares for an optional file field, would be refused. Only a
+    form body's, since a query string or a capture is typed by its client; only
+    ``on``, no other truthy string; and only for a parameter declared
+    ``boolean``, or an array of them, so a string field holding ``"on"`` is
+    left as sent. A ``SerializerValidator`` declares each form field ``any``
+    (``recording_spec``), so none of its fields is read here.
+
+    Each arm is held by its own test, in test_a_form_checkbox_over_http: a key
+    naming no parameter by test_an_undeclared_key_is_left_for_the_closed_set,
+    the boolean by test_a_boolean_field_posted_as_on_arrives_as_true (and its
+    declared type by test_a_string_field_keeps_a_value_of_on), the array
+    by test_an_array_of_booleans_reads_each_on and its element type by
+    test_an_array_of_strings_keeps_a_value_of_on.
+    """
+    read: dict[str, Any] = {}
+    for name, value in flat.items():
+        param = parameters.get(name)
+        if param is None:
+            read[name] = value
+        elif param.type == "boolean":
+            read[name] = True if value == "on" else value
+        elif param.items == "boolean":
+            # An array of booleans, whose value ``flat_arguments`` always reads as a list.
+            read[name] = [True if element == "on" else element for element in value]
+        else:
+            read[name] = value
+    return read
 
 
 def _unscoped(sent: Mapping[str, Any], reads: Parameters) -> dict[str, Any]:
@@ -475,17 +516,21 @@ def _read_call(
     a body that cannot be read, the first thing this asks (``_is_form_body``).
     """
     # Read before the arguments, which the twin's Validator declares: lenient
-    # for a form body, whose values its serializer alone parses.
+    # for a form body, whose values its serializer alone parses, and for a JSON
+    # body where the view or the project says so (``_lenient_json_body``).
     form_body = _is_form_body(spec, request=request, refused=refused, pool_seeds=pool_seeds)
     extra_kwargs, pinned, server = _overlay(spec, hooks)
     # Read by the recording twin's ``kwargs`` seat, which lays them beneath the
     # spec's provider over the Validator's values (``recording_spec``).
     edge_call_state().author_values = extra_kwargs
-    dispatched = recording_spec(spec, lenient=form_body)
+    # One arc to coverage, each side held by what fails without it: the form by
+    # test_a_live_view_validates_a_form_body_by_its_serializer_alone, the switch
+    # by test_the_view_attribute_turns_it_on.
+    dispatched = recording_spec(spec, lenient=form_body or _lenient_json_body(view))
     refused.spec = dispatched
     # The twin's Validator, the one the view's input layers are for: a kernel
     # call the service makes validates without them (``input_view_layers``).
-    # The twin, not the spec's: a form body's is lenient, so another object
+    # The twin, not the spec's: a lenient one is another object
     # (test_the_directional_hook_layers_over_drf_s[multipart]).
     state = edge_call_state()
     state.validator = getattr(dispatched, "validator", None)
@@ -530,6 +575,18 @@ def _read_call(
         keys = provider_keys(spec.kwargs) if isinstance(spec, KernelServiceSpec) else None
         state.provider_owned = keys.filled if keys is not None else frozenset()
     return dispatched, extra_kwargs, arguments, held
+
+
+def _lenient_json_body(view: Any) -> bool:
+    """Whether ``view`` has its serializer alone answer a JSON body: its own word, else the project's.
+
+    ``False`` on the view beats the setting
+    (test_a_view_attribute_of_false_beats_the_setting), so ``None`` alone reads it.
+    Off the attribute with ``getattr``, as a ``@service_action`` on DRF's own
+    viewset declares none (test_a_service_action_on_a_bare_viewset_reads_the_setting).
+    """
+    own = getattr(view, "lenient_json_body", None)
+    return lenient_json_body() if own is None else own
 
 
 def _is_form_body(

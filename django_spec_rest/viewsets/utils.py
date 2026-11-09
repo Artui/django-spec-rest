@@ -585,6 +585,12 @@ class _ActionSpecsMixin(_ServesRaisedSchema):
 
     action_specs: ClassVar[Mapping[str, ActionSpec]] = {}
 
+    lenient_json_body: bool | None = None
+    """Whether this viewset's serializers alone answer a JSON body; see
+    [`MutationFlowMixin`][django_spec_rest.views.mutation.mutation_flow_mixin.MutationFlowMixin].
+    Declared here too so a ``@service_action`` may name it on any of the
+    viewset bases (test_a_service_action_may_declare_its_own)."""
+
     pool_seeds: PoolSeeds = DEFAULT_POOL_SEEDS
     """The seeds the spec's callables are resolved with: the kernel's
     ``DEFAULT_POOL_SEEDS`` unless the view registers others, as a class

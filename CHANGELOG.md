@@ -11,6 +11,104 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+## [0.12.0] — 2026-11-09
+
+### Added
+
+- **`lenient_json_body` on a view or viewset**, also an `as_view()` and
+  `@service_action` keyword, and the `SPEC_REST_LENIENT_JSON_BODY` setting: a JSON
+  body is answered by the serializer alone, as a form body is, a `many` spec's rows
+  included, with every field's refusal in DRF's words (a body that is no object is
+  still refused as `{"detail": "The body must be an object; got list."}`). The view's
+  value beats the setting and the default is off. The spec's schema, its tool schema
+  and every other transport stay typed. The kernel's array cap no longer judges a
+  `ListField` or a nested `many=True` serializer under the switch, so give those a
+  `max_length`.
+- **The off-HTTP recipe gains a DRF `request` seed** built with
+  `build_offline_context`, for a selector that keeps reading
+  `request.query_params` over MCP, and says what a view resource needs from
+  `django-spec-mcp` first.
+- **The codemod follows a spec's answers into a view in another module.** A kernel
+  spec has no seat for `success_status` or `response_finalizer`, and
+  `tools/drfs_codemod` moved them only to views in the spec's own module, so a
+  `specs/` plus `views/` layout was left with comments. The files of one run are
+  now read together: an answer follows the spec's import, relative or absolute, by
+  name or through a module, onto the view that serves it, bringing the import a
+  name in its value needs. It moves only when that is certain. A spec two modules
+  import, or one imported under an alias, keeps its comment, as does a value that
+  would not resolve in the view, and the comment ends in why. So does a spec another
+  file star-imports, a package's re-export included, a name another answer already
+  brought into that view from elsewhere, a name a star import in the view may bind,
+  and one object carried both with and without an alias. A registration on a
+  module-level `SpecRegistry` is no second use; any other use, such as
+  `admin.site.register(x)`, is. A view that already declares the answer is marked
+  and the spec keeps the value. A file that cannot be parsed now stops the run with
+  exit 2 before anything is written, and `--root`, the directory absolute imports
+  start from, is documented.
+
+### Changed
+
+- **The `django-service-specs` floor is 0.31.0.** It writes a choice filter's labels
+  into the schema, an `OrderingFilter`'s included, which the document fix below
+  lowers under OpenAPI 3.0.
+
+### Fixed
+
+- **A JSON `null` for a file field declaring `allow_null` clears the file**, where
+  it answered 200 and kept it; without `allow_null` it is refused.
+  `SerializerValidator` hands `data` and the values `""` on every transport, so a
+  service reading the value itself sees `""`. It is what the model field stores
+  for no file, so `setattr` then `save()`, `create(**data)` and `update(**data)`
+  take it and clear the file, and the kernel's `update_from_input` reads it as a
+  clear. The bound serializer keeps `None`, so `serializer.save()` still clears.
+  A form body is unchanged. A `PUT` omitting a `FileField(allow_null=True,
+  default=None)` is filled with that `None` by DRF and clears the file the same
+  way; a `PATCH` fills no default and keeps it.
+- **A form body's checked checkbox, `on`, is read as `True` for a boolean
+  parameter.** A kernel `FormValidator` over a form body went through the kernel's
+  `coerce_flat`, which spells a boolean `true`, `false`, `1` or `0` alone, so a
+  `forms.BooleanField` and the `<name>-clear` boolean an optional file field's
+  clearable input declares were refused for the `on` a browser sends. The edge now
+  reads `on` as `True` for a parameter declared `boolean`, or an array of them, in a
+  form body only; a query string's `?flag=on` and a JSON body's `"on"` are refused
+  as before, and no other truthy string is widened to. A `SerializerValidator` was
+  never affected.
+- **A nullable or labelled schema no longer makes an OpenAPI 3.0 document
+  invalid.** The kernel writes JSON Schema: a nullable field's type is
+  `[t, "null"]`, a labelled parameter choice an `anyOf` of `{"const", "title"}`,
+  and a labelled output choice a `oneOf` of the same. 3.0, drf-spectacular's
+  default `OAS_VERSION`, has neither a type list nor `const`, so
+  `validate_schema` refused the whole document. Under 3.0 such a schema is now
+  written as `nullable` and `enum` wherever the kernel's schema enters the
+  document: a request body, a response body, a route capture a spec reads and a
+  `filter_set`'s query parameter, nested under `properties` and `items` as
+  deep as they go. A choice and a null are one `enum` listing `null`, beside
+  `nullable: true` only where the field admits null: a plain `type` with a null
+  choice stays non-nullable, as the server answers `400` for a null there. The
+  titles are dropped, since 3.0 has no place for them. A route capture's `enum`
+  lists no `null` under any version, since a segment is always present. Inside a
+  named component (a `DiscriminatedAction`'s request), drf-spectacular's enum hook moves the values
+  to `*Enum` components, as it does for a serializer's choice field, which can
+  rename a component they collide with. What an author writes in
+  `json_schema_extra` reaches the document as written, so under 3.0 it must be
+  valid 3.0. Under 3.1 and later the schema is kept as the kernel writes it.
+  What OPTIONS answers is unchanged. On the kernel floor below, every labelled
+  filter and every `OrderingFilter` is such a schema.
+- **The codemod no longer sets an answer a subclass would inherit.** A class of the
+  run that subclasses the serving view and binds its own `spec` or `action_specs`
+  would have answered with the other spec's status, so the answer stays on the spec
+  with its reason. A subclass the run cannot resolve is not seen, as the README says.
+  A class-level name that is annotated or conditional now counts as declared, so an
+  annotated `success_status` is marked rather than given a second, losing line above
+  or below it.
+- **The codemod's writes are staged.** Every changed file goes to a temporary file
+  beside its target and moves into place only when all are staged, so a failure while
+  staging changes no file and leaves no temporary file; a failure among the moves can
+  still leave some written. Either stops the run with exit 2, naming the file and
+  how many were written before it, and a file that cannot be written is found
+  before any is. A file's mode, a symlink and CRLF line ends are kept; its owner
+  and group become the runner's, and a hard link to it no longer shares it.
+
 ## [0.11.0] — 2026-11-09
 
 ### Added
@@ -884,7 +982,8 @@ lists each with what a project rewrites.
 - **The package is no longer a Django app.** It has no models, migrations,
   templates, static files or URLs, so it needs no `INSTALLED_APPS` entry.
 
-[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/Artui/django-spec-rest/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/Artui/django-spec-rest/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/Artui/django-spec-rest/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/Artui/django-spec-rest/compare/v0.8.1...v0.9.0

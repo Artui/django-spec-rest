@@ -19,13 +19,37 @@ PYTHONPATH=tools python -m drfs_codemod path/to/project --root path/to/project
 - `PATH...`: files, or directories searched for `.py` files. Hidden
   directories, `node_modules`, `site-packages` and `__pycache__` are skipped
   unless named.
-- `--root DIR` (repeatable, default `.`): where a dotted module is looked up
+- `--root DIR` (repeatable, default `.`): where a dotted module is looked up,
   to read a selector's signature, so the `reads=` it would take can be
-  spelled. The module is parsed, never imported.
-- `--check`: write nothing; exit 1 while any file would change.
+  spelled, and to follow a view's absolute import of its spec. The module is
+  parsed, never imported.
+  The root is the directory absolute imports start from, usually the parent of
+  the top package: for `from backend.shop.specs import x`, the directory
+  holding `backend/`. A wrong root gives no error: no import is found, so the
+  run reads as "no view in this run" for every spec.
+- `--check`: write nothing; exit 1 while any file would change. It reports what
+  a run would move and leave, at each file's lines as they stand.
 - `--report FILE`: write the report there instead of to stdout.
 
-The count of files changed goes to stderr.
+The count of files changed goes to stderr. A file that cannot be parsed, or is
+not UTF-8, stops the run with exit 2 before anything is written, and stderr
+names it: name the paths around it.
+
+## What a write guarantees
+
+Every changed file is first written to a temporary file beside it
+(`.name.XXXX.tmp`), with its mode, and the temporary files are moved over their
+targets only once all are written. A failure while staging, such as a file that
+is not writable, a folder that is read-only or a full disk, changes no file and
+removes the temporary files, so an answer never leaves a spec without arriving
+in its view. The moves are one rename each, and a failure among them can still
+leave some files written and some not; the files receiving an answer are moved
+first, which narrows that window and does not close it, so run it on a clean
+tree and read `git status` after a failure. Either failure stops the run with exit
+2, and stderr names the file and how many were written before it. A symlinked file
+is written through. Line ends are kept: a CRLF file stays CRLF. A rename makes a
+new file, so a rewritten file's owner and group become the runner's, and a hard
+link to it no longer shares it.
 
 ## The report
 
@@ -60,9 +84,12 @@ until its comment is deleted. Delete each once it is dealt with.
   without `permission_strategy=`. Its import is kept and the comment names the type; the
   `specs` become kernel specs by the rest of this page, and the moving page's "Declaring
   a spec" places the rest.
-- **A `success_status` or `response_finalizer` with no view here**, or on a
+- **A `success_status` or `response_finalizer` with no view found**, or on a
   spec built inline in a view rather than bound to a module-level name. Set it
-  on the view serving the spec, as the comment says where.
+  on the view serving the spec, as the comment says where, and say the value
+  the comment carries. A view in another module is followed where that is
+  certain, as [below](#a-view-in-another-module), and otherwise the comment ends
+  with why it was not.
 
 An input serializer is carried over as declared, in a `SerializerValidator`, so
 it accepts what it accepted under drfs. An empty PATCH answers as the
@@ -70,6 +97,77 @@ project's serializer did: a partial serializer lets it through to the service
 and the model, where the kernel's own validator would answer 400.
 
 The output is not formatted: run the project's formatter after the codemod.
+
+## A view in another module
+
+A kernel spec has no seat for `success_status` or `response_finalizer`, so they
+move to the view, and in a `specs/` plus `views/` layout the view is in another
+file. All the files named in one run are read together, and an answer follows
+the spec's import into the view when all of this holds:
+
+- **The spec and the view are both in the run.** Over `specs/` alone the note
+  is written; over `views/` alone the spec is not touched.
+- **One other module serves the spec**, by `spec = name`, an `action_specs`
+  entry or `@service_action(name)`, and has no other use of the name. Several
+  views in that module each take it, as views in the spec's own module do.
+- **It is imported by its own name**, as `from specs.x import y`, relatively,
+  through a package's unaliased re-export (`from specs import y`), or through a
+  module, however that module is named: `from specs import x`,
+  `import specs.x as s`, `import specs.x`. An absolute import is found under
+  `--root`.
+- **A registration is not a use.** A module may also pass the spec to
+  `<registry>.register(...)`, where `<registry>` is a name bound once at module
+  level to a `SpecRegistry(...)` call, with `SpecRegistry` imported from drfs
+  (or the kernel). A registry is read for an agent, never to route a request, so
+  that module neither serves the spec nor blocks it. A module that only
+  registers a spec leaves the plain note when nothing else serves it. Any other
+  `.register(...)` (`admin.site.register(x)`, a registry built or imported
+  from somewhere else, the spec inside a larger expression) is a use like any
+  other and blocks.
+- **No view is in the spec's own module.** Then the answer stays with that view.
+- **The value resolves in the view.** One naming nothing moves as written. A
+  name, or a dotted name such as `status.HTTP_201_CREATED`, brings its import:
+  the spec module's own absolute import, or, for a name the spec module defines,
+  an import of it from there (not through a re-export, which holds only the spec).
+- **No subclass serves another spec.** A view's answer is a class attribute, so a
+  subclass inherits it. Where a class of the run is based on the view and binds its
+  own `spec` or `action_specs` (in any form, annotated too), drfs read that
+  subclass's spec only, and the answer would reach it wrongly; the view gets a
+  comment naming the subclass and the spec keeps its note. A subclass that binds
+  neither inherits the spec and the answer, as it should, and does not block. The
+  same holds for a view in the spec's own module. A subclass is seen when its base
+  is a class of its module, imported by name (aliased, or through a package's
+  re-export) or reached through a module imported at the top of the module
+  (`from pkg import views`, `import pkg.views as v`, `import pkg.views`), in
+  any file of the run, and through any depth of subclasses. It is not seen when the
+  base is made by a call, imported inside a function, assigned from another name, or
+  from outside the run: the answer moves, and a subclass there serving another spec
+  still has to be checked by hand.
+- **No other module binds the value's name.** A name the value needs is not carried
+  into a view that star-imports anything at module level (the star import may
+  bind it), that binds it in the class in any way (an annotated name, a name under
+  an `if`), that imports it from elsewhere, or that another answer, from another
+  spec's module, has just brought in under that name: `finalize` defined in two
+  spec modules is two functions. The same object imported both with and without
+  an alias by two answers is left too. The first answer to arrive keeps the
+  name, in the order of the files.
+
+Anything else is left with the note, which ends in why: a spec imported by two
+modules, under an alias, by a star import or inside a function; one its own
+module reuses or binds twice; a lambda or a call naming anything, a builtin, a
+name the spec module imports relatively or from drfs. A test module (`test_*.py`,
+`*_test.py`, `tests.py`, `conftest.py`, or under `tests/`) reading a spec does not
+count as a use; a view declared in one does.
+
+The view can refuse. If it already declares that answer, or a value's name means
+something else there, the view gets a comment saying so and the spec's note stays,
+so an answer is never removed from a spec without arriving or being named on it.
+
+A spec's note says where its answer went, and a module outside the run serving
+that spec still has to declare it. A name it imported for the value alone may be
+left unused in the spec's module; the project's linter finds it. A run only sees
+what is still on a spec, so an earlier run's note is not followed: finish that one
+by hand.
 
 ## The import map
 
