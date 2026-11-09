@@ -691,9 +691,9 @@ def _cleared_at(value: Any, attrs: list[str], field: serializers.Field) -> Any:
 
     One arc to coverage, so each condition is named by the test that fails
     without it: the mapping by test_a_nesting_a_validate_replaced_is_left_as_built
-    and test_an_object_a_validate_returns_is_data_as_built, which read a key of no
-    mapping, and the key by test_a_patch_leaving_the_file_out_keeps_it, a partial
-    call's unsent key.
+    and test_an_object_a_validate_returns_is_data_as_built, each a key read of what
+    is no mapping, and the key by test_a_patch_leaving_the_file_out_keeps_it, a
+    partial call's unsent key.
     """
     if not isinstance(value, Mapping) or attrs[0] not in value:
         return value

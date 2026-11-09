@@ -95,7 +95,7 @@ class _ReplacesTheNesting(serializers.Serializer):
     wire = serializers.FileField(source="nest.upload", allow_null=True, required=False)
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
-        return {"nest": "replaced"}
+        return {"nest": 5}
 
 
 class _ReturnsAnObject(serializers.Serializer):
@@ -270,7 +270,7 @@ def test_a_nesting_a_validate_replaced_is_left_as_built(settings: Any, tmp_path:
     """Fails with the walk reading a key of a value that is no mapping."""
     document = _held(settings, tmp_path)
     _patch(_spec(_ReplacesTheNesting, _read_data), document, {"wire": None})
-    assert _HANDED["data"] == {"nest": "replaced"}
+    assert _HANDED["data"] == {"nest": 5}
 
 
 def test_an_object_a_validate_returns_is_data_as_built(settings: Any, tmp_path: Any) -> None:
