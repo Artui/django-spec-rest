@@ -78,7 +78,7 @@ def test_the_declared_refusals_document_what_the_view_sends(user: Any, status: i
     schema, _, view = _schema()
     responses = schema["paths"]["/declared/"]["post"]["responses"]
     # Beside what the spec documents, which the declaration does not drop.
-    assert set(responses) == {"204", "401", "403"}
+    assert set(responses) == {"201", "204", "401", "403"}
     request = APIRequestFactory().post("/", {}, format="json")
     if user is not None:
         force_authenticate(request, user())

@@ -50,7 +50,8 @@ def spec_options(
     ``check_permissions`` on a clone of the request carrying that method, as
     DRF's metadata asks it, and then the spec's checks judged on no
     arguments, as the edge judges a write whose body fails its shape
-    (``judge_without_arguments``), with the view's call context and the pool
+    (``judge_without_arguments``), with the view's call context (a copy naming
+    the action the method dispatches, below) and the pool
     seeds the edge dispatches with, the view's ``pool_seeds`` (test_pool_seeds'
     test_options_asks_a_check_naming_a_seed_with_the_view_s_seeds). So a
     method left out here is one whose write the edge refuses whatever the
@@ -62,7 +63,12 @@ def spec_options(
 
     The description is the kernel's ``spec_caller_input_schema``, what a
     caller is asked to send, read under the view's call context as dispatch
-    reads the spec (test_caller_schema_context): ``spec.parameters()`` less what the server fills
+    reads the spec, but for ``action``: the view's own is ``metadata``, the
+    OPTIONS handler, so each method is asked under a copy of the dict naming the
+    action its route dispatches it as (the ``action_map`` entry for the method,
+    ``None`` on a standalone view, as dispatch stamps it), and the view's own
+    dict is left as it is (test_caller_schema_context):
+    ``spec.parameters()`` less what the server fills
     (the view's seeds, test_options_metadata's
     test_a_read_named_for_a_seed_the_view_registers_is_not_described, and every
     key a typed provider fills), a key a provider may
@@ -111,14 +117,26 @@ class _SpecMetadata(SimpleMetadata):
             # test_a_method_the_view_does_not_allow_is_not_described.
             if spec is None or method not in allowed:
                 continue
+            # A copy naming the action this method dispatches, never the view's
+            # own dict, which dispatch and the other stages share. The
+            # view's ``action`` is ``metadata`` here, the OPTIONS handler, and the
+            # route's ``action_map`` says what the method is dispatched as; a
+            # standalone view has none, and dispatch stamps it no action
+            # (test_caller_schema_context' TestAFieldKeyedOnTheAction).
+            described_as = {**call_context, "action": _dispatched_action(view, method)}
             described = (
-                _variants_described(view, request, method, spec, call_context)
+                _variants_described(view, request, method, spec, described_as)
                 if isinstance(spec, DiscriminatedAction)
-                else _spec_described(view, request, method, spec, call_context)
+                else _spec_described(view, request, method, spec, described_as)
             )
             if described is not None:
                 actions[method] = described
         return actions
+
+
+def _dispatched_action(view: Any, method: str) -> str | None:
+    """The action ``method`` is dispatched under: the route's ``action_map`` entry, or ``None``."""
+    return getattr(view, "action_map", {}).get(method.lower())
 
 
 def _variants_described(

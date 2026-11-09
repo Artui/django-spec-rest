@@ -1,6 +1,10 @@
-"""A spec presenting nothing answers ``204`` unless the view sets a status, and is documented so.
+"""A spec with no presenter answers ``204`` for a service returning nothing, and is documented at either.
 
-The status is read off a real response beside the document's, so the two cannot
+The edge answers ``204`` only where the service returned ``None``, and the
+kernel's ``present`` hands a value back as it is, so a document cannot tell
+which one call answers: it lists the action's default status and the ``204``
+both, beside a destroy's ``204`` alone and the one status a view sets. The
+status is read off a real response beside the document's, so the two cannot
 drift apart; the merged responses of a ``DiscriminatedAction`` list each status
 any variant answers.
 """
@@ -50,6 +54,15 @@ def _returns_a_row(**_: Any) -> dict[str, str]:
 def _nothing(**_: Any) -> None: ...
 
 
+def _a_value(**_: Any) -> dict[str, bool]:
+    return {"raw": True}
+
+
+def _valued() -> ServiceSpec:
+    """No presenter, a service returning a value: the edge answers the default, with the value."""
+    return ServiceSpec(service=_a_value, permissions=_OPEN, atomic=False)
+
+
 def _bare(**fields: Any) -> ServiceSpec:
     return ServiceSpec(service=_nothing, permissions=_OPEN, allow_none=True, **fields)
 
@@ -66,6 +79,20 @@ def _status_callable() -> int:
 
 class Bare(ServiceCreateView):
     spec = _bare()
+
+
+class Valued(ServiceCreateView):
+    spec = _valued()
+
+
+class ValuedAtAStatus(ServiceCreateView):
+    spec = _valued()
+    success_status = 202
+
+
+@extend_schema(responses=Declared)
+class ValuedAndDeclared(ServiceCreateView):
+    spec = _valued()
 
 
 class Declaring(ServiceCreateView):
@@ -99,6 +126,22 @@ class MayPresentNothingAtAStatus(ServiceCreateView):
 class Plain(ServiceViewSet):
     queryset = Author.objects.all()
     action_specs = {"create": _bare()}
+
+
+class ValuedPlain(ServiceViewSet):
+    queryset = Author.objects.all()
+    action_specs = {"create": _valued()}
+
+
+class ValuedHalf(ServiceViewSet):
+    """One variant returns a value and the other nothing, with no presenter on either."""
+
+    queryset = Author.objects.all()
+    action_specs = {
+        "create": DiscriminatedAction(
+            lambda request: request.query_params["pick"], {"a": _valued(), "b": _bare()}
+        )
+    }
 
 
 class Half(ServiceViewSet):
@@ -167,12 +210,25 @@ class Decorated(GenericViewSet):
     def run(self, request: Any) -> Any: ...
 
 
+class ValuedDecorated(GenericViewSet):
+    queryset = Author.objects.all()
+
+    @service_action(_valued(), detail=False, methods=["post"])
+    def run(self, request: Any) -> Any: ...
+
+
 _router = DefaultRouter()
 _router.register("decorated", Decorated, basename="decorated")
+_router.register("valued-decorated", ValuedDecorated, basename="valued-decorated")
 
 _CREATE = {"post": "create"}
 urlpatterns = [
     path("bare/", Bare.as_view()),
+    path("valued/", Valued.as_view()),
+    path("valued-at-a-status/", ValuedAtAStatus.as_view()),
+    path("valued-and-declared/", ValuedAndDeclared.as_view()),
+    path("valued-plain/", ValuedPlain.as_view(_CREATE)),
+    path("valued-half/", ValuedHalf.as_view(_CREATE)),
     path("declaring/", Declaring.as_view()),
     path("calling/", Calling.as_view()),
     path("may-present-nothing/", MayPresentNothing.as_view()),
@@ -207,20 +263,22 @@ def _post(view: Any, url: str = "/", **captures: Any) -> Any:
 
 class TestASpecWithNoPresenter:
     @pytest.mark.parametrize(
-        ("route", "view"),
+        ("route", "view", "default"),
         [
-            ("/bare/", Bare.as_view()),
-            ("/plain/", Plain.as_view(_CREATE)),
-            ("/decorated/run/", Decorated.as_view({"post": "run"})),
+            ("/bare/", Bare.as_view(), "201"),
+            ("/plain/", Plain.as_view(_CREATE), "201"),
+            ("/decorated/run/", Decorated.as_view({"post": "run"}), "200"),
         ],
         ids=["standalone", "viewset", "decorated"],
     )
-    def test_it_documents_the_204_it_answers(
-        self, schema: dict[str, Any], route: str, view: Any
+    def test_it_answers_204_for_nothing_and_documents_it_beside_the_default(
+        self, schema: dict[str, Any], route: str, view: Any, default: str
     ) -> None:
         assert _post(view).status_code == 204
-        assert set(_responses(schema, route)) == {"204"}
-        assert "content" not in _responses(schema, route)["204"]
+        responses = _responses(schema, route)
+        assert set(responses) == {default, "204"}
+        assert "content" not in responses[default]
+        assert "content" not in responses["204"]
 
     def test_a_status_the_view_sets_is_the_one_answered_and_documented(
         self, schema: dict[str, Any]
@@ -232,6 +290,61 @@ class TestASpecWithNoPresenter:
     def test_a_callable_status_documents_the_action_s_default(self, schema: dict[str, Any]) -> None:
         # What it answers keys on the result, which no document can read.
         assert set(_responses(schema, "/calling/")) == {"201"}
+
+
+class TestASpecWithNoPresenterReturningAValue:
+    @pytest.mark.parametrize(
+        ("route", "view", "answered", "also"),
+        [
+            ("/valued/", Valued.as_view(), "201", "204"),
+            ("/valued-plain/", ValuedPlain.as_view(_CREATE), "201", "204"),
+            (
+                "/valued-decorated/run/",
+                ValuedDecorated.as_view({"post": "run"}),
+                "200",
+                "204",
+            ),
+        ],
+        ids=["standalone", "viewset", "decorated"],
+    )
+    def test_it_documents_the_status_it_answers_and_the_204_beside_it(
+        self, schema: dict[str, Any], route: str, view: Any, answered: str, also: str
+    ) -> None:
+        response = _post(view)
+        assert response.status_code == int(answered)
+        assert response.data == {"raw": True}
+        responses = _responses(schema, route)
+        assert set(responses) == {answered, also}
+        assert "content" not in responses[answered]
+        assert "content" not in responses[also]
+
+    def test_a_discriminated_action_lists_the_status_each_variant_may_answer(
+        self, schema: dict[str, Any]
+    ) -> None:
+        view = ValuedHalf.as_view(_CREATE)
+        valued = _post(view, "/?pick=a")
+        assert (valued.status_code, valued.data) == (201, {"raw": True})
+        assert _post(view, "/?pick=b").status_code == 204
+        assert set(_responses(schema, "/valued-half/")) == {"201", "204", "400"}
+
+    def test_a_status_the_view_sets_is_the_one_answered_and_documented(
+        self, schema: dict[str, Any]
+    ) -> None:
+        response = _post(ValuedAtAStatus.as_view())
+        assert (response.status_code, response.data) == (202, {"raw": True})
+        assert set(_responses(schema, "/valued-at-a-status/")) == {"202"}
+
+    def test_a_declared_success_body_lands_on_the_status_the_value_answers(
+        self, schema: dict[str, Any]
+    ) -> None:
+        response = _post(ValuedAndDeclared.as_view())
+        assert (response.status_code, response.data) == (201, {"raw": True})
+        responses = _responses(schema, "/valued-and-declared/")
+        assert responses["201"]["content"]["application/json"]["schema"] == {
+            "$ref": "#/components/schemas/Declared"
+        }
+        # A declared success replaces every one the spec documents (``_merged``).
+        assert "204" not in responses
 
 
 class TestASpecThatMayPresentNothing:
@@ -272,7 +385,7 @@ class TestTheVariantsMerged:
         assert _post(view, "/?pick=a").status_code == 204
         assert _post(view, "/?pick=b").status_code == 204
         responses = _responses(schema, "/silent/")
-        assert set(responses) == {"204", "400"}
+        assert set(responses) == {"201", "204", "400"}
         assert "content" not in responses["204"]
 
     def test_a_body_beside_no_body_at_one_status_keeps_the_body(
@@ -299,19 +412,26 @@ class TestTheVariantsMerged:
         # A declared success replaces every one the spec documents (``_merged``).
         assert "204" not in responses
 
-    def test_a_declared_success_body_never_lands_on_a_refusal(self, schema: dict[str, Any]) -> None:
+    def test_a_declared_success_body_lands_on_the_201_and_never_on_a_refusal(
+        self, schema: dict[str, Any]
+    ) -> None:
+        # No variant presents, so the lead is the 201 a value answers at, and
+        # the declared success replaces the 204 beside it (``_merged``).
         responses = _responses(schema, "/declared-over-silence/")
-        assert set(responses) == {"204", "400"}
+        assert set(responses) == {"201", "400"}
+        assert responses["201"]["content"]["application/json"]["schema"] == {
+            "$ref": "#/components/schemas/Declared"
+        }
         assert responses["400"]["content"]["application/json"]["schema"] != {
             "$ref": "#/components/schemas/Declared"
         }
 
 
-def test_a_validator_s_400_stays_beside_the_204(schema: dict[str, Any]) -> None:
+def test_a_validator_s_400_stays_beside_the_success_statuses(schema: dict[str, Any]) -> None:
     class WithValidator(ServiceCreateView):
         spec = _bare(validator=SerializerValidator(AIn))
 
     document = SchemaGenerator(patterns=[path("v/", WithValidator.as_view())]).get_schema(
         request=None, public=True
     )
-    assert set(_responses(document, "/v/")) == {"204", "400"}
+    assert set(_responses(document, "/v/")) == {"201", "204", "400"}

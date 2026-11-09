@@ -19,11 +19,18 @@ carries; releases up to 0.62.0 are in
   it, and one declared only to another transport is offered by neither. OPTIONS
   hands the call's own dict; a document describes the transport and never one
   caller, so OpenAPI hands `build_call_context("rest", view=view)`, with
-  `request` `None`. A Validator declaring `call_context` guards `request`: one
-  reading an attribute of a `None` request raises out of generation, and a
-  description that raises is left out of OPTIONS, as before. A
+  `request` `None`. A Validator declaring `call_context` guards `request`: a
+  description that raises `AttributeError`, `KeyError` or `TypeError` is left out
+  of OPTIONS, as before, and any other exception is a 500. A
   `SerializerValidator`'s output does not move. Requires
   `django-service-specs>=0.30.0`.
+- **Both seats name the action the wire names.** A Validator keyed on
+  `call_context["action"]` saw `None` in the document, `"metadata"` in OPTIONS and
+  the action's name in dispatch, so a field it requires only for that action was
+  missing from both descriptions and the wire answered `400` for it. The document
+  now hands the view's action, and OPTIONS a copy of the call's dict naming the
+  action each described method dispatches as (the route's `action_map` entry, none on a
+  standalone view); the view's own dict is untouched.
 - **The docs and the example say what `DiscriminatedAction` does.** The viewsets
   reference has a section on it (where it attaches, who is refused before the body
   is read, the row, validation per variant, `variant` for a status or finalizer),
@@ -36,6 +43,12 @@ carries; releases up to 0.62.0 are in
 
 ### Changed
 
+- **A Validator declaring `call_context` that guards only `call_context is None`
+  now raises out of OpenAPI generation.** Generation handed it no dict before; it
+  now hands one with `request` `None`, so a Validator that guards `call_context is
+  None` and then reads `call_context["request"].user` generated and now fails with
+  an `AttributeError`. Guard `call_context["request"] is None` instead. A
+  document silently missing a body is worse than a failure its author sees at once.
 - **`django_spec_rest.W001` also reports a retrieve-only viewset.** A retrieve
   ignores `get_queryset()` as a write or a list does, so tenant scoping left in an
   override let a `GET` read another tenant's row with no error, and the guard said
@@ -71,11 +84,16 @@ carries; releases up to 0.62.0 are in
   document no longer calls it partial: its `required` list is the one the wire
   demands, on each variant of a decorated `DiscriminatedAction` too. Nothing on
   the wire changes. A spec declaring `partial` is the way to a partial call.
-- **A spec with no presenter is documented at the status it answers.** The edge
-  answers `204` for one unless the view sets a status, and the document named the
-  action's default, `201` on a create and `200` on a custom action. A
-  `DiscriminatedAction` with one variant presenting and one not now lists both
-  statuses, where the second's `204` went undocumented. A spec that may present
+- **A spec with no presenter is documented at both statuses it may answer.** The
+  edge answers `204` for one where the service returns `None` (unless the view sets
+  a status) and the action's default with the value where it returns anything
+  else, and `allow_none` is a declaration no document can read, so the document
+  lists both with no schema: `201` and `204` on a create, `200` and `204` on a
+  custom action. It named the default alone, which was wrong for a service
+  returning nothing. A destroy lists `204` alone, its default, and a status the
+  view sets is the one status; a bare `@extend_schema(responses=Foo)` lands on the
+  default. A `DiscriminatedAction` with one variant presenting and one not now
+  lists both statuses, where the second's `204` went undocumented. A spec that may present
   nothing under a status the view sets no longer lists a `204` it never answers:
   the bodyless answer goes out at that status.
 - **`requestBody.required` where the body is a schema given whole.** drf-spectacular

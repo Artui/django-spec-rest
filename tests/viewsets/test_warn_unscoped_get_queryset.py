@@ -386,3 +386,18 @@ class TestWhenItIsMade:
             V.as_view({"get": "list"})
         report = next(w for w in caught if "django_spec_rest.W001" in str(w.message))
         assert report.filename == __file__
+
+    def test_a_router_mounted_viewset_reports_from_the_routers_module(self) -> None:
+        # The router calls ``as_view()``, so the report's location is DRF's, as
+        # the reference page says; the text still names the class.
+        class V(_Scoped, ServiceViewSet):
+            action_specs = {"list": _LIST}
+
+        router = SimpleRouter()
+        router.register("v", V, basename="v")
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            _ = router.urls
+        report = next(w for w in caught if "django_spec_rest.W001" in str(w.message))
+        assert report.filename.replace("\\", "/").endswith("rest_framework/routers.py")
+        assert "V" in str(report.message)
