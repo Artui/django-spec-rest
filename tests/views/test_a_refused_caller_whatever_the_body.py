@@ -792,20 +792,26 @@ def test_a_refused_caller_is_refused_where_a_hook_s_read_raises_django_s_own(cal
 
 
 class _Disconnected:
-    """A request stream whose client went away, which Django reads as ``UnreadablePostError``."""
+    """A server's ``wsgi.input`` whose client went away, which Django reads as ``UnreadablePostError``.
+
+    Handed in as ``wsgi.input``, so Django builds its own ``WSGIRequest`` and ``LimitedStream``
+    around it as it does for a server. Swapped in as ``request._stream`` instead, it would answer
+    for the stream too: Django 6.0's ``body`` asks that stream ``seekable()`` before reading.
+    """
 
     def read(self, *args: Any, **kwargs: Any) -> bytes:
         raise OSError("The client went away.")
 
-    def close(self) -> None: ...
+    def readline(self, *args: Any, **kwargs: Any) -> bytes:
+        raise OSError("The client went away.")
 
 
 @pytest.mark.parametrize("caller", REFUSED)
 def test_a_refused_caller_is_refused_where_a_hook_s_read_finds_the_client_gone(caller: str) -> None:
     """``UnreadablePostError``, as Django raises it: fails with that class out of the catch."""
     authentication, username, expected = REFUSED[caller]
-    request = factory.post("/", b"{}", content_type="application/json")
-    request._stream = _Disconnected()
+    extra = {"wsgi.input": _Disconnected()}
+    request = factory.post("/", b"{}", content_type="application/json", **extra)
     if username is not None:
         force_authenticate(request, User.objects.create(username=username))
     view = _hooked(_check("kernel-check"), authentication, get_input_data=_reads_the_body)
