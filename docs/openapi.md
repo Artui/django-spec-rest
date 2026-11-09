@@ -89,7 +89,11 @@ call `enable_openapi()` again after the reload.
 
 - **The request body** is a `SerializerValidator`'s serializer, under
   drf-spectacular's component name for the class, built partial where the
-  route validates partially (a `PATCH`, or a spec declaring `partial`).
+  route validates partially: an update route's `PATCH`, or a spec declaring
+  `partial`. A `@service_action` `PATCH` runs its spec as declared, so it is
+  validated whole and documented whole; a spec declaring `partial` is the way
+  to a partial call there, and the same holds for each variant of a decorated
+  `DiscriminatedAction`.
   Where the spec's `input_data` fills or may fill one of its fields, the body
   is a component of its own (see below). A `many` spec takes a list of its
   rows. Any other validator is the kernel's
@@ -97,15 +101,58 @@ call `enable_openapi()` again after the reload.
   route's captures, which never come from the body: a key the server fills is
   not offered, and one a provider may fill or decline is offered and not
   required. A `many` spec's rows are read the same way, by what its
-  `input_data` fills in every row.
+  `input_data` fills in every row. `requestBody.required` is stated wherever
+  the wire refuses an empty body: every spec the route may run takes a body with
+  a required field. A `DiscriminatedAction` with a variant taking no body, or
+  none of whose fields is required, leaves it out.
+- **A `DiscriminatedAction`'s request** is one component, named
+  `{View}_{action}_Request`, whose schema is an `anyOf` over the body of each
+  variant that takes one, a body two variants share listed once. It is an `anyOf`
+  where drfs' `PolymorphicServiceSpec` documented a `oneOf`, because the edge drops
+  a key a variant does not declare: a body one variant takes is also valid for
+  another that declares fewer fields. Where no variant takes a body there is no
+  request body and no component. Each member is the body its variant would be
+  documented with on a plain route of the same method, so a decorated `PATCH`'s
+  variants are whole and a variant declaring `partial` is partial. Its responses
+  are the variants' merged per status: one body where the variants agree, an inline
+  `anyOf` where they differ, and a 400 always, since the discriminator may refuse.
+  Two operations whose component name is the same but whose members differ warn
+  and document their own `anyOf` inline. See
+  [One URL, several specs](reference/viewsets.md#one-url-several-specs).
+- **A Validator declaring `call_context`** is asked under the `rest` stamp, as
+  dispatch asks it, so a field declared only to `rest` is in the body and a field
+  declared only to another transport is not. `call_context["action"]` is the
+  action the route dispatches the method as in the document and in OPTIONS alike,
+  and `None` on a standalone view, as dispatch stamps it. A document describes the transport
+  and never one caller, so `call_context["request"]` is `None` here, and a
+  Validator declaring `call_context` guards `request` before reading it. One that
+  reads an attribute of that `None` raises `AttributeError` out of generation: a
+  document silently missing a body is worse than a failure you see at once.
+  OPTIONS is asked under the request it answers, so a field keyed on the caller
+  may be offered there and stays out of the document; there, a description that
+  raises `AttributeError`, `KeyError` or `TypeError` leaves the method out of
+  `actions`, and any other exception, a Validator's `ValueError` included, is a
+  500. A `SerializerValidator` reads none
+  of this.
 - **The response body** is a `SerializerPresenter`'s serializer, or another
   presenter's output schema, a list where the spec presents rows. A spec with
-  no presenter documents no content; a selector spec with none keeps the
+  no presenter documents no body (see the status below); a selector spec with none keeps the
   view's `serializer_class`, which renders it.
 - **The status** is the view's `success_status` where it is an `int`, over the
   action's default. On a viewset it is the action's own where one is declared
   ([Per-action answers](reference/viewsets.md#per-action-answers)). A body documented under 204 is documented as the 200 it is
-  served as, with a 204 beside it where the spec can present nothing.
+  served as, with a 204 beside it where the spec can present nothing. A spec that
+  can present nothing under a status the view sets answers that status with no
+  body, so it lists no 204 beside the body. A spec with
+  no presenter answers 204 where its service returns `None` and the action's
+  default, with the value, where it returns anything else; `allow_none` is a
+  declaration and no document can read what a call returns, so the document lists
+  both with no schema: `201` and `204` on a create, `200` and `204` on a custom
+  action. A destroy lists `204` alone, its default being the `204`; one whose
+  service returns a value with no presenter answers an undocumented `200`, so give
+  it a presenter or declare the response. A status the view sets is the one status. A declared success body replaces both and goes
+  to the first, the default. A `DiscriminatedAction`
+  lists each status any of its variants answers.
 - **A 400** is documented wherever the spec declares a validator, because that
   is the status a validator's refusal gets, whichever kind refused
   (`SerializerValidator`, `DataclassValidator` or another validator raising the
@@ -179,9 +226,14 @@ call `enable_openapi()` again after the reload.
   `partial_update` or `destroy` the router maps but the viewset declares no
   spec for answers 405, so it is no operation. A `ServiceViewSet` with no
   `destroy` spec documents no `DELETE`, and one with a `partial_update` spec
-  alone documents `PATCH` and no `PUT`. The `list` and `retrieve` handlers,
-  which fall back to DRF's queryset, and a handler the viewset defines itself,
-  stay documented.
+  alone documents `PATCH` and no `PUT`. The `list` and `retrieve` handlers stay
+  documented where their fallback to DRF can run, on a viewset with rows to read
+  (a `queryset` or `get_queryset()`) and a serializer (a `serializer_class`,
+  `get_serializer_class()` or `get_serializer()`). Where it cannot they answer
+  405 and are left out, with every other method no spec serves, on any route of
+  that viewset: a create-only `ServiceViewSet` documents `POST` on its list route
+  and no path for its detail route. A handler the viewset defines itself stays
+  documented, and so does a `retrieve` beside its own `get_object()`.
 
 `ServiceErrorSerializer`, a `detail` field and the optional `schema` object, is
 the body of that 422 and of the 400's `{"detail": ...}` alternative, under the

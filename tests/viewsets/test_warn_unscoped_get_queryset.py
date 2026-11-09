@@ -155,6 +155,34 @@ class TestAnOverrideBesideASpecIsReported:
 
         assert _reports(V, {"get": "list"})
 
+    def test_beside_a_retrieve_spec_alone(self) -> None:
+        """A retrieve ignores ``get_queryset()`` as a write or a list does: a cross-tenant read."""
+
+        class V(_Scoped, SelectorViewSet):
+            action_specs = {"retrieve": _RETRIEVE}
+
+        assert _reports(V, {"get": "retrieve"})
+
+    def test_beside_a_selector_action_of_the_retrieve_kind(self) -> None:
+        class V(_Scoped, ServiceViewSet):
+            @selector_action(_RETRIEVE)
+            def one(self, request: Any, pk: Any = None) -> None:
+                """Stubbed: the decorator serves the spec."""
+
+        assert _reports(V, {"get": "one"})
+
+    def test_beside_a_retrieve_spec_handed_to_as_view(self) -> None:
+        class V(_Scoped, ServiceViewSet): ...
+
+        assert _reports(V, {"get": "retrieve"}, action_specs={"retrieve": _RETRIEVE})
+
+    def test_and_a_retrieve_only_viewset_is_silenced_as_the_others_are(self) -> None:
+        class V(_Scoped, SelectorViewSet):
+            action_specs = {"retrieve": _RETRIEVE}
+            spec_rows_scoped_by_selector = True
+
+        assert _reports(V, {"get": "retrieve"}) == []
+
 
 class TestADiscriminatedActionServesAWrite:
     """Neither lane that built these could see the other's type, so the pair is held here.
@@ -250,20 +278,6 @@ class TestSilent:
                 return Response({})
 
         assert _reports(V, {"get": "ping"}) == []
-
-    def test_for_a_retrieve_spec(self) -> None:
-        class V(_Scoped, SelectorViewSet):
-            action_specs = {"retrieve": _RETRIEVE}
-
-        assert _reports(V, {"get": "retrieve"}) == []
-
-    def test_for_a_selector_action_of_the_retrieve_kind(self) -> None:
-        class V(_Scoped, ServiceViewSet):
-            @selector_action(_RETRIEVE)
-            def one(self, request: Any, pk: Any = None) -> None:
-                """Stubbed: the decorator serves the spec."""
-
-        assert _reports(V, {"get": "one"}) == []
 
 
 class TestSilencingPerClass:
@@ -372,3 +386,18 @@ class TestWhenItIsMade:
             V.as_view({"get": "list"})
         report = next(w for w in caught if "django_spec_rest.W001" in str(w.message))
         assert report.filename == __file__
+
+    def test_a_router_mounted_viewset_reports_from_the_routers_module(self) -> None:
+        # The router calls ``as_view()``, so the report's location is DRF's, as
+        # the reference page says; the text still names the class.
+        class V(_Scoped, ServiceViewSet):
+            action_specs = {"list": _LIST}
+
+        router = SimpleRouter()
+        router.register("v", V, basename="v")
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            _ = router.urls
+        report = next(w for w in caught if "django_spec_rest.W001" in str(w.message))
+        assert report.filename.replace("\\", "/").endswith("rest_framework/routers.py")
+        assert "V" in str(report.message)

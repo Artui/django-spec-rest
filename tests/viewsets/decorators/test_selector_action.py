@@ -17,6 +17,7 @@ from django_service_specs import (
     PermissionCheck,
     SelectorKind,
     SelectorSpec,
+    ServiceSpec,
     Unrestricted,
 )
 from rest_framework.filters import BaseFilterBackend
@@ -29,6 +30,7 @@ from rest_framework.viewsets import GenericViewSet, ViewSet
 
 from django_spec_rest import SelectorViewSet, selector_action
 from django_spec_rest.service_specs.serializer_presenter import SerializerPresenter
+from django_spec_rest.types.discriminated_action import DiscriminatedAction
 from tests.testapp.models import Author
 from tests.testapp.serializers import AuthorSerializer
 
@@ -192,3 +194,43 @@ def test_methods_url_path_and_url_name_reach_the_route() -> None:
     response = route.callback(factory.post("/"))
     assert response.status_code == 200
     assert [row["name"] for row in response.data] == ["Ada"]
+
+
+def _write() -> ServiceSpec:
+    return ServiceSpec(service=lambda: None, permissions=_OPEN)
+
+
+class TestAtDecoration:
+    """A spec of the wrong kind is refused where it is decorated, naming the action and the fix,
+    rather than as an ``AttributeError`` at ``spec.kind`` for anything with no ``kind``."""
+
+    @pytest.mark.parametrize(
+        ("spec", "named", "fix"),
+        [
+            (_write(), "ServiceSpec", "@service_action"),
+            (
+                DiscriminatedAction(discriminator=lambda: "a", specs={"a": _write()}),
+                "DiscriminatedAction",
+                "@service_action",
+            ),
+            (object(), "object", "SelectorSpec"),
+            (None, "NoneType", "SelectorSpec"),
+        ],
+    )
+    def test_a_spec_that_is_not_a_selector_spec_is_refused(
+        self, spec: Any, named: str, fix: str
+    ) -> None:
+        with pytest.raises(ImproperlyConfigured) as refused:
+
+            @selector_action(spec)
+            def act(self: Any, request: Any) -> None:
+                """Stubbed: the decorator serves the spec."""
+
+        message = str(refused.value)
+        assert message.startswith("@selector_action ")
+        assert "act" in message
+        assert named in message
+        assert fix in message
+
+    def test_a_selector_spec_is_still_accepted(self) -> None:
+        assert callable(_viewset(_rows()).as_view({"get": "act"}))

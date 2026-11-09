@@ -8,6 +8,7 @@ from rest_framework.routers import DefaultRouter
 from invoices.views import (
     AuditInvoiceListView,
     DraftInvoiceViewSet,
+    IntakeViewSet,
     InvoiceViewSet,
     ReviewInvoiceListView,
     SentInvoiceListView,
@@ -16,6 +17,7 @@ from invoices.views import (
 
 router = DefaultRouter()
 router.register("invoices", InvoiceViewSet, basename="invoice")
+router.register("intake", IntakeViewSet, basename="intake")
 router.register("drafts", DraftInvoiceViewSet, basename="draft")
 
 urlpatterns = [

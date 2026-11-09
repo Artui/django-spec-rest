@@ -74,8 +74,10 @@ stated:
   reads the body: the edge runs the kernel's own prelude, ``check_call``,
   before ``dispatch``, and judges a call whose arguments fail their shape on
   no arguments, so a caller the checks refuse is answered 401 or 403 whatever
-  the body (``_admitted``, ``judge_without_arguments``). A check that cannot
-  answer without the arguments keeps the kernel's order.
+  the body (``_admitted``, ``judge_without_arguments``), a body that cannot be
+  read at all among them (``_is_form_body``, and the mutation views'
+  ``_view_hooks`` where a view hook reads it first). A check that cannot answer
+  without the arguments keeps the kernel's order.
 
 Every refusal the kernel raises leaves as a DRF exception, by
 ``KERNEL_REFUSALS`` (``dispatch/kernel_refusals.py``). The seed-named fields
@@ -469,15 +471,17 @@ def _read_call(
     so it is judged on no arguments first, as a failed shape is
     (``judge_without_arguments``), and a caller the checks refuse is told
     that rather than the read's refusal
-    (test_a_read_s_refused_caller_is_refused_whatever_the_query_string).
+    (test_a_read_s_refused_caller_is_refused_whatever_the_query_string). So is
+    a body that cannot be read, the first thing this asks (``_is_form_body``).
     """
+    # Read before the arguments, which the twin's Validator declares: lenient
+    # for a form body, whose values its serializer alone parses.
+    form_body = _is_form_body(spec, request=request, refused=refused, pool_seeds=pool_seeds)
     extra_kwargs, pinned, server = _overlay(spec, hooks)
     # Read by the recording twin's ``kwargs`` seat, which lays them beneath the
     # spec's provider over the Validator's values (``recording_spec``).
     edge_call_state().author_values = extra_kwargs
-    # Read before the arguments, which the twin's Validator declares: lenient
-    # for a form body, whose values its serializer alone parses.
-    dispatched = recording_spec(spec, lenient=isinstance(request.data, MultiValueDict))
+    dispatched = recording_spec(spec, lenient=form_body)
     refused.spec = dispatched
     # The twin's Validator, the one the view's input layers are for: a kernel
     # call the service makes validates without them (``input_view_layers``).
@@ -526,6 +530,42 @@ def _read_call(
         keys = provider_keys(spec.kwargs) if isinstance(spec, KernelServiceSpec) else None
         state.provider_owned = keys.filled if keys is not None else frozenset()
     return dispatched, extra_kwargs, arguments, held
+
+
+def _is_form_body(
+    spec: KernelSpec, *, request: Request, refused: RefusedCall, pool_seeds: PoolSeeds
+) -> bool:
+    """Whether DRF parsed the request's body as a form: the call's first read of it.
+
+    A body that cannot be read has told the edge nothing about the call, so it
+    is judged on no arguments as a failed shape is (``judge_without_arguments``),
+    and a caller the checks refuse is told that rather than what the read raised,
+    with OPTIONS leaving the method undescribed for the same callers
+    (test_a_refused_caller_is_refused_whatever_it_sends,
+    test_options_hides_a_method_exactly_when_its_write_is_refused_first). The
+    judgment waits for the failure, so a readable body's check is asked once
+    (test_a_well_formed_call_asks_the_class_level_check_once).
+
+    Whatever the read raises, not DRF's two alone: too many form fields is
+    Django's own ``TooManyFieldsSent``
+    (test_a_refused_caller_sending_a_body_django_refuses_to_read_is_refused).
+    An admitted caller is told what was raised, the same exception: read again,
+    an unparseable body answers the empty form DRF leaves in its place
+    (test_an_admitted_caller_is_told_its_body_cannot_be_read). ``spec`` is the
+    one judged and the one a denial is compared with (``_check_denied``), the
+    spec OPTIONS asks of, since no twin is built until the body says which.
+    """
+    try:
+        return isinstance(request.data, MultiValueDict)
+    except Exception:
+        refused.spec = spec
+        judge_without_arguments(
+            spec,
+            principal=request.user,
+            call_context=edge_call_state().call_context,
+            pool_seeds=pool_seeds,
+        )
+        raise
 
 
 def _edge_state(

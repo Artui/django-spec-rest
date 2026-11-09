@@ -11,6 +11,123 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+## [0.11.0] — 2026-11-09
+
+### Added
+
+- **OPTIONS and the OpenAPI body read a spec under the `rest` stamp.** Each asks
+  `spec_caller_input_schema` with a `call_context`, so a field a Validator
+  declares only to `rest` is offered by both and required where dispatch requires
+  it, and one declared only to another transport is offered by neither. OPTIONS
+  hands the call's own dict; a document describes the transport and never one
+  caller, so OpenAPI hands `build_call_context("rest", view=view)`, with
+  `request` `None`. A Validator declaring `call_context` guards `request`: a
+  description that raises `AttributeError`, `KeyError` or `TypeError` is left out
+  of OPTIONS, as before, and any other exception is a 500. A
+  `SerializerValidator`'s output does not move. Requires
+  `django-service-specs>=0.30.0`.
+- **Both seats name the action the wire names.** A Validator keyed on
+  `call_context["action"]` saw `None` in the document, `"metadata"` in OPTIONS and
+  the action's name in dispatch, so a field it requires only for that action was
+  missing from both descriptions and the wire answered `400` for it. The document
+  now hands the view's action, and OPTIONS a copy of the call's dict naming the
+  action each described method dispatches as (the route's `action_map` entry, none on a
+  standalone view); the view's own dict is untouched.
+- **The docs and the example say what `DiscriminatedAction` does.** The viewsets
+  reference has a section on it (where it attaches, who is refused before the body
+  is read, the row, validation per variant, `variant` for a status or finalizer),
+  the OpenAPI page names its `{View}_{action}_Request` `anyOf` component and its
+  merged responses, and `examples/invoices` serves one as `POST /intake/`, asserted
+  over HTTP and in the schema by `make examples`. The moving page's off-HTTP
+  default now names the HTTP transports (`"rest"`, `"html"`) and says what it means
+  for each of `"agent"`, `"mcp"`, `"cli"` and an unstamped call, where it compared
+  `("agent", "mcp")` and left out spec-cli's value.
+
+### Changed
+
+- **A Validator declaring `call_context` that guards only `call_context is None`
+  now raises out of OpenAPI generation.** Generation handed it no dict before; it
+  now hands one with `request` `None`, so a Validator that guards `call_context is
+  None` and then reads `call_context["request"].user` generated and now fails with
+  an `AttributeError`. Guard `call_context["request"] is None` instead. A
+  document silently missing a body is worse than a failure its author sees at once.
+- **`django_spec_rest.W001` also reports a retrieve-only viewset.** A retrieve
+  ignores `get_queryset()` as a write or a list does, so tenant scoping left in an
+  override let a `GET` read another tenant's row with no error, and the guard said
+  nothing. `as_view()` now reports an override beside any spec, whatever its kind,
+  and `spec_rows_scoped_by_selector = True` silences it as it does the others. A
+  viewset that overrides `get_queryset()` and serves only `retrieve` specs, which
+  built silent before, now warns once at `as_view()`; set the attribute once each
+  selector scopes its own rows. The warning's text now reads "serves a spec", and
+  the reference page says that a router-mounted viewset's `file:line` is DRF's
+  `rest_framework/routers.py`, since the router calls `as_view()`; the text names
+  the class.
+
+### Fixed
+
+- **A viewset read with nothing to fall back to answers 405, not DRF's assertion
+  as a 500.** A `list` or `retrieve` with no spec on a viewset with no rows
+  (`queryset`, `get_queryset()`) or no serializer (`serializer_class`,
+  `get_serializer_class()`, `get_serializer()`) raises `MethodNotAllowed` as an
+  unserved write does, and `Allow`, OPTIONS and the schema follow from one
+  predicate. So a create-only `ServiceViewSet` on a router answers 405 on `GET`
+  and `HEAD`, documents `POST` alone, and keeps a detail route, which a router
+  mounts, with `Allow: OPTIONS` and no schema path. A project's own `list`,
+  `retrieve`, `get_object()`, `get_queryset()`, `get_serializer_class()` or
+  `get_serializer()` still answers, each for the half it supplies, and the rule
+  that a `list` or `retrieve` fallback stays documented narrows to one that can
+  run. OPTIONS of a project's own write on such a viewset answers with that method
+  undescribed, where DRF's metadata asserted.
+- **`@selector_action` refuses a spec that is not a `SelectorSpec` where it is
+  decorated.** A `ServiceSpec`, a `DiscriminatedAction` or anything else failed
+  as an `AttributeError` at `spec.kind`, saying nothing of what to do. It is now
+  an `ImproperlyConfigured` naming the action and the way out: a write goes to
+  `@service_action`, anything else wants the `SelectorSpec` the action reads through.
+- **A caller a plain spec refuses is refused whatever it sends, a body that cannot
+  be read included.** An unparseable body answered DRF's 400, an unsupported media
+  type its 415 and too many form fields Django's 400, with no challenge, ahead of
+  the spec's checks. The edge now judges a failed read on no arguments, as it
+  judges a failed shape and as a `DiscriminatedAction` route already did, so an
+  anonymous caller gets the 401 with the challenge, or a 403 where the first
+  authenticator gives none, and a signed-in one the check's 403. A caller the
+  checks admit is told what the read raised, as before, and OPTIONS hides a
+  method from the same callers. A view hook that reads the body first is judged
+  the same; hooks still run before the checks, and the body is not read ahead of
+  them.
+  A hook raising one of those errors itself is judged the same way, which it cannot
+  be told from. A refused caller's too many form fields no longer writes to Django's
+  `django.security.TooManyFieldsSent` log, so a project alerting on it stops hearing
+  from callers it refuses; an admitted caller's still does.
+- **A `@service_action` `PATCH` is documented as the wire validates it.** The
+  action runs its spec as declared, so its body is validated whole, and the
+  document no longer calls it partial: its `required` list is the one the wire
+  demands, on each variant of a decorated `DiscriminatedAction` too. Nothing on
+  the wire changes. A spec declaring `partial` is the way to a partial call.
+- **A spec with no presenter is documented at both statuses it may answer.** The
+  edge answers `204` for one where the service returns `None` (unless the view sets
+  a status) and the action's default with the value where it returns anything
+  else, and `allow_none` is a declaration no document can read, so the document
+  lists both with no schema: `201` and `204` on a create, `200` and `204` on a
+  custom action. It named the default alone, which was wrong for a service
+  returning nothing. A destroy lists `204` alone, its default, and a status the
+  view sets is the one status; a bare `@extend_schema(responses=Foo)` lands on the
+  default. A `DiscriminatedAction` with one variant presenting and one not now
+  lists both statuses, where the second's `204` went undocumented. A spec that may present
+  nothing under a status the view sets no longer lists a `204` it never answers:
+  the bodyless answer goes out at that status.
+- **`requestBody.required` where the body is a schema given whole.** drf-spectacular
+  reads such a body as optional, so a `DiscriminatedAction`, and a plain spec over
+  any Validator but a `SerializerValidator`, stated nothing while the wire answered
+  `400` for an empty body. It is stated wherever every spec the route may run takes
+  a body with a required field, and stays absent where one takes no body or
+  requires none of its fields.
+- **A project's own `transport` key no longer replaces the stamp.** A view hook or a
+  `serializer_context` callable answering a `"transport"` key wrote it into the
+  call's one dict, so every later stage read the project's value in place of
+  `"rest"`, against the kernel's contract that the transport stamps last. The key is
+  now dropped from that shared dict, as `format` already was, without an error. A
+  serializer built over a dict of its own keeps what its layers wrote.
+
 ## [0.10.0] — 2026-11-08
 
 ### Added
@@ -767,7 +884,8 @@ lists each with what a project rewrites.
 - **The package is no longer a Django app.** It has no models, migrations,
   templates, static files or URLs, so it needs no `INSTALLED_APPS` entry.
 
-[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/Artui/django-spec-rest/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/Artui/django-spec-rest/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/Artui/django-spec-rest/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/Artui/django-spec-rest/compare/v0.8.0...v0.8.1

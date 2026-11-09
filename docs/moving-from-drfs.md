@@ -119,7 +119,7 @@ drfs field maps onto one of its seats:
 | a `QueryParam` no callable names | `shapes=Parameters.of(...)` |
 | `NotClientInput`, a hidden lookup key | a typed `kwargs` provider filling the key, which the kernel then keeps out of the caller's arguments (`server_owned_keys`) |
 | `InputRequired`, `InputDescription("...")` on a key the selector reads | `reads=Parameters.of(Parameter(..., required=True, help="..."))`, as [worked below](#a-nested-routes-captures) |
-| `PolymorphicServiceSpec` | one kernel spec per route or action stays the default. For an endpoint that must keep one URL, an `action_specs` entry (or `@service_action`) of `DiscriminatedAction(discriminator=, specs=)`, which is this package's alone: agents and MCP register each variant on its own. Its `{View}_{action}_Request` OpenAPI component comes back under that name, as an `anyOf` where drfs' was a `oneOf`: a body two variants accept is valid for both. `permission_strategy=` is gone: the chosen variant's checks always decide. A callable `success_status` or `response_finalizer` on such an action may declare `variant`, the chosen key, to answer per variant |
+| `PolymorphicServiceSpec` | one kernel spec per route or action stays the default. For an endpoint that must keep one URL, an `action_specs` entry (or `@service_action`) of `DiscriminatedAction(discriminator=, specs=)`, which is this package's alone: agents and MCP register each variant on its own. Its `{View}_{action}_Request` OpenAPI component comes back under that name, as an `anyOf` where drfs' was a `oneOf`: a body two variants accept is valid for both. A `@service_action` `PATCH` over it runs the chosen variant as declared, so it is validated whole and documented whole; a variant declaring `partial` is the way to a partial call. `permission_strategy=` is gone: the chosen variant's checks always decide. A callable `success_status` or `response_finalizer` on such an action may declare `variant`, the chosen key, to answer per variant |
 | `TargetGuard` | the kernel's preconditions and object permission, which see the row |
 | `OfflineContract.field_audiences` | `SerializerPresenter(S, field_audiences={...})`, layered over the serializer's own markings at the top level; a name the serializer does not output is refused when the output is read. HTTP names no audience, so a REST response is unchanged |
 | `OfflineContract.url_kwargs` | the selector's `reads=Parameters.of(Parameter("pk", "integer", required=True))`. A capture the model must never see is a server-supplied argument instead: `tool_server_arguments` on django-spec-agents' toolset, `server_arguments=` on a django-spec-mcp tool binding |
@@ -163,12 +163,31 @@ and compares what the transport stamped under the `"transport"` key:
 ```python
 from django_service_specs import call_transport
 
+# The transports that serve HTTP: this package's views, and django-spec-html's.
+OVER_HTTP = ("rest", "html")
+
 
 def off_http_defaults(*, call_context):
-    if call_transport(call_context) in ("agent", "mcp"):
+    if call_transport(call_context) not in OVER_HTTP:
         return {"default_query": "..."}
     return {}
 ```
+
+Naming the HTTP transports rather than the others is what makes the default hold
+for every one that is not:
+
+| `call_transport(call_context)` | Served by | Over HTTP | The example's default |
+| --- | --- | --- | --- |
+| `"rest"` | this package's views and viewsets (`REST_TRANSPORT`) | yes | not applied |
+| `"html"` | `django-spec-html` | yes | not applied |
+| `"agent"` | `django-spec-agents`' toolset | no | applied |
+| `"mcp"` | `django-spec-mcp` | no | applied |
+| `"cli"` | `django-spec-cli`' management commands | no | applied |
+| `None` | a call no transport stamped, such as the kernel's own `dispatch` | no | applied |
+
+A transport added later counts as off HTTP, so one that serves HTTP is added to
+the tuple. Comparing the other way (`in ("agent", "mcp")`) would leave out
+`"cli"` and `None`, and every off-HTTP transport added later.
 
 `call_transport` is in the kernel from 0.28.0, and a transport stamps its own
 name from the release that adopts the key. A view of this package stamps
@@ -259,8 +278,8 @@ over:
   `user`): left where it was, a `PATCH` or `DELETE` reaches another tenant's
   row with no error. DRF's `get_object()` ran the backends, so a backend that
   scoped a tenant's rows there no longer does, and nothing reports it, since
-  most backends are plain list filters. A `get_queryset()` override beside a
-  write or list spec is reported at `as_view()`
+  most backends are plain list filters. A `get_queryset()` override beside
+  any spec, a retrieve included, is reported at `as_view()`
   ([`django_spec_rest.W001`](reference/viewsets.md#the-row-scoping-warning)).
   The reverse holds for an action with no spec: DRF's
   fallback `retrieve` and a custom `@action` reading `self.get_queryset()`
@@ -385,9 +404,20 @@ The query string is read by the kernel's flat reader:
 - **A `many` spec with an `output_selector_spec` presents what the re-read
   returns**, where drfs presented the service's rows.
 - **Bulk and row refusals are worded by the kernel.**
+- **A read with no spec and nothing to fall back to answers 405**, not DRF's
+  assertion as a 500. A `list` or `retrieve` a router maps on a viewset with no
+  rows or no serializer leaves `Allow` and the schema, so a create-only
+  `ServiceViewSet` documents `POST` alone and its detail route `Allow`s
+  `OPTIONS` alone. A `list`, `retrieve` or `get_object()` of the project's own
+  keeps its route, and a read that can fall back answers as it did.
 - **OPTIONS runs no stage of a spec** (no selector, provider, service or
-  affordance condition) and never answers 500. `Allow` names only the methods
-  a spec serves: a handler with no spec is left out, on its 405 too.
+  affordance condition) and does not answer 500 for want of what DRF's metadata
+  reads. The exception is a Validator whose `parameters()` raises something other
+  than `AttributeError`, `KeyError` or `TypeError`, which is a 500, as
+  [the OpenAPI page](openapi.md) says. `Allow` names only the methods
+  that can answer: a handler of this package's with no spec is left out, on its
+  405 too, and a handler of the project's stays, undescribed where DRF's metadata
+  cannot describe it for want of a serializer or rows.
   `actions[METHOD]` is a JSON Schema object rather than DRF's per-field
   dictionary, and leaves out the keys the server fills, the route's captures
   and the target lookup's parameters; a key a provider may fill is described
@@ -459,15 +489,19 @@ The query string is read by the kernel's flat reader:
   permission classes in `initial()`. The spec's checks are asked before its
   arguments' shape is checked, so a caller they refuse gets the 401 or 403
   above whatever it sends: an empty body, a missing field, a value of the
-  wrong type or a query string the read cannot parse answer the same as a
-  well-formed request, never the 400 that lists the fields. A request whose
-  body or query string fails its shape is judged with no arguments, the
+  wrong type, a query string the read cannot parse, a body DRF cannot parse, a
+  media type it does not accept or more form fields than Django reads answer
+  the same as a well-formed request, never the 400 that lists the fields. A
+  request whose body cannot be read, or whose body or query string fails its
+  shape, is judged with no arguments, the
   question the OPTIONS answer asks before it describes a method, so OPTIONS
   shows a method's schema exactly to the callers whose incomplete request is
   told what it lacks. A check that reads the call's arguments and cannot
   answer without them keeps the kernel's order: the caller is told the 400
   first, and the check is asked once the shape passes. A check that answers
   `False` with no arguments refuses every caller sending an incomplete body.
+  DRF's own `initial()` runs before any of this, so a `get_permissions()` or
+  `get_throttles()` override that reads the body answers what that read raises.
 - **`DRFPermissionCheck` can raise `DRFNotAuthenticated`**, not only
   `DRFNotPermitted`, when the call carries a real DRF request with
   authenticators and nobody was recognised. `DRFNotAuthenticated` is DRF's

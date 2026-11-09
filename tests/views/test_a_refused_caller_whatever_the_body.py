@@ -16,14 +16,17 @@ asked once the shape passes.
 
 from __future__ import annotations
 
+import contextlib
 from collections.abc import Mapping
 from typing import Any
 
 import pytest
 from django.contrib.auth.models import User
-from django.core.exceptions import ImproperlyConfigured
+from django.core.exceptions import ImproperlyConfigured, TooManyFieldsSent
 from django.core.exceptions import PermissionDenied as DjangoPermissionDenied
+from django.test import override_settings
 from django_service_specs import (
+    DEFAULT_POOL_SEEDS,
     Parameter,
     Parameters,
     PermissionCheck,
@@ -33,8 +36,9 @@ from django_service_specs import (
 )
 from rest_framework import serializers
 from rest_framework.authentication import BasicAuthentication, SessionAuthentication
+from rest_framework.exceptions import NotFound, ParseError
 from rest_framework.exceptions import PermissionDenied as DRFPermissionDenied
-from rest_framework.permissions import AllowAny, BasePermission
+from rest_framework.permissions import AllowAny, BasePermission, IsAuthenticated
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from django_spec_rest import (
@@ -176,6 +180,103 @@ def test_a_refused_caller_sending_a_complete_body_is_answered_the_same(
     assert _answer(_post(view, body, username=username)) == expected
 
 
+UNREADABLE = {
+    # (the bytes, their content type, what DRF answers a caller the checks admit)
+    "unparseable": (b"{", "application/json", 400),
+    "an unsupported media type": (b"hello", "text/plain", 415),
+}
+
+
+def _post_raw(view: Any, body: str, *, username: str | None) -> Any:
+    raw, content_type, _ = UNREADABLE[body]
+    request = factory.post("/", raw, content_type=content_type)
+    if username is not None:
+        force_authenticate(request, User.objects.create(username=username))
+    response = view(request)
+    response.render()
+    return response
+
+
+@pytest.mark.parametrize("body", UNREADABLE)
+@pytest.mark.parametrize("caller", REFUSED)
+@pytest.mark.parametrize("refusal", REFUSALS)
+@pytest.mark.parametrize("route", ROUTES)
+def test_a_refused_caller_is_refused_whatever_it_sends(
+    route: str, refusal: str, caller: str, body: str
+) -> None:
+    """A body DRF cannot read is judged on no arguments too, as a discriminated route's is.
+
+    Fails where the read's own refusal leaves first: DRF's 400 or 415, with no
+    challenge. The kernel check's row fails too where the denial is raised
+    with no spec for ``_check_denied`` to compare it with: 403, not 401.
+    """
+    authentication, username, expected = REFUSED[caller]
+    view = ROUTES[route](_check(refusal), authentication)
+    assert _answer(_post_raw(view, body, username=username)) == expected
+
+
+@pytest.mark.parametrize("body", UNREADABLE)
+@pytest.mark.parametrize("refusal", REFUSALS)
+@pytest.mark.parametrize("route", ROUTES)
+def test_an_admitted_caller_is_told_its_body_cannot_be_read(
+    route: str, refusal: str, body: str
+) -> None:
+    """DRF's own refusal, never a second read of the empty body DRF leaves behind.
+
+    Fails where the edge carries on past the failed read: an unparseable body
+    reads as an empty form then, and is told the fields it lacks.
+    """
+    view = ROUTES[route](_check(refusal), [BasicAuthentication])
+    response = _post_raw(view, body, username="editor")
+    assert response.status_code == UNREADABLE[body][2]
+    assert set(response.data) == {"detail"}
+
+
+@override_settings(DATA_UPLOAD_MAX_NUMBER_FIELDS=1)
+@pytest.mark.parametrize("caller", REFUSED)
+def test_a_refused_caller_sending_a_body_django_refuses_to_read_is_refused(caller: str) -> None:
+    """Not every failed read is DRF's: too many form fields raises Django's own.
+
+    Fails where only DRF's exceptions are judged: ``TooManyFieldsSent`` leaves
+    as it was raised, for Django's 400.
+    """
+    authentication, username, expected = REFUSED[caller]
+    request = factory.post("/", b"a=1&b=2", content_type="application/x-www-form-urlencoded")
+    if username is not None:
+        force_authenticate(request, User.objects.create(username=username))
+    response = _view(_check("kernel-check"), authentication)(request)
+    response.render()
+    assert _answer(response) == expected
+
+
+@override_settings(DATA_UPLOAD_MAX_NUMBER_FIELDS=1)
+def test_an_admitted_caller_sending_a_body_django_refuses_to_read_is_refused_by_django() -> None:
+    request = factory.post("/", b"a=1&b=2", content_type="application/x-www-form-urlencoded")
+    force_authenticate(request, User.objects.create(username="editor"))
+    with pytest.raises(TooManyFieldsSent):
+        _view(_check("kernel-check"), [BasicAuthentication])(request)
+
+
+@pytest.mark.parametrize("caller", REFUSED)
+def test_a_read_s_refused_caller_is_refused_whatever_body_it_sends(caller: str) -> None:
+    """A selector spec's route reads the request's body as well, so a read is judged the same."""
+    authentication, username, expected = REFUSED[caller]
+    request = factory.generic("GET", "/", b"{", content_type="application/json")
+    if username is not None:
+        force_authenticate(request, User.objects.create(username=username))
+    response = _list_view(authentication)(request)
+    response.render()
+    assert _answer(response) == expected
+
+
+def test_an_admitted_caller_s_unreadable_body_asks_the_check_once() -> None:
+    """Judged once on the failed read, and nothing is dispatched to ask it again."""
+    check = _Counting()
+    response = _post_raw(_view(check, [BasicAuthentication]), "unparseable", username="ada")
+    assert response.status_code == 400
+    assert check.asked == 1
+
+
 @pytest.mark.parametrize("refusal", REFUSALS)
 @pytest.mark.parametrize("route", ROUTES)
 def test_an_admitted_caller_is_told_what_its_body_lacks(route: str, refusal: str) -> None:
@@ -264,6 +365,13 @@ def test_a_check_reading_the_arguments_keeps_the_kernel_s_order() -> None:
     response = _post(_owner_view(), {}, username="ada")
     assert response.status_code == 400
     assert set(response.data) == {"submission_id", "outcome"}
+
+
+def test_a_check_reading_the_arguments_is_told_the_body_cannot_be_read() -> None:
+    """It cannot be judged on no arguments, so the read's own refusal is told, as a shape's is."""
+    response = _post_raw(_owner_view(), "unparseable", username="ada")
+    assert response.status_code == 400
+    assert set(response.data) == {"detail"}
 
 
 def test_a_check_reading_the_arguments_judges_a_well_formed_body() -> None:
@@ -511,19 +619,38 @@ def test_options_hides_a_method_exactly_when_its_write_is_refused_first(case: st
     checks refuse, and the POST's 400 then listed its fields. Fails for the
     scope check where OPTIONS asks ``authorize`` alone, and for the check
     reading the arguments, which raises asked with none, where it does not
-    judge as the edge judges.
+    judge as the edge judges. A body DRF cannot parse is told its 400 to the same
+    callers, and fails where the read is answered before the checks: every
+    caller is told it then, whatever OPTIONS shows them.
     """
     build, username, described = OPTIONS_CASES[case]
     view = _view(build(), [SessionAuthentication])
     user = None if username is None else User.objects.create(username=username)
-    options, posted = factory.options("/"), factory.post("/", {}, format="json")
+    options = factory.options("/")
+    posted = factory.post("/", {}, format="json")
+    unparseable = factory.post("/", b"{", content_type="application/json")
     if user is not None:
-        force_authenticate(options, user)
-        force_authenticate(posted, user)
+        for request in (options, posted, unparseable):
+            force_authenticate(request, user)
     answer = view(options)
     assert answer.status_code == 200
     assert ("POST" in answer.data.get("actions", {})) is described
     assert (view(posted).status_code == 400) is described
+    assert (view(unparseable).status_code == 400) is described
+
+
+def test_a_misconfigured_spec_fails_on_a_body_that_cannot_be_read() -> None:
+    """A configuration error, as every well-formed call raises, never the read's 400.
+
+    Fails where the read's refusal leaves before the judgment.
+    """
+    spec = ServiceSpec(
+        service=lambda *, submission_id, outcome: None, validator=SerializerValidator(_Review)
+    )
+    attrs = {"spec": spec, "permission_classes": [], "authentication_classes": []}
+    view = type("_View", (ServiceCreateView,), attrs).as_view()
+    with pytest.raises(ImproperlyConfigured, match="declares no permissions"):
+        view(factory.post("/", b"{", content_type="application/json"))
 
 
 @pytest.mark.parametrize("method", ["options", "post"])
@@ -542,3 +669,372 @@ def test_a_misconfigured_spec_fails_as_a_well_formed_call_fails(method: str) -> 
     request = getattr(factory, method)("/", {}, format="json")
     with pytest.raises(ImproperlyConfigured, match="declares no permissions"):
         view(request)
+
+
+def _reads_the_body(self: Any, request: Any) -> dict[str, Any]:
+    """A view hook of any chain, reading the body as a hook may."""
+    _ = request.data
+    return {}
+
+
+def _reads_the_body_off_the_view(self: Any) -> dict[str, Any]:
+    """DRF's own ``get_serializer_context``, which takes no request and reads the view's."""
+    _ = self.request.data
+    return {}
+
+
+HOOKS_READING = {
+    "get_input_data": _reads_the_body,
+    "get_service_kwargs": _reads_the_body,
+    "get_input_serializer_context": _reads_the_body,
+    "get_serializer_context": _reads_the_body_off_the_view,
+    "get_progress_reporter": _reads_the_body,
+}
+ACTION_HOOKS_READING = [
+    "get_review_input_data",
+    "get_review_service_kwargs",
+    "get_review_input_serializer_context",
+    "get_review_progress_reporter",
+]
+
+
+def _hooked(check: PermissionCheck, authentication: list[type], **hooks: Any) -> Any:
+    attrs = {
+        "spec": _spec(check),
+        "permission_classes": [],
+        "authentication_classes": authentication,
+        **hooks,
+    }
+    return type("_View", (ServiceCreateView,), attrs).as_view()
+
+
+def _hooked_action(check: PermissionCheck, authentication: list[type], **hooks: Any) -> Any:
+    class _ViewSet(ServiceViewSet):
+        permission_classes = [AllowAny]
+        authentication_classes = authentication
+
+        @service_action(_spec(check), detail=False, methods=["post"])
+        def review(self, request: Any) -> None:
+            """Stubbed."""
+
+    for name, hook in hooks.items():
+        setattr(_ViewSet, name, hook)
+    return _ViewSet.as_view({"post": "review"})
+
+
+HOOKED_ROUTES = {"view": _hooked, "viewset-action": _hooked_action}
+
+
+@pytest.mark.parametrize("hook", HOOKS_READING)
+@pytest.mark.parametrize("body", UNREADABLE)
+@pytest.mark.parametrize("caller", REFUSED)
+@pytest.mark.parametrize("refusal", REFUSALS)
+@pytest.mark.parametrize("route", HOOKED_ROUTES)
+def test_a_refused_caller_is_refused_where_a_view_hook_reads_the_body_first(
+    route: str, refusal: str, caller: str, body: str, hook: str
+) -> None:
+    """The hooks run before the edge, so a read one of them makes is judged where they run.
+
+    Fails where the read's own refusal leaves first: DRF's 400 or 415, with no
+    challenge. The kernel check's row fails too where the denial is raised
+    with no spec for ``_check_denied`` to compare it with: 403, not 401.
+    """
+    authentication, username, expected = REFUSED[caller]
+    view = HOOKED_ROUTES[route](_check(refusal), authentication, **{hook: HOOKS_READING[hook]})
+    assert _answer(_post_raw(view, body, username=username)) == expected
+
+
+@pytest.mark.parametrize("hook", ACTION_HOOKS_READING)
+def test_a_refused_caller_is_refused_where_an_action_s_own_hook_reads_the_body_first(
+    hook: str,
+) -> None:
+    """A chain's action layer runs where its catch-all does, so it is judged the same."""
+    view = _hooked_action(_check("kernel-check"), [BasicAuthentication], **{hook: _reads_the_body})
+    assert _answer(_post_raw(view, "unparseable", username=None)) == (401, SIGN_IN, CHALLENGE)
+
+
+def test_a_refused_caller_is_refused_where_the_project_s_own_check_is_drf_s() -> None:
+    """``IsAuthenticated`` as the spec's check, a body cut short, and each hook reading it first."""
+    check = DRFPermissionCheck([IsAuthenticated])
+    for hook, reads in HOOKS_READING.items():
+        view = _hooked(check, [BasicAuthentication], **{hook: reads})
+        response = view(factory.post("/", b"{bad", content_type="application/json"))
+        response.render()
+        assert _answer(response) == (401, SIGN_IN, CHALLENGE), hook
+
+
+@pytest.mark.parametrize("hook", HOOKS_READING)
+@pytest.mark.parametrize("body", UNREADABLE)
+@pytest.mark.parametrize("route", HOOKED_ROUTES)
+def test_an_admitted_caller_is_told_what_the_hook_s_read_raised(
+    route: str, body: str, hook: str
+) -> None:
+    view = HOOKED_ROUTES[route](
+        _check("kernel-check"), [BasicAuthentication], **{hook: HOOKS_READING[hook]}
+    )
+    response = _post_raw(view, body, username="editor")
+    assert response.status_code == UNREADABLE[body][2]
+    assert set(response.data) == {"detail"}
+
+
+@override_settings(DATA_UPLOAD_MAX_NUMBER_FIELDS=1)
+@pytest.mark.parametrize("caller", REFUSED)
+def test_a_refused_caller_is_refused_where_a_hook_s_read_raises_django_s_own(caller: str) -> None:
+    """``TooManyFieldsSent``, a ``SuspiciousOperation``: fails with that class out of the catch."""
+    authentication, username, expected = REFUSED[caller]
+    request = factory.post("/", b"a=1&b=2", content_type="application/x-www-form-urlencoded")
+    if username is not None:
+        force_authenticate(request, User.objects.create(username=username))
+    view = _hooked(_check("kernel-check"), authentication, get_input_data=_reads_the_body)
+    response = view(request)
+    response.render()
+    assert _answer(response) == expected
+
+
+class _Disconnected:
+    """A server's ``wsgi.input`` whose client went away, which Django reads as ``UnreadablePostError``.
+
+    Handed in as ``wsgi.input``, so Django builds its own ``WSGIRequest`` and ``LimitedStream``
+    around it as it does for a server. Swapped in as ``request._stream`` instead, it would answer
+    for the stream too: Django 6.0's ``body`` asks that stream ``seekable()`` before reading.
+    """
+
+    def read(self, *args: Any, **kwargs: Any) -> bytes:
+        raise OSError("The client went away.")
+
+    def readline(self, *args: Any, **kwargs: Any) -> bytes:
+        raise OSError("The client went away.")
+
+
+@pytest.mark.parametrize("caller", REFUSED)
+def test_a_refused_caller_is_refused_where_a_hook_s_read_finds_the_client_gone(caller: str) -> None:
+    """``UnreadablePostError``, as Django raises it: fails with that class out of the catch."""
+    authentication, username, expected = REFUSED[caller]
+    extra = {"wsgi.input": _Disconnected()}
+    request = factory.post("/", b"{}", content_type="application/json", **extra)
+    if username is not None:
+        force_authenticate(request, User.objects.create(username=username))
+    view = _hooked(_check("kernel-check"), authentication, get_input_data=_reads_the_body)
+    response = view(request)
+    response.render()
+    assert _answer(response) == expected
+
+
+def test_a_refused_row_write_is_refused_where_a_hook_reads_the_body_first() -> None:
+    """A ``PATCH`` to a row, whose call dispatches a variant of the spec, is refused the same."""
+    spec = ServiceSpec(
+        service=lambda *, instance, name: None,
+        permissions=(_check("kernel-check"),),
+        validator=SerializerValidator(_Name),
+        instance_selector_spec=SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=lambda *, pk: Author.objects.filter(pk=pk).first(),
+            reads=Parameters.of(Parameter("pk", "integer", required=True)),
+        ),
+    )
+    attrs = {
+        "spec": spec,
+        "permission_classes": [],
+        "authentication_classes": [BasicAuthentication],
+        "get_input_data": _reads_the_body,
+    }
+    view = type("_View", (ServiceUpdateView,), attrs).as_view()
+    request = factory.patch("/", b"{", content_type="application/json")
+    response = view(request, pk=1)
+    response.render()
+    assert _answer(response) == (401, SIGN_IN, CHALLENGE)
+
+
+def test_a_hook_s_failed_read_asks_the_check_once() -> None:
+    """Judged once on the failed read, and nothing is dispatched to ask it again."""
+    check = _Counting()
+    view = _hooked(check, [BasicAuthentication], get_input_data=_reads_the_body)
+    assert _post_raw(view, "unparseable", username="ada").status_code == 400
+    assert check.asked == 1
+
+
+def test_a_misconfigured_spec_fails_on_a_hook_s_failed_read() -> None:
+    spec = ServiceSpec(
+        service=lambda *, submission_id, outcome: None, validator=SerializerValidator(_Review)
+    )
+    attrs = {
+        "spec": spec,
+        "permission_classes": [],
+        "authentication_classes": [],
+        "get_input_data": _reads_the_body,
+    }
+    view = type("_View", (ServiceCreateView,), attrs).as_view()
+    with pytest.raises(ImproperlyConfigured, match="declares no permissions"):
+        view(factory.post("/", b"{", content_type="application/json"))
+
+
+@pytest.mark.parametrize("case", OPTIONS_CASES)
+def test_options_hides_a_method_exactly_when_a_hook_s_failed_read_is_refused_first(
+    case: str,
+) -> None:
+    """A hook reading the body moves nothing here: OPTIONS runs no hook, and the write judges alike."""
+    build, username, described = OPTIONS_CASES[case]
+    view = _hooked(build(), [SessionAuthentication], get_input_data=_reads_the_body)
+    user = None if username is None else User.objects.create(username=username)
+    options = factory.options("/")
+    unparseable = factory.post("/", b"{", content_type="application/json")
+    if user is not None:
+        force_authenticate(options, user)
+        force_authenticate(unparseable, user)
+    assert ("POST" in view(options).data.get("actions", {})) is described
+    assert (view(unparseable).status_code == 400) is described
+
+
+class _Recording(PermissionCheck):
+    """Records when it is asked and what the call's arguments showed it."""
+
+    message = EDITORS_ONLY
+
+    def __init__(self, events: list[Any]) -> None:
+        self.events = events
+
+    def has_permission(
+        self, principal: Any, spec: Any, *, arguments: Mapping[str, Any] | None = None
+    ) -> bool:
+        self.events.append(("check", dict(arguments) if arguments is not None else None))
+        return False
+
+
+def test_a_hook_runs_before_the_checks_and_its_value_is_shown_to_them() -> None:
+    """The order this leaves alone: a project's check reads what a view hook put in."""
+    events: list[Any] = []
+
+    def get_input_data(self: Any, request: Any) -> dict[str, Any]:
+        events.append("hook")
+        return {"outcome": "from the hook"}
+
+    view = _hooked(_Recording(events), [BasicAuthentication], get_input_data=get_input_data)
+    response = _post(view, {"submission_id": 7, "outcome": "client"}, username="ada")
+    assert response.status_code == 403
+    assert events == ["hook", ("check", {"submission_id": 7, "outcome": "from the hook"})]
+
+
+@pytest.mark.parametrize("body", UNREADABLE)
+def test_a_hook_that_does_not_read_the_body_still_runs_on_one_that_cannot_be_read(
+    body: str,
+) -> None:
+    """The body is not read ahead of the hooks: fails where it is, since the hook never runs."""
+    ran: list[bool] = []
+
+    def get_input_data(self: Any, request: Any) -> dict[str, Any]:
+        ran.append(True)
+        return {}
+
+    view = _hooked(_check("kernel-check"), [BasicAuthentication], get_input_data=get_input_data)
+    answer = _post_raw(view, body, username=None)
+    assert _answer(answer) == (401, SIGN_IN, CHALLENGE)
+    assert ran == [True]
+
+
+def test_a_hook_may_read_the_raw_body_of_a_multipart_request() -> None:
+    """Why the body is not read ahead of the hooks: a parsed multipart body has no raw bytes left.
+
+    Fails where it is: Django raises ``RawPostDataException`` at the hook's read,
+    the one a signature check over the raw bytes makes.
+    """
+    lengths: list[int] = []
+
+    def get_service_kwargs(self: Any, request: Any) -> dict[str, Any]:
+        lengths.append(len(request.body))
+        return {}
+
+    view = _hooked(
+        _check("kernel-check"), [BasicAuthentication], get_service_kwargs=get_service_kwargs
+    )
+    request = factory.post("/", {"submission_id": 7, "outcome": "accept"}, format="multipart")
+    force_authenticate(request, User.objects.create(username="editor"))
+    assert view(request).status_code == 204
+    assert lengths and lengths[0] > 0
+
+
+def _raising(raised: Exception) -> Any:
+    def get_input_data(self: Any, request: Any) -> dict[str, Any]:
+        raise raised
+
+    return get_input_data
+
+
+def test_a_hook_s_own_refusal_is_answered_before_the_checks_as_before() -> None:
+    """Nothing but a failed read is judged: fails where the catch takes every exception."""
+    check = _Counting()
+    view = _hooked(check, [BasicAuthentication], get_input_data=_raising(NotFound("No tenant.")))
+    response = _post(view, {}, username=None)
+    assert (response.status_code, response.data["detail"]) == (404, "No tenant.")
+    assert check.asked == 0
+
+
+def test_a_hook_s_own_error_raises_before_the_checks_as_before() -> None:
+    """A hook's bug stays the 500 it was, rather than a 401 hiding it from every refused caller."""
+    check = _Counting()
+    view = _hooked(check, [BasicAuthentication], get_input_data=_raising(KeyError("tenant")))
+    with pytest.raises(KeyError, match="tenant"):
+        view(factory.post("/", {}, format="json"))
+    assert check.asked == 0
+
+
+def test_a_hook_catching_the_failed_read_is_answered_by_the_checks() -> None:
+    """A hook that handles the failure raises nothing here, so the edge asks the checks as ever."""
+
+    def get_input_data(self: Any, request: Any) -> dict[str, Any]:
+        with contextlib.suppress(ParseError):
+            _ = request.data
+        return {}
+
+    view = _hooked(_check("kernel-check"), [BasicAuthentication], get_input_data=get_input_data)
+    assert _answer(_post_raw(view, "unparseable", username=None)) == (401, SIGN_IN, CHALLENGE)
+
+
+def test_a_hook_raising_what_a_read_raises_is_judged_like_a_read() -> None:
+    """A hook's own ``ParseError`` cannot be told from its read's, and a refused caller is told that."""
+    view = _hooked(
+        _check("kernel-check"), [BasicAuthentication], get_input_data=_raising(ParseError("Bad."))
+    )
+    assert _post(view, {}, username=None).status_code == 401
+    admitted = _post(view, {}, username="editor")
+    assert (admitted.status_code, admitted.data["detail"]) == (400, "Bad.")
+
+
+def _reads_the_body_in_initial(self: Any) -> list[Any]:
+    _ = self.request.data
+    return []
+
+
+@pytest.mark.parametrize("override", ["get_permissions", "get_throttles"])
+def test_an_override_reading_the_body_in_initial_answers_what_the_read_raises(
+    override: str,
+) -> None:
+    """DRF's ``initial()`` runs before the edge asks the checks, so nothing judges this read."""
+    view = _hooked(
+        _check("kernel-check"), [BasicAuthentication], **{override: _reads_the_body_in_initial}
+    )
+    response = _post_raw(view, "unparseable", username=None)
+    assert (response.status_code, response.data["detail"].code) == (400, "parse_error")
+    # The same caller with no such override is told to sign in, so the read is what answered.
+    no_override = _hooked(_check("kernel-check"), [BasicAuthentication])
+    assert _post_raw(no_override, "unparseable", username=None).status_code == 401
+
+
+class _StampedCheck(PermissionCheck):
+    """A check opting into the ``stamp`` seed by naming it, so it needs the view's own seeds."""
+
+    message = EDITORS_ONLY
+
+    def has_permission(self, principal: Any, spec: Any, *, stamp: str) -> bool:
+        return False
+
+
+def test_a_hook_s_failed_read_judges_a_check_naming_a_seed_with_the_view_s_seeds() -> None:
+    """Without the view's seeds the check cannot be asked, and the read's 400 leaves instead."""
+    view = _hooked(
+        _StampedCheck(),
+        [],
+        get_input_data=_reads_the_body,
+        pool_seeds=DEFAULT_POOL_SEEDS.extend(stamp=lambda: "stamp"),
+    )
+    response = _post_raw(view, "unparseable", username="editor")
+    assert (response.status_code, response.data["detail"]) == (403, EDITORS_ONLY)

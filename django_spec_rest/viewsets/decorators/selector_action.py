@@ -6,7 +6,9 @@ import functools
 from collections.abc import Callable
 from typing import Any
 
+from django.core.exceptions import ImproperlyConfigured
 from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelectorSpec
+from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
 from django_service_specs.types.selector_kind import SelectorKind
 from rest_framework.decorators import action
 from rest_framework.request import Request
@@ -17,6 +19,7 @@ from django_spec_rest.selectors.utils import (
     present_kernel_list,
     present_kernel_row,
 )
+from django_spec_rest.types.discriminated_action import DiscriminatedAction
 from django_spec_rest.views.mutation.map_service_error import (
     _AdditionalInputAPIException,
 )
@@ -65,19 +68,22 @@ def selector_action(
     (test_a_decorated_action_s_seeds). On DRF's own ``GenericViewSet`` or
     ``ViewSet`` nothing asks it, and such a keyword is the first request's
     ``TypeError``.
-    """
-    is_retrieve = spec.kind is SelectorKind.RETRIEVE
 
-    drf_kwargs: dict[str, Any] = {"detail": is_retrieve}
-    if methods is not None:
-        drf_kwargs["methods"] = methods
-    if url_path is not None:
-        drf_kwargs["url_path"] = url_path
-    if url_name is not None:
-        drf_kwargs["url_name"] = url_name
-    drf_kwargs.update(action_kwargs)
+    Anything but a ``SelectorSpec`` is refused where it is decorated, saying
+    which decorator serves it (test_selector_action's TestAtDecoration).
+    """
 
     def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
+        _refuse_a_spec_that_is_not_a_selector(spec, fn)
+        drf_kwargs: dict[str, Any] = {"detail": spec.kind is SelectorKind.RETRIEVE}
+        if methods is not None:
+            drf_kwargs["methods"] = methods
+        if url_path is not None:
+            drf_kwargs["url_path"] = url_path
+        if url_name is not None:
+            drf_kwargs["url_name"] = url_name
+        drf_kwargs.update(action_kwargs)
+
         @functools.wraps(fn)
         def handler(self: Any, request: Request, *args: Any, **kwargs: Any) -> Response:
             try:
@@ -92,6 +98,27 @@ def selector_action(
         return action(**drf_kwargs)(handler)
 
     return decorator
+
+
+def _refuse_a_spec_that_is_not_a_selector(spec: Any, fn: Callable[..., Any]) -> None:
+    """``ImproperlyConfigured`` naming the action, for a ``spec`` that is not a ``SelectorSpec``.
+
+    A ``ServiceSpec`` or a ``DiscriminatedAction`` is a write, so it is pointed at
+    ``@service_action``. Without this each fails as an ``AttributeError`` at
+    ``spec.kind``, with nothing said of what to do.
+    """
+    label = f"@selector_action {getattr(fn, '__qualname__', repr(fn))}"
+    if isinstance(spec, KernelSelectorSpec):
+        return
+    if isinstance(spec, (KernelServiceSpec, DiscriminatedAction)):
+        raise ImproperlyConfigured(
+            f"{label}: the spec is a {type(spec).__name__}, which writes, and "
+            "@selector_action serves a read. Decorate the action with @service_action."
+        )
+    raise ImproperlyConfigured(
+        f"{label}: the spec is a {type(spec).__name__}, and @selector_action serves a "
+        "SelectorSpec. Pass the SelectorSpec the action reads through."
+    )
 
 
 def _serve_kernel_spec(view: Any, spec: KernelSelectorSpec) -> Response:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from rest_framework.exceptions import MethodNotAllowed
 from rest_framework.mixins import ListModelMixin
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -18,8 +19,9 @@ from django_spec_rest.viewsets.utils import (
 class SelectorListMixin(ListModelMixin, _ActionSpecsMixin):
     """Compose with ``GenericViewSet``.
 
-    An absent ``"list"`` key falls through to DRF's default ``get_queryset()``.
-    Any entry that is not a kernel
+    An absent ``"list"`` key falls through to DRF's default ``get_queryset()``
+    where the viewset has rows and a serializer for it, and otherwise answers 405,
+    leaving ``Allow`` and the schema (test_a_read_with_no_fallback). Any entry that is not a kernel
     [`SelectorSpec`][django_service_specs.specs.selector_spec.SelectorSpec]
     raises ``ImproperlyConfigured``.
 
@@ -51,6 +53,8 @@ class SelectorListMixin(ListModelMixin, _ActionSpecsMixin):
             result = dispatch_list_once(self, spec)
             data, paginated = present_kernel_list(self, spec, result, filtered=True)
             return self.get_paginated_response(data) if paginated else Response(data)  # ty: ignore[unresolved-attribute]
+        if self._has_no_fallback("list"):
+            raise MethodNotAllowed(self.request.method)
         return super().list(request, *args, **kwargs)
 
     def get_queryset(self) -> Any:
