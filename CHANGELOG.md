@@ -55,10 +55,14 @@ carries; releases up to 0.62.0 are in
 
 - **A JSON `null` for a file field declaring `allow_null` clears the file**, where
   it answered 200 and kept it; without `allow_null` it is refused.
-  `SerializerValidator` hands `data` and the values `False`, the kernel's clear
-  value, on every transport, so a service reading the value itself sees `False`.
-  The bound serializer keeps `None`, so `serializer.save()` still clears. A form
-  body is unchanged.
+  `SerializerValidator` hands `data` and the values `""` on every transport, so a
+  service reading the value itself sees `""`. It is what the model field stores
+  for no file, so `setattr` then `save()`, `create(**data)` and `update(**data)`
+  take it and clear the file, and the kernel's `update_from_input` reads it as a
+  clear. The bound serializer keeps `None`, so `serializer.save()` still clears.
+  A form body is unchanged. A `PUT` omitting a `FileField(allow_null=True,
+  default=None)` is filled with that `None` by DRF and clears the file the same
+  way; a `PATCH` fills no default and keeps it.
 - **A form body's checked checkbox, `on`, is read as `True` for a boolean
   parameter.** A kernel `FormValidator` over a form body went through the kernel's
   `coerce_flat`, which spells a boolean `true`, `false`, `1` or `0` alone, so a

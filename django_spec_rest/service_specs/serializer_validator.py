@@ -132,10 +132,13 @@ class SerializerValidator(Validator):
     back over the key in a
     mapping ``data`` (see ``_lay_back``). A dataclass instance is ``data`` as
     built, and a ``many`` call's rows are neither validated apart nor laid back.
-    **A validated ``None`` for a file field is the kernel's clear value,**
-    ``False``, in ``data`` and the values, where the input is no form (see
-    ``_cleared``), so a ``null`` a field's ``allow_null`` lets through clears the
-    file a service writes with ``update_from_input``.
+    **A validated ``None`` for a file field is ``""``,** what the model field
+    stores for no file, in ``data`` and the values, where the input is no form
+    (see ``_cleared``). ``save()``, ``create`` and ``update`` take it as it is and
+    the kernel's ``update_from_input`` reads it as a clear, so a ``null`` a
+    field's ``allow_null`` lets through clears the file however a service
+    writes it. The same holds for a field DRF fills with its ``None`` default on
+    a whole call (test_a_put_leaving_out_a_file_defaulting_to_none_clears_it).
 
     **A partial call over a dataclass is refused**, a ``DataclassSerializer``
     subclass included: one builds its instance from every field, and a field
@@ -652,30 +655,32 @@ def _lay_back(data: Any, serializer: serializers.Serializer, held: Mapping[str, 
 
 
 def _cleared(field: serializers.Field | None, value: Any) -> Any:
-    """``value`` as ``field`` validated it, each file field's ``None`` the kernel's ``False``.
+    """``value`` as ``field`` validated it, each file field's ``None`` the empty file ``""``.
 
-    The kernel writes a file field as a ``ModelForm`` does: ``None`` keeps the
-    file the row holds and ``False`` clears it (``update_from_input``). So
-    ``False`` is what a ``null`` an ``allow_null`` field took means to a service
-    writing ``data``, or a parameter, through it (test_a_null_clears_the_file).
+    ``""`` is what the model field stores for no file, so a service writing
+    ``data``, or a parameter, through ``setattr`` and ``save()``, ``create(**data)``
+    or ``update(**data)`` clears the file with it (test_a_service_writing_data_itself_clears_the_file),
+    and ``update_from_input`` reads it as a clear while ``None`` keeps the file the
+    row holds. So ``""`` is what a ``null`` an ``allow_null`` field took means to
+    a service (test_a_null_clears_the_file).
 
     A new mapping where a file is cleared, and ``value`` itself where none is
     (test_data_with_nothing_to_clear_is_the_bound_serializer_s_own), so the bound
-    serializer's ``validated_data`` keeps DRF's ``None``: its ``save()`` writes
-    ``None`` as no file, and raises on ``False``
-    (test_serializer_save_clears_the_file_as_it_did). A nested serializer's file
-    is read through the nesting (test_a_nested_serializer_s_file_is_cleared), a
-    ``source="*"`` one's in the mapping it flattens into
-    (test_a_flattened_serializer_s_file_is_cleared), and a nested list's and a
-    ``many`` call's in each row (test_each_row_of_a_nested_many_is_cleared,
-    test_a_bulk_row_s_null_is_handed_the_clear_value), a ``null`` for the list
+    serializer's ``validated_data`` keeps DRF's ``None``, which its ``save()``
+    writes as no file (test_serializer_save_clears_the_file_as_it_did). A nested
+    serializer's file is read through the nesting
+    (test_a_nested_serializer_s_file_is_cleared), a ``source="*"`` one's in the
+    mapping it flattens into (test_a_flattened_serializer_s_file_is_cleared), and
+    a nested list's and a ``many`` call's in each row
+    (test_each_row_of_a_nested_many_is_cleared,
+    test_a_bulk_row_s_null_is_handed_the_empty_file), a ``null`` for the list
     itself left one (test_a_null_nested_many_stays_null). Anything else a
     serializer validated into is as built, a dataclass instance
-    (test_a_dataclass_s_field_keeps_its_none), whose declared field ``False`` is
+    (test_a_dataclass_s_field_keeps_its_none), whose declared field ``""`` is
     no value of, among them.
     """
     if isinstance(field, serializers.FileField):
-        return False if value is None else value
+        return "" if value is None else value
     if isinstance(field, serializers.ListSerializer):
         if not isinstance(value, list):
             return value

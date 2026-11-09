@@ -423,12 +423,17 @@ The query string is read by the kernel's flat reader:
   200 and leaves the row as it was, so the 500 is the service's, not DRF's.
 - **A JSON `null` for a file field clears the file where the field declares
   `allow_null`, and is refused where it does not.** The service's `data` and
-  parameter hold `False`, the kernel's clear value, which `update_from_input`
-  writes as no file; the bound serializer keeps DRF's `None`, so
+  parameter hold `""`, what the model field stores for no file, so a service
+  clears the file however it writes: `update_from_input` reads `""` as no file
+  (and `None` as keep it), and `setattr` then `save()`, `create(**data)` and
+  `qs.update(**data)` all store it. The bound serializer keeps DRF's `None`, so
   `serializer.save()` clears it too. A service reading the value itself must
-  read `False` as "no file". A form body is unchanged: DRF's blank for the field
+  read `""` as "no file". A form body is unchanged: DRF's blank for the field
   keeps the file, and a `FormValidator`'s clear checkbox clears it. A dataclass's
   field stays `None`, as declared, so a service writing one keeps the file.
+  A `PUT` omitting a file field declared `FileField(allow_null=True, default=None)`
+  is the same as a `null`: DRF fills the field with its `None` default, so the
+  file is cleared. A `PATCH` fills no default, so it keeps the file.
 - **A body that is no object answers `{"detail": "The body must be an object;
   got list."}`**, where drfs answered `{"non_field_errors": ["Invalid data.
   Expected a dictionary, but got list."]}`. Both are a 400.
