@@ -1916,7 +1916,7 @@ nested list's errors in whichever shape the installed DRF writes them.</p>
 <p><code>validated()</code> hands the service <code>data</code>, the serializer's
 <code>validated_data</code> - the validated mapping, or the dataclass instance a
 <code>DataclassSerializer</code> builds - and the bound serializer is bound for the
-call as <code>serializer</code>. <code>values</code> follow what <code>validated_data</code> is: a
+call as <code>serializer</code>, its <code>save()</code> the DRF one. <code>values</code> follow what <code>validated_data</code> is: a
 mapping's entries, keyed as DRF keys them, by each field's <code>source</code>; a dataclass
 instance's <code>__init__</code> fields, whether a dataclass was declared or a
 <code>DataclassSerializer</code> subclass was; and nothing for any other object a
@@ -1939,7 +1939,14 @@ the field's <code>source</code> or, where that is no single key, by the field's 
 and by the key an author named it under (see <code>_handed</code>), and it is laid
 back over the key in a
 mapping <code>data</code> (see <code>_lay_back</code>). A dataclass instance is <code>data</code> as
-built, and a <code>many</code> call's rows are neither validated apart nor laid back.</p>
+built, and a <code>many</code> call's rows are neither validated apart nor laid back.
+<strong>A validated <code>None</code> for a file field is <code>""</code>,</strong> what the model field
+stores for no file, in <code>data</code> and the values, where the input is no form
+(see <code>_cleared</code>). <code>save()</code>, <code>create</code> and <code>update</code> take it as it is and
+the kernel's <code>update_from_input</code> reads it as a clear, so a <code>null</code> a
+field's <code>allow_null</code> lets through clears the file however a service
+writes it. The same holds for a field DRF fills with its <code>None</code> default on
+a whole call (test_a_put_leaving_out_a_file_defaulting_to_none_clears_it).</p>
 <p><strong>A partial call over a dataclass is refused</strong>, a <code>DataclassSerializer</code>
 subclass included: one builds its instance from every field, and a field
 a partial call left out fails as a <code>TypeError</code> from inside the library.
@@ -2083,7 +2090,9 @@ it (<code>validator_input</code>), and never meets the seed in the call's pool.<
 <p><code>lenient</code> declares each field by name alone - any value, optional,
 nullable - so the kernel's shape check passes every value through and
 the serializer is the one to answer it, as a live DRF view's request
-always was answered (<code>kernel_spec_variant(lenient=True)</code>).</p>
+always was answered. The edge dispatches a lenient copy of a spec's Validator
+(<code>recording_spec</code>) for a form body, and for a JSON body where the view's
+<code>lenient_json_body</code> says so.</p>
 
 
     </div>

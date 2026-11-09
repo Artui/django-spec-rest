@@ -1353,6 +1353,29 @@ call <code>enable_openapi()</code> again after the reload.</p>
   description. A viewset needs no <code>queryset</code> for its schema. A capture no spec
   declares, or that only a validator's field names (the request body's, not
   the route's), stays drf-spectacular's string, with its warning.</li>
+<li><strong>A nullable or labelled schema</strong> is written for the document's OpenAPI
+  version. The kernel's schemas are JSON Schema, which 3.1 and later is, so
+  there the document keeps them as the kernel writes them, a route capture's
+  <code>enum</code> apart (below): <code>{"type": [t, "null"]}</code>, and a labelled choice as an
+  <code>anyOf</code> (a <code>oneOf</code> in a response) of <code>{"const", "title"}</code>. OpenAPI 3.0, drf-spectacular's default <code>OAS_VERSION</code>,
+  has no type list and no <code>const</code>, so under it a nullable schema is written
+  with <code>nullable: true</code>, and a labelled choice as an <code>enum</code> of its values in
+  order, with <code>null</code> listed and <code>nullable: true</code> where it admits null. Titles
+  are dropped, since 3.0 has no place for them. A choice that lists <code>null</code>
+  makes a schema <code>nullable</code> only where its <code>type</code> is not already one that
+  refuses it: a plain <code>type</code> beside a null choice stays non-nullable, as the
+  server answers <code>400</code> for a null there. This holds in a request body, a
+  response body, a <code>filter_set</code>'s query parameter and the read that types a
+  route capture, nested as deep as they go. A captured segment is always
+  there, so under every version a capture's <code>enum</code> lists no <code>null</code> (an <code>enum</code>
+  left with no other value is dropped), and under 3.0 drf-spectacular leaves
+  <code>nullable</code> off a path parameter itself. Inside a named component (a <code>DiscriminatedAction</code>'s
+  <code>{View}_{action}_Request</code>), drf-spectacular's enum hook moves the values to
+  <code>*Enum</code> components, as it does for a serializer's choice field, which can
+  rename a component they collide with. What an author writes in
+  <code>json_schema_extra</code> reaches the document as written, since no kernel adapter
+  writes those keys: under 3.0 it must be valid 3.0 (a <code>{"type": "null"}</code>
+  member or a numeric <code>exclusiveMinimum</code> is not).</li>
 <li><strong>A viewset method with no spec behind it</strong> is left out where <code>Allow</code> leaves
   it out: on a route serving some spec, a <code>create</code>, <code>update</code>,
   <code>partial_update</code> or <code>destroy</code> the router maps but the viewset declares no

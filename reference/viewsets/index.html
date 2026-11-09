@@ -2158,7 +2158,9 @@ the handler. The method exists so that <code>@service_action</code> can attach
 DRF <code>@action</code> metadata and pick up the action name from <code>__name__</code>.</p>
 <p>Pass a <a class="autorefs autorefs-external" href="https://artui.github.io/django-service-specs/reference/#django_service_specs.specs.service_spec.ServiceSpec"><code>ServiceSpec</code></a>
 for the service wiring. <code>detail</code>, <code>methods</code>, <code>url_path</code>, <code>url_name</code>,
-and any extra <code>**action_kwargs</code> are forwarded to DRF's <code>@action</code>.</p>
+and any extra <code>**action_kwargs</code> are forwarded to DRF's <code>@action</code>, a
+<code>lenient_json_body</code> among them, which outranks the viewset's for this
+action (test_a_service_action_may_declare_its_own).</p>
 <p>The spec runs through the kernel's own <code>dispatch</code>, as on the standalone
 mutation views: its <code>permissions</code> are asked there, after the view's own
 classes, a detail action's row is its own target selector's (never

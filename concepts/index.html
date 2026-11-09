@@ -1288,7 +1288,9 @@ a viewset declares no <code>spec</code>, and DRF refuses that keyword with a <co
   absent, a typed array or a multiple-choice filter splits on a comma, and
   each value is coerced to its parameter's type.</li>
 <li><strong>A JSON body</strong> is read as it was sent, and checked against the declared
-  types as sent: a JSON <code>"true"</code> is a string, not a boolean.</li>
+  types as sent: a JSON <code>"true"</code> is a string, not a boolean. A view's
+  <code>lenient_json_body</code>, or the project's <code>SPEC_REST_LENIENT_JSON_BODY</code>, has its
+  serializer alone answer one instead, as DRF does; the spec stays typed.</li>
 <li><strong>A form body</strong> is read as DRF reads one: <code>"on"</code> and a blank checkbox for a
   boolean, and the prefixed spellings <code>v.tenant</code> and <code>tags[0]</code> of a nested or
   list field.</li>

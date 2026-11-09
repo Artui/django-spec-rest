@@ -1417,8 +1417,10 @@ clients see change. drfs' history is in its
 </tr>
 </tbody>
 </table>
-<p>The package reads no setting of its own. <code>SPEC_REST</code> is reserved as the name
-of the first one.</p>
+<p>The package reads one setting of its own, <code>SPEC_REST_LENIENT_JSON_BODY</code>, which
+drfs had no counterpart of: it is off unless the project sets it, and it asks
+for a JSON body to be answered by the serializer alone (see <code>lenient_json_body</code>
+under <em>Bodies and arguments</em>).</p>
 <h2 id="the-codemod">The codemod<a class="headerlink" href="#the-codemod" title="Permanent link">&para;</a></h2>
 <p>The repository carries a codemod,
 <a href="https://github.com/Artui/django-spec-rest/blob/main/tools/drfs_codemod/README.md"><code>tools/drfs_codemod</code></a>,
@@ -1430,14 +1432,35 @@ taken for it. It turns each drfs <code>ServiceSpec</code> and <code>SelectorSpec
 kernel's, moving each field onto its seat as <a href="#declaring-a-spec">below</a>: the
 serializers and their contexts, <code>permission_classes</code>, an output selector's
 serializer and context, <code>document_service_error</code> and <code>field_audiences</code>. A
-spec's <code>success_status</code> and <code>response_finalizer</code> move to the views in the same
-module that serve it, as <a href="#views-and-viewsets">Views and viewsets</a> places them,
-for a spec bound to a module-level name; one built inline in a view is marked.
-A second run changes nothing.</p>
+spec's <code>success_status</code> and <code>response_finalizer</code> move to the views that serve
+it, as <a href="#views-and-viewsets">Views and viewsets</a> places them, for a spec bound to
+a module-level name; one built inline in a view is marked. A view in the same
+module takes them first. Otherwise all the files of a run are read together and
+the answer follows the spec's import into <code>views/</code> or <code>viewsets/</code>, bringing the
+import a name in it needs, when that is certain: exactly one module serves the
+spec, importing it by its own name, and both files are in the run. A module
+that only passes the spec to the <code>.register(...)</code> of a <code>SpecRegistry</code> it builds
+is not a second server and does not block the move. An absolute import is
+found under <code>--root</code>, the directory such imports start from, usually the parent of
+the top package; a wrong root finds no import, so every spec reads as having no
+view in the run. A second run changes nothing.</p>
+<p>An answer stays with its note, and says why, where moving it could change what a
+request answers: a class of the run that is based on the view and binds its own
+<code>spec</code> or <code>action_specs</code> would inherit it; a name the answer needs could mean
+something else in the view, from a star import there, a name the class binds, or
+another spec's answer in the same view that brings in a different object of that
+name; a spec reaches a second view through a star import of a package that
+re-exports it. A subclass the run cannot resolve (a base made by a call, imported
+inside a function, or from outside the run) is not seen. Files are written all or
+none while they are staged (a failure there changes nothing), and keep their
+mode and line ends; the codemod's README says exactly what a failure while moving
+them into place can leave.</p>
 <p>Every site it leaves gets a comment beginning <code># drfs-codemod:</code> above its
 statement, giving the reason, and a line of its report, <code>path:line: reason</code>.
 A site stays in the report until its comment is deleted. <code>--check</code> writes
-nothing and exits 1 while a file would still change.</p>
+nothing, reports the same moves and sites, and exits 1 while a file would still
+change. A file that cannot be parsed stops the run with exit 2 before anything is
+written, and a write that fails stops it with exit 2, naming the file.</p>
 <p>What it does not do:</p>
 <ul>
 <li><strong>Declare reads.</strong> drfs handed a selector the route captures and query
@@ -1453,9 +1476,16 @@ nothing and exits 1 while a file would still change.</p>
   <code>TargetGuard</code>, <code>ArgumentBinding</code> or an input marker (<code>InputRequired</code>,
   <code>NotClientInput</code>, <code>InputDescription</code>). A use of one is marked, and its import
   kept.</li>
-<li><strong>Answer from another module.</strong> A <code>success_status</code> or <code>response_finalizer</code>
-  whose view is in another module, or that no view serves, is marked on the
-  spec: set it on that view.</li>
+<li><strong>Guess at a view.</strong> A <code>success_status</code> or <code>response_finalizer</code> that no view
+  in the run serves is marked on the spec, with its value: set it on that view.
+  So is one whose spec two modules import, or one module under an alias, by a
+  star import or inside a function; and one whose value will not resolve in the
+  view, such as a lambda or a call naming anything, or a name imported relatively.
+  The marker's last clause says which. A view that already declares the answer,
+  or binds the value's name to something else, is marked too, and the answer stays
+  on the spec's note. The
+  <a href="https://github.com/Artui/django-spec-rest/blob/main/tools/drfs_codemod/README.md#a-view-in-another-module">codemod's README</a>
+  has the full rule.</li>
 <li><strong>Follow a module import of drfs.</strong> <code>import rest_framework_services</code> (or a
   submodule) is marked, and a spec built through it, such as
   <code>drfs.ServiceSpec(...)</code>, is left whole.</li>
@@ -1861,17 +1891,38 @@ over:</p>
 <li><strong>A form body is read as DRF reads one</strong> (<code>"on"</code>, a blank checkbox, the
   prefixed spellings <code>v.tenant</code> and <code>tags[0]</code> of a nested or list field), and a
   JSON body is checked against the spec's declared types as sent: <code>"true"</code> is
-  no boolean in JSON.</li>
+  no boolean in JSON. A kernel <code>FormValidator</code> is no serializer, so a form
+  body's boolean (a <code>BooleanField</code>, or a file field's clear checkbox) reads
+  <code>true</code>, <code>false</code>, <code>1</code>, <code>0</code> and, for a form body alone, a checkbox's <code>on</code>; a
+  query string's <code>?flag=on</code> is refused.</li>
 <li><strong>A JSON integer field still takes a numeric string.</strong> <code>{"start_hour": "10"}</code>
   is accepted as <code>10</code>, as drfs accepted it, while <code>{"title": 5}</code> is refused
   with <code>Expected a string.</code>: "as sent" is a check of the kind of value, and the
   kernel reads a numeric string as a number but not a number as a string.</li>
+<li><strong>A <code>lenient=True</code> subclass of <code>SerializerValidator</code> has a better home: the
+  view.</strong> Handing every call site a validator with <code>lenient=True</code> relaxes the
+  spec itself, so its tool schema reads <code>{"title": {}, "n": {}}</code> with no
+  <code>required</code>, on every transport. To have DRF answer a JSON body as drfs did, set
+  <code>lenient_json_body = True</code> on the view, on a viewset, as an <code>as_view()</code> or
+  <code>@service_action</code> keyword, or project-wide with
+  <code>SPEC_REST_LENIENT_JSON_BODY = True</code>; the view's own value beats the setting,
+  and <code>False</code> on a view keeps the strict check under the setting. It covers a
+  <code>many</code> spec's rows too. <code>{"title": 5}</code> for a <code>CharField</code> is then <code>"5"</code>, as the
+  serializer takes it, and every field's refusal is DRF's (a body that is no
+  object is still refused by the package: <code>{"detail": "The body must be an
+  object; got list."}</code>), while the spec's schema, its
+  tool schema and every other transport stay typed. The kernel's checks of the
+  declared types are what it turns off, its array cap
+  (<code>SERVICE_SPECS_MAX_ARRAY_LENGTH</code>) on a field included: give a <code>ListField</code> or
+  a nested <code>many=True</code> serializer under the switch a <code>max_length</code> of its own. A
+  <code>many</code> spec's list of rows keeps its cap.</li>
 <li><strong>A JSON field's refusal is worded by the kernel, not DRF.</strong> <code>Date has wrong
   format. Use one of these formats instead: YYYY-MM-DD.</code> is <code>Enter a valid
   date.</code>, <code>A valid integer is required.</code> is <code>Expected an integer.</code>, and <code>This
   field may not be null.</code> is <code>This field cannot be null.</code>. A client matching
   on a message must match the new one; the keys and the 400 are unchanged.
-  A form body keeps DRF's wording, since the serializer answers it.</li>
+  A form body keeps DRF's wording, since the serializer answers it, and so does
+  a JSON body under <code>lenient_json_body</code>.</li>
 <li><strong>A PATCH behind a <code>SerializerValidator</code> hands the service only the keys
   the client sent.</strong> The serializer is partial on a PATCH, as DRF's is, so
   <code>{}</code>, or a body naming one field of several, validates and reaches the
@@ -1884,6 +1935,19 @@ over:</p>
   <code>DataclassValidator</code> is validated whole on a PATCH and answers 400 for a
   missing field. Plain DRF answers a PATCH of <code>{}</code> to a <code>ModelSerializer</code> with
   200 and leaves the row as it was, so the 500 is the service's, not DRF's.</li>
+<li><strong>A JSON <code>null</code> for a file field clears the file where the field declares
+  <code>allow_null</code>, and is refused where it does not.</strong> The service's <code>data</code> and
+  parameter hold <code>""</code>, what the model field stores for no file, so a service
+  clears the file however it writes: <code>update_from_input</code> reads <code>""</code> as no file
+  (and <code>None</code> as keep it), and <code>setattr</code> then <code>save()</code>, <code>create(**data)</code> and
+  <code>qs.update(**data)</code> all store it. The bound serializer keeps DRF's <code>None</code>, so
+  <code>serializer.save()</code> clears it too. A service reading the value itself must
+  read <code>""</code> as "no file". A form body is unchanged: DRF's blank for the field
+  keeps the file, and a <code>FormValidator</code>'s clear checkbox clears it. A dataclass's
+  field stays <code>None</code>, as declared, so a service writing one keeps the file.
+  A <code>PUT</code> omitting a file field declared <code>FileField(allow_null=True, default=None)</code>
+  is the same as a <code>null</code>: DRF fills the field with its <code>None</code> default, so the
+  file is cleared. A <code>PATCH</code> fills no default, so it keeps the file.</li>
 <li><strong>A body that is no object answers <code>{"detail": "The body must be an object;
   got list."}</code></strong>, where drfs answered <code>{"non_field_errors": ["Invalid data.
   Expected a dictionary, but got list."]}</code>. Both are a 400.</li>

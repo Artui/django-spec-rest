@@ -966,6 +966,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#django_spec_rest.views.mutation.mutation_flow_mixin.MutationFlowMixin.lenient_json_body" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        lenient_json_body
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#django_spec_rest.views.mutation.mutation_flow_mixin.MutationFlowMixin.pool_seeds" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1022,6 +1033,28 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Settings
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_rest.settings.lenient_json_body" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        lenient_json_body
+      
+    </span>
+  </a>
   
 </li>
       
@@ -1369,6 +1402,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#django_spec_rest.views.mutation.mutation_flow_mixin.MutationFlowMixin.lenient_json_body" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        lenient_json_body
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#django_spec_rest.views.mutation.mutation_flow_mixin.MutationFlowMixin.pool_seeds" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1425,6 +1469,28 @@
         
       </ul>
     </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Settings
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_rest.settings.lenient_json_body" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        lenient_json_body
+      
+    </span>
+  </a>
   
 </li>
       
@@ -1980,6 +2046,37 @@ and returns a <code>Response</code> to replace the one built, or <code>None</cod
 
 
 
+<h3 id="django_spec_rest.views.mutation.mutation_flow_mixin.MutationFlowMixin.lenient_json_body" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">lenient_json_body</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+  </span>
+
+<a href="#django_spec_rest.views.mutation.mutation_flow_mixin.MutationFlowMixin.lenient_json_body" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">lenient_json_body</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Whether this view's serializer alone answers a JSON body, as it answers a
+form body: <code>{"title": 5}</code> for a <code>CharField</code> is <code>"5"</code>, and every refusal
+is DRF's, in DRF's words. <code>None</code> reads <code>SPEC_REST_LENIENT_JSON_BODY</code>, which
+is <code>False</code> unset, so the spec's declared types are checked first. Only what
+this view dispatches changes: the spec's schema, its tool schema and every
+other transport stay typed (test_a_lenient_json_body_over_http). A
+<code>@service_action</code> may declare its own, as a keyword of the decorator.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
 <h3 id="django_spec_rest.views.mutation.mutation_flow_mixin.MutationFlowMixin.pool_seeds" class="doc doc-heading">
             <span class="doc doc-object-name doc-attribute-name">pool_seeds</span>
 
@@ -2098,6 +2195,56 @@ here for keys visible only during response rendering.</p>
 
 
   </div>
+
+    </div>
+
+</div><h2 id="settings">Settings<a class="headerlink" href="#settings" title="Permanent link">&para;</a></h2>
+
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="django_spec_rest.settings.lenient_json_body" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">lenient_json_body</span>
+
+
+<a href="#django_spec_rest.settings.lenient_json_body" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">lenient_json_body</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">bool</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p><code>SPEC_REST_LENIENT_JSON_BODY</code>: whether a view's serializer alone answers a JSON body.</p>
+<p><code>False</code> when the project sets nothing, so a JSON body is checked against the
+spec's declared types first. A view's own <code>lenient_json_body</code> outranks it.</p>
+<p>Read on every call, never at import, as every setting the kernel reads is: a
+test's <code>override_settings</code> must reach a view built before it.</p>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="django.core.exceptions.ImproperlyConfigured">ImproperlyConfigured</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>anything but a <code>bool</code>, so a <code>"false"</code> is refused by
+name rather than read as true
+(test_a_setting_that_is_no_bool_is_refused_by_name).</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
 
     </div>
 

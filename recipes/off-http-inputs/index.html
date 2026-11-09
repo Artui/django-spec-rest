@@ -717,6 +717,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#a-selector-reading-requestquery_params-over-mcp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A selector reading request.query_params over MCP
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1018,6 +1029,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#a-selector-reading-requestquery_params-over-mcp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A selector reading request.query_params over MCP
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1098,6 +1120,37 @@ request's call again, so pass it none, or a new dict.</p>
 </ul>
 <p>The example project dispatches its update spec and its permission-checked
 send spec this way.</p>
+<h2 id="a-selector-reading-requestquery_params-over-mcp">A selector reading <code>request.query_params</code> over MCP<a class="headerlink" href="#a-selector-reading-requestquery_params-over-mcp" title="Permanent link">&para;</a></h2>
+<p><code>django-spec-mcp</code> knows no DRF: the <code>request</code> a spec's callables are handed there
+is Django's <code>HttpRequest</code>, which has no <code>query_params</code>. Declaring the value in the
+selector's <code>reads</code> makes it a tool argument, and is the better answer. A project
+keeping a selector that reads the request itself registers its own <code>request</code> seed,
+a DRF request built with
+<a class="autorefs autorefs-internal" title="build_offline_context" href="../../reference/service-specs/#django_spec_rest.service_specs.build_offline_context.build_offline_context"><code>build_offline_context</code></a>,
+which is this package's, so <code>django-spec-mcp</code> has no equivalent:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_service_specs</span><span class="w"> </span><span class="kn">import</span> <span class="n">DEFAULT_POOL_SEEDS</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_spec_mcp</span><span class="w"> </span><span class="kn">import</span> <span class="n">MCPServer</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_spec_rest</span><span class="w"> </span><span class="kn">import</span> <span class="n">build_offline_context</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="k">def</span><span class="w"> </span><span class="nf">drf_request</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">user</span><span class="p">,</span> <span class="n">request</span><span class="p">):</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="k">return</span> <span class="n">build_offline_context</span><span class="p">(</span><span class="n">user</span><span class="p">,</span> <span class="n">http_request</span><span class="o">=</span><span class="n">request</span><span class="p">)</span><span class="o">.</span><span class="n">request</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="n">server</span> <span class="o">=</span> <span class="n">MCPServer</span><span class="p">(</span><span class="n">pool_seeds</span><span class="o">=</span><span class="n">DEFAULT_POOL_SEEDS</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">request</span><span class="o">=</span><span class="n">drf_request</span><span class="p">))</span>
+</span></code></pre></div>
+<p>A registered <code>request</code> is the value at every stage of a tool's call and a kernel
+resource's read, and its resolver is handed the call's own. The wrapped request
+is a copy, with the principal as its <code>user</code>, so the call's own is untouched. Its
+<code>query_params</code> are the query string of the MCP endpoint's <code>POST</code>, usually empty,
+so a selector reading a value there falls to its default; pass <code>query_params=</code> to
+<code>build_offline_context</code> for a value the project fixes.</p>
+<p><strong>Not yet for a UI view.</strong> A view resource, an MCP Apps UI resource among them,
+holds a bare selector whose pool <code>django-spec-mcp</code> builds by spreading its own
+<code>request</code> beside the server's seeds, and the kernel refuses the two with a
+<code>TypeError</code> when one is read. Only a change to <code>django-spec-mcp</code> can fix it, and that change is not released.
+Until it is, keep this seed off a server serving view resources, and mount the
+specs reading it on a server of their own.</p>
 
 
 

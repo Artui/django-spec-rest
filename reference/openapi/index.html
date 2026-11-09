@@ -1373,7 +1373,11 @@ action mixins, and <code>@service_action</code> / <code>@selector_action</code>:
   stamp with no request, so a field a Validator declares to this transport
   is offered and one declared to another is not (<code>_caller_schema</code>). A
   body the wire refuses to go without says <code>required</code>, which
-  drf-spectacular leaves off a schema given whole (<code>_DemandedBody</code>).</li>
+  drf-spectacular leaves off a schema given whole (<code>_DemandedBody</code>).
+  Every schema the kernel writes reaches the document through
+  <code>lowered_for_the_document</code>, so under OpenAPI 3.0 a nullable or labelled
+  one is <code>nullable</code> and <code>enum</code>, in a request body, a response body and
+  a parameter alike.</li>
 <li><strong>The response body</strong> is a <code>SerializerPresenter</code>'s serializer, or any
   other presenter's <code>output_schema</code>, a list of rows where the spec
   presents rows (<code>_presents_rows</code>). A spec with no presenter documents
