@@ -38,15 +38,21 @@ taken for it. It turns each drfs `ServiceSpec` and `SelectorSpec` into the
 kernel's, moving each field onto its seat as [below](#declaring-a-spec): the
 serializers and their contexts, `permission_classes`, an output selector's
 serializer and context, `document_service_error` and `field_audiences`. A
-spec's `success_status` and `response_finalizer` move to the views in the same
-module that serve it, as [Views and viewsets](#views-and-viewsets) places them,
-for a spec bound to a module-level name; one built inline in a view is marked.
-A second run changes nothing.
+spec's `success_status` and `response_finalizer` move to the views that serve
+it, as [Views and viewsets](#views-and-viewsets) places them, for a spec bound to
+a module-level name; one built inline in a view is marked. A view in the same
+module takes them first. Otherwise all the files of a run are read together and
+the answer follows the spec's import into `views/` or `viewsets/`, bringing the
+import a name in it needs, when that is certain: exactly one module serves the
+spec, importing it by its own name, and both files are in the run. An absolute
+import is found under `--root`. A second run changes nothing.
 
 Every site it leaves gets a comment beginning `# drfs-codemod:` above its
 statement, giving the reason, and a line of its report, `path:line: reason`.
 A site stays in the report until its comment is deleted. `--check` writes
-nothing and exits 1 while a file would still change.
+nothing, reports the same moves and sites, and exits 1 while a file would still
+change. A file that cannot be parsed stops the run with exit 2 before anything is
+written.
 
 What it does not do:
 
@@ -63,9 +69,16 @@ What it does not do:
   `TargetGuard`, `ArgumentBinding` or an input marker (`InputRequired`,
   `NotClientInput`, `InputDescription`). A use of one is marked, and its import
   kept.
-- **Answer from another module.** A `success_status` or `response_finalizer`
-  whose view is in another module, or that no view serves, is marked on the
-  spec: set it on that view.
+- **Guess at a view.** A `success_status` or `response_finalizer` that no view
+  in the run serves is marked on the spec, with its value: set it on that view.
+  So is one whose spec two modules import, or one module under an alias, by a
+  star import or inside a function; and one whose value will not resolve in the
+  view, such as a lambda or a call naming anything, or a name imported relatively.
+  The marker's last clause says which. A view that already declares the answer,
+  or binds the value's name to something else, is marked too, and the answer stays
+  on the spec's note. The
+  [codemod's README](https://github.com/Artui/django-spec-rest/blob/main/tools/drfs_codemod/README.md#a-view-in-another-module)
+  has the full rule.
 - **Follow a module import of drfs.** `import rest_framework_services` (or a
   submodule) is marked, and a spec built through it, such as
   `drfs.ServiceSpec(...)`, is left whole.
