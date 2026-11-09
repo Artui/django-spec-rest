@@ -62,3 +62,40 @@ request's call again, so pass it none, or a new dict.
 
 The example project dispatches its update spec and its permission-checked
 send spec this way.
+
+## A selector reading `request.query_params` over MCP
+
+`django-spec-mcp` knows no DRF: the `request` a spec's callables are handed there
+is Django's `HttpRequest`, which has no `query_params`. Declaring the value in the
+selector's `reads` makes it a tool argument, and is the better answer. A project
+keeping a selector that reads the request itself registers its own `request` seed,
+a DRF request built with
+[`build_offline_context`][django_spec_rest.service_specs.build_offline_context.build_offline_context],
+which is this package's, so `django-spec-mcp` has no equivalent:
+
+```python
+from django_service_specs import DEFAULT_POOL_SEEDS
+from django_spec_mcp import MCPServer
+from django_spec_rest import build_offline_context
+
+
+def drf_request(*, user, request):
+    return build_offline_context(user, http_request=request).request
+
+
+server = MCPServer(pool_seeds=DEFAULT_POOL_SEEDS.extend(request=drf_request))
+```
+
+A registered `request` is the value at every stage of a tool's call and a kernel
+resource's read, and its resolver is handed the call's own. The wrapped request
+is a copy, with the principal as its `user`, so the call's own is untouched. Its
+`query_params` are the query string of the MCP endpoint's `POST`, usually empty,
+so a selector reading a value there falls to its default; pass `query_params=` to
+`build_offline_context` for a value the project fixes.
+
+**Not yet for a UI view.** A view resource, an MCP Apps UI resource among them,
+holds a bare selector whose pool `django-spec-mcp` builds by spreading its own
+`request` beside the server's seeds, and the kernel refuses the two with a
+`TypeError` when one is read. The fix is in `django-spec-mcp` and is not released.
+Until it is, keep this seed off a server serving view resources, and mount the
+specs reading it on a server of their own.
