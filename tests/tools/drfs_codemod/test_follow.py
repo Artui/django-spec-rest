@@ -488,6 +488,7 @@ def test_a_test_module_reading_the_spec_is_no_second_view(project: Project) -> N
         "from .specs import enrolment\n\n\ndef test_it():\n    assert enrolment.enrol\n",
     )
     project.write("tests/helpers.py", f"{ABSOLUTE}\n\n\nuse = enrol\n")
+    project.write("tests.py", f"{ABSOLUTE}\n\n\nuse = enrol\n")
     project.run()
     assert _answers(view) == ["success_status", "response_finalizer"]
 

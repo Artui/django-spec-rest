@@ -647,7 +647,8 @@ class _Rewrite(cst.CSTTransformer):
         A name the module already binds holds only as the very import the spec's
         module spelled, at module level (``test_a_function_local_import_of_the_name_is_not_read``)
         and above the class (``test_an_import_of_the_same_name_below_the_view_is_not_read``),
-        with nothing else binding it (``test_a_second_binding_of_the_name_is_not_read``).
+        with nothing else binding it (``test_a_second_binding_of_the_name_is_not_read``), and
+        no other import of it (``test_a_name_the_view_binds_otherwise_is_not_carried``).
         """
         head = arrival.head
         if head is None:

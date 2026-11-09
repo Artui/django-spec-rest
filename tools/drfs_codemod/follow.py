@@ -94,13 +94,18 @@ def read_sources(files: Iterable[Path]) -> dict[Path, str]:
 
 
 def _is_test(where: str) -> bool:
-    """Whether a module is a test's, by its path under its root: one reads a spec, not serves it."""
+    """Whether a module is a test's, by its path under its root: one reads a spec, not serves it.
+
+    Each spelling is held by a module of ``test_a_test_module_reading_the_spec_is_no_second_view``
+    (``test_*.py``, ``tests.py``, under ``tests/``) or of
+    ``test_a_test_module_star_import_is_no_second_view`` (``*_test.py``, ``conftest.py``).
+    """
     path = PurePosixPath(where)
     name = path.name
     return (
         name.startswith("test_")
         or name.endswith("_test.py")
-        or name == "conftest.py"
+        or name in ("conftest.py", "tests.py")
         or "tests" in path.parts[:-1]
     )
 
@@ -154,7 +159,10 @@ class _Index:
         if name in analysis.answers:
             return file, name
         for site in analysis.imported:
-            # An aliased or function-local re-export is blocked by its own census entry.
+            # Another name's re-export is not this one
+            # (``test_a_re_export_under_another_name_is_not_the_spec``). The ``local`` half
+            # and a function-local re-export hold no test: each blocks the spec by its own
+            # census entry, so this only keeps the walk from reading what they say.
             if site.local == name == site.carried.obj:
                 carried = site.carried
                 target = self._file(file, carried.relative, carried.module)
@@ -174,6 +182,11 @@ class _Index:
                 self._by_attribute(module, site)
 
     def _star(self, module: _Module, site: ImportSite) -> None:
+        """A star import may bind any spec there, unseen (``test_a_star_import_leaves_it``).
+
+        Not one from outside the run (``test_a_star_import_of_what_is_outside_the_run_blocks_nothing``)
+        or in a test (``test_a_test_module_star_import_is_no_second_view``).
+        """
         where = self.display(module.file)
         carried = site.carried
         file = self._file(module.file, carried.relative, carried.module)
@@ -231,7 +244,15 @@ class _Index:
         *,
         aliased: bool,
     ) -> None:
-        """Count a module as serving ``spec``, or record why that cannot be told."""
+        """Count a module as serving ``spec``, or record why that cannot be told.
+
+        Held by, in order: ``test_a_test_module_reading_the_spec_is_no_second_view`` and
+        ``test_a_test_module_serving_the_spec_is_a_second_view`` (both halves of the first
+        guard), ``test_a_function_local_import_leaves_it``,
+        ``test_a_spec_imported_under_an_alias_is_left``,
+        ``test_a_use_beside_the_serving_one_leaves_it``,
+        ``test_an_import_nothing_reads_is_no_second_view``.
+        """
         where = self.display(module.file)
         sites = module.analysis.use_sites.get(key, [])
         if not sites and _is_test(where):
@@ -256,6 +277,8 @@ class _Index:
                 spec = (file, variable)
                 servers = list(self.servers.get(spec, {}).values())
                 why = self.blocked.get(spec)
+                # With no server nothing would move, so the plain note stands
+                # (``test_a_spec_nothing_imports_keeps_the_plain_note``).
                 if why is None and servers:
                     why = self._own_module(analysis, variable) or self._two_modules(servers)
                 for name, arg in answers.items():
@@ -263,6 +286,11 @@ class _Index:
         return plans
 
     def _own_module(self, analysis: _Analysis, variable: str) -> str | None:
+        """Why the spec's own module makes a move uncertain.
+
+        Held by ``test_a_spec_built_in_a_function_is_left``, ``test_a_spec_bound_twice_is_left``
+        and ``test_a_use_in_its_own_module_leaves_it``.
+        """
         if variable not in analysis.built_at_module_level:
             return "built inside a function"
         bound = analysis.module_scope.assignments[variable]
@@ -308,7 +336,11 @@ class _Index:
     def _value(
         self, analysis: _Analysis, value: str, reach: tuple[int, str] | None
     ) -> str | tuple[str | None, Carried | None]:
-        """What ``value`` needs in the view, as (the name, its import), or why it cannot go there."""
+        """What ``value`` needs in the view, as (the name, its import), or why it cannot go there.
+
+        Each refusal is a case of ``test_a_value_that_would_not_resolve_is_left_and_the_view_imports``,
+        but for ``reach``: ``test_a_spec_s_own_name_through_a_re_export_is_left``.
+        """
         try:
             tree = ast.parse(value, mode="eval").body
         except SyntaxError:
@@ -333,7 +365,11 @@ class _Index:
     def _imported_value(
         self, analysis: _Analysis, head: str, bindings: int
     ) -> str | tuple[str | None, Carried | None]:
-        """The spec module's own import of ``head``, carried only if it reads the same in a view."""
+        """The spec module's own import of ``head``, carried only if it reads the same in a view.
+
+        Each refusal is a case of ``test_a_value_that_would_not_resolve_is_left_and_the_view_imports``;
+        ``top_level`` is ``test_a_function_local_import_of_the_value_s_name_is_not_the_one_carried``.
+        """
         if bindings != 1:
             return f"{head} is imported more than once"
         carried = next(

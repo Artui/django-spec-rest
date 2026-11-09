@@ -105,8 +105,8 @@ Anything else is left with the note, which ends in why: a spec imported by two
 modules, under an alias, by a star import or inside a function; one its own
 module reuses or binds twice; a lambda or a call naming anything, a builtin, a
 name the spec module imports relatively or from drfs. A test module (`test_*.py`,
-`*_test.py`, `conftest.py`, or under `tests/`) reading a spec does not count as a
-use; a view declared in one does.
+`*_test.py`, `tests.py`, `conftest.py`, or under `tests/`) reading a spec does not
+count as a use; a view declared in one does.
 
 The view can refuse. If it already declares that answer, or a value's name means
 something else there, the view gets a comment saying so and the spec's note stays,
