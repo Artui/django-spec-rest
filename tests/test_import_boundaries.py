@@ -1,28 +1,3 @@
-"""Where the package reaches into DRF and into its own HTTP views, held as ratchets.
-
-The kernel's ``dispatch`` is the one transport-neutral execution path, and this
-package is its HTTP edge: the views read a request into the kernel's arguments and
-answer its result as DRF. Every module outside the HTTP transport that imports
-``rest_framework`` or ``django_spec_rest.views`` is a place the edge's helpers
-depend on the transport they sit beneath, so each is listed.
-
-These are not bans. Most entries below are legitimate today — the offline request
-types are DRF's ``Request``, and the call-context resolver lives in
-``views/utils.py`` beside the view helpers that share it. What the tests forbid is
-**growth without a decision**: an import that is not listed fails,
-and so does a listed import that no longer exists, so the lists can only shrink
-and every shrink is recorded here rather than lost.
-
-Each allowlist is keyed by module path relative to the package, with the modules
-it imports. A ``from pkg import name`` counts as importing ``pkg.name`` when that
-is a module, so ``from rest_framework import serializers`` is recorded as
-``rest_framework.serializers`` rather than as the whole of DRF.
-
-The walk reads every ``import`` in the file — top level, function-local and under
-``TYPE_CHECKING`` alike — because a deferred import is still a dependency; it is
-only a later one.
-"""
-
 from __future__ import annotations
 
 import ast
@@ -104,8 +79,7 @@ def _is_module(dotted: str) -> bool:
     try:
         return importlib.util.find_spec(dotted) is not None
     except (ImportError, ValueError):
-        # ``find_spec`` imports the parent to look inside it; a parent that is
-        # itself not a package raises rather than answering ``None``.
+        # ``find_spec`` imports the parent to look inside it.
         return False
 
 
