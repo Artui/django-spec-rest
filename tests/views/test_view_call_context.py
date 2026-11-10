@@ -45,13 +45,14 @@ def _request() -> Request:
     return Request(factory.get("/"))
 
 
-def test_the_dict_carries_the_edge_s_four_standard_entries() -> None:
+def test_the_dict_carries_the_edge_s_four_standard_entries_and_its_stamp() -> None:
     view, request = _View(), _request()
     assert view_call_context(view, request) == {
         "request": request,
         "view": view,
         "format": None,
         "action": "create",
+        "transport": "rest",
     }
 
 

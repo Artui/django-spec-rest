@@ -612,7 +612,7 @@ def test_dispatch_carries_the_call_s_context_to_a_list_and_a_service_spec() -> N
 
 
 class _Shaped(serializers.Serializer):
-    """Reads what a read-shaping query param would put on the request, as a ``fields`` selector does."""
+    """Reads what a read-shaping query param puts on the request, as ``fields`` selectors do."""
 
     name = serializers.CharField()
     fields_asked = serializers.SerializerMethodField()
@@ -833,7 +833,7 @@ def test_an_offline_pair_is_built_for_its_own_action_within_one_edge_call() -> N
 
 
 class _ReadsTheQuery(serializers.Serializer):
-    """Reads the request's query string and the view's action, tolerating a request DRF never wrapped."""
+    """Reads the request's query string and the view's action, tolerating an unwrapped request."""
 
     name = serializers.CharField()
     query = serializers.SerializerMethodField()

@@ -63,11 +63,19 @@ _DECLARING = "drfs' declaration type, gone with it; see 'Declaring a spec' on th
 # Why a drfs name has no import to rewrite to, for the names a project is most
 # likely to hold. Every other dropped name gets the default.
 DROP_REASONS = {
-    "PolymorphicServiceSpec": "declare one kernel spec per route or action",
+    "PolymorphicServiceSpec": (
+        "declare a DiscriminatedAction to keep one URL, else one kernel spec per route or "
+        "action; permission_strategy= is dropped"
+    ),
     "UrlKwarg": "declare the capture as a kernel Parameter in reads=",
-    "QueryParam": "declare the read as a kernel Parameter in reads= (or shapes= where no callable names it)",
+    "QueryParam": "declare the read as a kernel Parameter in reads= "
+    "(or shapes= where no callable names it)",
     "ArgumentBinding": _DECLARING,
-    "OfflineContract": "no counterpart: a kernel spec dispatches off HTTP through the kernel's dispatch",
+    "OfflineContract": (
+        "declare its parts on their seats: field_audiences on SerializerPresenter, url_kwargs as a "
+        "Parameter in the selector's reads= (a capture the model must never see is a server "
+        "argument), query_params as shapes= on the spec; see 'Declaring a spec' on the moving page"
+    ),
     "TargetGuard": "use the kernel's preconditions and object permission, which see the row",
     "InputRequired": "an input marker: declare the read as a kernel Parameter in reads=",
     "NotClientInput": "an input marker: fill the key from a typed kwargs provider",
@@ -121,7 +129,7 @@ def _module_name(root: Path, package: str, path: Path) -> str:
 
 
 def _top_level(body: list[ast.stmt]) -> list[ast.stmt]:
-    """The module's statements, with the branches of a top-level ``if`` or ``try`` read as its own."""
+    """The module's statements, with a top-level ``if`` or ``try``'s branches read as its own."""
     out: list[ast.stmt] = []
     for node in body:
         out.append(node)
@@ -193,7 +201,7 @@ def resolve(trees: dict[str, dict[str, Definition]], module: str, name: str) -> 
 def _rest_target(
     rest: dict[str, dict[str, Definition]], definition: Definition, name: str
 ) -> tuple[str, str] | None:
-    """Where this package keeps a drfs definition: its root if the root exports it, else its module."""
+    """Where this package keeps a drfs definition: its root if exported there, else its module."""
     same_path = REST + definition.module[len(DRFS) :]
     found = resolve(rest, same_path, name)
     if found is None:

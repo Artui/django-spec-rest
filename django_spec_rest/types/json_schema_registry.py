@@ -1,5 +1,3 @@
-"""``JsonSchemaRegistry`` — consumer-extensible type → JSON Schema mappings."""
-
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -10,42 +8,10 @@ from typing import Any
 _Rule = tuple[type, dict[str, Any]]
 
 
-# The built-in mappings live with the walkers, not here: a registry carries
-# only consumer additions, so the empty default stays dependency-free.
+# Built-in mappings live with the walkers; a registry holds only consumer additions.
 @dataclass(frozen=True)
 class JsonSchemaRegistry:
-    """Consumer-extensible ``type → JSON Schema fragment`` rules for the DRF seats.
-
-    Rules are tried in order and the first match wins, **before** the built-in
-    mappings — so a rule both adds support for a custom type and can override a
-    built-in. The matched fragment is copied per use, so callers may freely
-    mutate the returned schema.
-
-    Immutable: ``extend`` returns a *new* registry rather than mutating, so
-    there is no shared global state to leak across callers or tests. Start from
-    [`DEFAULT_JSON_SCHEMA_REGISTRY`][django_spec_rest.types.json_schema_registry.DEFAULT_JSON_SCHEMA_REGISTRY],
-    the empty base, layer rules on, and hand the result to a seat as its
-    ``json_schema_registry=``:
-
-        registry = DEFAULT_JSON_SCHEMA_REGISTRY.extend(
-            fields=[(MoneyField, {"type": "string", "format": "money"})],
-        )
-        validator = SerializerValidator(MySerializer, json_schema_registry=registry)
-
-    That rule describes every ``MoneyField`` of the serializer as the kernel
-    spec it serves compiles, where only what the kernel can state is kept: the
-    field is a string there and ``format: "money"``, which is none of the
-    kernel's four formats, is dropped
-    (test_registry_through_the_compiled_spec's
-    test_the_kernel_s_schema_states_the_rule_but_for_the_dropped_format). A rule
-    ``extend`` prepends wins over the registry's own
-    (test_a_rule_an_extension_prepends_wins_over_the_registrys_own).
-
-    Attributes:
-        fields: DRF ``Field`` subclasses, matched by ``isinstance`` when a
-            ``SerializerValidator`` or ``SerializerPresenter`` walks its
-            serializer.
-    """
+    """Consumer-extensible ``type → JSON Schema fragment`` rules for the DRF seats."""
 
     fields: tuple[_Rule, ...] = ()
 

@@ -454,7 +454,7 @@ class TestTheCallsRequestAndView:
 
 @pytest.mark.django_db
 class TestRequestAuth:
-    """A wrapped or offline request's ``auth`` is ``None``, set without running DRF's authenticators.
+    """A wrapped or offline request's ``auth`` is ``None``, set without DRF's authenticators.
 
     DRF's ``request.auth`` authenticates on first read, and a request built off
     DRF has no authenticator, so the read would set ``request.user`` to

@@ -1,12 +1,10 @@
-"""Schema-only ``Serializer`` standing for the ``400`` a service's ``ServiceValidationError`` is answered with."""
-
 from __future__ import annotations
 
 from rest_framework import serializers
 
 
 class ServiceValidationErrorSerializer(serializers.Serializer):
-    """The call was refused as invalid. The messages are a list, or an object by name whose values are a message, a list or an object of the same shape."""
+    """Refused as invalid: messages as a list, or by name, each a message, list or object."""
 
     # The docstring above is the component's description in the generated
     # document, so it is written for a client; the reference is

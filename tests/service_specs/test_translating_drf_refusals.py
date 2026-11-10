@@ -1,4 +1,4 @@
-"""``translating_drf_refusals`` changes what an author callable raises, and nothing a reader of it takes.
+"""``translating_drf_refusals`` changes what an author callable raises, and nothing a reader takes.
 
 An author applies it to a callable of a kernel spec. The kernel binds the call
 by the callable's signature, awaits it by its kind, and reads the keys a

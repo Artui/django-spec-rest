@@ -1,5 +1,3 @@
-"""``SerializerPresenter`` - the kernel's Presenter over a DRF serializer."""
-
 from __future__ import annotations
 
 import dataclasses
@@ -69,99 +67,7 @@ class _Shape:
 
 
 class SerializerPresenter(Presenter):
-    """An operation's output declared as a DRF serializer, rendered through it.
-
-    ``output()`` reads the serializer's fields into the kernel's
-    [`Output`][django_service_specs.output.output.Output], in declaration order:
-
-    - A ``write_only`` field is never rendered, so it is not declared.
-    - **Type**: JSON's own, with ``decimal``, ``date-time`` and ``date`` as
-      formats. A nested serializer is an object carrying its own ``Output``; a
-      ``many=True`` serializer, and a ``ListField`` whose child is one, is an
-      array of that ``Output``; a ``MultipleChoiceField`` is an array of its
-      choices. A field DRF gives no type, a
-      ``SerializerMethodField`` or a ``JSONField`` say, is declared ``any``,
-      so a schema describes it with no ``type`` rather than as a string it may
-      not be.
-    - **Label**: the author's, when one was written. DRF derives ``Vat id`` from
-      ``vat_id`` when none was, and that is ``None`` here: a derived label
-      says nothing the name does not.
-    - **Choices**: every ``(value, display)`` pair a ``ChoiceField`` holds,
-      typed by the values when they share a type.
-    - **Presence**: ``always_present`` is true where DRF is bound to emit the
-      key: a required field, one with a default, and one allowing ``null``. A
-      read-only field with neither is dropped when DRF cannot read it.
-      Under ``shaped=True``, no field at any depth is: the spec compiles a
-      shape, an argument such as a ``fields`` selector that the serializer
-      reads off the request, and a key is always present only if it is
-      present under every value the caller may send. Such an argument
-      declares no choices, so the values are any string, and which keys
-      each one drops is the serializer's to decide when it renders, so the
-      keys present under all of them are none that can be named. The
-      default, ``False``, is the presence above.
-    - **Marking**: the ``FieldMarking`` found in the field's ``style``, under
-      ``MARKING`` or any other key, and a value under ``MARKING`` that is not
-      one refused. Nested outputs carry their own.
-
-    ``field_audiences`` is the spec's own output declaration, a field name to a
-    ``FieldMarking``, layered over the serializer's markings **at the top level
-    only**. The layered marking is the
-    compiled ``OutputField.marking``, which is the seat
-    [`audience_projection_for_spec`][django_service_specs.dispatch.audience_projection_for_spec.audience_projection_for_spec]
-    reads, so every engine projects the one declaration with no ``overrides=``,
-    which stays a mount's. A name that is no output field is refused when the
-    output is read: a hidden marking that silently applies to nothing is a field
-    shown to an agent.
-
-    ``presented(value, context)`` is what the kernel's ``present`` asks for:
-    the serializer's ``.data`` for one value, under the serializer context
-    derived from the call's ``PresentationContext``. The ``request`` and
-    ``view`` the call registered as pool seeds, read from ``ambient``, are the
-    serializer's own, and where a seed is absent or ``None``, the entry of
-    that name in ``call_context``; a call that carries neither gets an
-    offline request whose ``user`` is the principal, so a
-    ``SerializerMethodField`` reading ``self.context["request"].user``
-    renders for the principal the call ran for, and whose query string is
-    the call's ``shapes``, so a serializer reading a ``fields`` selector off
-    ``request.query_params`` finds the one the caller sent. A request the
-    call carries is left as it is.
-    Over that, the output half of the view hooks a DRF edge adds to the
-    result's context (``output_view_layers``), resolved with the value, then
-    this Presenter's own ``serializer_context``, each winning on a key it shares
-    with what it layers over (see
-    ``serializer_context`` in ``service_specs/utils.py``).
-    The callable declares what it reads from the call's pool, ``request``,
-    ``view``, ``user`` or a registered seed, and the value being presented
-    under ``value_keyword``: ``result`` for a service's output, ``instance``
-    for a retrieve, nothing where it is ``None``.
-
-    ``presented_rows(values, context)`` is what the kernel's ``present`` asks
-    for a list: a page's rows over HTTP, a ``many`` service's return. **The
-    callable is asked once for them all**, offered the rows under ``page``,
-    the name drfs gave a list's, and under ``value_keyword`` too where it
-    names one, so a ``many`` service's ``result`` is its whole return, as the
-    view's output hook is handed it. A lookup it batches over the rows runs
-    once a page, not once a row. The rows are a list, already evaluated:
-    not a queryset to filter further, nor DRF's ``Page``. They render as one
-    ``many=True`` serializer, so a ``Meta.list_serializer_class`` and its
-    ``to_representation`` run as behind a DRF view, and its answer must keep
-    one row per value, in order, which the kernel checks: it adds affordances
-    to each row by its position. A ``None`` row stays ``None`` in its place,
-    as ``presented`` answers it, and the serializer renders the others.
-
-    ``present(value)`` is the context-free form, and delegates to
-    ``presented(value, None)``: a ``None`` context is the serializer context
-    a serializer is described with outside any call (``request``, ``view``
-    and ``format`` present, each ``None``), so a ``get_fields`` reading
-    ``self.context["request"]`` neither raises there nor sees a principal. It
-    is what a ``DispatchResult`` a transport built by hand is presented with,
-    and with no call to resolve it against, ``serializer_context`` is not
-    asked (test_present_with_no_call_runs_no_callable).
-
-    A dataclass type is read and rendered through a ``DataclassSerializer``
-    built for it, and a ``BaseSerializer`` that is not a ``Serializer``
-    declares no fields, so its output is empty while it still presents.
-    """
+    """An operation's output declared as a DRF serializer, rendered through it."""
 
     def __init__(
         self,
@@ -173,9 +79,7 @@ class SerializerPresenter(Presenter):
         shaped: bool = False,
         json_schema_registry: JsonSchemaRegistry | None = None,
     ) -> None:
-        # Resolved at construction but never instantiated: specs are built at
-        # import time, and a ``ModelSerializer`` reads the app registry when its
-        # fields are built.
+        # Resolved, not instantiated: specs load at import, and fields need the app registry.
         if not isinstance(serializer_class, type):
             raise ImproperlyConfigured(_REFUSED.format(declared=serializer_class))
         resolved = renderable_serializer_class(serializer_class)
@@ -194,16 +98,11 @@ class SerializerPresenter(Presenter):
         self.serializer_context = serializer_context
         self.value_keyword = value_keyword
         self.shaped = shaped
-        # Its ``fields`` rules declare the fields they match
-        # (test_a_spec_s_output_fields_take_the_presenter_s_rules).
         self.json_schema_registry = json_schema_registry
 
     def output(self) -> Output:
-        """The serializer's fields as an Output, with ``field_audiences`` layered on. Never queries."""
+        """The serializer's fields as an Output, with ``field_audiences`` layered on."""
         serializer = self.serializer_class(context=_context())
-        # A ``BaseSerializer`` declaring no fields outputs none, and still meets
-        # the check below: a marking it has no field to carry would otherwise be
-        # dropped, and the key it hides presented.
         output = (
             _output(serializer, path=(), registry=self.json_schema_registry)
             if isinstance(serializer, serializers.Serializer)
@@ -231,24 +130,7 @@ class SerializerPresenter(Presenter):
         return self.presented(value, None)
 
     def presented(self, value: Any, context: PresentationContext | None) -> Any:
-        """One value as the serializer's ``.data``, under the context of the call it belongs to.
-
-        ``None`` is presented as ``None``: it is JSON's null, and a serializer
-        handed none renders a row of blank fields indistinguishable from a real one.
-
-        A serializer refusing to render, DRF's ``ValidationError``, leaves as
-        the dual-base
-        [`DRFInvalidArguments`][django_spec_rest.service_specs.drf_invalid_arguments.DRFInvalidArguments],
-        raised from it, so a route over the kernel's ``present`` reads the
-        kernel's refusal of the arguments, a read-shaping ``fields`` naming no
-        field among them. A mapping detail is kept as it is, and a list, which
-        is all DRF makes of a message, goes under the kernel's
-        ``NON_FIELD_ERRORS``; every message keeps its code. One that is
-        already the kernel's ``InvalidArguments`` leaves as raised. A view
-        presents through the kernel's ``present``, so the refusal reaches HTTP
-        as a ``400`` whose body is the mapping
-        (``tests/service_specs/test_a_presenter_s_refusal.py``).
-        """
+        """One value as the serializer's ``.data``, under the context of the call it belongs to."""
         if value is None:
             return None
         with _refusals_as_the_kernel_s():
@@ -259,18 +141,7 @@ class SerializerPresenter(Presenter):
     def presented_rows(
         self, values: Sequence[Any], context: PresentationContext | None
     ) -> list[Any]:
-        """A list's rows as one ``many=True`` render, its context asked for once.
-
-        A ``None`` row is presented as ``None`` in its place, and the
-        serializer renders the rest. A ``list_serializer_class`` answering
-        another count for them is refused here when a ``None`` is to be
-        placed among its answer; otherwise the kernel refuses it, comparing
-        the answer with the rows it handed over
-        (test_a_list_serializer_answering_another_count_beside_a_none_is_refused).
-
-        A serializer's refusal leaves as ``presented``'s does
-        (test_a_refusal_on_a_page_leaves_as_the_kernel_s).
-        """
+        """A list's rows as one ``many=True`` render, its context asked for once."""
         rows = [value for value in values if value is not None]
         with _refusals_as_the_kernel_s():
             rendered = list(
@@ -306,8 +177,6 @@ class SerializerPresenter(Presenter):
             context.principal,
             context.ambient,
             None,
-            # A presenter naming no value hands the view's hook none either, as
-            # its callable is offered none under ``value_keyword``.
             view_layers=output_view_layers(
                 context.ambient, value if self.value_keyword is not None else None
             ),
@@ -325,11 +194,7 @@ _REFUSED: Final = (
 
 @contextmanager
 def _refusals_as_the_kernel_s() -> Generator[None]:
-    """A serializer's ``ValidationError`` raised as the dual ``DRFInvalidArguments``.
-
-    A mapping detail as it is, a list under the kernel's ``NON_FIELD_ERRORS``;
-    one already the kernel's ``InvalidArguments`` leaves as raised.
-    """
+    """A serializer's ``ValidationError`` raised as the dual ``DRFInvalidArguments``."""
     try:
         yield
     except KernelInvalidArguments:
@@ -370,16 +235,7 @@ def _output_field(
     path: tuple[type, ...],
     registry: JsonSchemaRegistry | None = None,
 ) -> OutputField:
-    """One rendered field as an ``OutputField``.
-
-    A field a ``registry`` rule matches is declared by the rule's fragment, split
-    by ``fragment_keywords``, before any built-in reading. Its own
-    ``allow_null``, an author's ``label`` and its marking stand beside the
-    fragment, the label written over it
-    (test_the_field_s_own_help_label_and_null_stand_beside_the_fragment). A
-    fragment admitting ``null`` makes nullable a field that does not allow it
-    (test_a_fragment_that_admits_null_makes_an_output_field_nullable_that_the_field_does_not).
-    """
+    """One rendered field as an ``OutputField``."""
     fragment = registered_fragment(registry, field)
     if fragment is not None:
         declared = fragment_keywords(fragment, output=True)
@@ -407,13 +263,7 @@ def _output_field(
 
 
 def _none_always_present(output: Output) -> Output:
-    """``output`` with no field at any depth ``always_present``: a shaped spec's output.
-
-    Down both seats a nested output has, an object's ``fields`` and an array's
-    ``items``; each is held by its own field of
-    test_a_shaped_output_marks_no_key_present_at_any_depth: ``one`` (the
-    first) and ``many`` and ``listed`` (the second).
-    """
+    """``output`` with no field at any depth ``always_present``: a shaped spec's output."""
     return Output(
         tuple(
             dataclasses.replace(
@@ -434,20 +284,8 @@ def _none_always_present(output: Output) -> Output:
 def _shape(
     field: serializers.Field, *, path: tuple[type, ...], registry: JsonSchemaRegistry | None = None
 ) -> _Shape:
-    """One field's type, and what it nests, with ``type=None`` where DRF names none.
-
-    A ``ListField``'s element a ``registry`` rule matches is typed by the rule,
-    and only typed (test_a_registered_list_element_is_typed_by_its_rule); a
-    nested serializer's fields are matched as the top level's are
-    (test_a_nested_serializer_s_fields_are_matched_too). A ``many=True``
-    serializer's rows are walked whatever matches their class
-    (test_a_rule_wins_over_the_walk_of_a_nested_serializer).
-    """
-    # One arc for both classes, so each is held by its own field of
-    # test_nested_serializers_and_lists_nest_their_output: ``rows`` and ``wrapped``.
+    """One field's type, and what it nests, with ``type=None`` where DRF names none."""
     if isinstance(field, serializers.ListSerializer | serializers.ListField):
-        # ``ListSerializer.child`` is typed ``Field`` by the stubs; both lists
-        # hold one at runtime, ``ListField``'s defaulting to an untyped field.
         child: Any = field.child
         fragment = (
             registered_fragment(registry, child)
@@ -459,10 +297,6 @@ def _shape(
             return _Shape("array", items=None if kind == "any" else kind)
         element = _shape(child, path=path, registry=registry)
         items = element.fields if element.fields is not None else element.type
-        # Only a declared element can be declared nullable: ``OutputField``
-        # refuses ``items_nullable`` without ``items``. Each condition is held
-        # by its own field of the same test: ``loose`` (the first) and
-        # ``scores`` (the second).
         return _Shape("array", items=items, items_nullable=items is not None and child.allow_null)
     if isinstance(field, serializers.ManyRelatedField):
         return _Shape("array")
@@ -471,18 +305,11 @@ def _shape(
             return _Shape("object")
         return _Shape("object", fields=_output(field, path=path, registry=registry))
     if isinstance(field, serializers.MultipleChoiceField):
-        # Before ``ChoiceField``, which it subclasses: a set of the choices. A
-        # list's choices are its element's, as the kernel's other adapters
-        # declare them.
         choices = _choices(field)
         return _Shape("array", items=_choices_type(choices), choices=choices)
     if isinstance(field, serializers.ChoiceField):
         choices = _choices(field)
         json_type = _choices_type(choices)
-        # The kernel lists no choices on an untyped value: a list of values
-        # says what type they are, and a mixed set says none. Held by the
-        # ``mixed`` and ``amount`` fields of
-        # test_choices_are_value_display_pairs_typed_by_their_values.
         return _Shape(json_type, choices=choices if json_type else None)
     for cls, json_type, fmt in _SCALARS:
         if isinstance(field, cls):
@@ -491,58 +318,30 @@ def _shape(
 
 
 def _choices(field: serializers.ChoiceField) -> tuple[tuple[Any, str], ...]:
-    # ``str()`` for a lazy translation, read in the language active when the
-    # output is read.
+    # ``str()`` for a lazy translation, read in the language active when the output is read.
     return tuple((value, str(display)) for value, display in field.choices.items())
 
 
 def _choices_type(choices: tuple[tuple[Any, str], ...]) -> str | None:
-    """The JSON type every non-null choice value shares, or ``None`` when they share none.
-
-    ``bool`` before ``int``, which it subclasses: a boolean described as an
-    integer is a false claim rather than a vague one.
-    """
+    """The JSON type every non-null choice value shares, or ``None`` when they share none."""
     return shared_json_type(value for value, _ in choices if value is not None)
 
 
 def _declared_label(name: str, field: serializers.Field) -> str | None:
-    """The field's ``label`` when its author wrote one, else ``None``.
-
-    ``Field.bind`` derives a label from the name when none was written, and that
-    says nothing a reader of the name does not have. Every field read here is
-    bound, so a label is always there to compare.
-    """
+    """The field's ``label`` when its author wrote one, else ``None``."""
     label = str(field.label)
     return None if label == name.replace("_", " ").capitalize() else label
 
 
 def _always_rendered(field: serializers.Field) -> bool:
-    """Whether DRF is bound to emit this field's key.
-
-    Mirrors ``Field.get_attribute``'s fallbacks: a default is substituted,
-    ``allow_null`` yields ``None``, and a required field raises rather than
-    skipping. Anything else can vanish from the payload.
-
-    No branch for coverage to see, so each term is held by its own row of
-    test_output_reads_order_types_formats_labels_and_presence: ``name`` (the
-    first), ``active`` (the second) and ``maybe`` (the third).
-    """
+    """Whether DRF is bound to emit this field's key."""
     return bool(field.required or field.default is not _drf_empty or field.allow_null)
 
 
 def _marking(
     field: serializers.Field, *, serializer: serializers.Serializer, name: str
 ) -> FieldMarking | None:
-    """The field's ``FieldMarking``, or ``None``.
-
-    Matched on the value, so a marking filed under another key still counts; a
-    value under ``MARKING`` that is not one is refused, because it is the shape a
-    half-finished migration leaves (a bare ``"handle"``) and would otherwise do
-    nothing at all. The guard is one branch to coverage, so each condition is
-    held by its own field of test_markings_are_read_off_the_style_bag: ``b``
-    (the first: no ``MARKING`` key to read) and ``a`` (the second: a marking
-    under it).
-    """
+    """The field's ``FieldMarking``, or ``None``."""
     style: dict[Any, Any] = field.style or {}
     if MARKING in style and not isinstance(style[MARKING], FieldMarking):
         raise ImproperlyConfigured(

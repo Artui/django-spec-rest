@@ -1,10 +1,3 @@
-"""Shared internal helpers for the ``openapi`` package.
-
-Loaded only through ``service_auto_schema`` and ``reserved_components_hook``,
-which ``enable_openapi`` imports, so importing ``drf-spectacular`` here keeps
-it an optional dependency.
-"""
-
 from __future__ import annotations
 
 import inspect
@@ -53,12 +46,7 @@ _VIEW_CLASS_DEFAULT_STATUS: dict[str, int] = {
 
 
 def default_status(view: Any) -> int:
-    """Pick the HTTP status the runtime would emit when no override is set.
-
-    Looks at ``view.action`` first (viewset path), then the view class name
-    (standalone view path). Falls back to ``200 OK`` for ``@service_action``
-    and any unrecognised surface, mirroring the decorator's own default.
-    """
+    """Pick the HTTP status the runtime would emit when no override is set."""
     action_name = getattr(view, "action", None)
     if isinstance(action_name, str) and action_name in _ACTION_DEFAULT_STATUS:
         return _ACTION_DEFAULT_STATUS[action_name]
@@ -73,16 +61,11 @@ VALIDATION_ERRORS = "ValidationErrors"
 
 
 class ValidationErrorsIdentity:
-    """The ``ValidationErrors`` component's identity in drf-spectacular's registry.
-
-    The registry tells components apart by the class handed as their
-    ``object``. ``ComponentIdentity`` would say this too, but it is new in
-    drf-spectacular 0.28 and the floor is 0.27.
-    """
+    """The ``ValidationErrors`` component's identity in drf-spectacular's registry."""
 
 
 class Reserved(NamedTuple):
-    """A component name the package keeps, the object it registers under it, and what it documents."""
+    """A component name the package keeps, its registered object, and what it documents."""
 
     owner: type
     body: str
@@ -116,12 +99,7 @@ def held_by_package(registry: Any, name: str) -> bool:
 
 
 def name_taken(where: str, name: str) -> ImproperlyConfigured:
-    """The refusal for a component of the project's own under a name the package reserves.
-
-    drf-spectacular only warns of two components of one name and then keeps one
-    for both, so the project's response, or the package's body, would be
-    documented by the other's.
-    """
+    """The refusal for a component of the project's own under a name the package reserves."""
     return ImproperlyConfigured(
         f"{where} is documented as the component {name!r}, the name django_spec_rest "
         f"gives {RESERVED_COMPONENTS[name].body}. Name the serializer's component "
@@ -149,31 +127,18 @@ drf-spectacular copies the mapping of a ``$ref`` it adds a field's
 
 
 def place(registry: Any, ref: dict[str, Any]) -> dict[str, Any]:
-    """Record ``ref``'s string as one the package wrote in the generation ``registry`` belongs to."""
+    """Record ``ref``'s string as one the package wrote, in the generation's ``registry``."""
     _PLACED.setdefault(registry, []).append(ref["$ref"])
     return ref
 
 
 def placed(registry: Any) -> list[str]:
-    """The ``$ref`` strings the package wrote in the generation ``registry`` belongs to.
-
-    Read, not taken, so the hook listed twice still finds them the second time.
-    """
+    """The ``$ref`` strings the package wrote in the generation ``registry`` belongs to."""
     return _PLACED.get(registry, [])
 
 
 class _PlacedComponent(ResolvedComponent):
-    """A reserved component of the package's, whose next ``$ref`` is recorded once its class asks.
-
-    drf-spectacular hands every serializer of the component's name the
-    component the registry holds, so its ``$ref`` alone cannot say whether
-    the package's body or a project's class of the same name asked for it.
-    ``_ReservedBodyExtension.get_name`` runs only for the package's own class,
-    just before the ``$ref`` is taken, so it arms the component and the
-    ``$ref`` it hands out next is recorded as the package's. A project's class
-    of the name, which never arms it, gets a ``$ref`` the hook refuses
-    (test_a_project_s_serializer_of_the_name_after_is_refused).
-    """
+    """A package-reserved component, whose next ``$ref`` is recorded once its class asks."""
 
     registry: Any = None
     armed = False
@@ -189,36 +154,14 @@ class _PlacedComponent(ResolvedComponent):
 
 
 class _ReservedBodyExtension(OpenApiSerializerExtension):
-    """Names the package's own 403 or 401 body by its reserved component, wherever it is resolved.
-
-    drf-spectacular asks a serializer's extension for its component name each
-    time it resolves the serializer, on its own ``AutoSchema`` as on
-    ``ServiceAutoSchema``, so this is where the package's class is told apart
-    from a project's of the same name. The component it registers is a
-    ``_PlacedComponent``, armed for the ``$ref`` the resolution takes next
-    (test_are_documented_on_drf_spectacular_s_schema_beside_a_package_view). A
-    project's object already under the name is refused, since the
-    package's body would be documented by it
-    (test_a_project_s_serializer_of_the_name_first_is_refused). Only the
-    exact class: a project's subclass is its own component. Registered by
-    defining a subclass naming the ``target_class``; this one names none, so
-    it matches nothing.
-    """
+    """Names the package's own 403 or 401 body by its reserved component wherever resolved."""
 
     def get_name(self, auto_schema: Any, direction: Any) -> str | None:
         name = get_class(self.target).__name__.removesuffix("Serializer")
         if direction == "request" and spectacular_settings.COMPONENT_SPLIT_REQUEST:
             # Its request twin is ``<name>Request``, a name nobody reserves.
-            # Without the direction, test_are_documented_under_split_request_components
-            # and test_are_documented_as_a_project_s_response_under_split_request_components
-            # fail; without the setting, test_is_documented_as_a_request_body's
-            # other case and test_are_documented_nested_in_a_project_s_serializer.
             return None
         if is_patched_serializer(self.target, direction):
-            # Its partial twin is ``Patched<name>``, nobody's reserved name
-            # either, and drf-spectacular takes no ``$ref`` of ``<name>``, so
-            # naming it would leave the component armed for the next class of
-            # the name (TestAPartialOfTheBody).
             return None
         registry = auto_schema.registry
         key = ResolvedComponent(name=name, type=ResolvedComponent.SCHEMA, object=self.target)
@@ -239,9 +182,7 @@ class _ReservedBodyExtension(OpenApiSerializerExtension):
         return name
 
     def map_serializer(self, auto_schema: Any, direction: Any) -> dict[str, Any]:
-        # Written out rather than read off the serializer: the reading that
-        # bypasses this extension is not in every drf-spectacular the floor
-        # admits. test_component_descriptions holds it to the class.
+        # Written out, not read off the serializer: older drf-spectacular lacks that path.
         return {
             "type": "object",
             "description": inspect.cleandoc(get_class(self.target).__doc__ or ""),

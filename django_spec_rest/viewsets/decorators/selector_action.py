@@ -1,12 +1,12 @@
-"""``@selector_action`` decorator — DRF ``@action`` plus selector plumbing."""
-
 from __future__ import annotations
 
 import functools
 from collections.abc import Callable
 from typing import Any
 
+from django.core.exceptions import ImproperlyConfigured
 from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelectorSpec
+from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
 from django_service_specs.types.selector_kind import SelectorKind
 from rest_framework.decorators import action
 from rest_framework.request import Request
@@ -17,6 +17,7 @@ from django_spec_rest.selectors.utils import (
     present_kernel_list,
     present_kernel_row,
 )
+from django_spec_rest.types.discriminated_action import DiscriminatedAction
 from django_spec_rest.views.mutation.map_service_error import (
     _AdditionalInputAPIException,
 )
@@ -32,52 +33,19 @@ def selector_action(
     url_name: str | None = None,
     **action_kwargs: Any,
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
-    """Wrap a viewset method as a selector-backed custom action.
-
-    The decorated method's body is *not* executed — the decorator supplies the
-    handler. The method exists so the decorator can attach DRF ``@action``
-    metadata and take the action name from ``__name__``.
-
-    ``spec.kind`` drives both the dispatch shape and the DRF URL shape, so there
-    is no separate ``detail=`` to keep in sync. ``SelectorKind.LIST`` is a
-    collection action (``detail=False``) whose rows are a page where the view
-    paginates; ``SelectorKind.RETRIEVE`` is a detail action (``detail=True``)
-    whose row is ``null`` under ``allow_none`` and a 404 otherwise. For a URL
-    shape that doesn't match the response shape, fall back to DRF's plain
-    ``@action`` and write the dispatch yourself.
-
-    A
-    [`SelectorSpec`][django_service_specs.specs.selector_spec.SelectorSpec]
-    runs through the kernel's own ``dispatch``, as on the standalone selector
-    views: its ``permissions`` are asked there, after the view's own classes,
-    and the view's object permission of the row a RETRIEVE finds. Its
-    ``presenter`` renders the row or the page's rows, or the viewset's
-    ``get_serializer`` where it declares neither presenter nor affordances.
-    An
-    [`AdditionalInputRequired`][django_service_specs.services.additional_input_required.AdditionalInputRequired]
-    answers ``422`` with its ``schema`` as raised on any viewset, DRF's own
-    included, as on ``@service_action``.
-
-    The spec's keywords are checked when its viewset is mounted, not here:
-    ``as_view()`` on a viewset built on this package's mixins asks the
-    kernel's ``check_seeds`` against the viewset's ``pool_seeds``, so a seed
-    the viewset registers serves and a keyword nothing fills is refused there
-    (test_a_decorated_action_s_seeds). On DRF's own ``GenericViewSet`` or
-    ``ViewSet`` nothing asks it, and such a keyword is the first request's
-    ``TypeError``.
-    """
-    is_retrieve = spec.kind is SelectorKind.RETRIEVE
-
-    drf_kwargs: dict[str, Any] = {"detail": is_retrieve}
-    if methods is not None:
-        drf_kwargs["methods"] = methods
-    if url_path is not None:
-        drf_kwargs["url_path"] = url_path
-    if url_name is not None:
-        drf_kwargs["url_name"] = url_name
-    drf_kwargs.update(action_kwargs)
+    """Wrap a viewset method as a selector-backed custom action."""
 
     def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
+        _refuse_a_spec_that_is_not_a_selector(spec, fn)
+        drf_kwargs: dict[str, Any] = {"detail": spec.kind is SelectorKind.RETRIEVE}
+        if methods is not None:
+            drf_kwargs["methods"] = methods
+        if url_path is not None:
+            drf_kwargs["url_path"] = url_path
+        if url_name is not None:
+            drf_kwargs["url_name"] = url_name
+        drf_kwargs.update(action_kwargs)
+
         @functools.wraps(fn)
         def handler(self: Any, request: Request, *args: Any, **kwargs: Any) -> Response:
             try:
@@ -86,20 +54,31 @@ def selector_action(
                 restore_schema_when_handled(self)
                 raise
 
-        # Stash the spec so schema generators can recover it; the closure is
-        # otherwise opaque.
+        # Stash the spec so schema generators can recover it; the closure is otherwise opaque.
         handler._selector_spec = spec  # ty: ignore[unresolved-attribute]
         return action(**drf_kwargs)(handler)
 
     return decorator
 
 
-def _serve_kernel_spec(view: Any, spec: KernelSelectorSpec) -> Response:
-    """A kernel spec's answer: its row, ``null`` under ``allow_none``, or its rows, a page where paginated.
+def _refuse_a_spec_that_is_not_a_selector(spec: Any, fn: Callable[..., Any]) -> None:
+    """``ImproperlyConfigured`` naming the action, for a ``spec`` that is not a ``SelectorSpec``."""
+    label = f"@selector_action {getattr(fn, '__qualname__', repr(fn))}"
+    if isinstance(spec, KernelSelectorSpec):
+        return
+    if isinstance(spec, (KernelServiceSpec, DiscriminatedAction)):
+        raise ImproperlyConfigured(
+            f"{label}: the spec is a {type(spec).__name__}, which writes, and "
+            "@selector_action serves a read. Decorate the action with @service_action."
+        )
+    raise ImproperlyConfigured(
+        f"{label}: the spec is a {type(spec).__name__}, and @selector_action serves a "
+        "SelectorSpec. Pass the SelectorSpec the action reads through."
+    )
 
-    No filter backend applies to the set: DRF's ``@action`` leaves filtering to
-    its handler.
-    """
+
+def _serve_kernel_spec(view: Any, spec: KernelSelectorSpec) -> Response:
+    """A kernel spec's answer: its row, ``null`` under ``allow_none``, or its rows (paged)."""
     if spec.kind is SelectorKind.RETRIEVE:
         row, data = present_kernel_row(view, spec)
         return _JsonNullResponse() if row is None else Response(data)

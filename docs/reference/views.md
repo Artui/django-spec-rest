@@ -24,6 +24,10 @@ takes `pool_seeds`, the seeds its spec's callables are resolved with (on
 
 ::: django_spec_rest.views.mutation.mutation_flow_mixin.MutationFlowMixin
 
+## Settings
+
+::: django_spec_rest.settings.lenient_json_body
+
 ## The write's target
 
 ::: django_spec_rest.views.mutation.utils.resolve_mutation_instance

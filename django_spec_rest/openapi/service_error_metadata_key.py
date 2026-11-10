@@ -1,5 +1,3 @@
-"""The spec ``metadata`` key that declares an operation can answer a plain ``ServiceError``."""
-
 from __future__ import annotations
 
 SERVICE_ERROR_METADATA_KEY = "document_service_error"

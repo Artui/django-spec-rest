@@ -1,4 +1,4 @@
-"""Tests for ``DRFNotAuthenticated``: DRF's ``NotAuthenticated`` as the kernel's denial, answered 401."""
+"""Tests for ``DRFNotAuthenticated``: DRF's ``NotAuthenticated`` as the kernel's denial, a 401."""
 
 from __future__ import annotations
 

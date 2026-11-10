@@ -27,7 +27,12 @@ from django_spec_rest import (
     selector_action,
     service_action,
 )
-from django_spec_rest.openapi._resolve import resolve_selector_spec, resolve_service_spec
+from django_spec_rest.openapi._resolve import (
+    resolve_discriminated_action,
+    resolve_selector_spec,
+    resolve_service_spec,
+)
+from django_spec_rest.types.discriminated_action import DiscriminatedAction
 
 _OPEN = (Unrestricted(),)
 
@@ -59,8 +64,16 @@ class _StandaloneListView(SelectorListView):
     spec = _list_spec
 
 
+_wrapper = DiscriminatedAction(lambda: "only", {"only": _create_spec})
+
+
 class _ViewSet(ServiceViewSet):
-    action_specs = {"create": _create_spec, "list": _list_spec, "retrieve": _retrieve_spec}
+    action_specs = {
+        "create": _create_spec,
+        "list": _list_spec,
+        "retrieve": _retrieve_spec,
+        "update": _wrapper,
+    }
 
 
 class _ActionViewSet(GenericViewSet):
@@ -69,6 +82,15 @@ class _ActionViewSet(GenericViewSet):
 
     @selector_action(_list_spec, detail=False)
     def recent(self, request: Any) -> Any: ...
+
+    @service_action(_wrapper, detail=False, methods=["post"])
+    def either(self, request: Any) -> Any: ...
+
+
+class _WrapperView(ServiceCreateView):
+    """Refused by ``as_view()``, but the walk reads its ``spec`` as it reads any."""
+
+    spec = _wrapper
 
 
 def _bound(view_cls: type, action: str) -> Any:
@@ -110,3 +132,29 @@ class TestResolveSelectorSpec:
         """``_ActionViewSet`` declares no ``action_specs``, and its ``go`` carries a
         service stamp, which is no selector's."""
         assert resolve_selector_spec(_bound(_ActionViewSet, "go")) is None
+
+
+class TestResolveDiscriminatedAction:
+    def test_an_action_specs_entry(self) -> None:
+        assert resolve_discriminated_action(_bound(_ViewSet, "update")) is _wrapper
+
+    def test_a_service_action_s_stamp(self) -> None:
+        assert resolve_discriminated_action(_bound(_ActionViewSet, "either")) is _wrapper
+
+    def test_a_view_s_spec(self) -> None:
+        assert resolve_discriminated_action(_WrapperView()) is _wrapper
+
+    def test_a_plain_spec_is_none(self) -> None:
+        assert resolve_discriminated_action(_bound(_ViewSet, "create")) is None
+        assert resolve_discriminated_action(_bound(_ActionViewSet, "go")) is None
+        assert resolve_discriminated_action(_StandaloneView()) is None
+
+    def test_a_view_with_no_action_is_none(self) -> None:
+        assert resolve_discriminated_action(_ViewSet()) is None
+
+    def test_it_is_no_service_spec_and_no_selector_spec(self) -> None:
+        # The wrapper is not a kernel spec: each of the other resolvers
+        # leaves it to this one.
+        for view in (_bound(_ViewSet, "update"), _bound(_ActionViewSet, "either"), _WrapperView()):
+            assert resolve_service_spec(view) is None
+            assert resolve_selector_spec(view) is None

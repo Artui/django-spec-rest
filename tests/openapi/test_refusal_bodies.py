@@ -1,4 +1,4 @@
-"""``PermissionDeniedSerializer`` and ``NotAuthenticatedSerializer``: the package's 403 and 401 bodies, for a project to declare.
+"""``PermissionDeniedSerializer`` and ``NotAuthenticatedSerializer``: the 403 and 401 bodies.
 
 The reserved-components hook refuses a ``$ref`` to ``PermissionDenied`` or
 ``NotAuthenticated`` the package did not write. A project's view declaring the
@@ -76,7 +76,7 @@ def _declaring(prefix: str, responses: Any, request: Any = None) -> URLPattern:
 
 
 def _patching(prefix: str, request: Any) -> URLPattern:
-    """A project's own view on drf-spectacular's ``AutoSchema``, taking ``request`` on a ``PATCH``."""
+    """A project's view on drf-spectacular's ``AutoSchema``, taking ``request`` on a ``PATCH``."""
 
     class _Patching(GenericAPIView):
         schema = AutoSchema()
@@ -122,7 +122,7 @@ def _paginated_listing_a_refusal(prefix: str) -> URLPattern:
 
 
 def _paginated_declaring(prefix: str, responses: Any) -> URLPattern:
-    """A project's paginated list view on drf-spectacular's ``AutoSchema``, declaring ``responses``."""
+    """A project's paginated list on drf-spectacular's ``AutoSchema``, declaring ``responses``."""
 
     class _PaginatedDeclaring(ListAPIView):
         schema = AutoSchema()
@@ -172,7 +172,7 @@ class TestTheExportedBodies:
         assert set(_COMPONENTS.values()) <= set(schema["components"]["schemas"])
 
     def test_are_documented_nested_in_a_project_s_serializer(self) -> None:
-        """A field of the package's body passes too, through drf-spectacular's copy of its ``$ref``."""
+        """A field of the package's body passes too, via drf-spectacular's copy of its ``$ref``."""
 
         class RefusalHolderSerializer(serializers.Serializer):
             refusal = PermissionDeniedSerializer(read_only=True)
@@ -207,7 +207,7 @@ class TestTheExportedBodies:
     def test_a_project_s_serializer_of_the_name_first_is_refused(
         self, code: int, their: type[serializers.Serializer]
     ) -> None:
-        """The registry holds the project's class when the package's body is resolved, on any schema.
+        """The registry holds the project's class when the package's body resolves, on any schema.
 
         Fails if the package's body is answered the project's component: the
         hook asks nothing of a name the package holds nothing under.
@@ -285,7 +285,7 @@ _THEIRS = {403: TheirPermissionDenied, 401: TheirNotAuthenticated}
 
 @pytest.mark.parametrize("code", [403, 401])
 class TestAPartialOfTheBody:
-    """The body partial, a ``PATCH`` request or a partial response, under the default ``COMPONENT_SPLIT_PATCH``.
+    """The body partial, a ``PATCH`` request or partial response, under ``COMPONENT_SPLIT_PATCH``.
 
     The partial body is ``Patched<name>``, a name nobody reserves, so it is
     resolved as ``<name>Request`` is under ``COMPONENT_SPLIT_REQUEST``: the
@@ -345,7 +345,7 @@ class TestAPartialOfTheBody:
 
 
 class TestUnderListMechanicsOnARefusal:
-    """``ENABLE_LIST_MECHANICS_ON_NON_2XX`` wraps a list view's non-2xx bodies as lists and pages them."""
+    """``ENABLE_LIST_MECHANICS_ON_NON_2XX`` wraps a list view's non-2xx bodies as lists, paged."""
 
     def _generate(self, *patterns: URLPattern) -> dict[str, Any]:
         with patched_settings({"ENABLE_LIST_MECHANICS_ON_NON_2XX": True}):
@@ -389,7 +389,7 @@ class TestAListOfTheBody:
     def test_a_project_s_serializer_of_the_name_after_a_list_beside_a_listed_200_is_refused(
         self, code: int
     ) -> None:
-        """Under ``ENABLE_LIST_MECHANICS_ON_NON_2XX``, the list is the refusal of a paginated view."""
+        """Under ``ENABLE_LIST_MECHANICS_ON_NON_2XX``, a paginated view's refusal is a list."""
         with (
             patched_settings({"ENABLE_LIST_MECHANICS_ON_NON_2XX": True}),
             pytest.raises(ImproperlyConfigured) as raised,

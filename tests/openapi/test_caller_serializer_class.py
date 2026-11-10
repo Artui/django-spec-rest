@@ -1,4 +1,4 @@
-"""``caller_serializer_class`` — the author's serializer less what ``input_data`` fills, named apart."""
+"""``caller_serializer_class``: the author's serializer less what ``input_data`` fills."""
 
 from __future__ import annotations
 

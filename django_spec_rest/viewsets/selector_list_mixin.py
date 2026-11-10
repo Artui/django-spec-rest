@@ -1,9 +1,8 @@
-"""Action-keyed list selector override on top of ``ListModelMixin``."""
-
 from __future__ import annotations
 
 from typing import Any
 
+from rest_framework.exceptions import MethodNotAllowed
 from rest_framework.mixins import ListModelMixin
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -18,8 +17,9 @@ from django_spec_rest.viewsets.utils import (
 class SelectorListMixin(ListModelMixin, _ActionSpecsMixin):
     """Compose with ``GenericViewSet``.
 
-    An absent ``"list"`` key falls through to DRF's default ``get_queryset()``.
-    Any entry that is not a kernel
+    An absent ``"list"`` key falls through to DRF's default ``get_queryset()``
+    where the viewset has rows and a serializer for it, and otherwise answers 405,
+    leaving ``Allow`` and the schema (test_a_read_with_no_fallback). Any entry that is not a kernel
     [`SelectorSpec`][django_service_specs.specs.selector_spec.SelectorSpec]
     raises ``ImproperlyConfigured``.
 
@@ -37,7 +37,6 @@ class SelectorListMixin(ListModelMixin, _ActionSpecsMixin):
     (test_selector_list_mixin).
     """
 
-    # Provided at runtime by ``GenericViewSet`` / ``GenericAPIView``.
     action: str | None
     request: Any
     kwargs: dict[str, Any]
@@ -45,12 +44,12 @@ class SelectorListMixin(ListModelMixin, _ActionSpecsMixin):
     def list(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         spec = resolve_action_selector_spec(self.action_specs, "list")
         if spec is not None:
-            # The dispatch a permission class's ``get_queryset()`` made, if one
-            # asked first, never the set ``get_queryset()`` answers: a subclass
-            # overriding it does not choose the rows a spec serves.
+            # The dispatch a permission class's ``get_queryset()`` made, not the set it answers.
             result = dispatch_list_once(self, spec)
             data, paginated = present_kernel_list(self, spec, result, filtered=True)
             return self.get_paginated_response(data) if paginated else Response(data)  # ty: ignore[unresolved-attribute]
+        if self._has_no_fallback("list"):
+            raise MethodNotAllowed(self.request.method)
         return super().list(request, *args, **kwargs)
 
     def get_queryset(self) -> Any:

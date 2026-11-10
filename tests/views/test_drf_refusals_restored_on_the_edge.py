@@ -124,7 +124,7 @@ def test_a_raise_with_no_context_is_restored_with_none() -> None:
 
 
 def test_the_exception_keeps_the_cause_it_was_raised_from() -> None:
-    """``from original`` sets the cause and suppresses the context, as Python's ``raise ... from`` does."""
+    """``from original`` sets the cause and suppresses the context, as ``raise ... from`` does."""
     original = KeyError("original")
 
     def service(**_: Any) -> None:

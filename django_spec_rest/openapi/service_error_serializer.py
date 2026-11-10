@@ -1,21 +1,12 @@
-"""Schema-only ``Serializer`` documenting the ``{"detail": ...}`` body of a ``ServiceError``, and its ``schema``."""
-
 from __future__ import annotations
 
 from rest_framework import serializers
 
 
 class ServiceErrorSerializer(serializers.Serializer):
-    """The service could not complete the call. Why is under `detail`, and the values still needed under `schema` where it asks for more input."""
+    """Could not complete the call. Why is under `detail`; values still needed under `schema`."""
 
-    # The docstring above is the component's description in the generated
-    # document, so it is written for a client; the reference is
-    # docs/openapi.md. ``ServiceAutoSchema`` documents it as the ``422`` of
-    # every spec-driven operation and as the ``detail`` alternative of a
-    # Validator's ``400`` (a body that is no object). It is only used for
-    # schema generation: ``map_service_error`` answers a ``ServiceError``
-    # with ``{"detail": ...}``, and an ``AdditionalInputRequired`` carrying
-    # a schema with that schema beside it.
+    # The docstring above is the component's description, for a client; see docs/openapi.md.
 
     detail = serializers.CharField()
     schema = serializers.DictField(

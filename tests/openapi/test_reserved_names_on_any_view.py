@@ -1,4 +1,4 @@
-"""A component name the package documents a refusal by is refused on a view the package does not document.
+"""A component name the package documents a refusal by is refused on any undocumented view.
 
 ``ValidationErrors``, ``PermissionDenied`` and ``NotAuthenticated`` are the
 bodies of a spec's 400, 403 and 401. drf-spectacular keeps the first component

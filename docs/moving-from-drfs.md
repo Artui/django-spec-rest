@@ -22,8 +22,10 @@ clients see change. drfs' history is in its
 | the `startserviceapp` management command | none |
 | `djangorestframework-services[spectacular]` | `django-spec-rest[spectacular]` |
 
-The package reads no setting of its own. `SPEC_REST` is reserved as the name
-of the first one.
+The package reads one setting of its own, `SPEC_REST_LENIENT_JSON_BODY`, which
+drfs had no counterpart of: it is off unless the project sets it, and it asks
+for a JSON body to be answered by the serializer alone (see `lenient_json_body`
+under *Bodies and arguments*).
 
 ## The codemod
 
@@ -38,15 +40,37 @@ taken for it. It turns each drfs `ServiceSpec` and `SelectorSpec` into the
 kernel's, moving each field onto its seat as [below](#declaring-a-spec): the
 serializers and their contexts, `permission_classes`, an output selector's
 serializer and context, `document_service_error` and `field_audiences`. A
-spec's `success_status` and `response_finalizer` move to the views in the same
-module that serve it, as [Views and viewsets](#views-and-viewsets) places them,
-for a spec bound to a module-level name; one built inline in a view is marked.
-A second run changes nothing.
+spec's `success_status` and `response_finalizer` move to the views that serve
+it, as [Views and viewsets](#views-and-viewsets) places them, for a spec bound to
+a module-level name; one built inline in a view is marked. A view in the same
+module takes them first. Otherwise all the files of a run are read together and
+the answer follows the spec's import into `views/` or `viewsets/`, bringing the
+import a name in it needs, when that is certain: exactly one module serves the
+spec, importing it by its own name, and both files are in the run. A module
+that only passes the spec to the `.register(...)` of a `SpecRegistry` it builds
+is not a second server and does not block the move. An absolute import is
+found under `--root`, the directory such imports start from, usually the parent of
+the top package; a wrong root finds no import, so every spec reads as having no
+view in the run. A second run changes nothing.
+
+An answer stays with its note, and says why, where moving it could change what a
+request answers: a class of the run that is based on the view and binds its own
+`spec` or `action_specs` would inherit it; a name the answer needs could mean
+something else in the view, from a star import there, a name the class binds, or
+another spec's answer in the same view that brings in a different object of that
+name; a spec reaches a second view through a star import of a package that
+re-exports it. A subclass the run cannot resolve (a base made by a call, imported
+inside a function, or from outside the run) is not seen. Files are written all or
+none while they are staged (a failure there changes nothing), and keep their
+mode and line ends; the codemod's README says exactly what a failure while moving
+them into place can leave.
 
 Every site it leaves gets a comment beginning `# drfs-codemod:` above its
 statement, giving the reason, and a line of its report, `path:line: reason`.
 A site stays in the report until its comment is deleted. `--check` writes
-nothing and exits 1 while a file would still change.
+nothing, reports the same moves and sites, and exits 1 while a file would still
+change. A file that cannot be parsed stops the run with exit 2 before anything is
+written, and a write that fails stops it with exit 2, naming the file.
 
 What it does not do:
 
@@ -58,13 +82,21 @@ What it does not do:
   send.
 - **Translate a `UrlKwarg` or `QueryParam` list.** A drfs `reads=` is marked
   and kept as it was, for a `Parameter` declaring its type to replace it.
-- **Split a `PolymorphicServiceSpec`** into one kernel spec per route or
-  action, nor replace `OfflineContract`, `TargetGuard`, `ArgumentBinding` or
-  an input marker (`InputRequired`, `NotClientInput`, `InputDescription`). A
-  use of one is marked, and its import kept.
-- **Answer from another module.** A `success_status` or `response_finalizer`
-  whose view is in another module, or that no view serves, is marked on the
-  spec: set it on that view.
+- **Turn a `PolymorphicServiceSpec` into a `DiscriminatedAction`**, split it
+  into one kernel spec per route or action, nor replace `OfflineContract`,
+  `TargetGuard`, `ArgumentBinding` or an input marker (`InputRequired`,
+  `NotClientInput`, `InputDescription`). A use of one is marked, and its import
+  kept.
+- **Guess at a view.** A `success_status` or `response_finalizer` that no view
+  in the run serves is marked on the spec, with its value: set it on that view.
+  So is one whose spec two modules import, or one module under an alias, by a
+  star import or inside a function; and one whose value will not resolve in the
+  view, such as a lambda or a call naming anything, or a name imported relatively.
+  The marker's last clause says which. A view that already declares the answer,
+  or binds the value's name to something else, is marked too, and the answer stays
+  on the spec's note. The
+  [codemod's README](https://github.com/Artui/django-spec-rest/blob/main/tools/drfs_codemod/README.md#a-view-in-another-module)
+  has the full rule.
 - **Follow a module import of drfs.** `import rest_framework_services` (or a
   submodule) is marked, and a spec built through it, such as
   `drfs.ServiceSpec(...)`, is left whole.
@@ -78,7 +110,7 @@ What it does not do:
 
 ## The import map
 
-The package root exports [29 names](reference/index.md#public-surface), none of
+The package root exports [32 names](reference/index.md#public-surface), none of
 them the kernel's. A name drfs re-exported from the kernel is imported from
 `django_service_specs`.
 
@@ -102,8 +134,10 @@ them the kernel's. A name drfs re-exported from the kernel is imported from
 
 drfs' `ServiceSpec`, `SelectorSpec`, `PolymorphicServiceSpec`, `UrlKwarg`,
 `QueryParam`, `ArgumentBinding`, `OfflineContract`, `TargetGuard` and the input
-markers (`InputRequired`, `NotClientInput`, `InputDescription`) are gone. A
-spec is the kernel's, and each drfs field maps onto one of its seats:
+markers (`InputRequired`, `NotClientInput`, `InputDescription`) are gone;
+`PolymorphicServiceSpec` returns as [`DiscriminatedAction`](reference/types.md),
+the others have no same-named counterpart. A spec is the kernel's, and each
+drfs field maps onto one of its seats:
 
 | drfs field | Kernel spec |
 | --- | --- |
@@ -116,8 +150,12 @@ spec is the kernel's, and each drfs field maps onto one of its seats:
 | a `QueryParam` no callable names | `shapes=Parameters.of(...)` |
 | `NotClientInput`, a hidden lookup key | a typed `kwargs` provider filling the key, which the kernel then keeps out of the caller's arguments (`server_owned_keys`) |
 | `InputRequired`, `InputDescription("...")` on a key the selector reads | `reads=Parameters.of(Parameter(..., required=True, help="..."))`, as [worked below](#a-nested-routes-captures) |
-| `PolymorphicServiceSpec` | one kernel spec per route or action; the polymorphic request body and its `{View}_{action}_Request` OpenAPI component are gone |
+| `PolymorphicServiceSpec` | one kernel spec per route or action stays the default. For an endpoint that must keep one URL, an `action_specs` entry (or `@service_action`) of `DiscriminatedAction(discriminator=, specs=)`, which is this package's alone: agents and MCP register each variant on its own. Its `{View}_{action}_Request` OpenAPI component comes back under that name, as an `anyOf` where drfs' was a `oneOf`: a body two variants accept is valid for both. A `@service_action` `PATCH` over it runs the chosen variant as declared, so it is validated whole and documented whole; a variant declaring `partial` is the way to a partial call. `permission_strategy=` is gone: the chosen variant's checks always decide. A callable `success_status` or `response_finalizer` on such an action may declare `variant`, the chosen key, to answer per variant |
 | `TargetGuard` | the kernel's preconditions and object permission, which see the row |
+| `OfflineContract.field_audiences` | `SerializerPresenter(S, field_audiences={...})`, layered over the serializer's own markings at the top level; a name the serializer does not output is refused when the output is read. HTTP names no audience, so a REST response is unchanged |
+| `OfflineContract.url_kwargs` | the selector's `reads=Parameters.of(Parameter("pk", "integer", required=True))`. A capture the model must never see is a server-supplied argument instead: `tool_server_arguments` on django-spec-agents' toolset, `server_arguments=` on a django-spec-mcp tool binding |
+| `OfflineContract.query_params` | `shapes=Parameters.of(...)` on the spec for a query that shapes what the presenter renders; a query the selector reads is a `reads=` `Parameter`, as above. A default that applies only off HTTP is [read from the call's transport](#a-default-for-off-http-calls) |
+| `ArgumentBinding` | none: a call has one argument namespace, [described below](#one-argument-namespace-in-place-of-argumentbinding) |
 
 `JsonSchemaRegistry` keeps its `fields` rules alone. Its `filters` and
 `python_types` rules are gone: a `filter_set` is described by the kernel's
@@ -125,7 +163,66 @@ spec is the kernel's, and each drfs field maps onto one of its seats:
 so a project passing either to `extend()` or the constructor drops it.
 
 The example project's [views](https://github.com/Artui/django-spec-rest/blob/main/examples/invoices/views/__init__.py)
-declare every seat above.
+declare the seats they use.
+
+### One argument namespace, in place of `ArgumentBinding`
+
+drfs' `ArgumentBinding` chose whether a callable's own parameters were the
+caller's input. The kernel has no such choice: the arguments a caller may send
+are the spec's `reads=` and `shapes=`, its Validator's parameters and, on a
+selector, its `filter_set`'s names, and the set is closed. A name that is none of them is refused under
+`UnknownArguments.REJECT` and dropped under `IGNORE`, whatever the callable's
+signature names.
+
+| drfs | Kernel |
+| --- | --- |
+| `BUNDLE`, and `AUTO` on a service | what the kernel always does: a service's own parameters, with no Validator in front of them, are never the caller's, and it receives `data={}` and its declared reads |
+| `SPREAD_AUTHOR_WINS`, and `AUTO` on a selector | declare each parameter the caller may send as a `Parameter` in the selector's `reads=`, or on the service's Validator. A value the spec's `kwargs` provider fills for a declared name still replaces the caller's, so an author-scoped `tenant_id` cannot be reset by the client |
+| `SPREAD_CALLER_WINS` | retired in drfs too. To let the caller's value win, leave the key out of the `kwargs` provider |
+
+A selector dispatched under drfs' `AUTO` took the caller's value for every
+parameter its signature named, so those parameters become the `reads=` the
+codemod writes into its markers.
+
+### A default for off-HTTP calls
+
+A default that should apply only when a call does not come over HTTP, such as
+a query an agent's tool call leaves out, reads which transport built the call's
+context. A presenter's `serializer_context` callable declares `call_context`
+and compares what the transport stamped under the `"transport"` key:
+
+```python
+from django_service_specs import call_transport
+
+# The transports that serve HTTP: this package's views, and django-spec-html's.
+OVER_HTTP = ("rest", "html")
+
+
+def off_http_defaults(*, call_context):
+    if call_transport(call_context) not in OVER_HTTP:
+        return {"default_query": "..."}
+    return {}
+```
+
+Naming the HTTP transports rather than the others is what makes the default hold
+for every one that is not:
+
+| `call_transport(call_context)` | Served by | Over HTTP | The example's default |
+| --- | --- | --- | --- |
+| `"rest"` | this package's views and viewsets (`REST_TRANSPORT`) | yes | not applied |
+| `"html"` | `django-spec-html` | yes | not applied |
+| `"agent"` | `django-spec-agents`' toolset | no | applied |
+| `"mcp"` | `django-spec-mcp` | no | applied |
+| `"cli"` | `django-spec-cli`' management commands | no | applied |
+| `None` | a call no transport stamped, such as the kernel's own `dispatch` | no | applied |
+
+A transport added later counts as off HTTP, so one that serves HTTP is added to
+the tuple. Comparing the other way (`in ("agent", "mcp")`) would leave out
+`"cli"` and `None`, and every off-HTTP transport added later.
+
+`call_transport` is in the kernel from 0.28.0, and a transport stamps its own
+name from the release that adopts the key. A view of this package stamps
+`"rest"` from 0.10.0 (`REST_TRANSPORT`).
 
 ### A nested route's captures
 
@@ -210,7 +307,12 @@ over:
   delete reaches. A project that scoped rows to a tenant through either moves
   that scoping into each selector's own queryset (a selector may declare
   `user`): left where it was, a `PATCH` or `DELETE` reaches another tenant's
-  row with no error. The reverse holds for an action with no spec: DRF's
+  row with no error. DRF's `get_object()` ran the backends, so a backend that
+  scoped a tenant's rows there no longer does, and nothing reports it, since
+  most backends are plain list filters. A `get_queryset()` override beside
+  any spec, a retrieve included, is reported at `as_view()`
+  ([`django_spec_rest.W001`](reference/viewsets.md#the-row-scoping-warning)).
+  The reverse holds for an action with no spec: DRF's
   fallback `retrieve` and a custom `@action` reading `self.get_queryset()`
   take their rows from the view's `queryset`, never from the list selector,
   so scoping kept in the list selector alone does not reach them.
@@ -275,17 +377,38 @@ The query string is read by the kernel's flat reader:
 - **A form body is read as DRF reads one** (`"on"`, a blank checkbox, the
   prefixed spellings `v.tenant` and `tags[0]` of a nested or list field), and a
   JSON body is checked against the spec's declared types as sent: `"true"` is
-  no boolean in JSON.
+  no boolean in JSON. A kernel `FormValidator` is no serializer, so a form
+  body's boolean (a `BooleanField`, or a file field's clear checkbox) reads
+  `true`, `false`, `1`, `0` and, for a form body alone, a checkbox's `on`; a
+  query string's `?flag=on` is refused.
 - **A JSON integer field still takes a numeric string.** `{"start_hour": "10"}`
   is accepted as `10`, as drfs accepted it, while `{"title": 5}` is refused
   with `Expected a string.`: "as sent" is a check of the kind of value, and the
   kernel reads a numeric string as a number but not a number as a string.
+- **A `lenient=True` subclass of `SerializerValidator` has a better home: the
+  view.** Handing every call site a validator with `lenient=True` relaxes the
+  spec itself, so its tool schema reads `{"title": {}, "n": {}}` with no
+  `required`, on every transport. To have DRF answer a JSON body as drfs did, set
+  `lenient_json_body = True` on the view, on a viewset, as an `as_view()` or
+  `@service_action` keyword, or project-wide with
+  `SPEC_REST_LENIENT_JSON_BODY = True`; the view's own value beats the setting,
+  and `False` on a view keeps the strict check under the setting. It covers a
+  `many` spec's rows too. `{"title": 5}` for a `CharField` is then `"5"`, as the
+  serializer takes it, and every field's refusal is DRF's (a body that is no
+  object is still refused by the package: `{"detail": "The body must be an
+  object; got list."}`), while the spec's schema, its
+  tool schema and every other transport stay typed. The kernel's checks of the
+  declared types are what it turns off, its array cap
+  (`SERVICE_SPECS_MAX_ARRAY_LENGTH`) on a field included: give a `ListField` or
+  a nested `many=True` serializer under the switch a `max_length` of its own. A
+  `many` spec's list of rows keeps its cap.
 - **A JSON field's refusal is worded by the kernel, not DRF.** `Date has wrong
   format. Use one of these formats instead: YYYY-MM-DD.` is `Enter a valid
   date.`, `A valid integer is required.` is `Expected an integer.`, and `This
   field may not be null.` is `This field cannot be null.`. A client matching
   on a message must match the new one; the keys and the 400 are unchanged.
-  A form body keeps DRF's wording, since the serializer answers it.
+  A form body keeps DRF's wording, since the serializer answers it, and so does
+  a JSON body under `lenient_json_body`.
 - **A PATCH behind a `SerializerValidator` hands the service only the keys
   the client sent.** The serializer is partial on a PATCH, as DRF's is, so
   `{}`, or a body naming one field of several, validates and reaches the
@@ -298,6 +421,19 @@ The query string is read by the kernel's flat reader:
   `DataclassValidator` is validated whole on a PATCH and answers 400 for a
   missing field. Plain DRF answers a PATCH of `{}` to a `ModelSerializer` with
   200 and leaves the row as it was, so the 500 is the service's, not DRF's.
+- **A JSON `null` for a file field clears the file where the field declares
+  `allow_null`, and is refused where it does not.** The service's `data` and
+  parameter hold `""`, what the model field stores for no file, so a service
+  clears the file however it writes: `update_from_input` reads `""` as no file
+  (and `None` as keep it), and `setattr` then `save()`, `create(**data)` and
+  `qs.update(**data)` all store it. The bound serializer keeps DRF's `None`, so
+  `serializer.save()` clears it too. A service reading the value itself must
+  read `""` as "no file". A form body is unchanged: DRF's blank for the field
+  keeps the file, and a `FormValidator`'s clear checkbox clears it. A dataclass's
+  field stays `None`, as declared, so a service writing one keeps the file.
+  A `PUT` omitting a file field declared `FileField(allow_null=True, default=None)`
+  is the same as a `null`: DRF fills the field with its `None` default, so the
+  file is cleared. A `PATCH` fills no default, so it keeps the file.
 - **A body that is no object answers `{"detail": "The body must be an object;
   got list."}`**, where drfs answered `{"non_field_errors": ["Invalid data.
   Expected a dictionary, but got list."]}`. Both are a 400.
@@ -333,9 +469,20 @@ The query string is read by the kernel's flat reader:
 - **A `many` spec with an `output_selector_spec` presents what the re-read
   returns**, where drfs presented the service's rows.
 - **Bulk and row refusals are worded by the kernel.**
+- **A read with no spec and nothing to fall back to answers 405**, not DRF's
+  assertion as a 500. A `list` or `retrieve` a router maps on a viewset with no
+  rows or no serializer leaves `Allow` and the schema, so a create-only
+  `ServiceViewSet` documents `POST` alone and its detail route `Allow`s
+  `OPTIONS` alone. A `list`, `retrieve` or `get_object()` of the project's own
+  keeps its route, and a read that can fall back answers as it did.
 - **OPTIONS runs no stage of a spec** (no selector, provider, service or
-  affordance condition) and never answers 500. `Allow` names only the methods
-  a spec serves: a handler with no spec is left out, on its 405 too.
+  affordance condition) and does not answer 500 for want of what DRF's metadata
+  reads. The exception is a Validator whose `parameters()` raises something other
+  than `AttributeError`, `KeyError` or `TypeError`, which is a 500, as
+  [the OpenAPI page](openapi.md) says. `Allow` names only the methods
+  that can answer: a handler of this package's with no spec is left out, on its
+  405 too, and a handler of the project's stays, undescribed where DRF's metadata
+  cannot describe it for want of a serializer or rows.
   `actions[METHOD]` is a JSON Schema object rather than DRF's per-field
   dictionary, and leaves out the keys the server fills, the route's captures
   and the target lookup's parameters; a key a provider may fill is described
@@ -407,15 +554,19 @@ The query string is read by the kernel's flat reader:
   permission classes in `initial()`. The spec's checks are asked before its
   arguments' shape is checked, so a caller they refuse gets the 401 or 403
   above whatever it sends: an empty body, a missing field, a value of the
-  wrong type or a query string the read cannot parse answer the same as a
-  well-formed request, never the 400 that lists the fields. A request whose
-  body or query string fails its shape is judged with no arguments, the
+  wrong type, a query string the read cannot parse, a body DRF cannot parse, a
+  media type it does not accept or more form fields than Django reads answer
+  the same as a well-formed request, never the 400 that lists the fields. A
+  request whose body cannot be read, or whose body or query string fails its
+  shape, is judged with no arguments, the
   question the OPTIONS answer asks before it describes a method, so OPTIONS
   shows a method's schema exactly to the callers whose incomplete request is
   told what it lacks. A check that reads the call's arguments and cannot
   answer without them keeps the kernel's order: the caller is told the 400
   first, and the check is asked once the shape passes. A check that answers
   `False` with no arguments refuses every caller sending an incomplete body.
+  DRF's own `initial()` runs before any of this, so a `get_permissions()` or
+  `get_throttles()` override that reads the body answers what that read raises.
 - **`DRFPermissionCheck` can raise `DRFNotAuthenticated`**, not only
   `DRFNotPermitted`, when the call carries a real DRF request with
   authenticators and nobody was recognised. `DRFNotAuthenticated` is DRF's

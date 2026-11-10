@@ -1,4 +1,4 @@
-"""``kernel_spec_variant`` over a kernel spec: the per-request ``partial`` and ``lenient``, derived once.
+"""``kernel_spec_variant`` over a kernel spec: the per-request ``partial`` and ``lenient``, derived.
 
 A kernel spec is dispatched as declared, so the variants a request of the DRF
 edge may still ask of it are two: a ``PATCH``'s, the spec with ``partial``
@@ -223,7 +223,7 @@ def _flagged(**validator: Any) -> ServiceSpec:
 
 @pytest.mark.django_db
 def test_a_lenient_variant_takes_what_drf_coerces() -> None:
-    """A typed ``"true"`` for a boolean is the kernel's refusal on the spec and DRF's ``True`` on the variant."""
+    """A typed ``"true"``: the kernel refuses it on the spec, DRF's variant reads it as ``True``."""
     spec = _flagged()
     principal = AnonymousUser()
 
@@ -268,7 +268,7 @@ def test_a_lenient_variant_carries_the_validator_s_other_keywords() -> None:
 
 @pytest.mark.parametrize(("low", "high"), [(None, None), (1, 3)], ids=["undeclared", "declared"])
 def test_a_lenient_variant_keeps_a_many_spec_s_bounds(low: int | None, high: int | None) -> None:
-    """A kernel spec declares its list's bounds, so the kernel's cap stays where the author left it."""
+    """The spec declares its list's bounds, so the kernel's cap stays where the author left it."""
     spec = _spec(many=True, many_min_length=low, many_max_length=high)
 
     variant = kernel_spec_variant(spec, lenient=True)
@@ -315,7 +315,7 @@ def _flag_view(lenient: bool) -> tuple[Any, dict[str, Any]]:
 @pytest.mark.django_db
 @pytest.mark.parametrize("fmt", ["multipart", None], ids=["multipart", "urlencoded"])
 def test_a_live_view_validates_a_form_body_by_its_serializer_alone(fmt: str | None) -> None:
-    """A checkbox's ``"on"`` is a 204 with ``published=True``, though the spec's Validator is not declared lenient."""
+    """A checkbox's ``"on"`` is a 204 with ``published=True``, the Validator not lenient."""
     view, seen = _flag_view(lenient=False)
     factory = APIRequestFactory()
     request = (

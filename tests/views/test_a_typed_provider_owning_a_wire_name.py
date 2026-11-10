@@ -1,4 +1,4 @@
-"""A typed ``kwargs`` provider over a field whose wire name and ``source`` differ, on the kernel route.
+"""A typed ``kwargs`` provider over a field whose wire name and ``source`` differ, on the kernel.
 
 ``tenant = CharField(source="org")`` is one value under two names: the client
 sends ``tenant``, and ``SerializerValidator`` hands the service ``org``. The
@@ -103,7 +103,7 @@ def test_a_declined_owned_source_hands_its_parameter_none_of_the_clients_value(f
     assert seen == _DECLINED
 
 
-def test_a_declined_owned_source_hands_its_parameter_none_of_the_clients_value_through_the_edge() -> (
+def test_a_declined_owned_source_hands_its_parameter_none_of_the_clients_value_through_the_edge() -> (  # noqa: E501
     None
 ):
     seen: dict[str, Any] = {}
@@ -200,7 +200,7 @@ def test_a_dotted_source_s_owned_key_is_the_one_it_nests_under(fmt: str) -> None
 
 @FORMATS
 def test_owning_the_key_a_dotted_source_nests_under_owns_no_deeper_one(fmt: str) -> None:
-    """``loc.city`` is nested under ``loc``: a field of its own named ``city`` stays the client's."""
+    """``loc.city`` is nested under ``loc``: a field named ``city`` stays the client's."""
     seen: dict[str, Any] = {}
 
     def service(*, data: Any, loc: Any = "D-loc", city: Any = "D-city") -> None:

@@ -305,7 +305,7 @@ class TestOnASelectorView:
     strict=True,
     reason=(
         "a key the input serializer's validate() writes reaches the service and the "
-        "output serializer, but the call's one dict is the one fill_call_context builds, "
+        "output serializer, but the call's one dict is the one view_call_context builds, "
         "not the object the view's get_serializer_context() returned, so the final "
         "identity assertion fails"
     ),

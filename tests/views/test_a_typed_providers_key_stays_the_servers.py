@@ -1,7 +1,7 @@
-"""A key the spec's typed ``kwargs`` provider is annotated to fill is never the client's, on the kernel route.
+"""A key a typed ``kwargs`` provider fills is never the client's, on the kernel route.
 
-The kernel decides most of that before a request arrives: a key that names a ``SerializerValidator`` parameter - a list, dict,
-nested or nested ``many`` field, or a plain required one - is refused when the
+The kernel decides most of that before a request arrives: a key that names a
+``SerializerValidator`` parameter (a list, dict, nested, or required field) is refused when the
 spec's parameters are assembled, because the provider's values reach the
 service's pool and never the Validator, and ``input_data`` is the seat that
 fills a field. So those shapes assert the refusal.

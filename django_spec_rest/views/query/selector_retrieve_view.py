@@ -1,5 +1,3 @@
-"""``GET`` detail endpoint backed by a kernel selector spec or DRF lookup."""
-
 from __future__ import annotations
 
 from typing import Any, ClassVar
@@ -58,16 +56,7 @@ class SelectorRetrieveView(_ServesRaisedSchema, RetrieveModelMixin, GenericAPIVi
         return super().as_view(**initkwargs)
 
     def get_object(self) -> Any:
-        """Resolve the target row through the spec's selector, if one is set.
-
-        **``filter_backends`` do not apply here.** DRF runs
-        ``filter_queryset()`` inside its own ``get_object()``, so overriding
-        that method - this view, or any hand-written override - drops them.
-        A tenant-scoping backend in ``DEFAULT_FILTER_BACKENDS`` scopes a
-        sibling list view and not this lookup. Scope the selector's own
-        queryset, or declare the rule as ``SelectorSpec.filter_set``, which
-        the dispatcher applies on both the list and the retrieve path.
-        """
+        """Resolve the target row through the spec's selector, if one is set."""
         s: SelectorSpec | None = get_class_attr(self, "spec")
         if s is None:
             return super().get_object()
@@ -77,9 +66,6 @@ class SelectorRetrieveView(_ServesRaisedSchema, RetrieveModelMixin, GenericAPIVi
         s: SelectorSpec | None = get_class_attr(self, "spec")
         if s is None:
             return self.retrieve(request, *args, **kwargs)
-        # The row and its body, presented by the spec, shared with the
-        # viewset's ``retrieve``. The view's object permission was asked
-        # inside the dispatch, so nothing here reads a row the caller may
-        # not see; ``None`` is a miss under ``allow_none``.
+        # The row and its body, presented by the spec, shared with the viewset's ``retrieve``.
         row, data = present_kernel_row(self, s)
         return _JsonNullResponse() if row is None else Response(data)

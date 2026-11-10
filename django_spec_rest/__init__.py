@@ -1,12 +1,3 @@
-"""django-spec-rest: kernel specs served over Django REST Framework.
-
-Public API re-exports live here. Importing the top-level package is enough
-for typical usage; deeper imports (``django_spec_rest.types``,
-``django_spec_rest.views``, ``django_spec_rest.viewsets``) are stable and
-supported. A spec itself, and everything the kernel owns, is imported from
-``django_service_specs``.
-"""
-
 from django_spec_rest.service_specs.base_serializer_context import base_serializer_context
 from django_spec_rest.service_specs.build_offline_context import build_offline_context
 from django_spec_rest.service_specs.renderable_serializer_class import (
@@ -15,6 +6,8 @@ from django_spec_rest.service_specs.renderable_serializer_class import (
 from django_spec_rest.types import (
     DEFAULT_JSON_SCHEMA_REGISTRY,
     MARKING,
+    REST_TRANSPORT,
+    DiscriminatedAction,
     HttpExtras,
     JsonSchemaRegistry,
     OfflineContext,
@@ -35,6 +28,7 @@ from django_spec_rest.views.mutation.mutation_flow_mixin import MutationFlowMixi
 from django_spec_rest.views.mutation.utils import resolve_mutation_instance
 from django_spec_rest.viewsets import (
     ActionSerializerResolver,
+    GetQuerysetScopeWarning,
     SelectorListMixin,
     SelectorRetrieveMixin,
     SelectorViewSet,
@@ -49,7 +43,10 @@ from django_spec_rest.viewsets import (
 __all__ = [
     "DEFAULT_JSON_SCHEMA_REGISTRY",
     "MARKING",
+    "REST_TRANSPORT",
     "ActionSerializerResolver",
+    "DiscriminatedAction",
+    "GetQuerysetScopeWarning",
     "HttpExtras",
     "JsonSchemaRegistry",
     "MutationFlowMixin",

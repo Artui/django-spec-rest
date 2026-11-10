@@ -56,7 +56,9 @@ The view turns the request into the one dict of arguments the kernel's
   absent, a typed array or a multiple-choice filter splits on a comma, and
   each value is coerced to its parameter's type.
 - **A JSON body** is read as it was sent, and checked against the declared
-  types as sent: a JSON `"true"` is a string, not a boolean.
+  types as sent: a JSON `"true"` is a string, not a boolean. A view's
+  `lenient_json_body`, or the project's `SPEC_REST_LENIENT_JSON_BODY`, has its
+  serializer alone answer one instead, as DRF does; the spec stays typed.
 - **A form body** is read as DRF reads one: `"on"` and a blank checkbox for a
   boolean, and the prefixed spellings `v.tenant` and `tags[0]` of a nested or
   list field.
@@ -221,3 +223,30 @@ One context dict is built per request, with `request`, `view`, `format` and
 `call_context` are handed that same dict, so a key one serializer's
 `validate()` writes is there for the service and for the serializer rendering
 the answer. See [Serializer context](recipes/serializer-context.md).
+
+## Which transport is calling
+
+That dict also carries the kernel's `"transport"` key, stamped `"rest"`
+(`REST_TRANSPORT`, from the package root), so a callable shared with another
+transport can tell them apart with the kernel's `call_transport`. Checks, a
+discriminator, hooks, the validator, the service, the presenter and an `OPTIONS`
+answer all read that one value. The dict is the view's, built by the kernel's
+`build_call_context`.
+
+- **A serializer of this package under another transport keeps that transport's
+  stamp.** Only a view stamps. A `SerializerValidator` or `SerializerPresenter`
+  dispatched by spec-mcp or spec-agents reads their value.
+- **A context you write by hand reads as you wrote it.** `build_offline_context`
+  returns a request and a view, not a context, so a dict built from them with
+  no `"transport"` key reads as an in-process call, where `call_transport`
+  answers `None`.
+- **The key is the transport's to write.** A view hook or a `serializer_context`
+  callable answering a `"transport"` key of its own is dropped from the dict every
+  stage shares, silently and without an error, so every stage reads the stamp; name
+  such a key something else. A serializer built over a dict of its own (a call with
+  no request DRF built) keeps what its layers wrote there, since no other stage reads
+  that dict.
+
+What you override on this transport is DRF's and the view's: authenticators and
+`EXCEPTION_HANDLER`, the view's attributes and its `get_*` hooks
+([Serializer context](recipes/serializer-context.md)).

@@ -7,6 +7,10 @@ a spec by name. ``_Rewrite`` then changes it. Every site left is marked with a
 comment beginning ``MARKER`` above its statement, and returned as a
 ``Finding`` carrying the original line.
 
+One file is all ``rewrite_source`` sees, so the answers of a spec served from
+another module reach it as ``Followed``, which ``follow.py`` works out across
+the run's files: what arrives here for a view, and what became of what left.
+
 A second run over the output changes nothing: the kernel spellings it writes
 are not drfs', so nothing is left to map, and a marker already above a
 statement is not written again.
@@ -16,9 +20,10 @@ from __future__ import annotations
 
 import ast
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Hashable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TypeVar
 
 import libcst as cst
 from libcst.codemod import CodemodContext
@@ -26,6 +31,7 @@ from libcst.codemod.visitors import AddImportsVisitor
 from libcst.helpers import get_full_name_for_node
 from libcst.metadata import (
     CodeRange,
+    GlobalScope,
     ImportAssignment,
     MetadataWrapper,
     PositionProvider,
@@ -110,7 +116,7 @@ class Finding:
 
 @dataclass
 class _SpecCall:
-    """One construction of a spec: its kind, its role if nested, and what becomes of each keyword."""
+    """One construction of a spec: its kind, its role if nested, and each keyword's fate."""
 
     kind: str
     role: str | None
@@ -131,6 +137,92 @@ class _UseSite:
     # The other keys of an ``action_specs`` dict, so an ``update`` entry's
     # answer is not written for a ``partial_update`` that has an entry of its own.
     entries: frozenset[str] = frozenset()
+    # The expression naming the spec, so another use of that name can be told from this one.
+    reference: cst.CSTNode | None = None
+
+
+@dataclass(frozen=True)
+class Carried:
+    """An import as ``AddImportsVisitor`` takes one, and as ``ImportSite`` reads one."""
+
+    module: str
+    obj: str | None
+    asname: str | None = None
+    relative: int = 0
+
+
+@dataclass(frozen=True)
+class ImportSite:
+    """One import of one name, at any depth of a module: the local it binds, and from what."""
+
+    local: str
+    carried: Carried
+    top_level: bool
+    node: cst.CSTNode
+
+
+@dataclass(frozen=True)
+class Arrival:
+    """An answer of a spec in another module, on its way to the views serving that spec here."""
+
+    spec: tuple[Path, str]
+    name: str
+    value: str
+    origin: str
+    head: str | None = None
+    carried: Carried | None = None
+
+
+@dataclass(frozen=True)
+class Followed:
+    """What the pass across files settled for one: answers arriving, and those that left it.
+
+    ``arrivals`` is keyed by how this file names the spec. ``moved`` says where
+    each (variable, keyword) of its own went, and ``left`` why one did not.
+    """
+
+    arrivals: Mapping[str, Sequence[Arrival]] = field(default_factory=dict)
+    moved: Mapping[tuple[str, str], str] = field(default_factory=dict)
+    left: Mapping[tuple[str, str], str] = field(default_factory=dict)
+    # Each class of this file that a class elsewhere in the run subclasses and gives its own
+    # ``spec`` or ``action_specs``, with why: an answer set on it would reach that subclass.
+    shadowed: Mapping[str, str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class ClassShape:
+    """A module-level class: the names it is based on, and which spec seats its body binds."""
+
+    bases: tuple[str, ...]
+    declared: tuple[str, ...]
+
+
+_SEATS = ("spec", "action_specs")
+
+_K = TypeVar("_K", bound=Hashable)
+
+
+def below(start: _K, children: Mapping[_K, Sequence[_K]]) -> list[_K]:
+    """Every class under ``start``, nearest first, each once: a subclass's subclass too."""
+    found: list[_K] = []
+    queue = list(children.get(start, ()))
+    while queue:
+        node = queue.pop(0)
+        if node not in found:
+            found.append(node)
+            queue.extend(children.get(node, ()))
+    return found
+
+
+def subclass_reason(name: str, declared: Sequence[str], where: str | None = None) -> str:
+    """Why a class's answer stays: ``name`` (in ``where``) subclasses it and binds its own seat."""
+    place = f" in {where}" if where else ""
+    return f"{name}{place} subclasses it and declares its own {' and '.join(declared)}"
+
+
+def _object(carried: Carried) -> tuple[int, str, str | None]:
+    """What an import brings in, whatever it is called there."""
+    return carried.relative, carried.module, carried.obj
 
 
 def _source(node: cst.CSTNode) -> str:
@@ -143,6 +235,11 @@ def _keyword(arg: cst.Arg) -> str | None:
 
 def _kwargs(call: cst.Call) -> dict[str, cst.Arg]:
     return {name: arg for arg in call.args if (name := _keyword(arg)) is not None}
+
+
+def _named(node: cst.BaseExpression) -> str | None:
+    """How ``node`` names a spec: a bare name, or dotted through a module; else ``None``."""
+    return get_full_name_for_node(node) if isinstance(node, (cst.Name, cst.Attribute)) else None
 
 
 def _is_true(node: cst.BaseExpression) -> bool:
@@ -165,6 +262,7 @@ class _Imports(cst.CSTVisitor):
         self.a = analysis
 
     def visit_ImportFrom(self, node: cst.ImportFrom) -> None:
+        self._record_from(node)
         if node.module is None or node.relative or isinstance(node.names, cst.ImportStar):
             return
         module = get_full_name_for_node(node.module) or ""
@@ -181,6 +279,26 @@ class _Imports(cst.CSTVisitor):
             # ``import a.b`` binds ``a``, which names the package ``a``.
             local = alias.evaluated_alias or name.split(".")[0]
             self.a.module_aliases[local] = name if alias.asname is not None else local
+            carried = Carried(name, None, alias.evaluated_alias)
+            self.a.imported.append(ImportSite(local, carried, self._top_level(node), node))
+
+    def _record_from(self, node: cst.ImportFrom) -> None:
+        """Every ``from`` import, relative too: ``origins`` skips those, and reads selectors."""
+        module = get_full_name_for_node(node.module) if node.module is not None else ""
+        level = len(node.relative)
+        top_level = self._top_level(node)
+        if isinstance(node.names, cst.ImportStar):
+            carried = Carried(module or "", "*", None, level)
+            self.a.imported.append(ImportSite("*", carried, top_level, node))
+            return
+        for alias in node.names:
+            name = get_full_name_for_node(alias.name) or ""
+            carried = Carried(module or "", name, alias.evaluated_alias, level)
+            local = alias.evaluated_alias or name
+            self.a.imported.append(ImportSite(local, carried, top_level, node))
+
+    def _top_level(self, node: cst.CSTNode) -> bool:
+        return isinstance(self.a.scopes[node], GlobalScope)
 
 
 class _Analysis(cst.CSTVisitor):
@@ -189,9 +307,17 @@ class _Analysis(cst.CSTVisitor):
         self.roots = list(roots)
         self.origins: dict[str, tuple[str, str]] = {}
         self.module_aliases: dict[str, str] = {}
+        self.imported: list[ImportSite] = []
+        self.attributes: dict[str, list[cst.Attribute]] = {}
+        self.built_at_module_level: set[str] = set()
         self.specs: dict[int, _SpecCall] = {}
         self.answers: dict[str, dict[str, cst.Arg]] = {}
         self.use_sites: dict[str, list[_UseSite]] = {}
+        self.classes: dict[str, ClassShape] = {}
+        # The spec expressions given to ``register`` of a ``SpecRegistry``: not a view, and no
+        # second use of the spec, since a registry is read for an agent and serves no route.
+        self.registrations: set[int] = set()
+        self._registries: dict[str, cst.CSTNode] = {}
         self.consumed: set[int] = set()
         self.dropped_imports: dict[str, cst.ImportAlias] = {}
         self.live_dropped: set[str] = set()
@@ -200,11 +326,12 @@ class _Analysis(cst.CSTVisitor):
         self._module_level_targets: dict[int, str] = {}
         self.positions: Mapping[cst.CSTNode, CodeRange] = {}
         self.scopes: Mapping[cst.CSTNode, Scope | None] = {}
+        self.module_scope: Scope
 
     # --- spec construction ---------------------------------------------------
 
-    def spec_kind(self, func: cst.BaseExpression) -> str | None:
-        """``ServiceSpec`` or ``SelectorSpec`` if ``func`` names drfs' or the kernel's, else ``None``."""
+    def _target(self, func: cst.BaseExpression) -> tuple[str, str] | None:
+        """The (module, name) of a called class, mapped to the kernel's, else ``None``."""
         origin: tuple[str, str] | None = None
         if isinstance(func, cst.Name):
             origin = self.origins.get(func.value)
@@ -217,13 +344,61 @@ class _Analysis(cst.CSTVisitor):
                 origin = (module, func.attr.value)
         if origin is None:
             return None
-        target = IMPORTS.get(origin, origin)
-        if target[0].startswith(KERNEL) and target[1] in ("ServiceSpec", "SelectorSpec"):
+        return IMPORTS.get(origin, origin)
+
+    def spec_kind(self, func: cst.BaseExpression) -> str | None:
+        """``ServiceSpec`` or ``SelectorSpec`` if ``func`` is drfs' or kernel's, else ``None``."""
+        target = self._target(func)
+        if (
+            target is not None
+            and target[0].startswith(KERNEL)
+            and target[1]
+            in (
+                "ServiceSpec",
+                "SelectorSpec",
+            )
+        ):
             return target[1]
         return None
 
+    def _is_registry(self, func: cst.BaseExpression) -> bool:
+        target = self._target(func)
+        # Held by ``unknown class`` (not the kernel's) and ``other class`` (not a registry).
+        return target is not None and target[0].startswith(KERNEL) and target[1] == "SpecRegistry"
+
     def visit_ClassDef(self, node: cst.ClassDef) -> None:
+        if isinstance(self.scopes[node], GlobalScope):
+            names = self.class_names(node)
+            self.classes[node.name.value] = ClassShape(
+                # A keyword (``metaclass=``) is read as a base too: a doubt only blocks.
+                bases=tuple(
+                    name for base in node.bases if (name := _named(base.value)) is not None
+                ),
+                declared=tuple(seat for seat in _SEATS if seat in names),
+            )
         self._class.append(node)
+
+    def class_names(self, node: cst.ClassDef) -> set[str]:
+        """Every name the class body binds, wherever: annotated, in an ``if``, or a ``def``."""
+        scope = self.scopes[node.body.body[0]]
+        assert scope is not None
+        return {assignment.name for assignment in scope.assignments}
+
+    def subclass_declaring(self, view: str) -> str | None:
+        """Why ``view`` has a subclass in this module that would inherit an answer set on it.
+
+        A base is the class of its name here, however often that name is bound: the answer stays
+        on a doubt, never moves on one.
+        """
+        children: dict[str, list[str]] = {}
+        for name, shape in self.classes.items():
+            for base in shape.bases:
+                if base in self.classes:
+                    children.setdefault(base, []).append(name)
+        for name in below(view, children):
+            if self.classes[name].declared:
+                return subclass_reason(name, self.classes[name].declared)
+        return None
 
     def leave_ClassDef(self, original_node: cst.ClassDef) -> None:
         self._class.pop()
@@ -237,6 +412,10 @@ class _Analysis(cst.CSTVisitor):
                 continue
             if not self._class and isinstance(small.value, cst.Call):
                 self._module_level_targets[id(small.value)] = target.value
+                if self._is_registry(small.value.func) and isinstance(
+                    self.scopes[node], GlobalScope
+                ):
+                    self._registries[target.value] = target
             if self._class and len(self._class) == 1:
                 self._class_assignment(node, target.value, small.value)
 
@@ -244,8 +423,10 @@ class _Analysis(cst.CSTVisitor):
         self, line: cst.SimpleStatementLine, name: str, value: cst.BaseExpression
     ) -> None:
         owner = self._class[-1]
-        if name == "spec" and isinstance(value, cst.Name):
-            self.use_sites.setdefault(value.value, []).append(_UseSite("view", owner, line, line))
+        if name == "spec" and (key := _named(value)) is not None:
+            self.use_sites.setdefault(key, []).append(
+                _UseSite("view", owner, line, line, reference=value)
+            )
         if name == "action_specs" and isinstance(value, cst.Dict):
             entries = frozenset(
                 element.key.evaluated_value
@@ -258,12 +439,20 @@ class _Analysis(cst.CSTVisitor):
                 if (
                     isinstance(element, cst.DictElement)
                     and isinstance(element.key, cst.SimpleString)
-                    and isinstance(element.value, cst.Name)
+                    and (key := _named(element.value)) is not None
                 ):
                     action = element.key.evaluated_value
                     assert isinstance(action, str)
-                    self.use_sites.setdefault(element.value.value, []).append(
-                        _UseSite("hook", owner, line, line, action=action, entries=entries)
+                    self.use_sites.setdefault(key, []).append(
+                        _UseSite(
+                            "hook",
+                            owner,
+                            line,
+                            line,
+                            action=action,
+                            entries=entries,
+                            reference=element.value,
+                        )
                     )
 
     def visit_FunctionDef(self, node: cst.FunctionDef) -> None:
@@ -275,14 +464,44 @@ class _Analysis(cst.CSTVisitor):
                 isinstance(call, cst.Call)
                 and call.args
                 and _keyword(call.args[0]) is None
-                and isinstance(call.args[0].value, cst.Name)
+                and (key := _named(call.args[0].value)) is not None
                 and (get_full_name_for_node(call.func) or "").split(".")[-1] == "service_action"
             ):
-                self.use_sites.setdefault(call.args[0].value.value, []).append(
-                    _UseSite("decorator", self._class[-1], decorator, node, action=node.name.value)
+                self.use_sites.setdefault(key, []).append(
+                    _UseSite(
+                        "decorator",
+                        self._class[-1],
+                        decorator,
+                        node,
+                        action=node.name.value,
+                        reference=call.args[0].value,
+                    )
                 )
 
+    def _registration(self, node: cst.Call) -> None:
+        """Note spec expressions given to ``<registry>.register(...)``, when it is certain.
+
+        Each conjunct is held by a case of ``test_a_use_that_is_not_a_registration_still_blocks``,
+        named here by its id: the method (``other method``), the receiver bound once, at module
+        level, to a construction (``bound twice``, ``built in a function``, ``shadowed in a
+        function``, ``not a construction``, ``unknown receiver``), the argument being the spec
+        itself (``unpacked``; ``wrapped`` and ``called`` hold the reference check in ``follow.py``).
+        The class constructed is held in ``_is_registry``.
+        """
+        func = node.func
+        if not (isinstance(func, cst.Attribute) and func.attr.value == "register"):
+            return
+        # A dotted receiver (``admin.site``) is no key of ``_registries``, which holds plain names.
+        name = get_full_name_for_node(func.value) or ""
+        scope = self.scopes[node]
+        assert scope is not None
+        # Only the one module-level construction: a rebinding or a local of the same name is not it.
+        if [a.node for a in scope[name]] != [self._registries.get(name)]:
+            return
+        self.registrations.update(id(arg.value) for arg in node.args if not arg.star)
+
     def visit_Call(self, node: cst.Call) -> None:
+        self._registration(node)
         kind = self.spec_kind(node.func)
         if kind is None:
             return
@@ -303,9 +522,11 @@ class _Analysis(cst.CSTVisitor):
             answers = {name: keywords[name] for name in _ANSWERS if name in keywords}
             if answers:
                 self.answers[spec.variable] = answers
+                if isinstance(self.scopes[node], GlobalScope):
+                    self.built_at_module_level.add(spec.variable)
 
     def _consumes(self, spec: _SpecCall, name: str, arg: cst.Arg) -> bool:
-        """Whether this keyword's source leaves the call for a comment, so a dropped name in it is not live."""
+        """Whether a keyword's source leaves the call for a comment: a dropped name is not live."""
         if name in ("reads", "json_schema_registry", "field_audiences", *_ANSWERS):
             return True
         return name in ("output_filter_from_call", "document_service_error") and not (
@@ -327,6 +548,9 @@ class _Analysis(cst.CSTVisitor):
     def visit_Arg(self, node: cst.Arg) -> bool:
         return id(node) not in self.consumed
 
+    def visit_Attribute(self, node: cst.Attribute) -> None:
+        self.attributes.setdefault(get_full_name_for_node(node) or "", []).append(node)
+
     def visit_Name(self, node: cst.Name) -> None:
         local = self._dropped_accesses.get(id(node))
         if local is not None:
@@ -335,16 +559,28 @@ class _Analysis(cst.CSTVisitor):
 
 
 class _Rewrite(cst.CSTTransformer):
-    def __init__(self, analysis: _Analysis, context: CodemodContext, module: cst.Module) -> None:
+    def __init__(
+        self,
+        analysis: _Analysis,
+        context: CodemodContext,
+        module: cst.Module,
+        followed: Followed,
+    ) -> None:
         self.a = analysis
         self.context = context
         self._module = module
+        self.followed = followed
+        self.placed: dict[tuple[tuple[Path, str], str], list[str]] = {}
         self.findings: list[Finding] = []
         self._statements: list[cst.CSTNode] = []
         self._markers: dict[int, list[str]] = {}
         self._insert_after: dict[int, list[cst.BaseStatement]] = {}
         self._decorator_keywords: dict[int, list[cst.Arg]] = {}
         self._renames: dict[int, str] = {}
+        # What the answers placed so far bring in, so a later one cannot bring in another thing
+        # under the same name, or the same thing under another: head to import, object to alias.
+        self._brought: dict[str, Carried] = {}
+        self._spelled: dict[tuple[int, str, str | None], str | None] = {}
         self._plan_answers()
         self._plan_renames()
         self._dropped_names = {id(node) for node in analysis.dropped_references}
@@ -366,7 +602,7 @@ class _Rewrite(cst.CSTTransformer):
             markers.append(text)
 
     def _standing(self, original: cst.CSTNode) -> None:
-        """Report a marker an earlier run left above this statement, unless this run writes it again."""
+        """Report a marker an earlier run left above this statement, unless this run rewrites it."""
         fresh = set(self._markers.get(id(original), []))
         for line in getattr(original, "leading_lines", ()):
             text = line.comment.value if line.comment is not None else ""
@@ -407,7 +643,7 @@ class _Rewrite(cst.CSTTransformer):
     # --- imports ---------------------------------------------------------------
 
     def _plan_renames(self) -> None:
-        """A renamed target imported under its old spelling renames that spelling's references too."""
+        """A renamed target imported under its old spelling renames those references too."""
         scope = self.a.scopes[self._module]
         assert scope is not None
         for local, origin in self.a.origins.items():
@@ -505,23 +741,82 @@ class _Rewrite(cst.CSTTransformer):
                     spelled = self._place(site, name, arg.value)
                     if spelled:
                         self._answered.setdefault((variable, name), []).append(spelled)
+        for key, arrivals in self.followed.arrivals.items():
+            for site in self.a.use_sites.get(key, []):
+                for arrival in arrivals:
+                    self._arrive(site, arrival)
 
-    def _class_names(self, node: cst.ClassDef) -> set[str]:
-        names: set[str] = set()
-        for statement in node.body.body:
-            if isinstance(statement, cst.SimpleStatementLine):
-                for small in statement.body:
-                    if isinstance(small, cst.Assign):
-                        names.update(
-                            t.target.value for t in small.targets if isinstance(t.target, cst.Name)
-                        )
-            elif isinstance(statement, cst.FunctionDef):
-                names.add(statement.name.value)
-        return names
+    def _arrive(self, site: _UseSite, arrival: Arrival) -> None:
+        """Place an answer from another module, and only then bring in the import it needs."""
+        reason = self._refusal(site, arrival)
+        if reason is not None:
+            self._conflict(
+                site, f"{arrival.name}={arrival.value} from {arrival.origin} not moved: {reason}"
+            )
+            return
+        spelled = self._place(site, arrival.name, cst.parse_expression(arrival.value))
+        if not spelled:
+            return
+        self.placed.setdefault((arrival.spec, arrival.name), []).append(spelled)
+        carried = arrival.carried
+        if carried is not None and arrival.head is not None:
+            self._brought[arrival.head] = carried
+            if carried.obj is not None:
+                self._spelled[_object(carried)] = carried.asname
+            AddImportsVisitor.add_needed_import(
+                self.context, carried.module, carried.obj, carried.asname, carried.relative
+            )
+
+    def _refusal(self, site: _UseSite, arrival: Arrival) -> str | None:
+        """Why the value's name means something else, or nothing yet, at ``site``; else ``None``.
+
+        A name the module already binds holds only as the very import the spec's
+        module spelled, at module level (``test_a_function_local_import_of_the_name_is_not_read``)
+        and above the class (``test_an_import_of_the_same_name_below_the_view_is_not_read``),
+        with nothing else binding it (``test_a_second_binding_of_the_name_is_not_read``), and
+        no other import of it (``test_a_name_the_view_binds_otherwise_is_not_carried``).
+        Each of the other refusals is a conjunct of its own:
+
+        * a star import at module level may bind the name
+          (``test_a_star_import_in_the_view_may_bind_the_name_the_answer_carries``);
+        * the class binds the name, in any way
+          (``test_an_annotated_name_the_class_binds_otherwise_is_not_carried``);
+        * an earlier answer of another spec brought in the name from elsewhere
+          (``test_two_arrivals_of_one_name_from_two_modules_do_not_share_it``);
+        * an earlier answer brought in the same name from a module under another spelling, which
+          ``AddImportsVisitor`` cannot write as one
+          (``test_one_object_imported_with_and_without_an_alias_is_left``), where a module itself
+          imported both ways is written as two lines
+          (``test_a_module_imported_with_and_without_an_alias_moves_both``).
+        """
+        head, carried = arrival.head, arrival.carried
+        if head is None or carried is None:
+            return None
+        if any(imported.carried.obj == "*" for imported in self.a.imported):
+            return f"{head} here may be bound by a star import"
+        if head in self.a.class_names(site.class_node):
+            return f"{head} here is not the name it is there"
+        if self._brought.get(head, carried) != carried:
+            return f"{head} here is already brought in from another module by another answer"
+        if self._spelled.get(_object(carried), carried.asname) != carried.asname:
+            return f"{head} here would import what another answer imports under another name"
+        bound = self.a.module_scope.assignments[head]
+        if not bound:
+            return None
+        above = self._line(site.class_node)
+        same = any(
+            imported.top_level and imported.carried == carried and self._line(imported.node) < above
+            for imported in self.a.imported
+        )
+        return None if same and len(bound) == 1 else f"{head} here is not the name it is there"
 
     def _place(self, site: _UseSite, name: str, value: cst.BaseExpression) -> str | None:
-        declared = self._class_names(site.class_node)
+        declared = self.a.class_names(site.class_node)
         view = site.class_node.name.value
+        leak = self.a.subclass_declaring(view) or self.followed.shadowed.get(view)
+        if leak is not None:
+            self._conflict(site, f"{view}: {name} not moved: {leak}, and would inherit it")
+            return None
         if site.form == "decorator":
             hook = f"get_{site.action}_{name}"
             if hook in declared:
@@ -563,7 +858,7 @@ class _Rewrite(cst.CSTTransformer):
         return ", ".join(spelled) or None
 
     def _conflict(self, site: _UseSite, reason: str) -> None:
-        """A use site the answer cannot move onto, marked above it so a second run reports it too."""
+        """A use site the answer cannot move onto, marked above so a second run reports it."""
         self.mark(site.anchor, reason, at=site.statement)
 
     def _insert(self, anchor: cst.CSTNode, statement: cst.BaseStatement) -> None:
@@ -600,7 +895,7 @@ class _Rewrite(cst.CSTTransformer):
         return _SpecRewrite(self, spec, original_node, updated_node).run()
 
     def reads_note(self, original: cst.Call, selector: cst.Arg) -> None:
-        """Mark a selector whose signature names a read drfs filled, with the ``reads=`` it needs."""
+        """Mark a selector whose signature names a read drfs filled, giving its ``reads=``."""
         reads = self._selector_reads(selector.value)
         named = _source(selector.value)
         if isinstance(reads, str):
@@ -638,24 +933,34 @@ class _Rewrite(cst.CSTTransformer):
                 else self.a.module_aliases.get(head)
             )
             if base is None:
-                return f"its selector {dotted} is out of reach: declare in reads= what drfs read by its signature"
+                return (
+                    f"its selector {dotted} is out of reach: "
+                    "declare in reads= what drfs read by its signature"
+                )
             module = ".".join([base, *owner[1:]])
         if module is None:
             source = self._module.code
         else:
             file = module_file(self.a.roots, module)
             if file is None:
-                return f"its selector {dotted} is out of reach: declare in reads= what drfs read by its signature"
+                return (
+                    f"its selector {dotted} is out of reach: "
+                    "declare in reads= what drfs read by its signature"
+                )
             source = file.read_text(encoding="utf-8")
         function = find_function(source, name)
         if function is None:
-            return f"its selector {dotted} is out of reach: declare in reads= what drfs read by its signature"
+            return (
+                f"its selector {dotted} is out of reach: "
+                "declare in reads= what drfs read by its signature"
+            )
         return reads_for(function)
 
     def answers_note(self, original: cst.Call, spec: _SpecCall, arg: cst.Arg) -> None:
         name = _keyword(arg)
         assert name is not None
-        moved = self._answered.get((spec.variable or "", name), [])
+        key = (spec.variable or "", name)
+        moved = self._answered.get(key, [])
         value = _source(arg.value)
         if moved:
             self.mark(
@@ -664,10 +969,20 @@ class _Rewrite(cst.CSTTransformer):
                 f"{spec.variable} declares it itself",
             )
             return
+        elsewhere = self.followed.moved.get(key)
+        if elsewhere is not None:
+            self.mark(
+                original,
+                f"{name}={value} moved to {elsewhere}; a view outside this run serving "
+                f"{spec.variable} declares it itself",
+            )
+            return
+        why = self.followed.left.get(key)
         self.mark(
             original,
             f"{name}={value} is the view's or the action's: set {name} on the view, "
-            f"@service_action(..., {name}=...), or get_<action>_{name} on the viewset",
+            f"@service_action(..., {name}=...), or get_<action>_{name} on the viewset"
+            + (f"; not followed: {why}" if why else ""),
         )
 
 
@@ -693,7 +1008,7 @@ def _closed_elements(elements: Sequence[cst.BaseDictElement]) -> list[cst.BaseDi
 
 
 def _finished(args: list[cst.Arg], original: Sequence[cst.Arg]) -> list[cst.Arg]:
-    """End ``args`` as the original call ended: its last comma, and the space before the parenthesis."""
+    """End ``args`` as the call did: its last comma, and the space before ``)``."""
     if args and original:
         last = original[-1]
         args[-1] = args[-1].with_changes(
@@ -792,7 +1107,8 @@ class _SpecRewrite:
                 if not shared_registry or ("input_serializer" not in keywords and output is None):
                     self.leave(
                         name,
-                        "json_schema_registry goes on the SerializerValidator and SerializerPresenter",
+                        "json_schema_registry goes on the SerializerValidator "
+                        "and SerializerPresenter",
                     )
             elif name == "field_audiences":
                 if output is None:
@@ -831,7 +1147,7 @@ class _SpecRewrite:
         return self.updated.with_changes(args=_finished(out, self.updated.args))
 
     def _reads_note(self, out: list[cst.Arg]) -> None:
-        """Mark a selector left with no kernel ``reads=``, whichever run it is, so a second adds nothing."""
+        """Mark a selector left with no kernel ``reads=``: a second run adds nothing."""
         if (
             self.spec.kind == "SelectorSpec"
             and "selector" in self.original_args
@@ -840,14 +1156,14 @@ class _SpecRewrite:
             self.r.reads_note(self.original, self.original_args["selector"])
 
     def _drfs_reads(self, arg: cst.Arg) -> bool:
-        """Whether ``reads=`` is drfs' list rather than the kernel's ``Parameters``, which a second run meets."""
+        """Whether ``reads=`` is drfs' list, not the kernel's ``Parameters``, as a rerun meets."""
         return not (
             isinstance(arg.value, cst.Call)
             and (get_full_name_for_node(arg.value.func) or "").endswith("Parameters.of")
         ) and not isinstance(arg.value, cst.Name)
 
     def _nested_output(self, keywords: dict[str, cst.Arg]) -> cst.Call:
-        """An output selector: its serializer is lifted by the service around it, so only its own seats move."""
+        """An output selector: the service lifts its serializer, so only its own seats move."""
         out: list[cst.Arg] = []
         for arg in self.updated.args:
             name = _keyword(arg)
@@ -888,7 +1204,7 @@ class _SpecRewrite:
         return self.r._seat(PRESENTER, value, **keywords)
 
     def _value_keyword(self) -> str | None:
-        """What drfs handed an output context callable the value as: ``result``, ``instance`` or nothing."""
+        """What drfs passed an output context callable: ``result``, ``instance``, or none."""
         keywords = _kwargs(self.original)
         if self.spec.kind == "ServiceSpec":
             many = keywords.get("many")
@@ -900,7 +1216,7 @@ class _SpecRewrite:
     def _hoisted(
         self, keywords: dict[str, cst.Arg]
     ) -> tuple[cst.Arg, cst.Arg | None, cst.Call | None] | None:
-        """An output selector's serializer, lifted onto this service, and what is left of the selector."""
+        """An output selector's serializer, lifted onto this service, and what it keeps."""
         if self.spec.kind != "ServiceSpec":
             return None
         arg = keywords.get("output_selector_spec")
@@ -929,13 +1245,15 @@ class _SpecRewrite:
         if self.spec.role is not None:
             self.leave(
                 "permission_classes",
-                "the kernel refuses permissions on a nested selector: declare them on the spec served",
+                "the kernel refuses permissions on a nested selector: "
+                "declare them on the spec served",
             )
             return []
         if isinstance(arg.value, (cst.List, cst.Tuple)) and not arg.value.elements:
             self.leave(
                 "permission_classes",
-                "an empty permission_classes: say permissions=(Unrestricted(),) if the spec admits everyone",
+                "an empty permission_classes: say permissions=(Unrestricted(),) "
+                "if the spec admits everyone",
             )
             return []
         seat = self.r._seat(PERMISSION, arg.value)
@@ -964,20 +1282,38 @@ class _SpecRewrite:
         return []
 
 
-def rewrite_source(
-    source: str, path: Path, roots: Sequence[Path] = ()
-) -> tuple[str, list[Finding]]:
-    """``source`` rewritten, and the sites left in it. ``roots`` is where a selector's module is looked up."""
-    module = cst.parse_module(source)
-    wrapper = MetadataWrapper(module)
+def scan_source(
+    source: str, path: Path, roots: Sequence[Path]
+) -> tuple[_Analysis, MetadataWrapper]:
+    """``source`` read, unchanged: what its names were imported as, its specs and its views."""
+    wrapper = MetadataWrapper(cst.parse_module(source))
     analysis = _Analysis(path, roots or [Path.cwd()])
     analysis.positions = wrapper.resolve(PositionProvider)
     analysis.scopes = wrapper.resolve(ScopeProvider)
+    scope = analysis.scopes[wrapper.module]
+    assert scope is not None
+    analysis.module_scope = scope
     wrapper.module.visit(_Imports(analysis))
     wrapper.visit(analysis)
+    return analysis, wrapper
+
+
+def rewrite_module(
+    source: str, path: Path, roots: Sequence[Path], followed: Followed
+) -> tuple[str, list[Finding], dict[tuple[tuple[Path, str], str], list[str]]]:
+    """``source`` rewritten, the sites left in it, and where each arrival was placed."""
+    analysis, wrapper = scan_source(source, path, roots)
     context = CodemodContext()
-    rewrite = _Rewrite(analysis, context, wrapper.module)
+    rewrite = _Rewrite(analysis, context, wrapper.module, followed)
     changed = wrapper.visit(rewrite)
     changed = AddImportsVisitor(context).transform_module(changed)
     findings = sorted(rewrite.findings, key=lambda f: (f.line, f.reason))
-    return changed.code, findings
+    return changed.code, findings, rewrite.placed
+
+
+def rewrite_source(
+    source: str, path: Path, roots: Sequence[Path] = ()
+) -> tuple[str, list[Finding]]:
+    """``source`` rewritten, and the sites left in it; ``roots`` finds a selector's module."""
+    output, findings, _ = rewrite_module(source, path, roots, Followed())
+    return output, findings

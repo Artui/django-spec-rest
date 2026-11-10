@@ -203,7 +203,7 @@ def _update(**fields: Any) -> ServiceSpec:
 
 
 def _task(**fields: Any) -> ServiceSpec:
-    """A spec over ``TaskInSerializer`` whose ``input_data`` fills ``owner`` and may fill ``note``."""
+    """A spec over ``TaskInSerializer`` whose ``input_data`` fills ``owner``, may fill ``note``."""
     return _create(
         **{"validator": SerializerValidator(TaskInSerializer), "input_data": _row_fill, **fields}
     )
@@ -280,7 +280,7 @@ class _AnnotatedUpdateView(ServiceUpdateView):
 
 
 class _AnnotatedTaskView(ServiceCreateView):
-    """The author's ``TaskInSerializer`` itself, documented beside a spec over it reaching nothing."""
+    """The author's ``TaskInSerializer`` itself, documented beside a spec reaching nothing."""
 
     queryset = Author.objects.all()
     spec = _create()
@@ -808,12 +808,14 @@ class TestTheResponse:
         assert set(responses) == {"201", "204", "400"}
         assert "content" not in responses["204"]
 
-    def test_no_presenter_documents_no_content_at_the_status(self, schema: dict[str, Any]) -> None:
-        # The spec may present nothing, and the no-content response is already
-        # the one documented, at its status: no 204 beside it.
+    def test_no_presenter_documents_no_body_at_the_status_and_the_204(
+        self, schema: dict[str, Any]
+    ) -> None:
+        # The wire is pinned beside the document in test_no_presenter_status.
         responses = _op(schema, "/create-bare/", "post")["responses"]
-        assert set(responses) == {"201", "400"}
+        assert set(responses) == {"201", "204", "400"}
         assert "content" not in responses["201"]
+        assert "content" not in responses["204"]
 
     def test_another_presenter_is_its_output_schema(self, schema: dict[str, Any]) -> None:
         body = _response(schema, "/create-dataclass-out/", "post", "201")

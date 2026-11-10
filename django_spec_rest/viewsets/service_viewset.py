@@ -1,5 +1,3 @@
-"""Full-CRUD viewset composed of per-action mixins."""
-
 from __future__ import annotations
 
 from rest_framework.viewsets import GenericViewSet

@@ -1,5 +1,3 @@
-"""``destroy`` action backed by a service callable."""
-
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -9,8 +7,12 @@ from rest_framework import status as drf_status
 from rest_framework.request import Request
 from rest_framework.response import Response
 
+from django_spec_rest.types.discriminated_action import DiscriminatedAction
 from django_spec_rest.views.mutation.mutation_flow_mixin import MutationFlowMixin
-from django_spec_rest.views.mutation.utils import resolve_mutation_instance
+from django_spec_rest.views.mutation.utils import (
+    dispatch_discriminated_action,
+    resolve_mutation_instance,
+)
 from django_spec_rest.viewsets.utils import (
     _ActionSpecsMixin,
     dispatches_action_specs,
@@ -27,12 +29,19 @@ class ServiceDestroyMixin(MutationFlowMixin, _ActionSpecsMixin):
     entry raises ``ImproperlyConfigured``.
     """
 
-    # Provided at runtime by ``GenericAPIView`` / ``GenericViewSet``.
     get_object: Callable[..., Any]
 
     @dispatches_action_specs
     def destroy(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         spec = resolve_action_service_spec(self.action_specs, "destroy", "DELETE")
+        if isinstance(spec, DiscriminatedAction):
+            return dispatch_discriminated_action(
+                self,
+                request,
+                spec,
+                default_status=drf_status.HTTP_204_NO_CONTENT,
+                render_instance_on_none=False,
+            )
         return self._run_mutation(
             request,
             spec,

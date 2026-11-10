@@ -1,4 +1,4 @@
-"""A ``many`` call whose top level passes and whose rows do not asks the spec's class-level check twice.
+"""A ``many`` call whose top level passes and whose rows fail asks the class-level check twice.
 
 The edge asks the spec's class-level checks before ``dispatch`` does
 (``_admitted`` in ``dispatch/kernel_edge.py``). Where the call is well formed

@@ -1,4 +1,4 @@
-"""``reserved_components_hook``: what it leaves to a project, where else it looks, and its place among the hooks.
+"""``reserved_components_hook``: what it leaves to a project, where else it looks, its hook order.
 
 The refusal itself, on a project's view in either order, is
 ``test_reserved_names_on_any_view``.
@@ -133,7 +133,7 @@ def _shallow_rebuild_hook(result: Any, **kwargs: Any) -> Any:
 
 
 class TestAProjectHookThatCopiesTheSchema:
-    """The hook knows the package's references by their strings' identity, so it must see them before a rebuild."""
+    """The hook knows the package's references by identity, so it must see them before rebuilds."""
 
     @pytest.mark.parametrize(
         "copying_hook", [_deep_copying_hook, _json_roundtrip_hook, _shallow_rebuild_hook]
@@ -156,7 +156,7 @@ class TestAProjectHookThatCopiesTheSchema:
 
 
 class TestTheHooksAProjectSets:
-    """A list of hooks that replaces drf-spectacular's own, as ``custom_settings`` does, drops the hook."""
+    """A hook list replacing drf-spectacular's own, as ``custom_settings`` does, drops the hook."""
 
     def test_a_list_without_the_hook_loses_the_guard(self) -> None:
         enable_openapi()

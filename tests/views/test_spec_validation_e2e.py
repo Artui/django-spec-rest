@@ -381,7 +381,7 @@ class TestASelectorView:
     def test_a_route_capture_the_spec_does_not_declare_is_refused(self) -> None:
         """A route capture nothing declares is no argument, so a retrieve
         selector cannot require a keyword in the hope that a route capture fills
-        it. The kernel route reads only a capture the spec declares, so an undeclared one fills nothing
+        it. The kernel route reads only a declared capture, so an undeclared one fills nothing
         (``kernel_arguments``) and the selector is refused here."""
 
         def selector(*, pk: int) -> None: ...

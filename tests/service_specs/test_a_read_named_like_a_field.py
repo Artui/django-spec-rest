@@ -5,7 +5,7 @@ be one argument declared by two sources. The kernel refuses that when it
 assembles ``parameters()``, which a ``SerializerValidator`` answers on first
 use rather than when it is built, so the spec is constructed and the refusal
 comes on the first call that reads its parameters. A view serving a kernel
-spec does not ask at ``as_view()`` yet, and the test of that is a strict xfail until the view's mount checks do.
+spec does not ask at ``as_view()`` yet; its test is a strict xfail until the mount checks do.
 """
 
 from __future__ import annotations

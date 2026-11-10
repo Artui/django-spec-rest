@@ -1,13 +1,3 @@
-"""``map_service_error`` — translate a framework-agnostic ``ServiceError`` to DRF.
-
-Kept in its own leaf module (rather than inside ``views.mutation.utils``) so it
-can be imported without pulling in the heavy mutation-flow machinery. That
-matters for the package's eagerly-imported public API: importing the whole
-``utils`` module at package-import time (during ``apps.populate()``) triggers a
-circular import, whereas this leaf depends only on DRF exceptions and the
-framework-agnostic error types.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -35,22 +25,7 @@ class _ServiceAPIException(drf_exceptions.APIException):
 class _AdditionalInputAPIException(_ServiceAPIException):
     """The ``422`` an
     [`AdditionalInputRequired`][django_service_specs.services.additional_input_required.AdditionalInputRequired]
-    carrying a schema answers with: ``{"detail": <message>, "schema": <schema>}``.
-
-    ``detail`` is built the way DRF builds every other one, so each leaf of the
-    schema in it is an ``ErrorDetail``, a ``str`` with a ``code``. That is the
-    contract a configured ``EXCEPTION_HANDLER`` is written against: handlers
-    such as drf-standardized-errors walk ``detail`` and read ``.code`` off every
-    leaf, and a schema carried with its native ``False`` and ``3`` in it turned
-    their ``422`` into a ``500``.
-
-    The schema as raised is kept on ``schema``, because a ``str`` leaf is no
-    longer JSON Schema: ``"default": "False"`` is a non-empty string to a client
-    rendering a form. The package's views and viewsets, and a ``@service_action`` on any
-    viewset, put it back into the body after the handler has built the response
-    (see ``views.mutation.utils.restore_raised_schema``); anything else holding
-    this exception, a direct ``map_service_error`` caller say, reads it here.
-    """
+    carrying a schema answers with: ``{"detail": <message>, "schema": <schema>}``."""
 
     def __init__(self, message: str, schema: Mapping[str, Any]) -> None:
         self.schema: dict[str, Any] = dict(schema)
@@ -58,11 +33,7 @@ class _AdditionalInputAPIException(_ServiceAPIException):
 
 
 class _ConflictAPIException(drf_exceptions.APIException):
-    """DRF mapping for
-    [`ServiceConflict`][django_service_specs.services.service_conflict.ServiceConflict].
-
-    Declared here rather than reached for from DRF, which ships no ``409``
-    exception of its own."""
+    """DRF mapping for [`ServiceConflict`][django_service_specs.services.service_conflict.ServiceConflict]."""  # noqa: E501
 
     status_code = drf_status.HTTP_409_CONFLICT
     default_detail = "Conflict."
@@ -70,42 +41,15 @@ class _ConflictAPIException(drf_exceptions.APIException):
 
 
 def map_service_error(exc: ServiceError) -> drf_exceptions.APIException:
-    """Translate a framework-agnostic service error into a DRF exception.
-
-    Specific members first, the generic ``422`` last. Every one of these is a
-    ``ServiceError`` subclass, so the order is the mapping: a generic branch reached
-    first would swallow all of them, which is the same trap a transport's own
-    handler has (see each member's docstring).
-
-    ``ActionUnavailable`` is a ``ServiceConflict`` and keeps its ``409``; its
-    branch exists only to put the affordance's ``code`` in the body beside the
-    ``detail`` a client already reads.
-
-    ``AdditionalInputRequired`` takes no *status* branch — "I need one more value"
-    is the resource being unprocessable as asked, so it stays a ``422`` like any
-    other service error. It does take a *body* branch, because the schema naming
-    what is missing is the whole point of the error: without it a client is told
-    that something is needed and not what, and the answer comes back as ordinary
-    input on every transport.
-    """
+    """Translate a framework-agnostic service error into a DRF exception."""
     if isinstance(exc, ServiceValidationError):
         return drf_exceptions.ValidationError(exc.detail)
     if isinstance(exc, ServiceNotFound):
         return drf_exceptions.NotFound(str(exc))
     if isinstance(exc, ActionUnavailable):
-        # A body branch rather than a status one, for the reason
-        # ``AdditionalInputRequired`` takes one below: the stable code is the
-        # whole point of the member, and a client left with only the sentence has
-        # nothing to branch on. Always present, since the member cannot be built
-        # without one.
         return _ConflictAPIException({"detail": str(exc), "code": exc.code})
     if isinstance(exc, ServiceConflict):
         return _ConflictAPIException(str(exc))
     if isinstance(exc, AdditionalInputRequired) and exc.schema is not None:
-        # A mapping detail renders as the object itself, so ``detail`` keeps the
-        # shape a client already reads and ``schema`` joins it rather than
-        # replacing it. Only when there is a schema: the error is valid without
-        # one, and growing the body unconditionally would change every plain
-        # message into an object for no gain.
         return _AdditionalInputAPIException(str(exc), exc.schema)
     return _ServiceAPIException(str(exc))

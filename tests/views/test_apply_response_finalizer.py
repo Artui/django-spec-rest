@@ -77,3 +77,19 @@ def test_instance_and_data_offered_only_when_present() -> None:
     _apply(finalizer)  # instance / data default to None → gated out
     assert "instance" not in seen
     assert "data" not in seen
+
+
+def test_variant_is_offered_only_where_there_is_one() -> None:
+    seen: dict[str, Any] = {}
+
+    def finalizer(**kwargs: Any) -> None:
+        seen.clear()
+        seen.update(kwargs)
+
+    request: Any = object()
+    apply_response_finalizer(
+        finalizer, Response(), request=request, view=None, result=None, variant="chosen"
+    )
+    assert seen["variant"] == "chosen"
+    apply_response_finalizer(finalizer, Response(), request=request, view=None, result=None)
+    assert "variant" not in seen

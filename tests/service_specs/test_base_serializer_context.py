@@ -1,4 +1,4 @@
-"""``base_serializer_context``: DRF's baseline context, on and off the HTTP path, for a kernel spec."""
+"""``base_serializer_context``: DRF's baseline context, on and off the HTTP path, for a spec."""
 
 from __future__ import annotations
 

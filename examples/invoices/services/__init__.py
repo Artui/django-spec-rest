@@ -5,13 +5,18 @@ from __future__ import annotations
 from typing import Any
 
 from django.conf import settings
-from django_service_specs import ServiceConflict, ServiceError
+from django_service_specs import ServiceConflict, ServiceError, update_from_input
 
 from invoices.models import Invoice
 
 
 def create_invoice(*, data: dict[str, Any]) -> Invoice:
     return Invoice.objects.create(**data)
+
+
+def create_blank_invoice(*, data: dict[str, Any]) -> Invoice:
+    """A draft for nothing yet: the amount is filled in by a later update."""
+    return Invoice.objects.create(customer=data["customer"], amount_cents=0)
 
 
 def update_invoice(*, instance: Invoice, data: dict[str, Any]) -> Invoice:
@@ -22,6 +27,10 @@ def update_invoice(*, instance: Invoice, data: dict[str, Any]) -> Invoice:
         setattr(instance, name, value)
     instance.save()
     return instance
+
+
+def set_receipt(*, instance: Invoice, data: dict[str, Any]) -> Invoice:
+    return update_from_input(instance, data).instance
 
 
 def sending_paused() -> bool:

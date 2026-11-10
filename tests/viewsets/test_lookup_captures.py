@@ -1,4 +1,4 @@
-"""A router-mounted detail route is refused at ``as_view()`` where its row lookup does not read the capture.
+"""A router-mounted detail route is refused at ``as_view()`` if its row lookup ignores the capture.
 
 A DRF router captures a detail route's lookup under ``lookup_url_kwarg``, else
 ``lookup_field``, and the edge hands a spec only the captures it declares as

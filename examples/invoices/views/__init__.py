@@ -15,9 +15,12 @@ from typing import Any
 from django_service_specs import (
     DEFAULT_POOL_SEEDS,
     Affordance,
+    Output,
+    OutputField,
     Parameter,
     Parameters,
     PermissionCheck,
+    Presenter,
     SelectorKind,
     SelectorSpec,
     ServiceSpec,
@@ -28,7 +31,15 @@ from rest_framework.authentication import BasicAuthentication
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.viewsets import GenericViewSet
 
-from django_spec_rest import SelectorListView, ServiceCreateMixin, ServiceViewSet, service_action
+from django_spec_rest import (
+    DiscriminatedAction,
+    SelectorListView,
+    ServiceCreateMixin,
+    ServiceCreateView,
+    ServiceUpdateView,
+    ServiceViewSet,
+    service_action,
+)
 from django_spec_rest.openapi import (
     SERVICE_ERROR_METADATA_KEY,
     NotAuthenticatedSerializer,
@@ -40,11 +51,55 @@ from django_spec_rest.service_specs.serializer_presenter import SerializerPresen
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from invoices.models import Invoice
 from invoices.selectors import InvoiceFilter, get_invoice, list_invoices, sent_invoices
-from invoices.serializers import InvoiceInput, InvoiceSerializer
-from invoices.services import create_invoice, send_invoice, sending_paused, update_invoice
+from invoices.serializers import (
+    BlankInvoiceInput,
+    InvoiceInput,
+    InvoiceSerializer,
+    ReceiptInput,
+)
+from invoices.services import (
+    create_blank_invoice,
+    create_invoice,
+    send_invoice,
+    sending_paused,
+    set_receipt,
+    update_invoice,
+)
 
 OPEN = (Unrestricted(),)
 PRESENTER = SerializerPresenter(InvoiceSerializer)
+
+# What an invoice has reached: nothing yet while it is a draft.
+STAGES = (("billed", "Billed"), ("settled", "Settled"))
+
+
+class InvoiceSummaryPresenter(Presenter):
+    """A presenter that is no serializer: the document's response is the kernel's ``output_schema``.
+
+    ``stage`` is a labelled choice that admits null, the shape the kernel writes
+    as JSON Schema (a type list, a ``oneOf`` of constants). Under OpenAPI 3.0,
+    drf-spectacular's default, the package writes it as ``nullable`` and an
+    ``enum``; ``OpenAPISchemaTests`` validates the project's default document.
+    """
+
+    def output(self) -> Output:
+        return Output(
+            (
+                OutputField("customer", "string"),
+                OutputField("status", "string", choices=Invoice.STATUS_CHOICES),
+                OutputField("stage", "string", choices=STAGES, nullable=True),
+            )
+        )
+
+    def present(self, value: Invoice) -> dict[str, Any]:
+        stage = {
+            Invoice.STATUS_DRAFT: None,
+            Invoice.STATUS_SENT: "billed",
+            Invoice.STATUS_PAID: "settled",
+            Invoice.STATUS_VOID: "settled",
+        }[value.status]
+        return {"customer": value.customer, "status": value.status, "stage": stage}
+
 
 # The seeds the viewset registers (``InvoiceViewSet.pool_seeds``). A callable
 # declaring ``sending_paused`` is handed its value. ``SEND_SPEC`` is served by
@@ -86,10 +141,41 @@ CREATE_SPEC = ServiceSpec(
     presenter=PRESENTER,
 )
 
+# The second variant of ``/intake/``: a body of its own, so the route's request
+# is documented as an ``anyOf`` of the two.
+BLANK_SPEC = ServiceSpec(
+    service=create_blank_invoice,
+    validator=SerializerValidator(BlankInvoiceInput),
+    permissions=OPEN,
+    presenter=PRESENTER,
+)
+
+
+def invoice_intake(*, data: Any) -> str:
+    """Choose the variant from the body: a request naming an amount is a full draft."""
+    return "draft" if "amount_cents" in data else "blank"
+
+
+# One URL, two specs: the request chooses. Each variant is asked what a plain
+# ``create`` entry is asked, and the chosen one's own checks decide.
+INTAKE = DiscriminatedAction(
+    discriminator=invoice_intake, specs={"draft": CREATE_SPEC, "blank": BLANK_SPEC}
+)
+
 # A write's target is its own selector's, never ``get_object()``'s.
 UPDATE_SPEC = ServiceSpec(
     service=update_invoice,
     validator=SerializerValidator(InvoiceInput),
+    instance_selector_spec=INVOICE_LOOKUP,
+    permissions=OPEN,
+    presenter=PRESENTER,
+)
+
+# A ``null`` for ``receipt`` clears the file: the serializer's field allows it,
+# and ``SerializerValidator`` hands the service ``""``, the empty file.
+RECEIPT_SPEC = ServiceSpec(
+    service=set_receipt,
+    validator=SerializerValidator(ReceiptInput),
     instance_selector_spec=INVOICE_LOOKUP,
     permissions=OPEN,
     presenter=PRESENTER,
@@ -155,6 +241,13 @@ AUDIT_SPEC = SelectorSpec(
     presenter=PRESENTER,
 )
 
+SUMMARY_SPEC = SelectorSpec(
+    kind=SelectorKind.LIST,
+    selector=list_invoices,
+    permissions=OPEN,
+    presenter=InvoiceSummaryPresenter(),
+)
+
 SENT_SPEC = SelectorSpec(
     kind=SelectorKind.LIST,
     selector=sent_invoices,
@@ -172,7 +265,7 @@ SENT_SPEC = SelectorSpec(
     partial_update=extend_schema(responses={409: ServiceConflictSerializer}),
 )
 class InvoiceViewSet(ServiceViewSet):
-    """``/invoices/`` and ``/invoices/<pk>/``, plus ``POST /invoices/<pk>/send/``, which answers 202.
+    """``/invoices/`` and ``/invoices/<pk>/``, plus ``POST /invoices/<pk>/send/``, answers 202.
 
     No ``"destroy"`` spec: ``DELETE`` answers 405 and the detail route's
     ``Allow`` header leaves it out. ``PATCH`` falls back to the ``"update"``
@@ -195,10 +288,33 @@ class InvoiceViewSet(ServiceViewSet):
         """Mark a draft as sent, answered 202."""
 
 
+class InvoiceImportView(ServiceCreateView):
+    """``POST /invoice-imports/``: ``CREATE_SPEC``, whose JSON body its serializer alone answers.
+
+    For a client sending ``5`` for a string, which ``POST /invoices/`` refuses.
+    The spec stays typed everywhere else, its schema included.
+    """
+
+    spec = CREATE_SPEC
+    lenient_json_body = True
+
+
+class InvoiceReceiptView(ServiceUpdateView):
+    """``PATCH /invoices/<pk>/receipt/``: a ``null`` clears the file the invoice holds."""
+
+    spec = RECEIPT_SPEC
+
+
 class SentInvoiceListView(SelectorListView):
     """``GET /sent-invoices/``: one selector spec on a standalone view."""
 
     spec = SENT_SPEC
+
+
+class SummaryInvoiceListView(SelectorListView):
+    """``GET /invoice-summaries/``: rows presented by a presenter that is no serializer."""
+
+    spec = SUMMARY_SPEC
 
 
 class StaffInvoiceListView(SelectorListView):
@@ -264,3 +380,19 @@ class DraftInvoiceViewSet(ServiceCreateMixin, GenericViewSet):
 
     queryset = Invoice.objects.all()
     action_specs = {"create": CREATE_SPEC}
+
+
+class IntakeViewSet(ServiceCreateMixin, GenericViewSet):
+    """``POST /intake/``: one ``create`` action serving ``INTAKE``, a ``DiscriminatedAction``.
+
+    Composed from the create mixin alone, as ``DraftInvoiceViewSet`` is, so the
+    router mounts nothing it does not serve. A body naming ``amount_cents`` is
+    validated and created as ``CREATE_SPEC`` does; any other is ``BLANK_SPEC``'s,
+    a customer and a zero amount. The schema documents the request as the
+    ``IntakeViewSet_create_Request`` component, an ``anyOf`` over both bodies.
+    One spec per route stays the default (``InvoiceViewSet``); this is for an
+    endpoint that must keep one URL.
+    """
+
+    queryset = Invoice.objects.all()
+    action_specs = {"create": INTAKE}

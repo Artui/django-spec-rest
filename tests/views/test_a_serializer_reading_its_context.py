@@ -286,7 +286,7 @@ class _ReadsItsContext(serializers.Serializer):
     strict=True,
     reason=(
         "The serializers and the service share one dict now, but it is the one "
-        "fill_call_context builds (view_call_context, views/utils.py), not the object "
+        "view_call_context builds (views/utils.py), not the object "
         "get_serializer_context() returned, so only the final identity assertion fails."
     ),
 )
@@ -443,7 +443,7 @@ def test_a_kernel_call_for_another_principal_is_never_described_under_the_view_s
     assert all(pair == (None, None) for pair in _DESCRIBED_UNDER)
 
 
-def test_a_kernel_call_of_the_view_s_own_spec_for_another_principal_is_never_described_under_the_view_s_request(
+def test_a_kernel_call_of_the_view_s_own_spec_for_another_principal_is_never_described_under_the_view_s_request(  # noqa: E501
     owner: User,
 ) -> None:
     """The service dispatches the view's own spec for another principal: the

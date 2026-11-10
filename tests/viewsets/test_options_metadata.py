@@ -242,9 +242,17 @@ def test_allow_keeps_a_views_own_handler_without_a_spec() -> None:
     assert _described(response) == {}
 
 
-def test_a_list_with_no_spec_stays_allowed() -> None:
-    """``list`` with no spec falls back to DRF's own queryset and is served."""
+def test_a_list_with_no_spec_and_no_serializer_leaves_allow() -> None:
+    """``list`` with no spec falls back to DRF, which needs a serializer this viewset lacks
+    beside its ``queryset``. So the handler answers 405 and ``Allow`` does not name it."""
     viewset = _viewset(action_specs={"create": _create()})
+    response = _options(viewset, {"get": "list", "post": "create"})
+    assert _allow(response) == {"POST", "OPTIONS"}
+
+
+def test_a_list_with_no_spec_stays_allowed_where_its_fallback_can_run() -> None:
+    """With a ``queryset`` and a ``serializer_class``, DRF's own ``list`` serves it."""
+    viewset = _viewset(action_specs={"create": _create()}, serializer_class=AuthorSerializer)
     response = _options(viewset, {"get": "list", "post": "create"})
     assert _allow(response) == {"GET", "HEAD", "POST", "OPTIONS"}
 

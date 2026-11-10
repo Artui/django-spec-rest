@@ -1,5 +1,3 @@
-"""``build_offline_context`` — synthesize the request / view a spec needs off-HTTP."""
-
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -24,95 +22,18 @@ def build_offline_context(
     query_params: Mapping[str, Any] | None = None,
     host: str | None = None,
 ) -> OfflineContext:
-    """Build the
-    [`OfflineContext`][django_spec_rest.types.offline_context.OfflineContext] for
-    dispatching a spec outside an HTTP request.
-
-    A spec written for the HTTP transport may read a DRF ``request`` or ``view``: a
-    ``kwargs`` provider, a request-scoped ``FilterSet``, a serializer reading its
-    context, and the DRF permission check evaluating ``permission_classes``. Off HTTP
-    there is neither, so this synthesizes both; hand them to
-    [`dispatch`][django_service_specs.dispatch.dispatch.dispatch] as
-    ``call_context={"request": context.request, "view": context.view}``, and the
-    spec keeps working when driven from an agent toolset, a management command or a
-    task runner.
-
-    Args:
-        user: Set as ``request.user``, so callables and permissions that read it behave
-            as on HTTP. ``request.auth`` is ``None``, set without running DRF's
-            authenticators, so reading it never replaces this user: a scope
-            check off DRF is the transport's to make.
-        params: Seeds ``request.data``, straight into DRF's parsed-data cache (a
-            synthetic request has no stream to parse), for a callable that reads it.
-            It is *not* what the spec validates: the kernel validates the
-            ``arguments`` handed to ``dispatch`` and never reads ``request.data``.
-        http_request: An ambient Django request to wrap, so its headers / ``META`` are
-            available (the MCP server passes its real one); otherwise an
-            [`OfflineHttpRequest`][django_spec_rest.types.offline_http_request.OfflineHttpRequest]
-            is created. Either way the method is forced to ``POST``, because mutation
-            callables often branch on it. **The caller keeps ownership: a request
-            passed here is never written to.** What gets wrapped is a shallow copy,
-            so the ``method`` / ``GET`` / ``user`` this function sets land on the copy
-            alone, while ``META``, the session, the upload handlers and any body
-            already read stay shared — headers and session writes behave as they do
-            on HTTP, and the live request keeps its own method, query string and user
-            for the rest of its cycle. Pass the request you are serving; dispatching
-            several specs from one request is safe, and neither leaks into the next.
-        action: The view action name, exposed on the
-            [`OfflineServiceView`][django_spec_rest.types.offline_service_view.OfflineServiceView].
-        kwargs: The view's ``kwargs``, the off-HTTP counterpart of a route's URL
-            captures, read by any callable that declares ``view`` and reads
-            ``view.kwargs``. Never merged into the call's arguments: a value the
-            spec validates is an ``argument`` to ``dispatch``.
-        query_params: Seeds the request's ``GET`` ``QueryDict``, the source
-            ``request.query_params`` reads — how read-shaping params that are not spec
-            inputs reach the serializer offline: a serializer branching on
-            ``query_params``, and a request-scoped ``FilterSet`` reading
-            ``self.request.query_params`` itself. Values are stringified as on
-            HTTP; a list / tuple becomes a multi-valued param. **Replaces** a wrapped
-            ``http_request``'s ``GET`` — on the copy that is wrapped, so the caller's
-            own ``GET`` still reads its real query string afterwards.
-        host: The origin the synthesized request reports, so ``build_absolute_uri`` —
-            which DRF's ``FileField`` / ``HyperlinkedIdentityField`` call whenever a
-            ``request`` is in the serializer context — returns real absolute URLs off
-            HTTP. Accepts ``"example.com"``, ``"example.com:8000"``, or a full origin
-            whose scheme decides whether links are https. There is no default: unset,
-            absolute-URI building degrades to the relative URL rather than raising (see
-            [`OfflineHttpRequest`][django_spec_rest.types.offline_http_request.OfflineHttpRequest]).
-            **Ignored when ``http_request`` is supplied**, whose own headers are
-            authoritative, so a caller can pass both unconditionally.
-
-    Returns: The
-        [`OfflineContext`][django_spec_rest.types.offline_context.OfflineContext]
-        to hand to ``dispatch``.
-    """
+    """Build the [`OfflineContext`][django_spec_rest.types.offline_context.OfflineContext] for dispatching a spec outside an HTTP request."""  # noqa: E501
     base: HttpRequest = (
         _copy_request(http_request) if http_request is not None else _synthesize_request(host)
     )
     base.method = "POST"
     if query_params is not None:
-        # ``_build_query_dict`` freezes the result (``_mutable = False``), so it is
-        # the immutable ``GET`` the stub's type wants; the stub can't see that.
         base.GET = _build_query_dict(query_params)  # ty: ignore[invalid-assignment]
-    # Constructed via ``Any`` and cast back to keep the static type on the result.
     raw: Any = Request(base)
     drf_request: Request = cast(Request, raw)
     drf_request.user = user
-    # Set rather than left to DRF: ``request.auth`` and
-    # ``request.successful_authenticator`` each authenticate on their first
-    # read, and this request has no authenticator, so that read would replace
-    # ``user`` with ``AnonymousUser`` and a class reading either before ``user``
-    # - a token scope check - would refuse a signed-in principal
-    # (test_a_class_reading_auth_first_still_sees_the_principal and
-    # test_reading_the_successful_authenticator_first_keeps_the_user). A
-    # credential off DRF is the transport's to check, so there is none to report
-    # here.
-    # The setter writes through to ``base``, a copy or a synthesized request,
-    # never the caller's (test_on_a_wrapped_django_request_too).
     drf_request.auth = None
     drf_request._authenticator = None  # ty: ignore[unresolved-attribute]
-    # ``_full_data`` is the cache DRF's ``request.data`` property returns; seeding
-    # it bypasses parsing entirely (there is no stream on a synthetic request).
     drf_request._full_data = params if params is not None else {}  # ty: ignore[unresolved-attribute]
     view = OfflineServiceView(
         request=drf_request, action=action, kwargs=dict(kwargs) if kwargs is not None else {}
@@ -121,45 +42,14 @@ def build_offline_context(
 
 
 def _copy_request(http_request: HttpRequest) -> HttpRequest:
-    """Shallow-copy the caller's request so the derived one owns its own attributes.
-
-    Four attributes are assigned to the wrapped request downstream — ``method``,
-    ``GET``, ``user`` and ``auth`` (DRF's ``Request`` setters for the last two write
-    through to the object it wraps). Assigning them to a live request would leak an
-    off-HTTP dispatch into the surrounding HTTP cycle: a later ``request.method == "GET"`` branch, a
-    permission class or audit hook reading ``request.user``, or a request-scoped
-    ``FilterSet`` reading ``query_params`` would all see values chosen by the
-    dispatched call rather than by the client.
-
-    The copy is deliberately *shallow*: ``META``, the session, the upload handlers and
-    any already-read body stay the same objects, so headers, session writes and body
-    access behave exactly as on the original, while the assignments above land
-    on the copy's own ``__dict__``.
-    """
-    # The ``__dict__`` is transplanted directly rather than via ``copy.copy``, which
-    # routes through ``__reduce_ex__`` and so through Django's own
-    # ``HttpRequest.__getstate__`` -- and that deliberately drops
-    # ``non_picklable_attrs``: ``environ``, ``_stream``, ``resolver_match``. A copy
-    # missing ``environ`` raises ``AttributeError`` from ``WSGIRequest._get_scheme``
-    # the first time anything builds an absolute URI, which a serializer with a
-    # ``FileField`` or a ``HyperlinkedIdentityField`` does. Going through
-    # ``object.__new__`` skips ``__init__`` (there is no ``environ`` to hand it) and
-    # copies every attribute, picklable or not.
+    """Shallow-copy the caller's request so the derived one owns its own attributes."""
     clone: Any = object.__new__(type(http_request))
     clone.__dict__.update(http_request.__dict__)
     return cast(HttpRequest, clone)
 
 
 def _synthesize_request(host: str | None) -> OfflineHttpRequest:
-    """Build the hostless-by-default stand-in, seeding ``META`` when a host is given.
-
-    The ``META`` keys mirror what a WSGI server would set. Host and scheme resolution
-    itself is
-    [`OfflineHttpRequest`][django_spec_rest.types.offline_http_request.OfflineHttpRequest]'s.
-    """
-    # ``HttpRequest.__new__`` in django-stubs returns ``_MutableHttpRequest``, so
-    # ty resolves the subclass to the wrong type; construct via ``Any`` and cast
-    # back (the same stub quirk this module works around for ``Request``).
+    """Build the hostless-by-default stand-in, seeding ``META`` when a host is given."""
     raw: Any = OfflineHttpRequest()
     request: OfflineHttpRequest = cast(OfflineHttpRequest, raw)
     if host is None:
@@ -175,12 +65,7 @@ def _synthesize_request(host: str | None) -> OfflineHttpRequest:
 
 
 def _split_host(host: str) -> tuple[str, str]:
-    """Split ``host`` into ``(scheme, netloc)``, defaulting the scheme to ``http``.
-
-    Django's own default for a request with no TLS marker, and the safe one: a
-    wrong ``https://`` is a broken link, and a caller wanting https says so by
-    passing a full origin.
-    """
+    """Split ``host`` into ``(scheme, netloc)``, defaulting the scheme to ``http``."""
     if "//" not in host:
         return ("http", host.strip("/"))
     split = urlsplit(host)
@@ -188,12 +73,7 @@ def _split_host(host: str) -> tuple[str, str]:
 
 
 def _build_query_dict(query_params: Mapping[str, Any]) -> QueryDict:
-    """Build an immutable ``QueryDict`` from a mapping, mirroring an HTTP ``GET``.
-
-    Scalars are stringified (query params are always strings on the wire); a
-    list / tuple becomes a multi-valued param so ``getlist`` sees each item.
-    Frozen like a real request's ``GET``.
-    """
+    """Build an immutable ``QueryDict`` from a mapping, mirroring an HTTP ``GET``."""
     query_dict = QueryDict(mutable=True)
     for key, value in query_params.items():
         if isinstance(value, (list, tuple)):

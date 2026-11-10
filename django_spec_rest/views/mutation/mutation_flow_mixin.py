@@ -1,5 +1,3 @@
-"""``MutationFlowMixin`` — shared service-action flow for views and viewsets."""
-
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
@@ -57,13 +55,25 @@ class MutationFlowMixin(_ServesRaisedSchema):
     action's default (``201`` create, ``200`` update, ``204`` delete). A body
     never goes out under ``204``, so a status resolving to it answers ``200``
     with one; set, it applies to an answer with nothing to present too
-    (test_callable_success_status)."""
+    (test_callable_success_status). On a ``DiscriminatedAction`` a callable may
+    also declare ``variant``, the key the discriminator chose."""
 
     response_finalizer: ClassVar[Callable[..., Response | None] | None] = None
     """The post-presentation hook on a ``2xx``: declares any of
     ``response`` / ``result`` / ``request`` / ``view`` / ``instance`` / ``data``
     and returns a ``Response`` to replace the one built, or ``None`` to keep it
-    (test_response_finalizer)."""
+    (test_response_finalizer). On a ``DiscriminatedAction`` it may also declare
+    ``variant``, the key the discriminator chose."""
+
+    lenient_json_body: bool | None = None
+    """Whether this view's serializer alone answers a JSON body, as it answers a
+    form body: ``{"title": 5}`` for a ``CharField`` is ``"5"``, and every refusal
+    is DRF's, in DRF's words. ``None`` reads ``SPEC_REST_LENIENT_JSON_BODY``, which
+    is ``False`` unset, so the spec's declared types are checked first. Only what
+    this view dispatches changes: the spec's schema, its tool schema and every
+    other transport stay typed (test_a_lenient_json_body_over_http). A
+    ``@service_action`` may declare its own, as a keyword of the decorator.
+    """
 
     pool_seeds: PoolSeeds = DEFAULT_POOL_SEEDS
     """The seeds the spec's callables are resolved with: the kernel's
@@ -82,21 +92,11 @@ class MutationFlowMixin(_ServesRaisedSchema):
         return {}
 
     def get_input_serializer_context(self) -> dict[str, Any]:
-        """Hook for the ``context=`` dict passed to the *input* serializer.
-
-        Defaults to ``get_serializer_context``, so overriding the
-        DRF-standard hook flows into input validation automatically; override
-        here for keys visible only during input validation.
-        """
+        """Hook for the ``context=`` dict passed to the *input* serializer."""
         return self.get_serializer_context()  # ty: ignore[unresolved-attribute]
 
     def get_output_serializer_context(self) -> dict[str, Any]:
-        """Hook for the ``context=`` dict passed to the *output* serializer.
-
-        Defaults to ``get_serializer_context``, so overriding the
-        DRF-standard hook flows into response rendering automatically; override
-        here for keys visible only during response rendering.
-        """
+        """Hook for the ``context=`` dict passed to the *output* serializer."""
         return self.get_serializer_context()  # ty: ignore[unresolved-attribute]
 
     def _run_mutation(
