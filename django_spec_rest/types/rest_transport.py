@@ -1,5 +1,3 @@
-"""``REST_TRANSPORT`` - the name this package stamps on the context of a call it serves."""
-
 from __future__ import annotations
 
 from typing import Final

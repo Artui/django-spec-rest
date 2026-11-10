@@ -1,5 +1,3 @@
-"""``MutationFlowMixin`` — shared service-action flow for views and viewsets."""
-
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
@@ -94,21 +92,11 @@ class MutationFlowMixin(_ServesRaisedSchema):
         return {}
 
     def get_input_serializer_context(self) -> dict[str, Any]:
-        """Hook for the ``context=`` dict passed to the *input* serializer.
-
-        Defaults to ``get_serializer_context``, so overriding the
-        DRF-standard hook flows into input validation automatically; override
-        here for keys visible only during input validation.
-        """
+        """Hook for the ``context=`` dict passed to the *input* serializer."""
         return self.get_serializer_context()  # ty: ignore[unresolved-attribute]
 
     def get_output_serializer_context(self) -> dict[str, Any]:
-        """Hook for the ``context=`` dict passed to the *output* serializer.
-
-        Defaults to ``get_serializer_context``, so overriding the
-        DRF-standard hook flows into response rendering automatically; override
-        here for keys visible only during response rendering.
-        """
+        """Hook for the ``context=`` dict passed to the *output* serializer."""
         return self.get_serializer_context()  # ty: ignore[unresolved-attribute]
 
     def _run_mutation(

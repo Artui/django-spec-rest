@@ -1,5 +1,3 @@
-"""``lowered_for_the_document`` - a kernel schema, written for the document's OpenAPI version."""
-
 from __future__ import annotations
 
 from typing import Any
@@ -10,33 +8,7 @@ _NULL = "null"
 
 
 def lowered_for_the_document(schema: dict[str, Any]) -> dict[str, Any]:
-    """``schema`` as the document's OpenAPI version reads it: untouched, or lowered from JSON Schema.
-
-    The kernel's schemas are JSON Schema, which OpenAPI 3.1 and later is, so
-    ``schema`` itself comes back under them. OpenAPI 3.0, drf-spectacular's
-    default ``OAS_VERSION``, is not: ``validate_schema`` refuses the whole
-    document over a type list or a ``const``. Under 3.0 the schema is written
-    anew, with:
-
-    - ``{"type": [t, "null"]}`` as ``{"type": t, "nullable": true}``;
-    - an ``anyOf`` or a ``oneOf`` made only of constants (a labelled choice) as
-      an ``enum`` of their values in order, the titles dropped since 3.0 has no
-      place for them. A ``{"type": "null"}`` or ``{"const": None}`` member is a
-      constant of ``null``: the ``enum`` lists ``None``, and the schema gains
-      ``nullable`` only where it admits null, which a schema with a ``type``
-      does through the type list alone (already ``nullable`` by the first
-      rule), so a plain ``type`` beside a null choice stays non-nullable, as
-      the server refuses null for it. An empty one, or one with any other
-      member, is not an ``enum`` and stays, its members lowered in turn. Nor is
-      one beside an ``enum`` the schema already has.
-
-    The walk goes where a schema holds a schema: the values of ``properties``,
-    ``items``, ``additionalProperties`` when it is a mapping, and the members
-    of ``anyOf``, ``oneOf`` and ``allOf``. It reads no value: ``default``,
-    ``enum``, ``const``, ``example`` and ``examples`` are data, and a property
-    called ``type`` or ``items`` is a name in ``properties``, never a keyword.
-    ``schema`` is not modified, since a kernel schema may be shared.
-    """
+    """``schema`` as the document's OpenAPI version reads it: untouched, or lowered from JSON Schema."""
     if not spectacular_settings.OAS_VERSION.startswith("3.0"):
         return schema
     return _lowered(schema)
@@ -46,19 +18,12 @@ def _lowered(schema: dict[str, Any]) -> dict[str, Any]:
     node = dict(schema)
     _nullable(node)
     for keyword in ("anyOf", "oneOf"):
-        # One branch to coverage, so the guard's operands are named: a schema
-        # already holding an ``enum`` keeps it
-        # (test_an_enum_already_there_is_never_replaced).
+        # One branch to coverage, so the guard's operands are named: a schema already holding an ``enum`` keeps it (test_an_enum_already_there_is_never_replaced).
         if "enum" not in node:
             values = _constants(node.get(keyword))
             if values is not None:
                 del node[keyword]
                 node["enum"] = values
-                # Two operands, named by the tests that fail without each: a
-                # null among the values (test_constants_without_a_null_do_not_make_it_nullable),
-                # and no ``type`` (test_a_null_choice_does_not_make_a_plain_type_nullable).
-                # A ``type`` of ``t`` refuses null whatever the ``enum`` lists,
-                # and ``[t, "null"]`` is already ``nullable`` after ``_nullable``.
                 if any(value is None for value in values) and "type" not in node:
                     node["nullable"] = True
     if isinstance(node.get("properties"), dict):
@@ -83,21 +48,13 @@ def _nullable(node: dict[str, Any]) -> None:
     if not isinstance(kinds, list):
         return
     types = [kind for kind in kinds if kind != _NULL]
-    # Exactly one type beside one null: ``["string"]`` is not nullable
-    # (test_any_other_type_is_as_it_was), nor are two types or none.
     if len(kinds) == 2 and len(types) == 1:
         node["type"] = types[0]
         node["nullable"] = True
 
 
 def _constants(members: Any) -> list[Any] | None:
-    """The values ``members`` are constants of, in order, or ``None`` where any member is more.
-
-    A member is a constant when it is ``{"const": v}`` or the null
-    (``{"type": "null"}``), titled or not, and states nothing else: a
-    member with a ``description`` or a ``type`` beside its ``const`` would lose
-    what it states as an ``enum`` value.
-    """
+    """The values ``members`` are constants of, in order, or ``None`` where any member is more."""
     if not isinstance(members, list) or not members:
         return None
     values: list[Any] = []

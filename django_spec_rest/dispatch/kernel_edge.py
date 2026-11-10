@@ -1,91 +1,3 @@
-"""The DRF edge over the kernel's own ``dispatch``, for a view whose ``spec`` is a kernel spec.
-
-Utils-shaped: the helpers here are shared by the mutation views
-(``views/mutation/utils.py``), the selector views (``selectors/utils.py``) and
-``as_view()``'s spec checks (``views/spec_validation.py``), and none is public
-API, so the module exports nothing and carries no ``__all__``. A kernel spec is
-dispatched as declared.
-
-What a view hands it, and what it does with each:
-
-- **The call's context**, ``view_call_context(view, request)``, the one dict
-  per request the view already builds with ``request``, ``view``, ``format``,
-  ``action`` and this package's transport stamp. It reaches the kernel's
-  ``dispatch`` as ``call_context`` as the very object, so the kernel seeds ``request`` and ``view`` from it by name
-  (``CALL_SEEDS``) for every callable declaring either, and the spec's
-  ``SerializerValidator`` and ``SerializerPresenter`` read both from it for
-  the serializer context DRF builds. The view builds it rather than this
-  module, which never imports the HTTP views for it.
-- **The request's arguments**, read as the kernel reads a wire: a JSON body as
-  it was sent, a form body and a query string through the kernel's
-  ``flat_arguments`` and then ``coerce_flat``, a form's prefixed spellings of a
-  field read as DRF's field reads them, and the route captures the spec
-  declares as parameters, coerced the same way and over what the body or the
-  query string sent (``kernel_arguments``). A capture the spec does not
-  declare is no argument and stays on ``view.kwargs`` for DRF's own machinery.
-- **The principal**, ``request.user``.
-- **The seeds**, the view's ``pool_seeds`` (``view_pool_seeds``): one
-  registry for the view's life, handed to the target's lookup and to
-  ``dispatch`` as the very object, since the kernel binds the seed values the
-  lookup's checks resolved to it and refuses them under any other.
-
-The edge's answers decided for every spec, each the kernel's own unless
-stated:
-
-- **Nothing is stripped**: a body key ``request`` or ``serializer`` that no
-  field declares reaches the kernel's closed argument set as any undeclared key
-  does, and ``UNKNOWN_ARGUMENTS`` answers it: dropped under ``IGNORE``, this
-  edge's policy, and "Unknown argument." under ``REJECT``.
-- **The one strip that stays**: a writable field of the spec's
-  ``SerializerValidator`` named like one of the dispatcher's own seeds
-  (``user``, ``result``, ``instance``, ...) or ``serializer`` is no parameter,
-  because the kernel refuses a parameter a seed occupies, while a DRF
-  serializer was always free to declare one. So the edge takes the field's
-  value off the kernel's arguments (``seed_named_fields``). For a single
-  object only: a ``many`` spec's rows are handed to the kernel as sent, so a
-  row's seed-named field is an unknown argument there: under ``IGNORE`` it is
-  dropped, so the row is refused for the field as required or loses its value
-  where the field is optional, and what the bulk path makes of it is the
-  mutation views'.
-- **The serializer binds the request's body**, for a single object, rather
-  than the kernel's checked arguments, as DRF's serializer was always handed
-  the request's data: a form body stays a ``QueryDict`` and is read as HTML
-  input, and a seed-named field validates into ``data`` from it. What the edge
-  put over the client's values for a field - a declared capture, a lookup read
-  the query string sends, a view hook's value, ``input_data``'s answer - is
-  written onto that body, and recorded as the server's value, which the
-  Validator validates on its own and lays back over whatever a second route
-  made of the key (``kernel_arguments``, ``SerializerValidator``). The kernel
-  merges ``input_data``'s answer into its arguments alone, so the edge
-  dispatches a twin of the spec whose provider puts its answer onto the body
-  as it returns it, called once as the spec's own is (``recording_spec``). A
-  key the provider owns and declines is absent rather than the client's, and
-  one it may decline and declines stays the client's, as the kernel answers
-  both for a declared field.
-
-- **A view's ``get_service_kwargs`` outranks the Validator**:
-  the kernel lays its ``extra_kwargs`` overlay beneath what the Validator
-  computes, so the twin's ``kwargs`` seat hands the hook's values back beneath
-  the spec's own provider, where they outrank a key a ``validate()`` derives
-  or a ``source="*"`` serializer flattens (``recording_spec``).
-
-- **The spec's checks are asked before the arguments' shape is told**, as
-  DRF's ``initial()`` asks a view's permission classes before the handler
-  reads the body: the edge runs the kernel's own prelude, ``check_call``,
-  before ``dispatch``, and judges a call whose arguments fail their shape on
-  no arguments, so a caller the checks refuse is answered 401 or 403 whatever
-  the body (``_admitted``, ``judge_without_arguments``), a body that cannot be
-  read at all among them (``_is_form_body``, and the mutation views'
-  ``_view_hooks`` where a view hook reads it first). A check that cannot answer
-  without the arguments keeps the kernel's order.
-
-Every refusal the kernel raises leaves as a DRF exception, by
-``KERNEL_REFUSALS`` (``dispatch/kernel_refusals.py``). The seed-named fields
-and the recording twin live in the adapter, ``service_specs/seed_named_fields.py``
-and ``service_specs/recording_spec.py``, since both read the
-``SerializerValidator`` and the edge's call state rather than the request.
-"""
-
 from __future__ import annotations
 
 import dataclasses
@@ -161,74 +73,7 @@ def kernel_arguments(
     input_data: Mapping[str, Any] | None = None,
     query: QueryDict | None = None,
 ) -> tuple[dict[str, Any], tuple[Any, Any] | None]:
-    """The arguments a request makes for ``spec``, and the body its serializer binds, if any.
-
-    - **A selector spec reads the query string**, through ``flat_arguments``:
-      a repeated key or a comma list for an array, a blank value absent where
-      the parameter cannot take ``""``, Django's ``csrfmiddlewaretoken``
-      dropped, and an undeclared key kept for the closed argument set to
-      refuse. ``query`` is read in place of ``request.query_params`` where a
-      caller hands one: a list view hands the query string without the keys
-      its own pagination, ordering and format read, which are DRF's and no
-      argument of the spec (test_kernel_edge's
-      test_a_query_handed_over_is_read_in_place_of_the_request_s).
-    - **A service spec reads the body**: a ``many`` spec's under its
-      ``many_argument``, which takes a list body; a form body
-      (a ``QueryDict``) through ``flat_arguments``; a JSON object as it was
-      sent, which a typed caller's values already are. A body that is no
-      object is refused as a whole.
-    - **A service spec's target lookup reads the route and the query
-      string**: each parameter of its target selector, its ``reads`` and the
-      filters its ``filter_set`` declares, is read from the query string, as
-      a selector spec's are, with the route's capture over it, and a body key
-      of such a name is dropped, so the client's body never chooses the row a
-      write reaches, past a permission that read the query string
-      (test_instance_selector_views' test_the_query_string_is_the_scope,
-      test_what_the_body_sends_for_the_filter,
-      test_a_target_lookups_declared_reads'
-      test_a_body_value_never_chooses_the_row; the drop itself by
-      test_a_body_s_filter_key_alone_scopes_nothing and
-      test_a_body_value_never_reaches_the_lookup_the_route_or_the_query_string).
-      A required read neither sends is refused as missing
-      (test_a_lookup_read_the_route_does_not_capture_is_never_the_body_s).
-      Only the lookup's keys are read there: the rest of a write's query
-      string, ``?format`` among them, is DRF's and no argument
-      (test_the_rest_of_a_write_s_query_string_is_no_argument).
-    - **The route captures the spec declares** go over either, since the
-      route scopes the call and a client's value must not move it.
-    - **The view's ``input_data`` hooks' values**, ``input_data`` here, go
-      over the body's, and over each row that is an object for a ``many``
-      spec, since a server's key beats the client's; the kernel has no
-      overlay for a Validator's input, so they are arguments, beneath the
-      spec's own ``input_data`` provider, which the kernel merges over them
-      (test_service_create_view's test_input_data_three_tier_chain). A key
-      naming no field is the closed argument set's to refuse, as the
-      client's would be.
-
-    Flat values, the form body's, the query string's and the captures', go
-    through ``coerce_flat``, so ``?published=true`` reaches the shape check as
-    ``True``; a JSON body's do not, since the client typed them, so a JSON
-    ``"true"`` is a string there, as on every typed transport
-    (test_a_json_body_is_not_read_as_flat_strings). A form body's checked
-    checkbox, ``"on"``, is read as ``True`` first for a parameter declared
-    ``boolean``, which ``coerce_flat`` would refuse; a query string's is not
-    (``_checked_boxes``). A form body's fields are
-    its serializer's to parse: the spec dispatched for one carries a lenient
-    ``SerializerValidator`` (``recording_spec``), which declares each field
-    ``any``, so a checkbox's ``"on"`` reaches DRF's field as sent, and a
-    nested, dict or list field the form spells as prefixed keys (``v.tenant``,
-    ``tags[0]``) is read as its field reads them (``read_form_spellings``). A
-    JSON body's are too where the view's ``lenient_json_body`` says so
-    (``_lenient_json_body``, test_a_lenient_json_body_over_http).
-
-    The second value is ``(validator, body)`` for a single object over a
-    ``SerializerValidator``: the request's body, with what the edge put over
-    the client's values for a field written onto it and each field the client
-    may not fill taken off it (``_validator_body``), which the serializer binds
-    in place of the kernel's arguments (see the module docstring). Otherwise
-    ``None``, and the Validator takes what the kernel hands it. The kernel's
-    arguments leave out each seed-named field, which is no parameter.
-    """
+    """The arguments a request makes for ``spec``, and the body its serializer binds, if any."""
     call_context = edge_call_state().call_context
     parameters: Parameters = spec.parameters(call_context=call_context)
     route = {
@@ -247,14 +92,10 @@ def kernel_arguments(
     body: Any = request.data
     server = dict(input_data or {})
     if spec.many:
-        # A row that is no object is left as sent, for the Validator to refuse
-        # (test_bulk_rows_over_http's test_a_row_that_is_no_object_is_refused_beside_view_input_data).
         if server and isinstance(body, list):
             body = [{**row, **server} if isinstance(row, Mapping) else row for row in body]
         return {spec.many_argument: body, **coerce_flat(parameters, route)}, None
     reads = _target_reads(spec)
-    # The flat values that scope the call: the lookup's reads as the query
-    # string sends them, then the route's captures over them.
     scope = {
         **{
             name: value
@@ -265,9 +106,6 @@ def kernel_arguments(
     }
     if isinstance(body, MultiValueDict):
         flat = _unscoped(flat_arguments(parameters, body), reads)
-        # A serializer's fields alone have prefixed spellings to read: a spec
-        # with no such Validator has no serializer to describe
-        # (test_kernel_views' test_a_capture_outranks_a_form_body).
         if isinstance(spec.validator, SerializerValidator):
             flat = read_form_spellings(spec.validator, body, flat, call_context=call_context)
         sent = coerce_flat(parameters, {**_checked_boxes(parameters, flat), **scope})
@@ -282,19 +120,7 @@ def kernel_arguments(
     seeded = seed_named_fields(validator, call_context=call_context)
     fields = validator.parameters(call_context=call_context).names() | seeded
     keys = provider_keys(spec.input_data)
-    # A key the spec's typed ``input_data`` provider owns is the provider's
-    # alone: what the client sent for it is never bound, and what the provider
-    # answers is put over the body when it is called (``recording_spec``)
-    # (test_an_owned_field_it_declines_is_absent_not_the_client_s).
     owned = fields.intersection(keys.filled) if keys is not None else frozenset[str]()
-    # What the edge put over the client's value for a field: a declared capture
-    # (test_a_declared_capture_outranks_the_body_beside_a_seed_named_field,
-    # which fails without ``name in scope``) or a view hook's value
-    # (test_a_hooks_none_fills_a_required_nullable_field_the_client_omitted,
-    # without ``name in server``). A target lookup's read is never named like a
-    # field, which the kernel refuses as two sources for one name. The owned
-    # keys are left out, so a hook's value for one is no more bound than the
-    # client's (test_a_hook_s_value_for_an_owned_parameter_it_declines_is_never_bound).
     put = {
         name: sent[name]
         for name in fields.intersection(sent).difference(owned)
@@ -305,17 +131,7 @@ def kernel_arguments(
 
 
 def _validator_body(body: Any, put: Mapping[str, Any], dropped: frozenset[str]) -> Any:
-    """The body the spec's ``SerializerValidator`` binds: the caller's, with the edge's keys.
-
-    The whole body, as DRF's serializer was always handed the request's data,
-    so a ``QueryDict`` stays one and is read as HTML input. The serializer
-    binds it rather than the kernel's checked arguments, so what the edge put
-    over the caller's values for a field - a declared capture, a lookup read
-    the query string sends, a view hook's value - is written onto it, a list
-    on a form body through ``setlist`` (``write_form_value``), and each name
-    in ``dropped``, a key the ``input_data`` provider owns, is taken off it. Nothing to put or take hands the caller's
-    body on as it is, uncopied, since a form's copy is a deep one.
-    """
+    """The body the spec's ``SerializerValidator`` binds: the caller's, with the edge's keys."""
     if not put and not dropped.intersection(body):
         return body
     held = body.copy() if isinstance(body, MultiValueDict) else dict(body)
@@ -338,25 +154,7 @@ def _target_reads(spec: KernelServiceSpec) -> Parameters:
 
 
 def _checked_boxes(parameters: Parameters, flat: Mapping[str, Any]) -> dict[str, Any]:
-    """A form body's flat values, with a checked checkbox's ``"on"`` read as ``True``.
-
-    A browser sends ``on`` for a checked box, which ``coerce_flat`` does not
-    spell as a boolean (it takes ``true``, ``false``, ``1`` and ``0``), so a
-    kernel ``FormValidator``'s ``BooleanField``, and the ``<name>-clear``
-    boolean it declares for an optional file field, would be refused. Only a
-    form body's, since a query string or a capture is typed by its client; only
-    ``on``, no other truthy string; and only for a parameter declared
-    ``boolean``, or an array of them, so a string field holding ``"on"`` is
-    left as sent. A ``SerializerValidator`` declares each form field ``any``
-    (``recording_spec``), so none of its fields is read here.
-
-    Each arm is held by its own test, in test_a_form_checkbox_over_http: a key
-    naming no parameter by test_an_undeclared_key_is_left_for_the_closed_set,
-    the boolean by test_a_boolean_field_posted_as_on_arrives_as_true (and its
-    declared type by test_a_string_field_keeps_a_value_of_on), the array
-    by test_an_array_of_booleans_reads_each_on and its element type by
-    test_an_array_of_strings_keeps_a_value_of_on.
-    """
+    """A form body's flat values, with a checked checkbox's ``"on"`` read as ``True``."""
     read: dict[str, Any] = {}
     for name, value in flat.items():
         param = parameters.get(name)
@@ -365,7 +163,6 @@ def _checked_boxes(parameters: Parameters, flat: Mapping[str, Any]) -> dict[str,
         elif param.type == "boolean":
             read[name] = True if value == "on" else value
         elif param.items == "boolean":
-            # An array of booleans, whose value ``flat_arguments`` always reads as a list.
             read[name] = [True if element == "on" else element for element in value]
         else:
             read[name] = value
@@ -389,41 +186,7 @@ def dispatch_kernel_spec(
     query: QueryDict | None = None,
     pool_seeds: PoolSeeds = DEFAULT_POOL_SEEDS,
 ) -> DispatchResult:
-    """Run a kernel ``spec`` for ``request`` through the kernel's ``dispatch``.
-
-    ``call_context`` is the request's one dict, handed to ``dispatch`` as the
-    very object; ``target`` the row the view resolved, or ``UNSET`` for the
-    spec's own lookup to find it.
-
-    ``view_hooks`` is the view's hook chains, its own layers only, never the
-    spec's providers, which the kernel calls itself: its ``extra_kwargs`` go
-    to ``dispatch``'s overlay of that name, beneath the spec's ``kwargs``
-    provider, but for a key naming a field, which pins it (``_overlay``); its
-    ``input_data`` into the arguments (``kernel_arguments``); its
-    ``progress`` to ``dispatch``'s; and its serializer context layers to the
-    spec's ``SerializerValidator`` and ``SerializerPresenter``, the input half
-    through the call's state and the output half on the result's presentation
-    context (``_with_output_layers``).
-
-    ``query`` is the query string a selector spec reads, where the caller
-    hands one in place of the request's (``kernel_arguments``).
-
-    ``pool_seeds`` is the view's registry, its ``pool_seeds``: the one object
-    the target's lookup and ``dispatch`` are both handed, since the seeds the
-    lookup's checks resolved are handed on to ``dispatch`` bound to it
-    (``_resolved``). The kernel's default where a caller hands none.
-
-    ``on_target`` is asked of what the spec's own lookup finds before anything
-    runs on it, where ``target`` is ``UNSET``: the view's DRF object
-    permissions, which ``get_object()`` asks of a row it finds and the kernel's
-    lookup never would (``_resolved``).
-
-    The spec's class-level checks are asked first (``_admitted``), so a
-    caller they refuse is refused whatever the request sends. Every refusal
-    leaves as its DRF answer (``KERNEL_REFUSALS``), a check the dispatched
-    spec declares denying a caller nobody authenticated as a request to
-    authenticate, as DRF's ``permission_denied`` answers it.
-    """
+    """Run a kernel ``spec`` for ``request`` through the kernel's ``dispatch``."""
     hooks = view_hooks if view_hooks is not None else ViewHooks()
     with answering_refusals(request) as refused:
         state = _edge_state(
@@ -440,9 +203,6 @@ def dispatch_kernel_spec(
                 refused=refused,
                 pool_seeds=pool_seeds,
             )
-            # The spec's checks first, as DRF's ``initial()`` asks a view's
-            # permission classes before the handler reads the body
-            # (``_admitted``).
             grant, seeds = _admitted(
                 dispatched,
                 principal=request.user,
@@ -468,9 +228,6 @@ def dispatch_kernel_spec(
                 principal=request.user,
                 arguments=arguments,
                 grant=found[1],
-                # The seeds the checks were offered, by the prelude or by the
-                # lookup, so the run resolves none of them again (test_pool_seeds'
-                # test_are_handed_on_so_a_call_through_the_view_s_lookup_resolves_each_once).
                 seeds=found.seeds if isinstance(found, ResolvedTarget) else seeds,
                 pool_seeds=pool_seeds,
                 unknown_arguments=UNKNOWN_ARGUMENTS,
@@ -494,53 +251,14 @@ def _read_call(
     refused: RefusedCall,
     pool_seeds: PoolSeeds,
 ) -> tuple[KernelSpec, dict[str, Any], dict[str, Any], tuple[Any, Any] | None]:
-    """The spec to dispatch, the overlay, the arguments and the held body of one call.
-
-    Every read that describes the input serializer, in one step. The spec to
-    dispatch is ``recording_spec``'s, built here rather than before the call's
-    state is set, so the fields it records are those the serializer declares
-    described with the call's request (test_kernel_edge's
-    test_the_twin_records_the_fields_the_call_s_own_serializer_declares), and
-    set on ``refused`` as soon as it is built, as the spec whose checks'
-    denials are this call's own, which the map answers as DRF's
-    ``permission_denied``: the twin, since that is the spec the kernel names
-    on the denial.
-
-    A request whose values cannot be read as the spec's arguments - a flat
-    value ``coerce_flat`` refuses (``?year=x`` for an integer), a body that is
-    no object - is refused here, before ``check_call`` could ask the checks,
-    so it is judged on no arguments first, as a failed shape is
-    (``judge_without_arguments``), and a caller the checks refuse is told
-    that rather than the read's refusal
-    (test_a_read_s_refused_caller_is_refused_whatever_the_query_string). So is
-    a body that cannot be read, the first thing this asks (``_is_form_body``).
-    """
-    # Read before the arguments, which the twin's Validator declares: lenient
-    # for a form body, whose values its serializer alone parses, and for a JSON
-    # body where the view or the project says so (``_lenient_json_body``).
+    """The spec to dispatch, the overlay, the arguments and the held body of one call."""
     form_body = _is_form_body(spec, request=request, refused=refused, pool_seeds=pool_seeds)
     extra_kwargs, pinned, server = _overlay(spec, hooks)
-    # Read by the recording twin's ``kwargs`` seat, which lays them beneath the
-    # spec's provider over the Validator's values (``recording_spec``).
     edge_call_state().author_values = extra_kwargs
-    # One arc to coverage, each side held by what fails without it: the form by
-    # test_a_live_view_validates_a_form_body_by_its_serializer_alone, the switch
-    # by test_the_view_attribute_turns_it_on.
     dispatched = recording_spec(spec, lenient=form_body or _lenient_json_body(view))
     refused.spec = dispatched
-    # The twin's Validator, the one the view's input layers are for: a kernel
-    # call the service makes validates without them (``input_view_layers``).
-    # The twin, not the spec's: a lenient one is another object
-    # (test_the_directional_hook_layers_over_drf_s[multipart]).
     state = edge_call_state()
     state.validator = getattr(dispatched, "validator", None)
-    # And the one it describes its serializer through as the edge's own, beside
-    # the spec's, which described it while the twin was built
-    # (``describe_serializer``): a form body's twin is another object
-    # (test_a_live_view_scopes_the_field_to_the_caller_on_a_form_body). Only a
-    # serializer's: the check holds no case of its own, every caller handing
-    # ``describe_serializer`` its Validator, and keeps ``None``, the default
-    # it takes, out of the edge's own.
     if isinstance(state.validator, SerializerValidator):
         state.describing = (*state.describing, state.validator)
     try:
@@ -556,35 +274,15 @@ def _read_call(
         )
         raise
     if held is not None:
-        # The server's value for each field it put one into, as it put it: what
-        # the Validator validates for the field on its own and lays back over
-        # whatever a second route made of the key, never what the field reads
-        # back from the body (``SerializerValidator``), each source held by its
-        # own test: test_a_view_hook_s_value_outranks_a_second_route_over_http
-        # (the hooks') and test_input_data_outranks_a_second_route_over_http
-        # (``input_data``'s, which ``recording_spec`` adds when it answers).
         state.server_values = dict(server)
-        # A ``get_service_kwargs`` value named the parameter of its key, which
-        # the Validator hands the value to as well (test_server_value_the_edge_put's
-        # test_a_get_service_kwargs_value_by_wire_name_reaches_the_parameter_of_that_name).
         state.author_keys = {name: name for name in pinned}
-        # A key the spec's typed ``kwargs`` provider fills is never the client's,
-        # whichever field its value came in through
-        # (test_a_typed_provider_owning_a_wire_name's
-        # test_a_declined_owned_source_hands_its_parameter_none_of_the_clients_value).
         keys = provider_keys(spec.kwargs) if isinstance(spec, KernelServiceSpec) else None
         state.provider_owned = keys.filled if keys is not None else frozenset()
     return dispatched, extra_kwargs, arguments, held
 
 
 def _lenient_json_body(view: Any) -> bool:
-    """Whether ``view`` has its serializer alone answer a JSON body: its own word, else the project's.
-
-    ``False`` on the view beats the setting
-    (test_a_view_attribute_of_false_beats_the_setting), so ``None`` alone reads it.
-    Off the attribute with ``getattr``, as a ``@service_action`` on DRF's own
-    viewset declares none (test_a_service_action_on_a_bare_viewset_reads_the_setting).
-    """
+    """Whether ``view`` has its serializer alone answer a JSON body: its own word, else the project's."""
     own = getattr(view, "lenient_json_body", None)
     return lenient_json_body() if own is None else own
 
@@ -592,26 +290,7 @@ def _lenient_json_body(view: Any) -> bool:
 def _is_form_body(
     spec: KernelSpec, *, request: Request, refused: RefusedCall, pool_seeds: PoolSeeds
 ) -> bool:
-    """Whether DRF parsed the request's body as a form: the call's first read of it.
-
-    A body that cannot be read has told the edge nothing about the call, so it
-    is judged on no arguments as a failed shape is (``judge_without_arguments``),
-    and a caller the checks refuse is told that rather than what the read raised,
-    with OPTIONS leaving the method undescribed for the same callers
-    (test_a_refused_caller_is_refused_whatever_it_sends,
-    test_options_hides_a_method_exactly_when_its_write_is_refused_first). The
-    judgment waits for the failure, so a readable body's check is asked once
-    (test_a_well_formed_call_asks_the_class_level_check_once).
-
-    Whatever the read raises, not DRF's two alone: too many form fields is
-    Django's own ``TooManyFieldsSent``
-    (test_a_refused_caller_sending_a_body_django_refuses_to_read_is_refused).
-    An admitted caller is told what was raised, the same exception: read again,
-    an unparseable body answers the empty form DRF leaves in its place
-    (test_an_admitted_caller_is_told_its_body_cannot_be_read). ``spec`` is the
-    one judged and the one a denial is compared with (``_check_denied``), the
-    spec OPTIONS asks of, since no twin is built until the body says which.
-    """
+    """Whether DRF parsed the request's body as a form: the call's first read of it."""
     try:
         return isinstance(request.data, MultiValueDict)
     except Exception:
@@ -633,23 +312,7 @@ def _edge_state(
     hooks: ViewHooks,
     call_context: dict[str, Any],
 ) -> EdgeCallState:
-    """The edge's state for one call of ``spec``, set before anything describes its serializer.
-
-    Set before the arguments are read, since reading them asks
-    ``spec.parameters()``, which describes the input serializer: with the
-    state's ``describe_context`` it is built with the call's request and
-    view, the view's input layers and the Validator's own context callable,
-    and with no body and no row, so a ``get_fields`` reading
-    ``self.context["request"]`` declares the fields the call validates
-    (test_service_create_view's
-    test_a_request_scoped_serializer_declares_the_fields_the_call_validates;
-    the layers by test_the_view_s_input_layer_reaches_the_description and
-    test_the_validator_s_own_context_reaches_the_description), and is built
-    once for the call. A context callable taking ``**kwargs`` is left out
-    of a description, and what a serializer that cannot be built without it
-    raises is raised as it is
-    (test_a_serializer_its_description_cannot_build_raises_as_it_is).
-    """
+    """The edge's state for one call of ``spec``, set before anything describes its serializer."""
     validator = spec.validator if isinstance(spec, KernelServiceSpec) else None
     provider = validator.serializer_context if isinstance(validator, SerializerValidator) else None
     ambient = {"request": request, "view": view}
@@ -669,10 +332,6 @@ def _edge_state(
         call_context=call_context,
         view_hooks=hooks,
         principal=request.user,
-        # The spec's own, which describes the serializer before the twin is
-        # built (test_a_live_view_scopes_the_field_to_the_caller); the twin's
-        # joins it once built (``_read_call``). Only a serializer's, for the
-        # reason ``_read_call`` gives: the check holds no case of its own.
         describing=(validator,) if isinstance(validator, SerializerValidator) else (),
         describe_context=describe_context,
     )
@@ -681,33 +340,11 @@ def _edge_state(
 def _overlay(
     spec: KernelSpec, hooks: ViewHooks
 ) -> tuple[dict[str, Any], frozenset[str], dict[str, Any]]:
-    """The view's ``extra_kwargs`` for ``dispatch``'s overlay, the keys pinned out of it, and the server's input.
-
-    A ``get_service_kwargs`` value named like one of the spec's parameters or
-    seed-named fields pins that field: the serializer validates the
-    server's value, never the client's. The kernel refuses an overlay key
-    naming a parameter, so the edge moves such a key into the arguments over
-    the client's value, where the shape check, the permission checks and the
-    Validator all read the one value, beneath the view's ``input_data``, which
-    names the serializer's input on purpose
-    (test_service_create_view's test_a_get_service_kwargs_value_named_like_a_field_pins_it,
-    test_a_get_service_kwargs_value_named_like_a_seed_field_pins_it), and so
-    is one naming a read the spec declares itself, which left in the overlay
-    the kernel would refuse with a 500
-    (test_a_get_service_kwargs_value_named_like_a_spec_read_pins_it). For a
-    ``many`` spec the pinned keys go over each row, as ``input_data``'s do,
-    which is why a row's fields, the Validator's parameters, are named
-    besides the spec's own (test_bulk_mutations'
-    test_a_get_service_kwargs_value_pins_each_row). Every other key stays the
-    overlay's.
-    """
+    """The view's ``extra_kwargs`` for ``dispatch``'s overlay, the keys pinned out of it, and the server's input."""
     overlay = dict(hooks.extra_kwargs or {})
     call_context = edge_call_state().call_context
     names = spec.parameters(call_context=call_context).names()
     if isinstance(spec, KernelServiceSpec) and spec.validator is not None:
-        # Asked as dispatch asks it, so a Validator that opted into the call's
-        # dict names the rows dispatch will check (test_bulk_mutations'
-        # test_a_get_service_kwargs_value_pins_the_row_an_opted_in_validator_names).
         validator = spec.validator
         rows = validator_parameters(validator, call_context=call_context)
         names = names | rows.names() | seed_named_fields(validator, call_context=call_context)
@@ -734,44 +371,7 @@ def _admitted(
     call_context: dict[str, Any],
     pool_seeds: PoolSeeds,
 ) -> tuple[Grant | None, CallSeeds | None]:
-    """Ask ``spec``'s class-level checks of the call before its arguments' shape is told.
-
-    DRF asks a view's permission classes in ``initial()``, before the handler
-    reads the body, and drfs asked them there; the kernel's ``dispatch``
-    checks the arguments' shape first and asks the checks second. So the edge
-    asks the checks first, through ``check_call``, the kernel's own prelude:
-    a caller they refuse is answered 401 or 403 whatever the body, as for a
-    well-formed one (test_a_refused_caller_whatever_the_body's
-    test_a_refused_caller_is_refused_whatever_the_body), and its denial is
-    raised as the kernel raised it, so the map answers it as the dispatched
-    spec's own and asks a caller nobody authenticated to sign in. django-spec-mcp
-    asks the same prelude before a tool call (its ``admit_kernel_call``).
-
-    Arguments that pass their shape are shown to the checks as ``dispatch``
-    shows them, checked, and the grant and the seeds the checks were offered
-    are handed on, to the target's lookup and to ``dispatch``, so neither asks
-    the class-level check again (test_a_well_formed_call_asks_the_class_level_check_once,
-    test_a_row_write_asks_the_class_level_check_once).
-
-    Arguments that fail their shape have no checked form to show a check, so
-    the call is judged on none (``judge_without_arguments``): refused there
-    exactly when the OPTIONS answer leaves the method undescribed, and
-    otherwise left to ``dispatch``, which tells the admitted caller what its
-    body lacks (test_an_admitted_caller_is_told_what_its_body_lacks). A
-    ``many`` call whose top level passes and whose rows do not is no failed
-    shape: the kernel asked the checks on its top level before it raised the
-    row, and marks that refusal ``after_authorize``, so the checks admitted it.
-
-    What is left to ``dispatch`` - a failed shape the judgment admits, a
-    refused row - goes with no grant and no seeds, so ``dispatch`` asks the
-    checks again in its own order and reports the refusal as before, a refused
-    row beside the Validator's refusals of the other rows. Every other
-    refusal the prelude raises, a denial or one that is no denial (a
-    ``ServiceError`` a check or a seed's resolver raises), and what is no
-    refusal, a configuration error or a check that raises, leaves here as
-    ``dispatch`` would have raised it, the same exception the same map
-    answers, with the check asked once.
-    """
+    """Ask ``spec``'s class-level checks of the call before its arguments' shape is told."""
     try:
         checked = check_call(
             spec,
@@ -797,39 +397,12 @@ def judge_without_arguments(
     call_context: dict[str, Any] | None,
     pool_seeds: PoolSeeds,
 ) -> None:
-    """Raise the denial ``spec``'s checks give ``principal`` asked with no arguments, if they give one.
-
-    Shared with the OPTIONS answer (``views/spec_options.py``), which leaves a
-    method undescribed exactly when this refuses it, so a caller OPTIONS
-    shows no schema to is never shown it by a write's 400
-    (test_a_refused_caller_whatever_the_body's
-    test_options_hides_a_method_exactly_when_its_write_is_refused_first).
-
-    The two questions a call asks before it reads anything, asked through the
-    kernel's ``authorize_without_arguments``, which raises whatever they raise, so
-    what each answer means on this edge is decided here. ``pool_seeds`` is handed
-    on: a deactivated principal is refused only when it is.
-
-    A denial is raised: ``NotPermitted``, the check's own as the kernel
-    marked it, or ``PrincipalUnavailable``; so is a configuration error
-    (``ImproperlyConfigured``: a spec declaring no permissions, a check left
-    awaiting its answer), which every well-formed call raises too. Anything
-    else a check raises asked with no arguments - a check that reads them and
-    cannot answer without (``arguments["owner"]`` on ``None``) - says nothing
-    about the caller, so the call keeps the kernel's order: ``dispatch``
-    tells the shape's refusal, and asks such a check once the shape passes
-    (test_a_check_reading_the_arguments_keeps_the_kernel_s_order). That is
-    where this edge parts from django-spec-mcp's prelude, which refuses a
-    call whose checks raise on no arguments, as its listing hides the tool.
-    """
+    """Raise the denial ``spec``'s checks give ``principal`` asked with no arguments, if they give one."""
     try:
         authorize_without_arguments(
             spec, principal, call_context=call_context, pool_seeds=pool_seeds
         )
     except (*_DENIALS, *_RAISED_REFUSALS, ImproperlyConfigured):
-        # A configuration error is raised as the call raises it, so OPTIONS and
-        # a write fail with it rather than describing or admitting the method
-        # (test_a_misconfigured_spec_fails_as_a_well_formed_call_fails).
         raise
     except Exception:  # noqa: BLE001 - a check that cannot answer without its arguments
         return
@@ -847,37 +420,7 @@ def _resolved(
     grant: Grant | None,
     seeds: CallSeeds | None,
 ) -> ResolvedTarget | tuple[Any, Grant | None] | DispatchResult:
-    """The target and grant ``dispatch`` takes for ``spec``, or a missing row's answer.
-
-    Where ``on_target`` asks of what the spec's own lookup finds, the kernel's
-    ``resolve_target`` finds it as ``dispatch`` would, refused where it would
-    refuse, and ``on_target`` is asked of it before ``dispatch`` runs anything
-    on it; the ``target_checked`` grant it returns, minted for the spec
-    dispatched, so ``dispatch`` neither looks the target up again nor asks its
-    object-level check twice, and on ``.seeds`` the values of the registered
-    seeds its checks named, which ``dispatch`` takes rather than resolving
-    them again. The kernel binds both to the call, so the lookup is handed the
-    spec, principal, ``call_context`` and ``pool_seeds`` that ``dispatch`` is.
-    Otherwise ``target`` as given, beside the prelude's ``grant``, and
-    ``dispatch``'s own lookup finding it where that is ``UNSET``. ``grant`` and
-    ``seeds`` are the prelude's (``_admitted``), handed to the lookup so it
-    asks no class-level check again, or ``None`` where the prelude left the
-    checks to ask.
-
-    One arc to coverage, so each condition is named:
-    test_service_update_view's test_a_put_s_own_row_is_asked_of_the_view_once
-    (``on_target``), test_kernel_edge's
-    test_with_no_on_target_the_kernel_s_own_lookup_finds_the_row (its absence:
-    a caller handing none would have ``None`` called),
-    test_service_update_view's test_a_row_the_view_resolved_is_looked_up_once
-    (``target``: without it a row the caller handed over is looked up again),
-    and test_bulk_length_over_http's test_the_kernel_s_cap_holds_on_http (the
-    target selector: a ``many`` spec declares none, the kernel refusing one
-    when the spec is built, and its list body is no target to resolve). The
-    type is a selector spec's, which takes no target and has no target
-    selector to ask; ``ty`` holds it, and no view hands a selector spec an
-    ``on_target``, so no test does.
-    """
+    """The target and grant ``dispatch`` takes for ``spec``, or a missing row's answer."""
     if (
         on_target is None
         or target is not UNSET
@@ -901,19 +444,7 @@ def _resolved(
 
 
 def _with_output_layers(result: DispatchResult, hooks: ViewHooks) -> DispatchResult:
-    """``result`` carrying the view's output serializer context layers, for its presenter.
-
-    The presenter runs when the view presents, after the call, so the view's
-    lazy ``output_serializer_context`` hook travels on the result's
-    presentation context under ``SERIALIZER_CONTEXT_SEED``, where
-    ``SerializerPresenter`` reads it (``output_view_layers``), rather than
-    through the call's pool. A result with no context, a missing row, is
-    presented by no one, and one with no output layer has nothing to carry.
-    One arc to coverage: the context by test_kernel_edge's
-    test_a_row_the_kernel_s_lookup_misses_carries_no_output_layer. The layer
-    is a saving, not a guard: hooks with no output layer carried on the
-    context present as no hooks do, so no test fails without it.
-    """
+    """``result`` carrying the view's output serializer context layers, for its presenter."""
     if result.context is None or hooks.output_serializer_context is None:
         return result
     ambient = MappingProxyType({**result.context.ambient, SERIALIZER_CONTEXT_SEED: hooks})

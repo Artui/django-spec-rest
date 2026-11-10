@@ -1,5 +1,3 @@
-"""``update`` and ``partial_update`` actions backed by a service callable."""
-
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -36,7 +34,6 @@ class ServiceUpdateMixin(MutationFlowMixin, _ActionSpecsMixin):
     entry raises ``ImproperlyConfigured``.
     """
 
-    # Provided at runtime by ``GenericAPIView`` / ``GenericViewSet``.
     get_object: Callable[..., Any]
 
     @dispatches_action_specs

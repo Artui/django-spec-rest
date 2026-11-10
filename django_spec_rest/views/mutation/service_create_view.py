@@ -1,5 +1,3 @@
-"""Generic create endpoint backed by a user-defined service callable."""
-
 from __future__ import annotations
 
 from typing import Any, ClassVar
@@ -38,13 +36,11 @@ class ServiceCreateView(MutationFlowMixin, GenericAPIView):
         return super().as_view(**initkwargs)
 
     def get_serializer_class(self) -> type[BaseSerializer[Any]]:
-        # Only DRF's browsable renderer asks a spec-only kernel view, for the
-        # forms it draws on every HTML page (``standalone_form_serializer_class``).
+        # Only DRF's browsable renderer asks a spec-only kernel view, for the forms it draws on every HTML page (``standalone_form_serializer_class``).
         return standalone_form_serializer_class(self) or super().get_serializer_class()
 
     def options(self, request: Request, *args: Any, **kwargs: Any) -> Response:
-        # The spec describes the route, never DRF's probe of ``get_object()``
-        # and ``serializer_class`` (``spec_options``).
+        # The spec describes the route, never DRF's probe of ``get_object()`` and ``serializer_class`` (``spec_options``).
         if self.spec is not None:
             return spec_options(self, request, {"POST": self.spec})
         return super().options(request, *args, **kwargs)

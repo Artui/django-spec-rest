@@ -1,5 +1,3 @@
-"""Action-keyed list selector override on top of ``ListModelMixin``."""
-
 from __future__ import annotations
 
 from typing import Any
@@ -39,7 +37,6 @@ class SelectorListMixin(ListModelMixin, _ActionSpecsMixin):
     (test_selector_list_mixin).
     """
 
-    # Provided at runtime by ``GenericViewSet`` / ``GenericAPIView``.
     action: str | None
     request: Any
     kwargs: dict[str, Any]
@@ -47,9 +44,7 @@ class SelectorListMixin(ListModelMixin, _ActionSpecsMixin):
     def list(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         spec = resolve_action_selector_spec(self.action_specs, "list")
         if spec is not None:
-            # The dispatch a permission class's ``get_queryset()`` made, if one
-            # asked first, never the set ``get_queryset()`` answers: a subclass
-            # overriding it does not choose the rows a spec serves.
+            # The dispatch a permission class's ``get_queryset()`` made, if one asked first, never the set ``get_queryset()`` answers: a subclass overriding it does not choose the rows a spec serves.
             result = dispatch_list_once(self, spec)
             data, paginated = present_kernel_list(self, spec, result, filtered=True)
             return self.get_paginated_response(data) if paginated else Response(data)  # ty: ignore[unresolved-attribute]

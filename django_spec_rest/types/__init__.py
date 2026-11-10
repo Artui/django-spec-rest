@@ -1,9 +1,3 @@
-"""Types this adapter owns: the DRF-typed authoring shapes and the view hook chain.
-
-The kernel's own types are imported from ``django_service_specs``, not
-re-exported here.
-"""
-
 from django_spec_rest.types.discriminated_action import DiscriminatedAction
 from django_spec_rest.types.field_marking import MARKING
 from django_spec_rest.types.http_extras import HttpExtras

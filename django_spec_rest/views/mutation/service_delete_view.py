@@ -1,5 +1,3 @@
-"""Generic delete endpoint backed by a user-defined service callable."""
-
 from __future__ import annotations
 
 from typing import Any, ClassVar
