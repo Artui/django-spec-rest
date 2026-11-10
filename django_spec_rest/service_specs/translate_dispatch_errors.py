@@ -1,5 +1,3 @@
-"""``translate_dispatch_errors`` - the kernel's refusals leave as the classes DRF's ladders catch."""
-
 from __future__ import annotations
 
 from collections.abc import Generator
@@ -22,47 +20,7 @@ from django_spec_rest.service_specs.drf_principal_unavailable import DRFPrincipa
 
 @contextmanager
 def translate_dispatch_errors() -> Generator[None]:
-    """Re-raise the kernel's ``DispatchError``s inside the block as this package's dual-base classes.
-
-    Every published consumer of this package catches DRF's
-    ``ValidationError`` and ``PermissionDenied`` by name, and DRF's exception
-    handler answers only those; the kernel's own refusals reach none of them,
-    and a view serves one as a 500. So the DRF edge runs the kernel's dispatch
-    inside this block:
-
-    - the kernel's ``InvalidArguments`` leaves as
-      [`DRFInvalidArguments`][django_spec_rest.service_specs.drf_invalid_arguments.DRFInvalidArguments],
-      with the same tree and every message's code;
-    - its ``DRFNotPermitted`` as
-      [`DRFNotPermitted`][django_spec_rest.service_specs.drf_not_permitted.DRFNotPermitted],
-      and its ``DRFPrincipalUnavailable`` as
-      [`DRFPrincipalUnavailable`][django_spec_rest.service_specs.drf_principal_unavailable.DRFPrincipalUnavailable],
-      each with the same message;
-    - a subclass of any of the three leaves as that class's twin, with the
-      subclass's message.
-
-    The new exception is raised ``from`` the kernel's, so the traceback keeps
-    where dispatch refused. Each dual-base class is still the kernel's, so an
-    ``except DispatchError`` around the block catches what leaves it as well.
-
-    Left exactly as raised:
-
-    - anything that is not a ``DispatchError``, a service's own refusals
-      among them;
-    - a ``DispatchError`` that is already a DRF exception, such as a dual-base
-      class a validator raised itself, which both ladders already catch. An
-      author callable's DRF ``PermissionDenied`` and ``NotAuthenticated`` reach
-      here as such a class, translated by
-      [`translate_drf_refusals`][django_spec_rest.service_specs.translate_drf_refusals.translate_drf_refusals]
-      as the compile hands the kernel the callable, and the DRF edge restores
-      the author's exception itself (its ``ValidationError`` reaches here as a
-      service's refusal, not a ``DispatchError``);
-    - a ``DispatchError`` with no twin here, which keeps the kernel's class
-      rather than be given a DRF answer nobody declared.
-
-    Use it as a ``with`` block, around ``await`` too. Not as a decorator on an
-    ``async def``: that would wrap the creation of the coroutine, not its run.
-    """
+    """Re-raise the kernel's ``DispatchError``s inside the block as this package's dual-base classes."""
     try:
         yield
     except DispatchError as exc:
@@ -73,13 +31,7 @@ def translate_dispatch_errors() -> Generator[None]:
 
 
 def _drf_twin(exc: DispatchError) -> DispatchError | None:
-    """The dual-base class ``exc`` leaves as, or ``None`` to leave it as raised.
-
-    One ``isinstance`` per branch, so each has the test that takes it. A dual
-    class is a subclass of the kernel's it twins, so the check for a DRF
-    exception comes first or a dual ``DRFInvalidArguments`` would be rebuilt as
-    itself.
-    """
+    """The dual-base class ``exc`` leaves as, or ``None`` to leave it as raised."""
     if isinstance(exc, APIException):
         return None
     if isinstance(exc, KernelInvalidArguments):
