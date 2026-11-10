@@ -1,5 +1,3 @@
-"""Router-compatible viewsets, action mixins, and the ``@service_action`` decorator."""
-
 from django_spec_rest.viewsets.action_serializer_resolver import (
     ActionSerializerResolver,
 )

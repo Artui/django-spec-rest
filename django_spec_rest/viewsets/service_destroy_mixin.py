@@ -1,5 +1,3 @@
-"""``destroy`` action backed by a service callable."""
-
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -31,7 +29,6 @@ class ServiceDestroyMixin(MutationFlowMixin, _ActionSpecsMixin):
     entry raises ``ImproperlyConfigured``.
     """
 
-    # Provided at runtime by ``GenericAPIView`` / ``GenericViewSet``.
     get_object: Callable[..., Any]
 
     @dispatches_action_specs

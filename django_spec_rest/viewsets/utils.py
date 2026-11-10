@@ -1,5 +1,3 @@
-"""Shared infrastructure for viewset mixins."""
-
 from __future__ import annotations
 
 import inspect
@@ -59,13 +57,7 @@ def resolve_action_spec_entry(
     action_specs: Mapping[str, ActionSpec],
     action: str | None,
 ) -> ActionSpec | None:
-    """Return the ``action_specs`` entry for ``action``, following fallbacks.
-
-    Single source of truth for the action→spec-key chain: dispatch, permission
-    resolution and serializer resolution must all route through here, or they
-    disagree on the key (an ``"update"``-keyed spec's ``permission_classes``
-    silently not applying under PATCH).
-    """
+    """Return the ``action_specs`` entry for ``action``, following fallbacks."""
     if action is None:
         return None
     entry = action_specs.get(action)
@@ -81,40 +73,13 @@ _HandlerT = TypeVar("_HandlerT", bound=Callable[..., Any])
 
 
 def dispatches_action_specs(handler: _HandlerT) -> _HandlerT:
-    """Mark a viewset handler as this package's own ``action_specs`` dispatcher.
-
-    Such a handler answers 405 when no spec serves its action, so ``Allow`` and
-    OPTIONS leave that method out rather than describe a body nobody accepts. A
-    handler the view defines itself, even one calling ``super()``, is not
-    marked: what it accepts is its own business, and OPTIONS describes it as
-    DRF always has.
-    """
+    """Mark a viewset handler as this package's own ``action_specs`` dispatcher."""
     handler._dispatches_action_specs = True  # ty: ignore[unresolved-attribute]
     return handler
 
 
 def resolve_action_spec(view: Any, action: str | None) -> ActionSpec | None:
-    """Return the spec ``action`` routes to on ``view``, from either source.
-
-    A spec reaches a viewset two ways: keyed in ``action_specs`` (read through
-    [`resolve_action_spec_entry`][django_spec_rest.viewsets.utils.resolve_action_spec_entry],
-    fallbacks included), or stamped on the bound handler by ``@service_action`` /
-    ``@selector_action``. ``get_permissions`` and the OPTIONS metadata path both
-    ask through here, so a hook that reads only one of the two cannot be written
-    by accident again: it is how OPTIONS on a ``@service_action`` POST came to
-    500 while its permissions resolved fine.
-
-    ``action`` is taken as given and never translated. DRF's implicit
-    ``"metadata"`` action has no handler and no entry, so it resolves to
-    ``None``; the metadata path names the action it describes itself.
-
-    The ``getattr`` default is load-bearing: no handler exists for an implicit
-    action, and an ``AttributeError`` is not an ``APIException``, so
-    ``handle_exception`` would re-raise it and every OPTIONS request (CORS
-    preflights included) would 500 before permissions are evaluated. So is the
-    ``action is None`` check, for a method the action map does not route: held
-    by the ``None`` case of test_a_kernel_entry_resolves_to_the_view_s_serializer_class.
-    """
+    """Return the spec ``action`` routes to on ``view``, from either source."""
     spec = resolve_action_spec_entry(view.action_specs, action)
     if spec is not None or action is None:
         return spec
@@ -127,18 +92,10 @@ def resolve_action_service_spec(
     action: str,
     method: str,
 ) -> KernelServiceSpec | DiscriminatedAction:
-    """Pick the kernel ``ServiceSpec`` from ``action_specs`` for a mutation action.
-
-    Centralised so all three mutation viewset mixins share one error path. A
-    ``DiscriminatedAction`` comes back as it is: only the request can choose
-    among its variants, so the mixin hands it to
-    ``dispatch_discriminated_action`` (test_discriminated_action_readers'
-    test_resolve_action_service_spec_leaves_it_unresolved)."""
+    """Pick the kernel ``ServiceSpec`` from ``action_specs`` for a mutation action."""
     entry = resolve_action_spec_entry(action_specs, action)
     if entry is None:
         raise MethodNotAllowed(method)
-    # ``as_view`` refuses this pairing at setup, so reaching it means the mapping
-    # was built or swapped after the view was wired. Kept as the backstop.
     if not isinstance(entry, KernelServiceSpec | DiscriminatedAction):
         raise ImproperlyConfigured(
             f"action_specs[{action!r}] must be a ServiceSpec, got "
@@ -152,18 +109,10 @@ def resolve_action_selector_spec(
     action_specs: Mapping[str, ActionSpec],
     action: str,
 ) -> KernelSelectorSpec | None:
-    """Pick the kernel ``SelectorSpec`` from ``action_specs`` for a read action.
-
-    ``None`` means the caller must fall back to vanilla DRF
-    (``super().get_queryset()`` / ``super().get_object()``): the action is
-    unconfigured. A kernel ``SelectorSpec`` always declares its selector, so an
-    entry is never ``None`` for lacking one.
-    """
+    """Pick the kernel ``SelectorSpec`` from ``action_specs`` for a read action."""
     entry = action_specs.get(action)
     if entry is None:
         return None
-    # As above: setup already refused this pairing, so this is the backstop for
-    # a mapping that changed afterwards.
     if not isinstance(entry, KernelSelectorSpec):
         raise ImproperlyConfigured(
             f"action_specs[{action!r}] must be a SelectorSpec, got "
@@ -178,18 +127,7 @@ _ANSWERS = ("success_status", "response_finalizer")
 
 
 def _as_the_instance_reads(view_cls: type | MountedView, name: str) -> Any:
-    """``name`` on ``view_cls`` as an instance of it reads the attribute, or ``None``.
-
-    An ``as_view()`` keyword is set on the instance, where nothing binds it,
-    so a ``MountedView``'s override is the value as it stands. A class
-    attribute goes through its descriptor with the class standing in for the
-    instance: a method is bound, so its ``self`` is never a key it asks the
-    framework for, a ``staticmethod`` stays a plain function and a
-    ``classmethod`` is bound to the class, as each is at dispatch
-    (test_per_action_answers' test_a_hook_s_own_self_is_not_a_key_it_requires,
-    TestAStaticHookIsReadAsTheInstanceReadsIt). Anything else, an ``int``
-    among them, is the value as it stands.
-    """
+    """``name`` on ``view_cls`` as an instance of it reads the attribute, or ``None``."""
     base: Any = view_cls
     while isinstance(base, MountedView):
         overrides: dict[str, Any] = base._mounted_overrides
@@ -202,13 +140,7 @@ def _as_the_instance_reads(view_cls: type | MountedView, name: str) -> Any:
 
 
 def _action_hooks(view_cls: type | MountedView, action: str) -> dict[str, Any]:
-    """Each ``get_<action>_<answer>`` hook ``view_cls`` defines, as an instance reads it.
-
-    A plain function stored as one is bound as a method, so one declaring no
-    ``self`` has no signature to read, and is refused by name rather than as
-    ``inspect``'s ``ValueError`` (test_per_action_answers'
-    test_a_plain_function_hook_is_refused_by_name).
-    """
+    """Each ``get_<action>_<answer>`` hook ``view_cls`` defines, as an instance reads it."""
     hooks: dict[str, Any] = {}
     for name in _ANSWERS:
         hook_name = f"get_{action}_{name}"
@@ -231,25 +163,7 @@ def _action_hooks(view_cls: type | MountedView, action: str) -> dict[str, Any]:
 def _as_mounted(
     view_cls: type | MountedView, action: str, spec: object, *, label: str
 ) -> MountedView:
-    """``view_cls`` as a standalone view would carry ``spec``: on ``spec``, serving ``action``.
-
-    The standalone views' kernel checks (``validate_mutation_view_spec`` and
-    ``validate_selector_view_spec``) read the spec, the view's hooks, its
-    ``success_status`` and ``response_finalizer`` and the ``action`` its
-    per-action hooks are named for, all off the class. The viewset read
-    through the entry as its ``spec`` and the key as its ``action`` answers
-    each of those as the viewset does for that action, so the entry is asked
-    exactly what the standalone view asks of its spec, the checks added to
-    those entry points included, rather than a copy of them. A ``MountedView``
-    rather than a subclass, so no class is made per entry
-    (test_mounting_makes_no_class), and named after the entry, so a refusal
-    names the action it is about (test_service_viewset's
-    test_the_refusal_names_the_action). The action's own
-    ``get_<action>_success_status`` and ``get_<action>_response_finalizer``
-    stand in for the viewset's, as they do at dispatch (``action_answer``), so
-    the checks ask the value the action answers with
-    (test_per_action_answers' TestTheMountedChecksReadThePerActionValue).
-    """
+    """``view_cls`` as a standalone view would carry ``spec``: on ``spec``, serving ``action``."""
     overrides = {"spec": spec, "action": action, **_action_hooks(view_cls, action)}
     return MountedView(view_cls, overrides, name=label)
 
@@ -263,24 +177,7 @@ def _validate_kernel_action_spec(
     pool_seeds: PoolSeeds,
     discriminated: bool = False,
 ) -> None:
-    """Ask a kernel entry the checks a standalone view asks of its kernel ``spec``.
-
-    A built-in write action is asked as the matching mutation view is
-    (``has_instance`` for an update or a delete, so a spec naming no target is
-    refused), and a read action as the matching selector view is, the
-    ``kind`` included. A kernel spec under the other kind of action is refused
-    by those same checks, against ``pool_seeds``, the viewset's registry.
-
-    **A custom key is refused.** Such an entry feeds ``get_permissions`` and
-    the serializer resolver alone, while a kernel spec declares no
-    ``permission_classes`` and its own checks are asked by ``dispatch``, which
-    a custom key never reaches: the entry would guard nothing it seems to.
-    ``@service_action`` and ``@selector_action`` serve one
-    (test_service_viewset's test_a_kernel_spec_under_a_custom_key_is_refused).
-
-    ``discriminated`` is that ``spec`` is a variant of a ``DiscriminatedAction``,
-    only ever asked under a built-in write action (``_validate_action_spec``).
-    """
+    """Ask a kernel entry the checks a standalone view asks of its kernel ``spec``."""
     mounted = _as_mounted(view_cls, action, spec, label=label)
     if action in _MUTATION_ACTIONS:
         validate_mutation_view_spec(
@@ -306,11 +203,7 @@ def _validate_kernel_action_spec(
 def _validate_action_spec(
     view_cls: type | MountedView, action: str, spec: object, *, pool_seeds: PoolSeeds
 ) -> None:
-    """Run fail-fast validation for a single ``action_specs`` entry.
-
-    Every entry is validated, whatever it is keyed on, against the registry
-    the viewset dispatches with.
-    """
+    """Run fail-fast validation for a single ``action_specs`` entry."""
     label = f"{view_cls.__name__}.action_specs[{action!r}]"
     if isinstance(spec, DiscriminatedAction):
         _validate_discriminated_entry(view_cls, action, spec, label=label, pool_seeds=pool_seeds)
@@ -330,14 +223,7 @@ def _validate_discriminated_entry(
     label: str,
     pool_seeds: PoolSeeds,
 ) -> None:
-    """Ask a ``DiscriminatedAction`` entry its own shape, then each variant as a plain entry.
-
-    Refused under ``list``, ``retrieve`` or a custom key: it serves a write and
-    only a built-in write action or ``@service_action`` dispatches one. Each
-    variant is asked under the entry's action with the entry's label and its key
-    (``[key]``), which ``_as_mounted`` names the refusal after
-    (test_discriminated_action_checks' TestEachVariantIsAskedAsAPlainEntry).
-    """
+    """Ask a ``DiscriminatedAction`` entry its own shape, then each variant as a plain entry."""
     if action not in _MUTATION_ACTIONS:
         raise ImproperlyConfigured(
             f"{label} is a DiscriminatedAction, which serves a write action. Put it under "
@@ -362,19 +248,7 @@ def _is_decorated(member: object) -> bool:
 
 
 def _fills_service_keywords(view_cls: type | MountedView, action: str) -> bool:
-    """Whether ``view_cls`` has a service-kwargs hook that reaches ``action``'s service.
-
-    A hook's keys reach the service's pool through the edge's overlay, which
-    ``check_seeds`` cannot see, so a decorated service action on such a viewset
-    is not asked it, as a standalone view with one is not
-    (``validate_mutation_view_spec``). A viewset with no mutation mixin has no
-    catch-all hook at all, so it reads as unhooked, where
-    ``is_overridden`` would read it as hooked (test_a_decorated_action_s_seeds'
-    test_on_a_resolver_over_drf_s_viewset_it_is_refused_too). One arc to
-    coverage, so each disjunct is named: the catch-all hook by
-    test_a_catch_all_hook_filling_the_keyword_mounts_and_fills_it, the
-    per-action one by test_a_per_action_hook_filling_the_keyword_mounts_and_fills_it.
-    """
+    """Whether ``view_cls`` has a service-kwargs hook that reaches ``action``'s service."""
     base = MutationFlowMixin.get_service_kwargs
     return getattr(view_cls, "get_service_kwargs", base) is not base or hasattr(
         view_cls, f"get_{action}_service_kwargs"
@@ -384,14 +258,7 @@ def _fills_service_keywords(view_cls: type | MountedView, action: str) -> bool:
 def _validate_action_answers(
     view_cls: type | MountedView, action: str, handler: Any = None, *, discriminated: bool = False
 ) -> None:
-    """Ask a decorated action's per-action hooks what a standalone view's answers are asked.
-
-    Only a service action dispatches with them, and a selector action's are
-    asked as harmlessly as they are ignored. The decorator's own values were
-    asked at decoration. A hook beside one is
-    refused, since the action would carry two answers and only one is read
-    (test_per_action_answers' test_a_decorator_value_beside_a_hook_is_refused).
-    """
+    """Ask a decorated action's per-action hooks what a standalone view's answers are asked."""
     label = f"{view_cls.__name__}.{action}"
     hooks = _action_hooks(view_cls, action)
     for name in hooks:
@@ -409,14 +276,7 @@ def _validate_action_answers(
 def _refuse_view_answers_naming_variant(
     view_cls: type | MountedView, action: str, handler: Any
 ) -> None:
-    """Refuse the view's own answers declaring ``variant``, for a plain decorated service action.
-
-    Such an action answers with them where it declares neither a value nor a
-    hook of its own (``action_answer``), and is otherwise asked nothing about
-    them, so one written for a discriminated action of the same viewset would
-    be a ``TypeError`` after this one's write committed (test_discriminated_action_answers'
-    test_a_view_wide_answer_naming_variant_is_refused_beside_a_plain_decorated_action).
-    """
+    """Refuse the view's own answers declaring ``variant``, for a plain decorated service action."""
     hooks = _action_hooks(view_cls, action)
     for name in _ANSWERS:
         if name not in hooks and getattr(handler, f"_{name}", None) is None:
@@ -428,42 +288,20 @@ def _refuse_view_answers_naming_variant(
 def _each_kernel_spec(
     action: str, spec: ActionSpec
 ) -> list[tuple[str, KernelServiceSpec | KernelSelectorSpec]]:
-    """The kernel specs ``spec`` serves ``action`` with, each with the name a refusal gives it.
-
-    A plain spec is its own, under the action. A ``DiscriminatedAction`` is never
-    asked as a spec, since it compiles to nothing: each variant is, as
-    ``action[key]``.
-    """
+    """The kernel specs ``spec`` serves ``action`` with, each with the name a refusal gives it."""
     if isinstance(spec, DiscriminatedAction):
         return [(f"{action}[{key!r}]", variant) for key, variant in spec.specs.items()]
     return [(action, spec)]
 
 
 def _validate_decorated_actions(view_cls: type | MountedView, *, pool_seeds: PoolSeeds) -> None:
-    """Ask each decorated action's spec the kernel's ``check_seeds`` against ``pool_seeds``.
-
-    ``@service_action`` and ``@selector_action`` run before their viewset and
-    its ``pool_seeds`` exist, so the seed check of the spec each stamps on its
-    handler is the viewset's, at ``as_view()``: a seed the viewset registers
-    serves, and a keyword nothing fills, a seed it does not register among
-    them, is refused here, naming the action, rather than answering every
-    request with a ``TypeError`` (test_a_decorated_action_s_seeds). A service
-    action on a viewset whose hook may fill the keyword is not asked
-    (``_fills_service_keywords``); a selector action always is, since the edge
-    hands a kernel selector no view hook. Only the seed check is asked: the
-    decorator asks the rest of what it can know, and a list action is served
-    unfiltered, so the ``filter_set`` check of a list view does not apply.
-    """
+    """Ask each decorated action's spec the kernel's ``check_seeds`` against ``pool_seeds``."""
     for action, handler in inspect.getmembers(view_cls, _is_decorated):
         spec: ActionSpec | None = getattr(handler, "_service_spec", None)
         discriminated = isinstance(spec, DiscriminatedAction)
         _validate_action_answers(view_cls, action, handler, discriminated=discriminated)
-        # A selector action is not asked: it answers with neither.
         if isinstance(spec, KernelServiceSpec):
             _refuse_view_answers_naming_variant(view_cls, action, handler)
-        # One arc to coverage, so each conjunct is named: a selector action on
-        # a hooked viewset by test_a_service_kwargs_hook_does_not_excuse_it,
-        # the hook by test_a_catch_all_hook_filling_the_keyword_mounts_and_fills_it.
         if spec is not None and _fills_service_keywords(view_cls, action):
             continue
         for label, each in _each_kernel_spec(action, spec or handler._selector_spec):
@@ -474,27 +312,14 @@ def _validate_decorated_actions(view_cls: type | MountedView, *, pool_seeds: Poo
 
 
 def _lookup_capture(view_cls: MountedView) -> str:
-    """The name a DRF router captures a detail route's lookup under.
-
-    ``lookup_url_kwarg``, else ``lookup_field``, else ``"pk"``, read as
-    ``SimpleRouter.get_lookup_regex`` reads them, so the name checked is the
-    one the route hands the view.
-    """
+    """The name a DRF router captures a detail route's lookup under."""
     return getattr(view_cls, "lookup_url_kwarg", None) or getattr(view_cls, "lookup_field", "pk")
 
 
 def _mapped_specs(
     view_cls: MountedView, actions: Mapping[str, str]
 ) -> list[tuple[str, KernelServiceSpec | KernelSelectorSpec]]:
-    """Each action ``actions`` maps a method to, and each kernel spec serving it, where one does.
-
-    The spec ``@service_action`` or ``@selector_action`` stamped on the
-    handler, else the ``action_specs`` entry (``partial_update`` falling back
-    to ``update``). An action no spec serves (a DRF handler of the author's)
-    has no lookup of this package's to check. A ``DiscriminatedAction`` is its
-    variants, each with its own lookup (``_each_kernel_spec``,
-    test_discriminated_action_checks' TestALookupCapture).
-    """
+    """Each action ``actions`` maps a method to, and each kernel spec serving it, where one does."""
     specs: list[tuple[str, KernelServiceSpec | KernelSelectorSpec]] = []
     for action in dict.fromkeys(actions.values()):
         handler: Any = getattr(view_cls, action, None)
@@ -508,13 +333,7 @@ def _mapped_specs(
 
 
 def _row_lookup(spec: KernelServiceSpec | KernelSelectorSpec) -> KernelSelectorSpec | None:
-    """The selector that finds the one row ``spec`` acts on, or ``None`` where it finds none.
-
-    A selector spec is its own lookup; a write's is its ``instance_selector_spec``,
-    which the kernel hands only its own parameters, so a capture another of
-    the write's parameters declares never reaches the row. A write over a set
-    (``collection_selector_spec``) or a list body (``many``) looks up no row.
-    """
+    """The selector that finds the one row ``spec`` acts on, or ``None`` where it finds none."""
     if isinstance(spec, KernelSelectorSpec):
         return spec
     return spec.instance_selector_spec
@@ -523,28 +342,12 @@ def _row_lookup(spec: KernelServiceSpec | KernelSelectorSpec) -> KernelSelectorS
 def _validate_lookup_captures(
     view_cls: MountedView, actions: Mapping[str, str] | None, initkwargs: Mapping[str, Any]
 ) -> None:
-    """Refuse a router-mounted detail route whose row lookup declares no parameter for the capture.
-
-    A route capture reaches a spec only as a parameter it declares (the edge's
-    ``kernel_arguments``), so a retrieve selector, or a write's target
-    selector, that does not read the capture the router builds is never handed
-    it: the row is looked up without its key at every request. Refused here
-    instead, naming the viewset, the action, the capture and the read that
-    serves it (test_lookup_captures). Asked only where a router mounts the
-    detail route, which DRF's ``SimpleRouter`` marks by handing ``detail=True``
-    to ``as_view()``, and only of the actions it maps there: a viewset mounted
-    by hand on a route of its own (a ``me/`` retrieve) has the URLconf's
-    captures, which ``as_view()`` cannot see, as a standalone view has. A
-    write that looks up no row has no capture to miss (``_row_lookup``).
-    """
+    """Refuse a router-mounted detail route whose row lookup declares no parameter for the capture."""
     if initkwargs.get("detail") is not True or not actions:
         return
     capture = _lookup_capture(view_cls)
     for action, spec in _mapped_specs(view_cls, actions):
         lookup = _row_lookup(spec)
-        # One arc to coverage, so each conjunct is named: a write looking up
-        # no row by test_a_write_over_a_set_or_a_list_body_looks_up_no_row,
-        # the read by test_a_target_selector_reading_the_capture_mounts.
         if lookup is not None and lookup.parameters().get(capture) is None:
             raise ImproperlyConfigured(
                 f"{view_cls.__name__}.{action}: the router captures the lookup as "
@@ -599,7 +402,6 @@ class _ActionSpecsMixin(_ServesRaisedSchema):
     requires a seed it does not register, and every call's checks, target
     lookup and ``dispatch`` are handed that object (test_pool_seeds)."""
 
-    # Provided by ``GenericAPIView`` / ``ViewSetMixin`` at runtime.
     action: str | None
     action_map: dict[str, str]
     kwargs: dict[str, Any]
@@ -607,19 +409,11 @@ class _ActionSpecsMixin(_ServesRaisedSchema):
 
     @classmethod
     def as_view(cls, *args: Any, **initkwargs: Any) -> Any:
-        # Checked as the instances will be, keywords included: an
-        # ``action_specs`` handed here is the one the mixins dispatch, and is
-        # this viewset's ``as_view(spec=...)`` (``mounted_view``).
+        # Checked as the instances will be, keywords included: an ``action_specs`` handed here is the one the mixins dispatch, and is this viewset's ``as_view(spec=...)`` (``mounted_view``).
         mounted = mounted_view(cls, initkwargs)
         pool_seeds = view_pool_seeds(mounted)
         for action, spec in mounted.action_specs.items():
             _validate_action_spec(mounted, action, spec, pool_seeds=pool_seeds)
-        # A ``PATCH`` with no entry of its own dispatches the ``update`` entry
-        # but reads the answers named for ``partial_update``, so they are
-        # asked here; the spec itself was asked as ``update``'s. With an
-        # entry of its own they were asked under its key, and asking them
-        # twice costs nothing (test_per_action_answers'
-        # test_a_status_hook_the_view_cannot_resolve_is_refused[partial_update]).
         for action, fallback in _ACTION_SPEC_FALLBACKS.items():
             if fallback in mounted.action_specs:
                 entry = resolve_action_spec_entry(mounted.action_specs, action)
@@ -629,22 +423,11 @@ class _ActionSpecsMixin(_ServesRaisedSchema):
         _validate_decorated_actions(mounted, pool_seeds=pool_seeds)
         actions = args[0] if args else initkwargs.get("actions")
         _validate_lookup_captures(mounted, actions, initkwargs)
-        # After every refusal, so a viewset refused above is told that alone.
         warn_unscoped_get_queryset(mounted)
         return super().as_view(*args, **initkwargs)  # ty: ignore[unresolved-attribute]
 
     def options(self, request: Any, *args: Any, **kwargs: Any) -> Any:
-        """Answer OPTIONS from the kernel specs the route serves, or as DRF does.
-
-        A route serving any spec is described from its specs (``spec_options``):
-        no spec stage runs, and only a method a spec serves is described. A
-        route serving none answers as DRF does, and where DRF's metadata asserts,
-        asking ``get_serializer()`` or ``get_object()`` of a viewset lacking what they
-        read for a handler of the project's, it answers with that method
-        undescribed, as ``spec_options`` leaves out a description that raises
-        (test_a_read_with_no_fallback's TestOptionsOfAProjectsOwnWrite). A view
-        overriding ``options()`` without calling ``super()`` gets DRF's own answers.
-        """
+        """Answer OPTIONS from the kernel specs the route serves, or as DRF does."""
         served = self._kernel_specs_served()
         if served:
             return spec_options(self, request, served)
@@ -654,17 +437,7 @@ class _ActionSpecsMixin(_ServesRaisedSchema):
             return spec_options(self, request, served)
 
     def _kernel_specs_served(self) -> dict[str, ActionSpec]:
-        """Each method the route maps to an action served by a kernel spec, and that spec.
-
-        Read through ``resolve_action_spec``, as dispatch resolves a spec, so the
-        ``"partial_update"`` to ``"update"`` fallback and a spec stamped by
-        ``@service_action`` or ``@selector_action`` are both served here too.
-        Empty where the view has no action map: built other than by
-        ``as_view(actions)``. A ``DiscriminatedAction`` stays one, since no request
-        has chosen a variant, and ``spec_options`` describes each it admits
-        (test_discriminated_action_readers'
-        test_kernel_specs_served_leaves_it_unresolved).
-        """
+        """Each method the route maps to an action served by a kernel spec, and that spec."""
         served: dict[str, ActionSpec] = {}
         for method, action in getattr(self, "action_map", {}).items():
             spec = resolve_action_spec(self, action)
@@ -674,71 +447,25 @@ class _ActionSpecsMixin(_ServesRaisedSchema):
 
     @property
     def allowed_methods(self) -> list[str]:
-        """DRF's, less a method this package's own handler would refuse.
-
-        DRF lists every method the action map binds a handler to, so a router
-        mapping PUT to ``update`` on a viewset with no ``update`` spec put PUT
-        in ``Allow`` while the handler answers 405. Such a method is left out
-        by ``_refuses_without_a_spec``, which ``Allow`` on every response and
-        OPTIONS' ``actions`` both read
-        (test_options_metadata's test_allow_names_only_the_methods_a_spec_serves).
-        A handler the view defines itself, and a list or retrieve handler whose
-        fallback to DRF can run, stay.
-        """
+        """DRF's, less a method this package's own handler would refuse."""
         methods: list[str] = super().allowed_methods  # ty: ignore[unresolved-attribute]
         return [method for method in methods if not self._refuses_without_a_spec(method)]
 
     def _refuses_without_a_spec(self, method: str) -> bool:
-        """Whether ``method`` is left out of ``Allow``: one rule, read by the schema too.
-
-        True for a method reaching one of this package's handlers with nothing
-        to serve it, on a route serving a spec or on a viewset whose fallback
-        cannot run. A route serving no spec on a viewset that can fall back keeps
-        DRF's own answer. ``ServiceAutoSchema`` leaves such a method out of the
-        schema by this same predicate, because drf-spectacular reads the
-        router's action map and never ``Allow`` (test_spec_less_actions). And
-        OPTIONS answers by it: a PUT out of ``allowed_methods`` is one DRF's
-        metadata never asks ``get_object()`` for.
-
-        A read ``_has_no_fallback`` refuses is one this leaves out, since both
-        ask ``_fallback_cannot_run``, so the handler's 405 and ``Allow`` cannot part.
-        """
-        # The cheap per-method question first: ``Allow`` asks this on every response.
-        # The route's spec is held by test_spec_less_actions'
-        # test_a_destroy_with_no_spec_is_left_out_and_the_rest_stays, whose viewset can fall
-        # back, so only the spec can open this; the viewset's fallback by
-        # test_a_read_with_no_fallback's
-        # test_every_method_of_the_detail_route_is_a_405, and each leaving the method in
-        # by test_service_viewset's test_options_of_a_route_serving_no_spec_is_drf_s_own_answer.
+        """Whether ``method`` is left out of ``Allow``: one rule, read by the schema too."""
         return self._refuses(method.lower()) and (
             bool(self._kernel_specs_served()) or self._fallback_cannot_run()
         )
 
     def _refuses(self, method: str) -> bool:
         """Whether ``method`` reaches one of this package's handlers with nothing to serve it."""
-        # ``""`` for a method the action map does not bind (``options``, which
-        # DRF serves itself), so the lookups below answer "not refused"
-        # without a branch of its own. One arc to coverage, so each condition
-        # is named: the marker by test_allow_keeps_a_views_own_handler_without_a_spec,
-        # the missing spec by test_allow_names_only_the_methods_a_spec_serves.
         action = getattr(self, "action_map", {}).get(method, "")
         marked = getattr(getattr(self, action, None), "_dispatches_action_specs", False)
         unserved = marked and resolve_action_spec(self, action) is None
         return unserved or self._has_no_fallback(action)
 
     def _has_no_fallback(self, action: str) -> bool:
-        """Whether a read has no spec, no handler of the project's, and a fallback that cannot run.
-
-        The list and retrieve handlers ask this before they fall through to DRF
-        and raise ``MethodNotAllowed`` as an unserved write does. An own ``list``,
-        ``retrieve`` or ``get_object`` keeps the route the project's business.
-        """
-        # One arc to coverage, so each conjunct is named, all in test_a_read_with_no_fallback:
-        # the read by the exact ``Allow`` of test_a_read_of_the_list_route_is_a_405, which
-        # names OPTIONS; the spec by test_spec_less_actions'
-        # test_a_list_spec_alone_documents_no_detail_route; the handler by
-        # test_an_own_list_keeps_its_route, test_an_own_retrieve_keeps_its_route and
-        # test_an_own_get_object_keeps_the_retrieve; the fallback by TestAFallbackThatCanRun.
+        """Whether a read has no spec, no handler of the project's, and a fallback that cannot run."""
         return (
             action in _READ_HANDLERS
             and resolve_action_spec(self, action) is None
@@ -747,19 +474,7 @@ class _ActionSpecsMixin(_ServesRaisedSchema):
         )
 
     def _fallback_cannot_run(self) -> bool:
-        """Whether DRF's reads lack rows or a serializer, so could only raise their assertion.
-
-        Read off the instance, so ``as_view(queryset=...)`` counts. A project's own
-        ``get_queryset`` answers for the rows and its ``get_serializer_class`` or
-        ``get_serializer`` for the serializer, each for that half alone.
-        """
-        # Each half and each stand-in is held by test_a_read_with_no_fallback. The rows: the
-        # attribute by test_rows_handed_to_as_view_are_read, the override by
-        # test_both_routes_answer[own-get-queryset], the half by
-        # test_the_read_is_refused[serializer-no-rows-rows]. The serializer: the attribute by
-        # test_both_routes_answer[rows-and-serializer], the overrides by its
-        # own-serializer-class and own-get-serializer rows, the half by
-        # test_the_read_is_refused[rows-no-serializer-serializer].
+        """Whether DRF's reads lack rows or a serializer, so could only raise their assertion."""
         view_cls = type(self)
         has_rows = getattr(self, "queryset", None) is not None or _defined_by_the_project(
             view_cls, "get_queryset"

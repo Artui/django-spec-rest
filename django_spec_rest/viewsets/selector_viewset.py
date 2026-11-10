@@ -1,5 +1,3 @@
-"""Read-only viewset composed of selector + action-serializer-resolver mixins."""
-
 from __future__ import annotations
 
 from rest_framework.viewsets import GenericViewSet

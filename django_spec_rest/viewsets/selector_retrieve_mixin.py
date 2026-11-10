@@ -1,5 +1,3 @@
-"""Action-keyed retrieve selector override on top of ``RetrieveModelMixin``."""
-
 from __future__ import annotations
 
 from typing import Any
@@ -35,7 +33,6 @@ class SelectorRetrieveMixin(RetrieveModelMixin, _ActionSpecsMixin):
     is its own selector's.
     """
 
-    # Provided at runtime by ``GenericViewSet`` / ``GenericAPIView``.
     request: Any
     kwargs: dict[str, Any]
 
@@ -49,17 +46,6 @@ class SelectorRetrieveMixin(RetrieveModelMixin, _ActionSpecsMixin):
         return _JsonNullResponse() if row is None else Response(data)
 
     def get_object(self) -> Any:
-        """Resolve the target row through the retrieve selector, if one is wired.
-
-        **``filter_backends`` do not apply here.** DRF runs
-        ``filter_queryset()`` inside its own ``get_object()``, so taking that
-        method over — as this mixin does, and as any hand-written
-        ``get_object()`` override does — is what drops them. A tenant-scoping
-        backend listed in ``DEFAULT_FILTER_BACKENDS`` therefore narrows the
-        sibling ``list`` action and *not* this lookup, which is what makes the
-        gap easy to miss. Scope the selector's own queryset, or declare the
-        rule as ``SelectorSpec.filter_set`` — the sanctioned seam, applied by
-        the dispatcher on both paths.
-        """
+        """Resolve the target row through the retrieve selector, if one is wired."""
         spec = resolve_action_selector_spec(self.action_specs, "retrieve")
         return super().get_object() if spec is None else dispatch_selector_for_spec(self, spec)  # ty: ignore[unresolved-attribute]
