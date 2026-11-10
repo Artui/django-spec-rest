@@ -1,5 +1,3 @@
-"""Unit tests for ``openapi.utils.default_status``."""
-
 from __future__ import annotations
 
 from typing import Any

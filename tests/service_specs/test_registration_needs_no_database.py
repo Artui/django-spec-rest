@@ -1,18 +1,3 @@
-"""Declaring and registering a kernel spec never needs the database.
-
-A kernel spec asks its Validator's ``parameters()`` when the spec's own are
-read, by a schema or a dispatch, and never as it is declared or registered.
-So a spec declared at import, before ``migrate`` has made a table, whose
-serializer's fields query one, look up a row that is not there yet or read a
-request no import has, registers; the refusal a description makes is made
-when the call describes it.
-
-A ``many`` spec's rows are bound by the list serializer DRF builds for its
-input, which builds the row serializer too. One that cannot be built with no
-call still registers, and the list serializer that validates the call holds the
-list to the bound it declares.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -98,8 +83,7 @@ def _many_spec() -> ServiceSpec:
 
 
 def _spec() -> ServiceSpec:
-    # A read named like the writable field ``title``: refused where the
-    # serializer's fields can be read.
+    # A read named like the writable field ``title``.
     return ServiceSpec(
         service=_service,
         permissions=(Unrestricted(),),
@@ -125,8 +109,7 @@ def test_a_spec_whose_fields_cannot_be_read_without_a_call_registers(how: str) -
 
 @pytest.mark.django_db
 def test_with_its_fields_read_the_read_is_refused_by_its_parameters() -> None:
-    """The kernel reads a Validator's ``parameters()`` when the spec's are asked,
-    not when it is declared or registered, so the refusal is there."""
+    """The kernel reads a Validator's ``parameters()`` when the spec's are asked."""
     spec = _spec()
     SpecRegistry().register("titled", spec)
 
@@ -160,13 +143,11 @@ def test_declared_before_the_table_exists_its_list_is_still_bounded() -> None:
     SpecRegistry().register("rows", spec)
 
     FAILING["how"] = None
-    # The spec declares no bound of its own, so the list serializer that
-    # validates the call is what refuses the third row.
+    # The spec declares no bound of its own.
     assert spec.many_max_length is None
     rows = [{"title": "a"}, {"title": "b"}, {"title": "c"}]
     with pytest.raises(InvalidArguments) as excinfo:
         dispatch(spec, principal=AnonymousUser(), arguments={"items": rows})
-    # The list serializer's own refusal, under the spec's ``many_argument``.
     (message,) = excinfo.value.detail["items"][NON_FIELD_ERRORS]
     assert (str(message), message.code) == (
         "Ensure this field has no more than 2 elements.",

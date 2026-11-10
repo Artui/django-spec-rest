@@ -1,11 +1,3 @@
-"""``requestBody.required`` where the body is a whole schema, which drf-spectacular marks optional.
-
-The wire is the check: where every spec the route may run takes a body with a
-required field, an empty body is refused, and the document says so. Where one may
-run with no body, or with none of its fields required, an empty body gets through,
-and the document leaves ``required`` out.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -281,9 +273,7 @@ class TestWhatTheVariantsDoNotAnswer:
 
 
 def _named_alike(entry: Any, route: str) -> Any:
-    # A fixed route, not ``id(entry)``: the generator orders operations by path, and
-    # the first of one name is the one that holds the component, so an address-
-    # dependent route flipped which was "held" with the heap's layout.
+    # A fixed route, not ``id(entry)``: the generator orders operations by path.
     return path(f"{route}/", _viewset("Alike", "create", entry).as_view(_CREATE))
 
 

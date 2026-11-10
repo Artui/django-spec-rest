@@ -1,5 +1,3 @@
-"""Test models exercising the full surface area of the mutation helpers."""
-
 from __future__ import annotations
 
 from django.contrib.contenttypes.fields import GenericForeignKey, GenericRelation
@@ -54,12 +52,7 @@ class _PublishedOnlyManager(models.Manager):
 
 
 class PublishedPost(Post):
-    """``Post`` whose default manager hides drafts.
-
-    For the affordance checks, which must re-find a row the caller already holds
-    through ``_base_manager``: a lookup through this default manager disagrees
-    with the table about every draft.
-    """
+    """``Post`` whose default manager hides drafts."""
 
     objects = _PublishedOnlyManager()
 

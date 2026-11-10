@@ -1,11 +1,3 @@
-"""Tests for ``register_drf_row_errors``: DRF's ``ValidationError`` from a row lands at that row.
-
-A row service written for DRF refuses its row with DRF's ``ValidationError``,
-which the kernel cannot name. Registered, the refusal is re-rooted under the
-row's place in the arguments, as the kernel's own refusals are, and keeps its
-class, so DRF still answers it 400 and the caller learns which row it was.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -64,9 +56,7 @@ class TestARowsDrfRefusal:
         assert excinfo.value.get_codes() == {"sections": {1: {"non_field_errors": ["invalid"]}}}
 
     def test_the_dual_class_leaves_a_row_as_the_kernels_class(self) -> None:
-        # Recorded, not chosen: the kernel reads its own ``DRFInvalidArguments``
-        # before any registered class, so the dual class leaves a nested write
-        # as the kernel's bare one, which DRF does not answer.
+        # The kernel's own ``DRFInvalidArguments`` is read before any registered class.
         register_drf_row_errors()
         with pytest.raises(KernelInvalidArguments) as excinfo:
             create_from_input(
@@ -84,9 +74,7 @@ class TestTheRegistration:
         register_drf_row_errors()
 
     def test_it_registered_drf_s_validation_error_with_its_own_reader(self) -> None:
-        # The kernel refuses a second reader for a registered class, so the
-        # refusal proves the registration happened without reading the
-        # kernel's private registry.
+        # The kernel refuses a second reader for a registered class.
         register_drf_row_errors()
         with pytest.raises(ImproperlyConfigured, match="already registered"):
             register_row_error(ValidationError, lambda exc: exc.detail)

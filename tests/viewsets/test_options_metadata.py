@@ -1,14 +1,3 @@
-"""OPTIONS against a viewset serving kernel specs.
-
-DRF sets ``self.action = "metadata"`` for OPTIONS, an implicit action with no
-handler behind it, and a CORS preflight is an OPTIONS request too, so every
-route must answer one. A route serving a kernel spec is described from its
-specs (``tests/views/test_spec_options.py`` holds the answer on every base);
-this file holds what is particular to a viewset: which methods its routing
-serves, the ``Allow`` it states, and the shapes a metadata pass probing the
-view's serializer could not describe.
-"""
-
 from __future__ import annotations
 
 from typing import Any, TypedDict
@@ -192,9 +181,7 @@ def test_a_view_without_a_metadata_class_refuses_options() -> None:
 
 
 def test_allow_names_only_the_methods_a_spec_serves() -> None:
-    """A router binds PUT, PATCH and DELETE to this package's own handlers on
-    every detail route, and each answers 405 with no spec behind it, so none
-    is listed; ``Allow`` is the same on the 405 itself."""
+    """A router binds PUT, PATCH and DELETE to this package's own handlers on every detail route."""
     viewset = _viewset(action_specs={"create": _create(), "list": _list()})
     actions = {
         "get": "list",
@@ -226,8 +213,7 @@ def test_a_partial_update_only_spec_serves_patch_alone() -> None:
 
 
 def test_allow_keeps_a_views_own_handler_without_a_spec() -> None:
-    """A handler the view defines itself is its own business: it stays in
-    ``Allow`` and, with no spec, is not described."""
+    """A handler the view defines itself is its own business: it stays in ``Allow`` and."""
 
     class _ViewSet(ServiceViewSet):
         queryset = Author.objects.all()
@@ -243,8 +229,7 @@ def test_allow_keeps_a_views_own_handler_without_a_spec() -> None:
 
 
 def test_a_list_with_no_spec_and_no_serializer_leaves_allow() -> None:
-    """``list`` with no spec falls back to DRF, which needs a serializer this viewset lacks
-    beside its ``queryset``. So the handler answers 405 and ``Allow`` does not name it."""
+    """``list`` with no spec falls back to DRF."""
     viewset = _viewset(action_specs={"create": _create()})
     response = _options(viewset, {"get": "list", "post": "create"})
     assert _allow(response) == {"POST", "OPTIONS"}
@@ -273,9 +258,7 @@ def test_a_service_action_s_kernel_spec_is_described() -> None:
 
 
 def test_a_route_capture_is_not_described_as_input() -> None:
-    """The edge reads a declared capture from the route over anything the body
-    sends, so a route carrying it does not ask the caller for it; on a route
-    with no such capture it is still the caller's to send."""
+    """The edge reads a declared capture from the route over anything the body sends."""
     spec = ServiceSpec(
         service=_service,
         permissions=_OPEN,
@@ -290,17 +273,14 @@ def test_a_route_capture_is_not_described_as_input() -> None:
 
 
 def test_a_put_s_target_reads_are_not_described_as_input() -> None:
-    """An update never reads its target's lookup from the body, only from the
-    route and the query string, so PUT's body schema leaves it out on any
-    route, a list route with no capture included."""
+    """An update never reads its target's lookup from the body."""
     viewset = _viewset(action_specs={"update": _update()})
     for captures in ({"pk": 1}, {}):
         assert _described(_options(viewset, {"put": "update"}, **captures)) == {"PUT": {"name"}}
 
 
 def test_a_bulk_put_with_no_target_is_described() -> None:
-    """A ``many`` update declares no target selector, so there is no lookup to
-    leave out: its body is the list of rows."""
+    """A ``many`` update declares no target selector, so there is no lookup to leave out."""
     spec = ServiceSpec(
         service=_service, permissions=_OPEN, validator=SerializerValidator(_NameIn), many=True
     )
@@ -310,9 +290,7 @@ def test_a_bulk_put_with_no_target_is_described() -> None:
 
 
 def test_a_post_s_target_reads_are_not_described() -> None:
-    """The edge drops a target lookup's reads from the body whatever the
-    method, so a custom POST acting on a row does not ask for its lookup
-    either, even on a route that does not carry it."""
+    """The edge drops a target lookup's reads from the body whatever the method."""
 
     class _ViewSet(ServiceViewSet):
         queryset = Author.objects.all()
@@ -328,9 +306,7 @@ def test_a_post_s_target_reads_are_not_described() -> None:
 
 
 def test_a_read_a_provider_may_decline_is_offered_and_not_required() -> None:
-    """The ``kwargs`` provider may answer ``owner`` with ``UNSET``, so dispatch
-    does not demand it of the caller, whose value is kept beneath the
-    provider's answer: described, and not required."""
+    """The ``kwargs`` provider may answer ``owner`` with ``UNSET``."""
     spec = ServiceSpec(
         service=_service,
         permissions=_OPEN,
@@ -345,9 +321,7 @@ def test_a_read_a_provider_may_decline_is_offered_and_not_required() -> None:
 
 
 def test_a_read_named_for_a_seed_the_view_registers_is_not_described() -> None:
-    """``stamp`` is a reflected read the view's ``pool_seeds`` fill, so the
-    kernel withholds it under those seeds; under the kernel's defaults it
-    would be offered, which OPTIONS once built its answer with."""
+    """``stamp`` is a reflected read the view's ``pool_seeds`` fill."""
     spec = ServiceSpec(
         service=_service,
         permissions=_OPEN,
@@ -373,8 +347,7 @@ def test_a_field_input_data_may_decline_is_offered_and_not_required() -> None:
 
 
 def test_a_partial_spec_s_put_requires_none_of_its_fields() -> None:
-    """A ``partial`` spec is dispatched partial on every method, so a PUT
-    leaving a field out is not refused for it."""
+    """A ``partial`` spec is dispatched partial on every method."""
     viewset = _viewset(action_specs={"update": _update(partial=True)})
     schema = _schema(_options(viewset, {"put": "update"}, pk=1), "PUT")
     assert set(schema["properties"]) == {"name"}
@@ -382,8 +355,7 @@ def test_a_partial_spec_s_put_requires_none_of_its_fields() -> None:
 
 
 def test_a_many_row_withholds_what_input_data_fills_and_relaxes_what_it_may() -> None:
-    """``input_data`` is merged over every row: ``owner`` is never the
-    caller's in any row, and ``note`` is described and not required."""
+    """``input_data`` is merged over every row: ``owner`` is never the caller's in any row."""
     spec = ServiceSpec(
         service=_service,
         permissions=_OPEN,
@@ -414,18 +386,14 @@ def test_a_field_a_typed_input_data_fills_is_not_described() -> None:
 
 
 def test_a_put_on_a_list_route_is_described_without_a_lookup() -> None:
-    """A PUT routed on a URL with no lookup kwarg is described without
-    ``get_object()``, which would end in DRF's ``URL keyword argument``
-    assertion. The target is the spec's own selector, which OPTIONS never runs."""
+    """A PUT routed on a URL with no lookup kwarg is described without ``get_object()``."""
     response = _options(_viewset(action_specs={"update": _update()}), {"put": "update"})
     assert response.status_code == 200
     assert "PUT" in _described(response)
 
 
 def test_a_context_dependent_input_is_left_out_rather_than_a_500() -> None:
-    """Built with DRF's base context, the input would end in the serializer's
-    ``KeyError``. The method stays routed and is not described: its fields are
-    known only to the call its view's input layer adds to."""
+    """Built with DRF's base context, the input would end in the serializer's ``KeyError``."""
 
     class _ViewSet(ServiceViewSet):
         queryset = Author.objects.all()
@@ -441,8 +409,7 @@ def test_a_context_dependent_input_is_left_out_rather_than_a_500() -> None:
 
 
 def test_a_spec_only_viewset_without_a_serializer_class_is_described() -> None:
-    """A ``create`` with no serializer to resolve is described from its spec,
-    never reaching ``GenericAPIView.get_serializer_class``'s assertion."""
+    """A ``create`` with no serializer to resolve is described from its spec."""
     viewset = type("_ViewSet", (ServiceViewSet,), {"action_specs": {"create": _create()}})
     response = _options(viewset, {"post": "create"})
     assert response.status_code == 200
@@ -450,10 +417,7 @@ def test_a_spec_only_viewset_without_a_serializer_class_is_described() -> None:
 
 
 def test_the_resolver_after_generic_viewset_still_cannot_describe() -> None:
-    """Listed after ``GenericViewSet``, the package's bases come after DRF's
-    ``options()`` in the MRO, so DRF's own metadata answers and probes
-    ``serializer_class`` as it always has: the one shape still ending in DRF's
-    assertion. Listing the package's base first is the fix."""
+    """Listed after ``GenericViewSet``."""
     viewset = type(
         "_ViewSet",
         (GenericViewSet, ActionSerializerResolver),

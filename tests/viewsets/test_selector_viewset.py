@@ -1,10 +1,3 @@
-"""``SelectorViewSet`` serving kernel ``SelectorSpec`` entries.
-
-``list`` and ``retrieve`` dispatch through the selector views' own edge
-(``dispatch_kernel_selector``), and are presented by the spec, as
-``SelectorListView`` and ``SelectorRetrieveView`` present a kernel spec.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -134,8 +127,7 @@ class TestAsView:
         assert callable(_viewset(action_specs={action_name: entry}).as_view({"get": action_name}))
 
     def test_a_selector_hook_on_a_viewset_with_no_selector_mixin_is_refused(self) -> None:
-        """A ``get_selector_kwargs`` there is the viewset's own, as on any
-        viewset, and never reaches a kernel spec."""
+        """A ``get_selector_kwargs`` there is the viewset's own, as on any viewset."""
         viewset = _viewset(
             base=type("_Base", (ServiceCreateMixin, GenericViewSet), {}),
             action_specs={"list": _list()},

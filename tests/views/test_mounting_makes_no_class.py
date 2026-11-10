@@ -1,14 +1,3 @@
-"""Mounting a view makes no class: ``as_view()``'s checks read the author's class through.
-
-A project's ``__init_subclass__``, metaclass or subclass registry sees every
-class made from its views. ``as_view()`` asks its checks of the view as its
-instances will answer, keywords included, and once asked that of a subclass
-made per mount, one per ``action_specs`` entry on a viewset, each named like
-the author's class: a router mounting one viewset made several. Each test
-records every subclass made after the author's class is defined, so each fails
-against a tree that makes one.
-"""
-
 from __future__ import annotations
 
 from typing import Any

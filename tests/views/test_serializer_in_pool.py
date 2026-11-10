@@ -1,12 +1,3 @@
-"""The bound input serializer a ``SerializerValidator`` hands a kernel service, over HTTP.
-
-A service declaring ``serializer`` is handed the serializer that validated the
-body, bound to it and, on an update, to the row, so persistence may live on
-the serializer (``serializer.save()``). A client cannot stand a value in for
-it: a body key ``serializer`` no field declares is an argument the spec does
-not declare, which the kernel's unknown-argument policy answers.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -140,8 +131,7 @@ def test_a_service_not_declaring_the_serializer_is_unaffected() -> None:
 def test_a_body_key_named_serializer_never_stands_in_for_it(
     policy: UnknownArguments, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Refused as an unknown argument under ``REJECT``; dropped unseen under
-    ``IGNORE``, the service still handed the bound serializer."""
+    """Refused as an unknown argument under ``REJECT``; dropped unseen under ``IGNORE``."""
     monkeypatch.setattr(kernel_edge, "UNKNOWN_ARGUMENTS", policy)
     captured: dict[str, Any] = {}
 
@@ -153,7 +143,6 @@ def test_a_body_key_named_serializer_never_stands_in_for_it(
 
     if policy is UnknownArguments.REJECT:
         assert response.status_code == 400
-        # The whole body: the unknown key under its wire name, nothing else refused.
         assert response.data == {"serializer": ["Unknown argument."]}
         assert captured == {}
     else:

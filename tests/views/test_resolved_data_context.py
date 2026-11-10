@@ -1,19 +1,3 @@
-"""The value about to be presented, handed to a presenter's serializer context callable.
-
-A ``SerializerPresenter``'s ``serializer_context`` callable may declare the
-value it renders under the presenter's ``value_keyword`` (``result`` by
-default; ``instance`` or ``page`` where the author names it so), and is handed
-it only when declared, so it can run a *single* batched query against the
-exact objects and pass the outcome on through the context. A callable
-declaring only ``view`` and ``request``, or a subset of them, is unaffected.
-
-The view-side binder, ``_invoke_provider``, is held here too: it is how the
-view's own hooks are asked, on either route.
-
-A list view's presenter is asked for the page once, so a callable declaring
-``page`` (or the presenter's ``value_keyword``) is handed the page's rows.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -127,8 +111,7 @@ class TestTheResultOfAMutation:
         assert capturing.captured["result_pk"] == author.pk
 
     def test_the_result_is_the_output_selector_s_row(self) -> None:
-        """An output selector re-reads the row, and the callable sees what it read,
-        not the service's own return."""
+        """An output selector re-reads the row, and the callable sees what it read."""
         capturing = _capturing_serializer_factory()
         seen: dict[str, Any] = {}
         raw = Author.objects.create(name="raw")

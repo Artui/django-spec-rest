@@ -1,14 +1,3 @@
-"""This schema's ``PermissionDenied`` and ``NotAuthenticated`` components: no serializer takes them.
-
-drf-spectacular strips ``Serializer`` from a class's name, so a project's
-``PermissionDeniedSerializer`` is the component ``PermissionDenied`` too, and
-would re-point every spec 403 ``$ref`` at its own fields (or the 403 would
-document the project's response by ``detail``). The handling is the
-``ValidationErrors`` component's (``test_validation_errors_component_name``):
-refused with ``ImproperlyConfigured``, whichever of the two registers first,
-so each order is driven for each name.
-"""
-
 from __future__ import annotations
 
 from typing import Any

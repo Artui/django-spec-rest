@@ -1,10 +1,3 @@
-"""A kernel spec's view's ``response_finalizer`` across the HTTP flows.
-
-A kernel ``ServiceSpec`` has no ``response_finalizer``, which is HTTP's alone,
-so its view declares it (``MutationFlowMixin.response_finalizer``), and off HTTP
-there is nothing to skip: no transport but the view reads it.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -105,8 +98,7 @@ class TestResponseFinalizerSingle:
         assert response.data == {"id": Author.objects.get().pk, "swapped": True}
 
     def test_result_is_the_service_return_and_data_the_validated_input(self) -> None:
-        """A finalizer keying on the service's own return sees what the service
-        produced, even where an output selector re-reads a different object."""
+        """A finalizer keying on the service's own return sees what the service produced."""
 
         @dataclass
         class _Made:
@@ -204,8 +196,7 @@ class TestAFinalizerTheViewCannotCall:
     def test_a_finalizer_taking_kwargs_beside_a_key_the_framework_lacks_is_refused_at_as_view(
         self,
     ) -> None:
-        """``**kwargs`` takes the framework's keys, never a name it lacks: called,
-        the finalizer would still raise ``TypeError`` for ``call_context``."""
+        """``**kwargs`` takes the framework's keys, never a name it lacks: called."""
 
         def finalizer(*, call_context: Any, **kwargs: Any) -> None: ...
 
@@ -214,9 +205,7 @@ class TestAFinalizerTheViewCannotCall:
             _view(ServiceCreateView, spec, finalizer)
 
     def test_a_finalizer_taking_a_positional_only_parameter_is_refused_at_as_view(self) -> None:
-        """The framework hands its keys by keyword, so a positional-only
-        parameter with no default is never supplied, ``response`` included:
-        called, the finalizer would raise ``TypeError``."""
+        """The framework hands its keys by keyword."""
 
         def finalizer(response: Response, /) -> None: ...
 

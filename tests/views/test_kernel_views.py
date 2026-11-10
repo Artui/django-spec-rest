@@ -1,12 +1,3 @@
-"""A kernel spec set on a view's ``spec``, served by the kernel's own ``dispatch``.
-
-Every spec
-here is the kernel's own ``ServiceSpec`` or ``SelectorSpec``, with the DRF seats
-``SerializerValidator`` and ``SerializerPresenter``, and every test drives a
-view through ``as_view()`` with nothing imported that the kernel route added,
-so each one fails against a tree without it.
-"""
-
 from __future__ import annotations
 
 import dataclasses
@@ -86,8 +77,7 @@ class TestACreateView:
         assert response.data == {"id": Author.objects.get().pk, "name": "Ada"}
 
     def test_the_view_s_own_classes_refuse_before_the_spec_runs(self) -> None:
-        """A kernel spec's checks are its ``permissions``, asked by ``dispatch``;
-        the view's own ``permission_classes`` are DRF's, asked first."""
+        """A kernel spec's checks are its ``permissions``, asked by ``dispatch``."""
 
         class _Deny(BasePermission):
             def has_permission(self, request: Any, view: Any) -> bool:
@@ -260,8 +250,7 @@ class TestASeedNamedFieldValidatesFromTheBody:
         assert received["user"] == principal
 
     def test_a_seed_named_field_validates_from_a_form_body(self) -> None:
-        """A form body's seed-named field is handed to the serializer as its one
-        value, as DRF reads a form, so the serializer coerces it."""
+        """A form body's seed-named field is handed to the serializer as its one value."""
 
         class _Input(serializers.Serializer):
             title = serializers.CharField()
@@ -290,9 +279,7 @@ class TestASeedNamedFieldValidatesFromTheBody:
         assert response.data["user"][0].code == "invalid"
 
     def test_a_declared_capture_outranks_the_body_beside_a_seed_named_field(self) -> None:
-        """Where the serializer is handed what the request sent, for a field the
-        kernel cannot take, a declared capture still goes over the body, as it
-        does on a body with no such field: the client never moves the route."""
+        """Where the serializer is handed what the request sent."""
 
         class _Input(serializers.Serializer):
             author = serializers.IntegerField()
@@ -309,8 +296,7 @@ class TestASeedNamedFieldValidatesFromTheBody:
         assert received == {"author": 4, "user": 7}
 
     def test_a_body_with_no_seed_named_field_keeps_the_input_data_provider(self) -> None:
-        """The serializer binds what the kernel hands it, ``input_data``'s values
-        merged in."""
+        """The serializer binds what the kernel hands it, ``input_data``'s values merged in."""
 
         class _Input(serializers.Serializer):
             title = serializers.CharField()
@@ -328,9 +314,7 @@ class TestASeedNamedFieldValidatesFromTheBody:
         assert received == {"title": "from the server"}
 
     def test_input_data_outranks_the_body_beside_a_seed_named_field(self) -> None:
-        """A body sending a field the kernel cannot take still has the server's
-        values over the client's: the serializer binds the request's body with
-        ``input_data``'s answer put over it."""
+        """A body sending an untaken field still gets the server's value over the client's."""
 
         class _Input(serializers.Serializer):
             title = serializers.CharField()
@@ -391,10 +375,7 @@ def _post_as(principal: User, spec: ServiceSpec, body: Any) -> tuple[Response, d
 
 
 class TestInputDataOverASeedNamedField:
-    """The kernel hands a Validator only the ``input_data`` keys its parameters
-    declare, and a seed-named field is none of them, so the edge reads the
-    provider's answer for such a field as the provider gives it and binds it
-    over the client's, the provider still called once."""
+    """The kernel hands a Validator only the ``input_data`` keys its parameters declare."""
 
     def _spec(self, input_data: Any) -> ServiceSpec:
         return ServiceSpec(
@@ -427,8 +408,7 @@ class TestInputDataOverASeedNamedField:
         assert received == {"title": "t", "user": principal.pk}
 
     def test_the_view_s_spec_presents_what_its_twin_returned(self) -> None:
-        """The edge dispatches the spec's recording twin, and the view presents
-        the result through its own spec, whose presenter the twin shares."""
+        """The edge dispatches the spec's recording twin."""
         principal = User.objects.create(username="ada")
 
         def create(*, data: dict[str, Any]) -> Author:
@@ -467,9 +447,7 @@ class TestInputDataOverASeedNamedField:
     def test_an_owned_parameter_it_declines_never_takes_the_client_s_value(
         self, extra: dict[str, Any]
     ) -> None:
-        """Beside a seed-named field too: the edge takes the owned ``title``
-        off the body the serializer binds, as the kernel takes it off its
-        arguments."""
+        """Beside a seed-named field too."""
         principal = User.objects.create(username="ada")
         response, received = _post_as(
             principal, self._spec(_declines_title), {"title": "from the client", **extra}
@@ -478,8 +456,7 @@ class TestInputDataOverASeedNamedField:
         assert received == extra
 
     def test_a_hook_s_value_for_an_owned_parameter_it_declines_is_never_bound(self) -> None:
-        """The provider owns ``title``, so a view hook's value for it is no
-        more the serializer's than the client's, as the kernel answers it."""
+        """The provider owns ``title``."""
         received: dict[str, Any] = {}
         spec = dataclasses.replace(
             self._spec(_declines_title), service=lambda *, data: received.update(data)
@@ -517,14 +494,11 @@ class TestTheArgumentsAreReadAsTheKernelReadsAWire:
             format="multipart",
         )
         assert response.status_code == 204, response.data
-        # ``views`` parsed to the integer its field declares and a blank
-        # boolean absent, as DRF reads a form, and Django's CSRF field never an
-        # argument.
+        # ``views`` parsed to the integer its field declares and a blank boolean absent.
         assert received == {"title": "t", "views": 3}
 
     def test_a_form_s_true_is_a_boolean(self) -> None:
-        """A form's ``"true"`` is the serializer's to parse: the kernel's typed
-        check, which would refuse the string, is lenient for a form body."""
+        """A form's ``"true"`` is the serializer's to parse: the kernel's typed check."""
 
         class _Input(serializers.Serializer):
             published = serializers.BooleanField()
@@ -540,12 +514,7 @@ class TestTheArgumentsAreReadAsTheKernelReadsAWire:
         assert received == {"published": True}
 
     def test_a_json_body_is_not_read_as_flat_strings(self) -> None:
-        """A JSON ``"true"`` is a string, typed by the client, and reaches the
-        kernel's typed check as one, where a form's ``"true"`` is the serializer's.
-
-        The kernel's check answers before the serializer does, so DRF, which
-        would read ``"true"`` as ``True``, is never asked. A lenient Validator,
-        whose typed check leaves the serializer's coercion to DRF, reverses this."""
+        """A JSON ``"true"`` is a string, typed by the client."""
 
         class _Input(serializers.Serializer):
             published = serializers.BooleanField()
@@ -619,8 +588,7 @@ class TestAManySpec:
     def test_a_list_body_is_its_rows_and_its_output_selector_s_re_read_is_presented(
         self,
     ) -> None:
-        """The kernel runs a ``many`` spec's output selector on what the service
-        returned and presents the re-read, as on every transport."""
+        """The kernel runs a ``many`` spec's output selector on the service's result."""
         reread: dict[str, Any] = {}
 
         def create(*, data: list[dict[str, Any]]) -> list[Author]:
@@ -785,8 +753,7 @@ class TestAListView:
         response = _get(_AuthorsByName, spec, f"/?ids={kept.pk},{other.pk}&named=")
         assert response.status_code == 200, response.data
         assert [row["name"] for row in response.data] == ["Bo", "Cy"]
-        # A comma list of integers is its elements, coerced; a blank string is
-        # one a plain string can take.
+        # A comma list of integers is its elements, coerced.
         assert received == {"ids": [kept.pk, other.pk], "named": ""}
 
     def test_an_undeclared_query_key_is_an_unknown_argument_under_reject(
@@ -821,8 +788,7 @@ class TestAListView:
         assert received == {"published": True}
 
     def test_a_filter_set_beside_django_filter_s_backend_is_refused_at_as_view(self) -> None:
-        """Both apply a ``FilterSet`` to the list, so the list would be
-        filtered twice; with no such backend the spec mounts."""
+        """Both apply a ``FilterSet`` to the list, so the list would be filtered twice."""
 
         class _ByName(django_filters.FilterSet):
             class Meta:

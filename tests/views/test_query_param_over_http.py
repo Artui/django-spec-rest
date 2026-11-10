@@ -1,10 +1,3 @@
-"""A kernel selector spec's declared read is read off the query string, over HTTP.
-
-A kernel read is the declaration, read through ``flat_arguments`` and coerced to its type. The
-query string is the request's own: a permission class reads it before the
-dispatch, and the dispatch writes nothing back onto it.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -84,10 +77,7 @@ def test_a_missing_required_read_is_refused_under_its_name(posts: None) -> None:
 def test_a_missing_row_beside_an_unknown_key(
     monkeypatch: pytest.MonkeyPatch, policy: UnknownArguments
 ) -> None:
-    """Under ``REJECT`` the kernel checks the arguments before it looks the row
-    up, so an unknown key beside a missing row answers 400, not the miss's 404.
-    Under ``IGNORE`` the key is dropped and the
-    miss is the answer."""
+    """Under ``REJECT`` the kernel checks the arguments before it looks the row up."""
     monkeypatch.setattr(kernel_edge, "UNKNOWN_ARGUMENTS", policy)
     spec = SelectorSpec(
         kind=SelectorKind.RETRIEVE,

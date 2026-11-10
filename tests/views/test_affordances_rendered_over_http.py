@@ -1,12 +1,3 @@
-"""The query views serve a kernel spec's affordance answers as every transport renders them.
-
-The rows' answers per view are held by ``test_selector_list_view`` and
-``test_selector_retrieve_view``; this is the parity half: the body a browser
-is served is the object the kernel's own ``present`` renders for any other
-transport, and a subclass extending ``list`` keeps running. The viewset and
-``selector_action`` sites are the viewsets' own.
-"""
-
 from __future__ import annotations
 
 import json

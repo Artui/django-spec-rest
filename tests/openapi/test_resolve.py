@@ -1,11 +1,3 @@
-"""The schema's spec resolvers answer a kernel spec on every surface that serves one.
-
-A standalone view's ``spec``, an ``action_specs`` entry and the stamp
-``@service_action`` / ``@selector_action`` leave on their handler each carry
-the kernel's own ``ServiceSpec`` or ``SelectorSpec``, and each resolver answers
-the spec of its own kind on all three.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -129,8 +121,7 @@ class TestResolveSelectorSpec:
         assert resolve_selector_spec(_StandaloneView()) is None
 
     def test_a_viewset_with_no_action_specs_and_no_stamp_is_none(self) -> None:
-        """``_ActionViewSet`` declares no ``action_specs``, and its ``go`` carries a
-        service stamp, which is no selector's."""
+        """``_ActionViewSet`` declares no ``action_specs``."""
         assert resolve_selector_spec(_bound(_ActionViewSet, "go")) is None
 
 
@@ -153,8 +144,7 @@ class TestResolveDiscriminatedAction:
         assert resolve_discriminated_action(_ViewSet()) is None
 
     def test_it_is_no_service_spec_and_no_selector_spec(self) -> None:
-        # The wrapper is not a kernel spec: each of the other resolvers
-        # leaves it to this one.
+        # The wrapper is not a kernel spec: each of the other resolvers leaves it to this one.
         for view in (_bound(_ViewSet, "update"), _bound(_ActionViewSet, "either"), _WrapperView()):
             assert resolve_service_spec(view) is None
             assert resolve_selector_spec(view) is None

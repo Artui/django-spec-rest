@@ -1,17 +1,3 @@
-"""A spec's rows come from its selector alone, and filter backends narrow only a ``list``.
-
-States the "Views and viewsets" page of the move-from-drfs guide over a real
-viewset: no action a spec serves (``list``, ``retrieve``, a
-``@selector_action``, a write's target) takes its rows from the view's
-``get_queryset()``, and the view's ``filter_backends`` narrow a spec's ``list``
-and nothing else. The viewset here overrides ``get_queryset()`` to a set that
-would answer nothing and records every ask; its one filter backend hides the
-author ``"b"``, a row each other action reaches all the same.
-
-A permission class that asks ``get_queryset()`` (DRF's ``DjangoModelPermissions``)
-is not asked about: none is declared here, so a recorded ask is the action's own.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -123,13 +109,7 @@ class _ViewSet(ServiceViewSet):
 
 
 class _WriteViewSet(_ViewSet):
-    """No ``"retrieve"`` entry, so ``get_object()`` is DRF's own, as a project's was in drfs.
-
-    ``SelectorRetrieveMixin`` replaces ``get_object()`` with the retrieve spec's
-    lookup when one is wired, which would find the row for a write whatever the
-    write did: with none wired, a write that fell back to ``get_object()`` would
-    ask ``get_queryset()`` and the filter backends, and these tests would see it.
-    """
+    """No ``"retrieve"`` entry, so ``get_object()`` is DRF's own, as a project's was in drfs."""
 
     action_specs = {"update": _UPDATE, "destroy": _DESTROY}
 

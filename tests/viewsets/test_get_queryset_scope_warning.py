@@ -1,5 +1,3 @@
-"""The class of the report, for a project's filter or a test's ``pytest.warns``."""
-
 from __future__ import annotations
 
 from typing import Any

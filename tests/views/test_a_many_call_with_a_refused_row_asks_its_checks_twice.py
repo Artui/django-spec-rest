@@ -1,22 +1,3 @@
-"""A ``many`` call whose top level passes and whose rows fail asks the class-level check twice.
-
-The edge asks the spec's class-level checks before ``dispatch`` does
-(``_admitted`` in ``dispatch/kernel_edge.py``). Where the call is well formed
-it hands the grant and the seeds its checks were offered on, so ``dispatch``
-asks nothing again. Where a row is refused the prelude hands on neither, so
-``dispatch`` asks the checks again, and resolves the seeds they name again,
-in its own order beside the Validator's refusals of the other rows (see
-``_admitted``'s docstring, "What is left to ``dispatch``").
-
-The double ask is accepted, not a defect: the kernel's prelude raises a
-refused row without a grant (``InvalidArguments`` carries none), so the edge
-has nothing to hand on, and ``dispatch`` reports the refusal in its own order
-beside the Validator's refusals of the other rows. A check with side effects,
-or a costly seed, is therefore paid twice on such a call. These tests pin that
-count so a change to it is deliberate; the well-formed call beside it answers
-once.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -88,11 +69,7 @@ def test_a_well_formed_many_call_asks_its_check_and_resolves_its_seed_once() -> 
 
 
 def test_a_many_call_with_a_refused_row_asks_its_check_and_resolves_its_seed_twice() -> None:
-    """The prelude hands on no grant and no seeds for a refused row, so ``dispatch`` asks again.
-
-    Accepted on purpose (see ``_admitted``): pinned so that handing the grant
-    on, or asking only once, is a deliberate change that updates this count.
-    """
+    """The prelude hands on no grant and no seeds for a refused row, so ``dispatch`` asks again."""
     response, counted = _post([{"title": "a"}, 5])
     assert response.status_code == 400
     assert list(response.data["items"]) == [1]

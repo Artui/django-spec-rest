@@ -1,10 +1,3 @@
-"""``view_call_context``: the one call-context dict of the request a view serves.
-
-The helper's own contract, and what the kernel route hands each callable of a
-kernel spec that declares ``call_context``: the view's dict, as the very
-object, so a value one stage keeps there is read by the next.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -74,9 +67,7 @@ class _NameIn(serializers.Serializer):
 
 @pytest.mark.django_db
 def test_every_callable_of_a_kernel_service_is_handed_the_view_s_dict() -> None:
-    """The ``kwargs`` and ``input_data`` providers, both seats' context callables
-    and the service: each declaring ``call_context`` is handed the one dict, and
-    what the first keeps there the last reads."""
+    """The ``kwargs`` and ``input_data`` providers."""
     seen: dict[str, Any] = {}
 
     def recording(stage: str, answer: Any = None) -> Any:
@@ -144,8 +135,7 @@ def test_a_kernel_selector_is_handed_the_view_s_dict() -> None:
     "name", ["get_service_kwargs", "get_input_serializer_context", "get_progress_reporter"]
 )
 def test_a_view_hook_taking_kwargs_alone_is_never_handed_the_call_context(name: str) -> None:
-    """The dict is offered by name only: a hook taking a bare ``**kwargs`` is
-    handed the view and the request, as it always was."""
+    """The dict is offered by name only."""
     seen: dict[str, Any] = {}
 
     def hook(self: Any, **kwargs: Any) -> dict[str, Any] | None:
@@ -186,8 +176,7 @@ _HOOKS = (
 
 @pytest.mark.django_db
 def test_every_viewset_hook_naming_the_call_context_is_handed_the_view_s_dict() -> None:
-    """Each of a viewset's hooks, the catch-all and the per-action form alike,
-    declaring ``call_context`` is handed the request's one dict."""
+    """Each of a viewset's hooks, the catch-all and the per-action form alike."""
     seen: dict[str, Any] = {}
 
     def hook(name: str) -> Any:
@@ -243,10 +232,7 @@ def _finalize(*, response: Any, call_context: dict[str, Any]) -> Any:
 def test_a_status_or_finalizer_naming_the_call_context_is_refused_when_the_view_is_built(
     attrs: dict[str, Any], view: str
 ) -> None:
-    """Neither is offered the call's context, so one declaring it is refused by
-    ``as_view()``: a standalone view's, and a viewset's over a kernel
-    ``action_specs`` entry, which ``as_view()`` asks of each entry as the
-    standalone view asks of its spec."""
+    """Neither is offered the call's context, so one declaring it is refused by ``as_view()``."""
     spec = ServiceSpec(
         service=lambda *, data: None,
         permissions=(Unrestricted(),),

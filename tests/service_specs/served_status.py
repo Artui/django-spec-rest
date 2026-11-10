@@ -1,5 +1,3 @@
-"""Helpers shared by the tests of the dual-base exceptions and the translator."""
-
 from __future__ import annotations
 
 from typing import Any
@@ -12,13 +10,7 @@ from rest_framework.views import APIView
 
 
 def served_status(error: Exception) -> int:
-    """The status Django answers when a DRF view raises ``error``.
-
-    Served through DRF's exception handler and then Django's own conversion of
-    an exception to a response, which is what wraps every view in a running
-    project. So an exception DRF's handler does not recognise is answered as a
-    project answers it, a 500, rather than escaping the test as a raise.
-    """
+    """The status Django answers when a DRF view raises ``error``."""
 
     class _Raising(APIView):
         authentication_classes: Any = []

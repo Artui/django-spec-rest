@@ -1,10 +1,3 @@
-"""``rewrite_source``: what one module's drfs declarations become, and what is left marked.
-
-Each source is a drfs module as a project holds it; the output is compared as
-text where the spelling is the claim (an import's module, a keyword's seat),
-and executed where the claim is the object a kernel spec is built with.
-"""
-
 from __future__ import annotations
 
 import textwrap

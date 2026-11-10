@@ -1,11 +1,3 @@
-"""``SelectorRetrieveView`` over a kernel ``SelectorSpec``.
-
-The spec's own ``presenter`` renders the row, with the affordance answers it
-declares; ``None`` under ``allow_none`` is a ``200`` with a JSON ``null`` body;
-the view's object permission is asked inside the dispatch, before the spec's
-preconditions and before anything is presented.
-"""
-
 from __future__ import annotations
 
 import dataclasses
@@ -116,8 +108,7 @@ class TestAllowNone:
         assert presented == []
 
     def test_a_does_not_exist_under_allow_none_is_null_too(self) -> None:
-        """The kernel's rule: a RETRIEVE's missing row is ``None`` or a
-        ``DoesNotExist`` alike, so ``allow_none`` lets either through."""
+        """The kernel's rule: a RETRIEVE's missing row is ``None`` or a ``DoesNotExist`` alike."""
         spec = _detail(
             lambda *, pk: Author.objects.get(pk=pk),
             presenter=SerializerPresenter(_NameOnly),
@@ -145,8 +136,7 @@ class TestTheViewsObjectPermission:
     def test_the_view_s_object_permission_is_asked_before_the_preconditions(
         self, ada: Author
     ) -> None:
-        """A principal refused the row is never told what a rule over it says:
-        the precondition would answer 400 had it run."""
+        """A principal refused the row is never told what a rule over it says."""
         ran: list[Any] = []
 
         def never_on_a_refused_row(*, instance: Author) -> None:
@@ -169,8 +159,7 @@ class TestTheViewsObjectPermission:
     def test_an_anonymous_caller_refused_the_row_is_asked_to_authenticate(
         self, ada: Author
     ) -> None:
-        """DRF's own refusal leaves as it is: an unauthenticated caller with an
-        authenticator offering a challenge is answered 401, not 403."""
+        """DRF's own refusal leaves as it is."""
         spec = _detail(presenter=SerializerPresenter(_NameOnly))
         attrs = {"permission_classes": [_NotAda], "authentication_classes": [BasicAuthentication]}
         response = _get(spec, ada.pk, attrs=attrs)
@@ -178,8 +167,7 @@ class TestTheViewsObjectPermission:
         assert "WWW-Authenticate" in response
 
     def test_a_spec_declaring_no_permissions_is_still_refused(self, ada: Author) -> None:
-        """The view's check is added only beside the spec's own, so a spec
-        declaring none is still the kernel's configuration error."""
+        """The view's check is added only beside the spec's own."""
         spec = _detail(presenter=SerializerPresenter(_NameOnly), permissions=None)
         with pytest.raises(ImproperlyConfigured, match="permissions"):
             _get(spec, ada.pk, attrs={"permission_classes": [_NotAda]})
@@ -191,8 +179,7 @@ class TestTheViewsObjectPermission:
         assert _viewed(spec).permissions[1:] == spec.permissions
 
     def test_a_dead_spec_leaves_no_twin_behind(self) -> None:
-        """The weakref callback drops the entry when its spec dies, so an
-        ``id`` Python reuses is never found holding a dead spec's twin."""
+        """The weakref callback drops the entry when its spec dies."""
         spec = _detail(presenter=SerializerPresenter(_NameOnly))
         key = id(spec)
         _viewed(spec)
@@ -204,8 +191,7 @@ class TestTheViewsObjectPermission:
     def test_a_stale_entry_under_a_live_spec_s_id_is_not_its_twin(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """An entry whose weak reference names another spec, as a reused ``id``
-        would leave one, is rebuilt rather than served."""
+        """An entry whose weak reference names another spec, as a reused ``id`` would leave one."""
         spec = _detail(presenter=SerializerPresenter(_NameOnly))
         other = _detail(presenter=SerializerPresenter(_NameOnly))
         stale = _viewed(other)
@@ -260,9 +246,7 @@ def _post(*, pk: int) -> QuerySet[Post]:
 
 class TestTheViewsHooks:
     def test_get_selector_kwargs_beside_a_kernel_spec_is_refused_at_as_view(self) -> None:
-        """As on a list view: the hook never reaches a kernel spec, whose
-        keywords are its own providers', so it is refused when the view is
-        built rather than left unasked."""
+        """As on a list view: the hook never reaches a kernel spec."""
         spec = _detail(presenter=SerializerPresenter(_NameOnly))
         with pytest.raises(ImproperlyConfigured, match="_View overrides get_selector_kwargs"):
             _get(spec, 1, attrs={"get_selector_kwargs": lambda self: {"tenant": "acme"}})
@@ -385,8 +369,7 @@ class TestAMissOnTheWire:
 
 class TestGetObject:
     def test_with_a_spec_it_is_the_row_the_selector_finds(self, ada: Author) -> None:
-        """A method of the view's own asking ``get_object()`` is handed the row
-        the spec's selector finds, not one DRF's lookup would."""
+        """A ``get_object()`` call is handed the row the spec's selector finds."""
 
         def post(self: Any, request: Any, *args: Any, **kwargs: Any) -> Response:
             return Response({"found": self.get_object().name})

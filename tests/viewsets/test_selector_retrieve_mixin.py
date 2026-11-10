@@ -1,5 +1,3 @@
-"""``SelectorRetrieveMixin`` alone over ``GenericViewSet``, with a kernel ``SelectorSpec``."""
-
 from __future__ import annotations
 
 from typing import Any
@@ -68,8 +66,7 @@ def test_an_allow_none_miss_serves_a_json_null_body() -> None:
 
 
 def test_filter_backends_do_not_narrow_the_lookup() -> None:
-    """The selector is the lookup, and DRF's
-    ``filter_queryset()`` runs only inside its own ``get_object()``."""
+    """The selector is the lookup."""
     author = Author.objects.create(name="a")
     viewset = _viewset(action_specs={"retrieve": _retrieve()}, filter_backends=[_ExcludeEverything])
     assert _get(viewset, pk=author.pk).status_code == 200
@@ -87,8 +84,7 @@ def test_the_view_s_object_permission_is_asked_of_the_row() -> None:
 
 
 def test_get_object_answers_the_kernel_spec_s_row() -> None:
-    """A detail handler of the view's own reading ``get_object()`` gets the
-    row the retrieve spec finds."""
+    """A detail handler's ``get_object()`` gets the row the retrieve spec finds."""
     author = Author.objects.create(name="a")
     Author.objects.create(name="b")
 

@@ -1,14 +1,3 @@
-"""A viewset's ``get_queryset()`` override is reported where it no longer scopes a spec's rows.
-
-Under this package a write's row and a list's set are the spec's own selector's, so a
-tenant filter left in ``get_queryset()`` narrows nothing and a ``PATCH`` reaches another
-tenant's row with no error. Each case mounts through ``as_view()``, the only place the
-report is made, so a test here that fails says what a project would not be told.
-
-The message is matched by its id rather than by the warning's class, so this file still
-collects on a tree that has no such class and fails by behaviour there.
-"""
-
 from __future__ import annotations
 
 import warnings
@@ -185,11 +174,7 @@ class TestAnOverrideBesideASpecIsReported:
 
 
 class TestADiscriminatedActionServesAWrite:
-    """Neither lane that built these could see the other's type, so the pair is held here.
-
-    Each variant is a write spec, and the guard reads the wrapper rather than resolving it:
-    no request exists at ``as_view()`` to choose a variant with.
-    """
+    """Neither lane that built these could see the other's type, so the pair is held here."""
 
     @pytest.mark.parametrize(
         ("action_name", "method", "variant"),

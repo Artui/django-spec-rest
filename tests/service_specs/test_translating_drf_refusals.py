@@ -1,13 +1,3 @@
-"""``translating_drf_refusals`` changes what an author callable raises, and nothing a reader takes.
-
-An author applies it to a callable of a kernel spec. The kernel binds the call
-by the callable's signature, awaits it by its kind, and reads the keys a
-``kwargs`` provider fills off its return ``TypedDict``, resolved in the
-provider's own module. So every surface the kernel derives from a spec is
-compared with the decorator left off: a wrapper that hid ``async``-ness, the
-signature, the annotations or ``__wrapped__`` would change one of them.
-"""
-
 from __future__ import annotations
 
 import functools
@@ -242,14 +232,7 @@ def _a_partial_with_an_attribute() -> Callable[..., Any]:
 def test_a_partial_or_a_callable_object_gets_no_docstring_or_attributes(
     author: Callable[..., Any],
 ) -> None:
-    """``inspect.isfunction`` is how a reader tells a function's words from a class's.
-
-    Copying the class's docstring would make ``functools.partial`` or the
-    callable's class read as the description of this one callable, and copying
-    the attributes would stamp the wrapper with what belongs to the object.
-    Each is held apart: the docstring by ``__doc__``, the attributes by a
-    ``note`` the author carries on the instance.
-    """
+    """``inspect.isfunction`` is how a reader tells a function's words from a class's."""
     assert author.note  # ty: ignore[unresolved-attribute]
 
     wrapped = translating_drf_refusals(author)

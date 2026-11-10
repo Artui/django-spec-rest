@@ -1,11 +1,3 @@
-"""PATCH and PUT on a viewset serving kernel specs.
-
-A PATCH dispatches the spec's partial variant, a PUT the spec as declared, and
-a spec declaring ``partial=True`` takes a PUT partially too, as on
-``ServiceUpdateView``. A ``"partial_update"`` entry wins for PATCH, and PATCH
-falls back to ``"update"``.
-"""
-
 from __future__ import annotations
 
 from typing import Any

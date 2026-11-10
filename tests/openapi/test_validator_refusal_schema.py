@@ -1,17 +1,3 @@
-"""What a refused call documents against what the edge sends.
-
-A Validator's refusal is a ``400`` whose body is DRF's field errors, whichever
-seat refused: a ``SerializerValidator``, a ``DataclassValidator``, or another
-Validator raising the kernel's ``InvalidArguments``. Each test here drives the
-view, then validates the wire body against the schema the operation documents
-for that status, so a documented shape that disagrees with the edge fails.
-
-A ``422`` is a service's (or a precondition's, or a provider's) plain
-``ServiceError``, which a spec with a service can raise whether or not it has
-a Validator; it is documented where the spec declares it
-(``document_service_error`` in its ``metadata``).
-"""
-
 from __future__ import annotations
 
 import json

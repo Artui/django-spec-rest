@@ -1,5 +1,3 @@
-"""Unit tests for ``apply_response_finalizer``."""
-
 from __future__ import annotations
 
 from typing import Any

@@ -1,12 +1,3 @@
-"""A view's ``pool_seeds``: the seeds its spec's callables are resolved with, at mount and per call.
-
-A spec whose affordance condition, precondition, selector or permission check
-reads a registered seed is served by a view registering it, as a class
-attribute or as ``as_view(pool_seeds=...)``, and refused at ``as_view()`` by a
-view that does not. Each test drives a view through ``as_view()`` and reads
-the answer off the response, so each fails against a tree with no seat.
-"""
-
 from __future__ import annotations
 
 import json
@@ -133,15 +124,12 @@ class TestAnAffordanceConditionReadingASeed:
         )
 
     def test_the_as_view_keyword_outranks_the_class_attribute(self) -> None:
-        """DRF sets the keyword's value on every instance over the class's, so
-        the check reads the one the view will dispatch with."""
+        """DRF sets the keyword's value on every instance over the class's."""
         with pytest.raises(ImproperlyConfigured, match="frozen"):
             _update_view(GUARDED, pool_seeds=SEEDS).as_view(pool_seeds=DEFAULT_POOL_SEEDS)
 
     def test_a_view_hooking_the_service_s_kwargs_is_not_checked_at_as_view(self) -> None:
-        """A ``get_service_kwargs`` override exempts the view from the seed
-        check, its conditions included, so a seed it does not register is
-        met on the first request instead."""
+        """A ``get_service_kwargs`` override exempts the view from the seed check."""
         view = _update_view(GUARDED, get_service_kwargs=lambda self: {}).as_view()
         with pytest.raises(TypeError, match="frozen"):
             _patch(view, Post.objects.create(title="t").pk)
@@ -211,8 +199,7 @@ class TestASelectorReadingASeed:
         assert view(factory.get("/"), pk=str(post.pk)).data["title"] == "t"
 
     def test_a_retrieve_view_registering_it_renders_an_affordance_s_answer(self) -> None:
-        """A selector's affordance answers are asked when the row is presented,
-        with the seeds the view registers."""
+        """A selector's affordance answers are asked when the row is presented."""
         post = Post.objects.create(title="t")
         view = type(
             "_View", (SelectorRetrieveView,), {"spec": _RENDERING, "pool_seeds": SEEDS}
@@ -377,10 +364,7 @@ class TestADecoratedAction:
         assert _patch(view, Post.objects.create(title="u").pk)[0] == 409
 
     def test_a_service_action_missing_a_seed_mounts_and_fails_its_first_request(self) -> None:
-        """On DRF's own ``GenericViewSet`` nothing asks the seed check: its
-        ``as_view()`` is DRF's, so the missing seed is the request's
-        ``TypeError`` (the docs say so). A viewset built on this package's
-        mixins refuses it at ``as_view()`` (test_a_decorated_action_s_seeds)."""
+        """On DRF's own ``GenericViewSet`` nothing asks the seed check."""
 
         @service_action(GUARDED, detail=True, methods=["patch"])
         def publish(self: Any, request: Any, pk: Any = None) -> None:
@@ -447,9 +431,7 @@ class _StampedRow(PermissionCheck):
 
 class TestTheSeedsTheTargetWasCheckedWith:
     def test_are_handed_on_so_a_call_through_the_view_s_lookup_resolves_each_once(self) -> None:
-        """The update view's row is found by the kernel's ``resolve_target``, which
-        resolves the seeds its checks name; ``dispatch`` runs on those rather
-        than resolving them again."""
+        """The update view's row is found by the kernel's ``resolve_target``."""
         resolver = _CountingResolver()
         seeds: PoolSeeds = DEFAULT_POOL_SEEDS.extend(stamp=resolver)
         spec = _publish_spec(permissions=(_StampedRow(),))
@@ -466,8 +448,7 @@ class _StampedCreate(PermissionCheck):
 
 
 def test_a_create_s_check_named_seed_is_resolved_once() -> None:
-    """A create has no lookup: the seeds the prelude offered its checks are the
-    ones ``dispatch`` runs on, so the seed is not resolved again."""
+    """A create has no lookup: the prelude's seeds are the ones ``dispatch`` runs on."""
     resolver = _CountingResolver()
     spec = ServiceSpec(service=lambda: None, permissions=(_StampedCreate(),))
     attrs = {

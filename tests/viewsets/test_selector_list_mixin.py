@@ -1,13 +1,3 @@
-"""``SelectorListMixin.get_queryset`` beside the actions it does not serve.
-
-DRF's ``DjangoModelPermissions`` asks ``get_queryset()`` on every action, for
-the model whose permissions it checks. Off ``list`` the mixin answers DRF's own
-``get_queryset()`` (the viewset's ``queryset``), so a ``retrieve``, a ``PATCH``,
-a ``@selector_action`` or an OPTIONS beside a list spec answers as its own spec
-says, never the list's refusal. On ``list`` the dispatch the permission class
-asked for is the one ``list`` presents, so the list's selector runs once.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -165,9 +155,7 @@ class TestOffList:
         assert response.status_code == 200
 
     def test_get_queryset_answers_the_viewset_s_queryset(self, admin: Any) -> None:
-        """A handler of the view's own reading ``get_queryset()`` off ``list``
-        reads the viewset's ``queryset``, as on DRF's own viewset, never the
-        list spec's set."""
+        """A ``list`` handler's ``get_queryset()`` reads the viewset's ``queryset``."""
         Author.objects.create(name="a")
 
         class _ViewSet(SelectorViewSet):
@@ -181,10 +169,7 @@ class TestOffList:
         assert _call(_ViewSet, admin, "get", "names").data == []
 
     def test_drf_s_own_retrieve_reaches_the_viewset_s_rows_not_the_list_s(self) -> None:
-        """A ``retrieve`` with no spec is DRF's: its ``get_object()`` looks the
-        row up in the viewset's ``queryset``, so a row the list selector leaves
-        out is reached. Scoping kept in the list selector alone scopes the list
-        alone."""
+        """A ``retrieve`` with no spec is DRF's."""
         Author.objects.create(name="mine")
         theirs = Author.objects.create(name="theirs")
 
@@ -201,8 +186,7 @@ class TestOffList:
         assert [row["name"] for row in listed.data] == ["mine"]
 
     def test_no_queryset_is_drf_s_own_assertion(self, admin: Any) -> None:
-        """DRF's contract: ``DjangoModelPermissions`` needs a ``queryset``
-        attribute, and off ``list`` the mixin answers DRF's ``get_queryset()``."""
+        """DRF's contract: ``DjangoModelPermissions`` needs a ``queryset`` attribute."""
         author = Author.objects.create(name="a")
         viewset = _viewset(_list(), queryset=None)
         with pytest.raises(AssertionError, match="should either include a `queryset` attribute"):
@@ -237,9 +221,7 @@ class TestOnList:
         assert _call(_viewset(_DENIED), admin, "get", "list").status_code == 403
 
     def test_get_queryset_on_list_is_the_set_the_list_presents(self) -> None:
-        """Without a permission class asking first, ``get_queryset()`` on
-        ``list`` still answers the spec's set, and ``list`` presents that
-        same dispatch rather than running the selector again."""
+        """Without a permission class asking first."""
         calls: list[int] = []
 
         def counted() -> QuerySet[Author]:
@@ -257,8 +239,7 @@ class TestOnList:
         assert calls == [1]
 
     def test_a_dispatch_that_raised_is_not_kept(self) -> None:
-        """A refused dispatch keeps nothing: asked again for the same request,
-        the spec dispatches again rather than answering a stale set."""
+        """A refused dispatch keeps nothing: asked again for the same request."""
         calls: list[int] = []
 
         def flaky() -> QuerySet[Author]:
@@ -278,9 +259,7 @@ class TestOnList:
         assert calls == [1, 1]
 
     def test_the_dispatch_is_the_request_s_own(self) -> None:
-        """The one dispatch is kept for the request it answered: a view
-        instance handed a second request (DRF builds one instance per request,
-        but a test or a subclass may reuse it) dispatches again."""
+        """The one dispatch is kept for the request it answered."""
         calls: list[int] = []
 
         def counted() -> QuerySet[Author]:

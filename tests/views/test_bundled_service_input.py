@@ -1,14 +1,3 @@
-"""A kernel service spec with no Validator takes no client value for its service's own keywords.
-
-A kernel spec's arguments are what it declares: its Validator's fields, its
-target lookup's reads and its own ``reads``. A service keyword none of those
-names is the author's to fill - a view's ``get_service_kwargs``, the spec's
-``kwargs`` provider, a default - so ``DELETE {"hard": true}`` cannot set
-``hard=True`` and a create body cannot set ``is_admin``. A client's key
-naming no argument is the unknown-argument policy's: refused under
-``REJECT``, dropped under ``IGNORE``, and in neither case handed on.
-"""
-
 from __future__ import annotations
 
 from typing import Any

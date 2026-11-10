@@ -1,13 +1,3 @@
-"""The root surface: what ``django_spec_rest`` exports, and that nothing is shadowed.
-
-The package exports what it owns and nothing of the kernel's: a spec, a dispatch
-function or a refusal is imported from ``django_service_specs``. This pins the
-contract in both directions. Every exported name is *the same object* as its
-home module's, so no copy diverges, and the export list is exactly this set, so a
-kernel name creeping back into the root fails here rather than in a downstream
-import.
-"""
-
 from __future__ import annotations
 
 import importlib
@@ -108,21 +98,7 @@ def test_a_name_the_kernel_owns_is_not_exported(kernel_name: str) -> None:
 
 
 def test_no_export_is_shadowed_by_its_own_submodule() -> None:
-    """Every re-exported name resolves to a value, never to a module object.
-
-    **This hazard is real and has already been hit once.** ``import pkg.mod``
-    binds ``mod`` as an attribute of ``pkg``, so a package ``__init__`` that
-    does ``from pkg.mod import mod`` (function and module sharing a name — the
-    one-symbol-per-file convention makes that the *normal* case here) can have
-    its function binding overwritten by the submodule, if some *other* import
-    on a later line pulls ``pkg.mod`` in for the first time. The symptom is a
-    module where a callable was expected, at import time, far from the edit
-    that caused it.
-
-    ⇒ *an invariant maintained by a comment is maintained until someone sorts
-    the imports.* This asserts it for every export in every package instead, so
-    a future reordering fails here rather than downstream.
-    """
+    """Every re-exported name resolves to a value, never to a module object."""
     packages = [
         "django_spec_rest",
         "django_spec_rest.openapi",

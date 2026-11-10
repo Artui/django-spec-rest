@@ -1,10 +1,3 @@
-"""Every reader of an action's spec, and the wrapper left unresolved: one test each.
-
-No request has chosen a variant when these read it, so a reader that ran the
-discriminator, or read a spec's field off the wrapper, fails here. The
-discriminator below raises to hold that: asked at all, the test ends in it.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -312,13 +305,7 @@ CASES = {
 def test_options_shows_exactly_the_variants_whose_write_is_not_refused_first(
     case: str, body: bytes
 ) -> None:
-    """A caller shown no variant is refused whatever it sends; one shown any is told its 400.
-
-    The discriminated form of test_a_refused_caller_whatever_the_body's
-    test_options_hides_a_method_exactly_when_its_write_is_refused_first, each
-    caller choosing a variant it is shown: the incomplete body's 400 is that
-    variant's validator's and the unparseable body's the discriminator's read.
-    """
+    """A caller shown no variant is refused whatever it sends; one shown any is told its 400."""
     checks, username, chosen, shown = CASES[case]
     first, second = checks()
     user = None if username is None else User.objects.create(username=username)

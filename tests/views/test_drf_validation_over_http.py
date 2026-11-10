@@ -1,20 +1,3 @@
-"""Over HTTP, a lenient ``SerializerValidator`` answers a view's input as DRF's serializer does.
-
-The kernel checks a call's arguments against the Parameters a spec declares
-before its Validator runs, which is right for a caller that sends typed JSON
-and wrong for a browser or a form: DRF's fields take ``"true"`` and ``1`` for a
-boolean, ``123`` for a string, an HTML checkbox's ``"on"``, an empty string for
-an optional field in a form, and an unchecked box's absence as ``False``, and
-DRF answers every field's refusal at once in its own words. A kernel spec
-whose Validator is ``SerializerValidator(..., lenient=True)`` declares each
-field by name alone, so the kernel's check passes every value through and the
-serializer answers it; each expectation here is what a bare DRF serializer
-answers for the same body, on whichever DRF is installed.
-
-A Validator that is not lenient holds the body to its declared types, as every
-typed transport does: a JSON ``"true"`` is a string there.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -75,8 +58,7 @@ def _view(
     view_attrs: dict[str, Any] | None = None,
     **spec: Any,
 ) -> Any:
-    """A create view over a kernel spec, with no permission classes of the view's own.
-    ``view_attrs`` are the view's own overrides, a hook among them."""
+    """A create view over a kernel spec, with no permission classes of the view's own."""
     served = ServiceSpec(
         **{"service": _rows if spec.get("many") else _echo, **spec},
         permissions=_OPEN,
@@ -221,12 +203,7 @@ def test_a_bulk_row_refusal_is_drf_s_own() -> None:
 def test_a_single_call_body_that_is_no_object_is_refused(
     body: Any, served: bytes, spec: Any
 ) -> None:
-    """The edge refuses a body that is no object as a whole,
-    a ``400`` in the kernel's words, before any serializer is asked, rather than
-    DRF's ``{"non_field_errors": ["Invalid data. Expected a dictionary, but got
-    list."]}``; the answer is the ``detail`` mapping below, pinned as served.
-    An ``input_data`` provider's keys have no object to go over, and the body is
-    still refused rather than raising."""
+    """The edge refuses a body that is no object as a whole, a ``400`` in the kernel's words."""
     response = _view(_Lenient, **spec)(_request(body, "json"))
     response.render()
 
@@ -258,11 +235,7 @@ def test_a_validator_that_is_not_lenient_keeps_the_kernel_s_typed_check() -> Non
 def test_a_json_field_s_refusal_is_worded_by_the_kernel(
     body: dict[str, Any], served: bytes
 ) -> None:
-    """The wording ``docs/moving-from-drfs.md`` tells a client to match on, pinned as
-    served over the whole payload, so a kernel rewording fails here and not on the
-    page: the kernel's ``Enter a valid date.`` is not DRF's ``Date has wrong
-    format...``, nor ``Expected a string.`` anything DRF says of a number (DRF's
-    ``CharField`` takes it)."""
+    """The wording ``docs/moving-from-drfs.md`` tells a client to match on."""
     response = _view(_Typed, lenient=False)(_request(body, "json"))
     response.render()
 
@@ -296,11 +269,7 @@ def test_a_json_field_s_refusal_is_worded_by_the_kernel(
 def test_a_bulk_body_that_is_no_list_is_refused_under_the_many_argument(
     body: Any, answer: tuple[str, str], served: bytes
 ) -> None:
-    """The edge hands a ``many`` spec's body to the kernel under
-    its ``many_argument`` as sent, so the kernel's shape check refuses it there, in
-    its words and with DRF's code, rather than as DRF's list serializer's
-    ``non_field_errors`` (``Expected a list of items but got type "dict".``,
-    ``No data provided``). The wire is pinned as served."""
+    """The edge hands a ``many`` spec's body to the kernel under its ``many_argument`` as sent."""
     request = (
         _factory.generic("POST", "/", "null", content_type="application/json")
         if body is None
@@ -343,11 +312,7 @@ def _decline_the_title() -> _OwnsTheTitle:
 
 @pytest.mark.parametrize("fmt", ["json", "multipart"])
 def test_a_declined_provider_owned_field_is_absent(fmt: str) -> None:
-    """A key the spec's typed ``input_data`` provider is annotated
-    to fill is the provider's alone, so declining it leaves it absent rather than
-    the client's, as the kernel answers it for a declared field (the edge's module
-    docstring). Absent from a required field,
-    the serializer refuses the call."""
+    """A key the typed ``input_data`` provider fills is the provider's alone, never the client's."""
     response = _view(_TitleIn, lenient=False, input_data=_decline_the_title)(
         _request({"title": "client"}, fmt)
     )
@@ -397,9 +362,6 @@ class _RepeatedIn(serializers.Serializer):
 @pytest.mark.parametrize(
     "lenient",
     [
-        # A lenient field is declared ``any``, which ``flat_arguments`` reads
-        # as the last value a repeated key carries; the serializer reads the
-        # request's ``QueryDict`` itself, so it takes every value.
         pytest.param(True, id="lenient"),
         pytest.param(False, id="typed"),
     ],
@@ -411,8 +373,6 @@ def test_a_form_body_s_repeated_keys_reach_the_serializer_whole(lenient: bool) -
     response = _view(_RepeatedIn, lenient=lenient)(_request(body, "multipart"))
 
     assert response.status_code == 204, response.data
-    # ``MultipleChoiceField`` answers a ``set`` on DRF 3.14 and a ``list`` on
-    # current DRF, so only the values chosen are compared.
     assert {**SEEN["data"], "flags": sorted(SEEN["data"]["flags"])} == {
         "tags": ["a", "b"],
         "flags": ["x", "y"],
@@ -436,7 +396,6 @@ def test_a_hooks_none_fills_a_required_nullable_field_the_client_omitted(fmt: st
     )(_request({"tags": ["a"]}, fmt))
 
     assert response.status_code == 204, response.data
-    # A form body reads an absent multiple choice as none chosen, as DRF does.
     chosen = {"flags": []} if fmt == "multipart" else {}
     data = SEEN["data"]
     assert {**data, **({"flags": sorted(data["flags"])} if "flags" in data else {})} == {
@@ -472,9 +431,7 @@ class _ReadsTheRequest(serializers.Serializer):
 def test_a_wrong_shaped_body_is_refused_for_a_serializer_needing_the_request(
     many: bool, body: Any, served: bytes
 ) -> None:
-    """The shape is refused before any field is read, so a serializer that cannot be
-    built without the call's request still answers the shape's refusal over a live
-    view. The words are the kernel's (see the two tests above)."""
+    """The shape is refused before any field is read."""
     request = (
         _factory.generic("POST", "/", "null", content_type="application/json")
         if body is None

@@ -1,35 +1,3 @@
-"""A ``many`` spec's refusal of its rows is a tree keyed by the argument, its rows by index.
-
-The kernel refuses the list under the argument that carries it (``items``, or
-the spec's ``many_argument``) and each invalid row under its ``int`` index, a
-valid row having no entry. DRF below 3.18 reports a list with an empty entry
-per valid row and 3.18 a mapping of the invalid rows' indexes; both reach a
-client as the latter. The tree is the dual-base ``DRFInvalidArguments``, so it is
-DRF's ``ValidationError`` too, and renders as JSON with the indexes as string
-keys.
-
-A refusal of a read beside the rows keeps its own key beside the argument's
-rather than being unwrapped into a bare list.
-
-**What a client sees.** A ``many`` view answers three things in the kernel's
-shape rather than DRF's list serializer's, and the tests assert each:
-
-* A refusal of the rows is answered under the argument, ``{"items": {"1": {...}}}``,
-  rather than as the bare tree, ``{"1": {...}, "3": {...}}``.
-* A body that is no list is ``{"items": ["Expected an array."]}``, rather than
-  ``{"non_field_errors": ["Expected a list of items but got type \"dict\"."]}``.
-* For a body that is a list holding a row that is no object, rather than
-  ``{"1": {"non_field_errors": ["Invalid data. Expected a dictionary, but got
-  str."]}}``, the kernel answers ``{"items": {"1": {"non_field_errors": ["Expected an
-  object."]}}}``.
-
-Unwrapping the first two to DRF's shape would need the spec inside
-``answering_refusals``. The third is the kernel's own wording for a row that is no
-object, against DRF's; the bulk body as a whole is awaiting an owner decision
-(the kernel's wording and nesting, or DRF's), and until it is made the tests pin the
-kernel's answer.
-"""
-
 from __future__ import annotations
 
 from typing import Any

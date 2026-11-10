@@ -1,13 +1,3 @@
-"""The schema under the setup ``docs/openapi.md`` gives a project.
-
-There, DRF's ``DEFAULT_SCHEMA_CLASS`` stays drf-spectacular's ``AutoSchema`` and
-``enable_openapi()`` sets ``ServiceAutoSchema`` on the library's view classes.
-The rest of the suite points the default at ``ServiceAutoSchema`` itself, so it
-cannot see what the docs warn of: the order a class-level ``@extend_schema``
-meets ``enable_openapi()`` in, and a viewset of the project's own that inherits
-none of the library's classes.
-"""
-
 from __future__ import annotations
 
 import dataclasses
@@ -78,8 +68,7 @@ class TestAClassLevelExtendSchema:
     def test_decorated_before_enable_openapi_documents_nothing_of_the_spec(self) -> None:
         view = _decorated_view()
         enable_openapi()
-        # drf-spectacular's own reading, where a declared mapping is the
-        # operation's every response: neither the spec's success nor its 400.
+        # drf-spectacular's own reading, where a declared mapping is the operation's every response.
         assert _responses(path("v/", view.as_view())) == {"/v/": {"404"}}
 
     def test_decorated_after_enable_openapi_documents_the_spec(self) -> None:
@@ -100,9 +89,7 @@ def _method_decorated_view() -> type:
 
 
 def test_a_method_level_extend_schema_has_no_order() -> None:
-    # Decorated under the documented default, which the method's schema
-    # subclasses: drf-spectacular lays it over the class's schema when it
-    # generates, so ``enable_openapi()`` may run after the decorator.
+    # Decorated under the documented default, which the method's schema subclasses.
     view = _method_decorated_view()
     enable_openapi()
     assert _responses(path("v/", view.as_view())) == {"/v/": {"201", "400", "404"}}
@@ -221,10 +208,7 @@ def _on_a_row() -> ServiceSpec:
 def test_a_mixin_listed_first_documents_its_spec_with_no_schema_of_its_own(
     mixin: type, action: str, spec: Any
 ) -> None:
-    """Documented as with ``schema = ServiceAutoSchema()``, and not as drf-spectacular reads it.
-
-    Fails if ``enable_openapi()`` leaves the mixin without the package's schema.
-    """
+    """Documented as with ``schema = ServiceAutoSchema()``, and not as drf-spectacular reads it."""
     enable_openapi()
     attrs = {"queryset": Author.objects.all(), "action_specs": {action: spec}}
     composed = type("_Composed", (mixin, GenericViewSet), attrs)
@@ -239,11 +223,7 @@ class _ProjectSchema(ServiceAutoSchema):
 
 
 def test_a_mixin_listed_first_overrides_a_project_s_default_schema_class() -> None:
-    """The mixin's ``ServiceAutoSchema`` wins over the default; a class's ``schema`` keeps its own.
-
-    Fails if ``enable_openapi()`` leaves the mixin without a schema: the
-    composed viewset would then be documented by the project's default class.
-    """
+    """The mixin's ``ServiceAutoSchema`` wins over the default."""
     enable_openapi()
     attrs = {"queryset": Author.objects.all(), "action_specs": {"create": _spec()}}
     default = {"DEFAULT_SCHEMA_CLASS": f"{__name__}._ProjectSchema"}

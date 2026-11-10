@@ -1,17 +1,3 @@
-"""A key a typed ``kwargs`` provider fills is never the client's, on the kernel route.
-
-The kernel decides most of that before a request arrives: a key that names a
-``SerializerValidator`` parameter (a list, dict, nested, or required field) is refused when the
-spec's parameters are assembled, because the provider's values reach the
-service's pool and never the Validator, and ``input_data`` is the seat that
-fills a field. So those shapes assert the refusal.
-
-What a provider may still own is a key no field is named for, a ``source``:
-whether the client's value reaches it is held by
-``test_a_typed_provider_owning_a_wire_name``, and ``input_data`` filling the
-field it comes from, and a kernel call inside the service, are held here.
-"""
-
 from __future__ import annotations
 
 from typing import Any, TypedDict, cast
@@ -103,9 +89,7 @@ def _declines_the_source() -> _OwnsTheSource:
 
 @FORMATS
 def test_input_data_for_the_field_of_a_declined_source_reaches_its_parameter(fmt: str) -> None:
-    """``input_data`` is the server's, so its value for the field is the
-    ``source``'s, in the parameter and in ``data``, though the provider owning
-    the ``source`` declined it."""
+    """``input_data`` is the server's, so its value for the field is the ``source``'s."""
     seen: dict[str, Any] = {}
 
     def service(*, data: Any, org: Any = "DEFAULT") -> None:
@@ -127,8 +111,7 @@ def test_input_data_for_the_field_of_a_declined_source_reaches_its_parameter(fmt
 
 
 def test_a_kernel_call_inside_the_service_takes_none_of_the_outer_calls_server_values() -> None:
-    """The value the outer call's ``input_data`` put is that call's: a spec the
-    service dispatches through the kernel validates what its own caller sent."""
+    """The value the outer call's ``input_data`` put is that call's."""
     seen: dict[str, Any] = {}
 
     def inner(*, data: Any, org: Any = "DEFAULT") -> None:
@@ -155,9 +138,7 @@ def test_a_kernel_call_inside_the_service_takes_none_of_the_outer_calls_server_v
 
 
 def test_a_kernel_call_inside_the_service_keeps_its_own_values() -> None:
-    """The keys the outer call's provider owns are that call's: a spec the
-    service dispatches through the kernel hands its own parameter of that name
-    the value its own caller sent."""
+    """The keys the outer call's provider owns are that call's."""
     seen: dict[str, Any] = {}
 
     def inner(*, data: Any, org: Any = "DEFAULT") -> None:

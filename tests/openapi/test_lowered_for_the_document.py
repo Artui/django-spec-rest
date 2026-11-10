@@ -1,12 +1,3 @@
-"""``lowered_for_the_document``: a kernel schema, written for the document's OpenAPI version.
-
-The kernel's schemas are JSON Schema. OpenAPI 3.0, drf-spectacular's default
-``OAS_VERSION``, is not: it has no ``const`` and no type list, so ``nullable``
-and ``enum`` say what the kernel says with a type list, an ``anyOf`` or a
-``oneOf``. Held end to end, through a whole document, by
-test_the_document_validates.
-"""
-
 from __future__ import annotations
 
 import copy
@@ -151,10 +142,7 @@ class TestTheNullableType:
         ],
     )
     def test_any_other_type_is_as_it_was(self, kind: Any) -> None:
-        # ``isinstance`` (a string is not a list), and each operand of the
-        # list's reading: the length of two (["string"] is not nullable), and
-        # exactly one type beside the null (["string", "integer"] has no null,
-        # and ["null", "null"] no type).
+        # ``isinstance`` (a string is not a list), and each operand of the list's reading.
         assert lowered_for_the_document({"type": kind}) == {"type": kind}
 
     def test_a_schema_with_no_type_is_as_it_was(self) -> None:
@@ -174,9 +162,7 @@ class TestTheConstants:
     def test_a_null_is_a_constant_of_null_and_a_typeless_schema_gains_nullable(
         self, nothing: dict[str, Any]
     ) -> None:
-        # No ``type`` beside the choices: the schema admits null only through
-        # the ``enum`` the null is listed in, which 3.0 reads with ``nullable``.
-        # Without the ``"type" not in node`` conjunct this has no ``nullable``.
+        # No ``type`` beside the choices.
         schema = {"anyOf": [{"const": "a"}, nothing]}
         assert lowered_for_the_document(schema) == {"nullable": True, "enum": ["a", None]}
 
@@ -184,9 +170,7 @@ class TestTheConstants:
     def test_a_null_choice_does_not_make_a_plain_type_nullable(
         self, nothing: dict[str, Any]
     ) -> None:
-        # The ``type`` refuses null, so the field does: ``nullable`` would tell
-        # a client a value is fine that the server answers with 400. Without
-        # the ``"type" not in node`` conjunct this gains ``nullable``.
+        # The ``type`` refuses null, so the field does.
         schema = {"type": "string", "anyOf": [{"const": "a"}, nothing]}
         assert lowered_for_the_document(schema) == {"type": "string", "enum": ["a", None]}
 
@@ -209,8 +193,6 @@ class TestTheConstants:
     @pytest.mark.parametrize("typed", [{"type": "integer"}, {}])
     def test_constants_without_a_null_do_not_make_it_nullable(self, typed: dict[str, Any]) -> None:
         # A constant of ``false`` or ``0`` is no null: the test is ``is None``.
-        # The typeless schema is the one the ``type`` conjunct lets through, so
-        # only the null operand keeps it non-nullable.
         schema = {**typed, "anyOf": [{"const": 0}, {"const": 1}]}
         assert lowered_for_the_document(schema) == {**typed, "enum": [0, 1]}
 
@@ -224,15 +206,13 @@ class TestTheConstants:
         }
 
     def test_an_empty_one_stays(self) -> None:
-        # ``all`` over nothing is true: without the emptiness test an empty
-        # ``anyOf`` becomes an empty ``enum``, which admits no value.
+        # ``all`` over nothing is true.
         for keyword in ("anyOf", "oneOf"):
             schema = {"type": "string", keyword: []}
             assert lowered_for_the_document(schema) == schema
 
     def test_one_holding_anything_but_constants_stays_and_its_members_are_walked(self) -> None:
-        # ``all``, not ``any``: the constant alone would pass, the object does
-        # not, and an ``enum`` of the constants would refuse the object.
+        # ``all``, not ``any``: the constant alone would pass, the object does not.
         schema = {
             "anyOf": [
                 {"const": "a", "title": "A"},
@@ -332,9 +312,7 @@ class TestWhatIsNeverRewritten:
         }
 
     def test_a_property_named_for_a_keyword_is_a_property(self) -> None:
-        # ``properties`` is a mapping of names to schemas, not a schema: a
-        # property called ``type``, ``items`` or ``anyOf`` is read as the
-        # schema it holds and its name is left alone.
+        # ``properties`` is a mapping of names to schemas, not a schema: a property called ``type``.
         schema = {
             "type": "object",
             "properties": {

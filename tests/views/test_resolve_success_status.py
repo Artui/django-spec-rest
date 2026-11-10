@@ -1,5 +1,3 @@
-"""Unit tests for ``resolve_success_status``."""
-
 from __future__ import annotations
 
 from typing import Any
@@ -46,8 +44,7 @@ def test_callable_with_var_keyword_gets_whole_pool() -> None:
 
 
 def test_callable_tolerates_absent_pool_keys() -> None:
-    # ``instance`` is absent (create / bulk path); a callable declaring it with
-    # a default still resolves.
+    # ``instance`` is absent (create / bulk path).
     def status(*, result: Any, instance: Any = None) -> int:
         return 201 if instance is None else 200
 

@@ -1,14 +1,3 @@
-"""A checked box sends ``on``; a kernel ``FormValidator`` over a form body reads it as ``True``.
-
-``coerce_flat`` spells a boolean as ``true``, ``false``, ``1`` or ``0`` alone, so
-without the edge's reading a form body's ``on`` for a parameter declared
-``boolean`` (a ``forms.BooleanField``, or the ``<name>-clear`` a file field's
-clearable input declares) is refused. The reading is a form body's alone: a
-query string and a JSON body keep the kernel's four spellings. A
-``SerializerValidator`` declares each form field ``any`` and so never meets it.
-Every case drives a real view.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -153,11 +142,7 @@ def test_a_query_string_s_on_is_still_refused() -> None:
 
 
 def test_a_query_string_s_on_beside_a_form_body_is_still_refused() -> None:
-    """Fails with the query string's ``on`` as ``True``, were ``_checked_boxes`` handed the scope.
-
-    ``flag`` is a target read, so the body's own ``flag`` is dropped and the query
-    string's is what scopes the call: typed by its client, as it is on a ``GET``.
-    """
+    """Fails with the query string's ``on`` as ``True``."""
     _SEEN.clear()
     spec = ServiceSpec(
         service=_service,

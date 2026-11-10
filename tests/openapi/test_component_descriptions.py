@@ -1,11 +1,3 @@
-"""Every component the package registers is described for a client, not for this package's reader.
-
-drf-spectacular gives a serializer's component its class docstring as the
-``description`` (the first one up the MRO), so a docstring written for the API
-reference would publish mkdocs cross-reference syntax and the package's private
-names in every generated document.
-"""
-
 from __future__ import annotations
 
 import re
@@ -56,11 +48,7 @@ def _owner() -> _Owned:
 
 
 def _view(responses: dict[int, Any] | None = None) -> type:
-    """A create view documenting every component a spec does: a 400, a 401, a 403 and a 422.
-
-    Its body is ``TaskLessOwner``, derived from ``TaskSerializer``, since ``input_data``
-    fills ``owner``.
-    """
+    """A create view documenting every component a spec does: a 400, a 401, a 403 and a 422."""
     spec = ServiceSpec(
         service=lambda **_: None,
         permissions=(DRFPermissionCheck([AllowAny]),),
@@ -82,12 +70,7 @@ def _view(responses: dict[int, Any] | None = None) -> type:
 
 
 def _registered() -> dict[str, dict[str, Any]]:
-    """The components of a generated document that this package registered, by name.
-
-    Each component whose object is a class of the package's, and the body
-    derived from a project's serializer, which drf-spectacular's serializer
-    metaclass places in its own module.
-    """
+    """The components of a generated document that this package registered, by name."""
     enable_openapi()
     patterns: list[URLPattern] = [
         path("spec/", _view().as_view()),
@@ -117,8 +100,7 @@ def _registered() -> dict[str, dict[str, Any]]:
 
 def test_no_component_the_package_registers_describes_itself_to_its_reader() -> None:
     registered = _registered()
-    # Sized so every kind is read: the spec's refusals, the exported
-    # serializers, and a body derived from the author's serializer.
+    # Sized so every kind is read: the spec's refusals, the exported serializers.
     assert set(registered) == {
         "ActionUnavailable",
         "NotAuthenticated",

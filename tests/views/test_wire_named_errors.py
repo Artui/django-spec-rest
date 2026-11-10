@@ -1,22 +1,3 @@
-"""A refusal comes back under the names the request used, not the model's.
-
-A service raises about the model, because the model is what it was handed. The
-request may have called those fields something else -- a serializer field
-declares ``source=`` precisely to let the two diverge -- and DRF resolves
-``source=`` while building ``validated_data``, at every depth, so by the time
-the service runs the wire name is gone from the payload entirely. The
-``SerializerValidator`` is the one thing still holding both vocabularies.
-
-These assert, over a kernel spec served by a view, that the rename reaches
-every depth and that it leaves alone what it cannot name.
-
-The kernel route does not rename yet: ``answering_refusals`` is not told which
-serializer the call validated with, and the kernel route has no step renaming a
-refusal by a serializer's ``source=``. Every test that needs the rename is a
-strict ``xfail`` naming that, so the day the edge hands its validator's
-serializer over and renames by it, they fail as XPASS until the marks come off.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -118,9 +99,7 @@ class TestTheRenameReachesEveryDepth:
 
     @_NOT_RENAMED
     def test_a_collection_keyed_by_index_is_renamed_inside_its_rows(self) -> None:
-        # DRF's other form for a collection, and the one it defaults to from
-        # 3.18: an ``int`` key is a row's position, never a field, so the row
-        # beneath it is named by the same serializer the list form's rows are.
+        # DRF's other form for a collection, and the one it defaults to from 3.18.
         spec = _spec(_refuse({"sections": {1: {"title": ["Too rude."]}}}), _CatalogInput)
 
         response = _served(spec, {"name": "c", "chapters": [{"heading": "a"}, {"heading": "b"}]})

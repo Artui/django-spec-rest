@@ -1,5 +1,3 @@
-"""Tests for views/mutation/map_service_error.py."""
-
 from __future__ import annotations
 
 from django_service_specs.services.action_unavailable import ActionUnavailable
@@ -53,11 +51,7 @@ class TestMapServiceError:
         assert not isinstance(exc.detail, dict)
 
     def test_a_subclass_of_a_member_keeps_that_members_status(self) -> None:
-        """The whole point of the members: a project names its own rule.
-
-        ``class SlotTaken(ServiceConflict)`` is how this is meant to be used, and
-        the mapping has to follow the class rather than the exact type.
-        """
+        """The whole point of the members: a project names its own rule."""
 
         class SlotTaken(ServiceConflict):
             default_message = "That slot is taken."
@@ -71,10 +65,7 @@ class TestMapServiceError:
         assert exc.status_code == drf_status.HTTP_422_UNPROCESSABLE_ENTITY
 
     def test_the_detail_keeps_drf_s_shape_and_the_schema_is_kept_as_raised(self) -> None:
-        """Every leaf of ``.detail`` is an ``ErrorDetail``, as on any other DRF
-        exception, so a configured ``EXCEPTION_HANDLER`` walking it for codes
-        still can. The schema as raised rides on ``.schema`` for whoever renders
-        it: the package's views put it back in the body, a direct caller reads it."""
+        """Every leaf of ``.detail`` is an ``ErrorDetail``, as on any other DRF exception."""
         schema = {"confirmed": {"type": "boolean", "default": False}, "batches": {"maximum": 3}}
         exc = map_service_error(AdditionalInputRequired("Confirm to proceed.", schema=schema))
 
@@ -97,12 +88,7 @@ class TestMapServiceError:
         assert exc.schema["confirmed"]["default"] is False  # ty: ignore[unresolved-attribute]
 
     def test_the_generic_branch_is_last(self) -> None:
-        """Every member is a ``ServiceError``, so the order *is* the mapping.
-
-        A generic branch reached first would answer 422 to all of them — the same
-        trap a transport's own handler has, and the reason each member's docstring
-        says to match before the generic one.
-        """
+        """Every member is a ``ServiceError``, so the order *is* the mapping."""
         statuses = {
             type(error).__name__: map_service_error(error).status_code
             for error in (ServiceNotFound(), ServiceConflict(), ServiceError())

@@ -1,11 +1,3 @@
-"""``ServiceUpdateView`` over a kernel spec.
-
-A kernel spec's target is its own target selector's: the kernel refuses a
-``target=`` handed to a spec declaring none, so the view never asks
-``get_object()`` for one, and asks the view's object permissions of the row the
-spec's lookup finds before the service runs, as ``get_object()`` would.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -116,8 +108,7 @@ class TestServiceUpdateView:
         assert response.data["bio"][0].code == "required"
 
     def test_patch_partial_update(self) -> None:
-        """A ``PATCH`` dispatches the spec's partial twin, so a field it leaves
-        out is no refusal."""
+        """A ``PATCH`` dispatches the spec's partial twin."""
         author = Author.objects.create(name="orig")
         response = _UpdateView.as_view()(
             factory.patch("/", {"name": "new"}, format="json"), pk=author.pk
@@ -142,9 +133,7 @@ class TestServiceUpdateView:
         assert author.name == "new"
 
     def test_a_patch_over_a_dataclass_validates_every_field(self) -> None:
-        """A dataclass is built from every field, so it cannot take a partial
-        call: a ``PATCH`` to it is validated as a ``PUT`` is, and a field it
-        leaves out is the client's ``400`` rather than a server error."""
+        """A dataclass is built from every field, so it cannot take a partial call."""
 
         @dataclass
         class _Name:
@@ -171,8 +160,7 @@ class TestServiceUpdateView:
     def test_a_patch_dispatches_the_one_partial_variant_of_its_spec(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Every ``PATCH`` hands the kernel the spec's partial variant as
-        ``kernel_spec_variant`` holds it, so there is one partial twin per spec."""
+        """Every ``PATCH`` hands the kernel the spec's partial variant."""
         handed: list[Any] = []
         dispatched = utils.dispatch_kernel_spec
 
@@ -187,8 +175,6 @@ class TestServiceUpdateView:
             view(factory.patch("/", {"name": "new"}, format="json"), pk=author.pk)
         variant = kernel_spec_variant(_UPDATE, partial=True)
         assert variant is not _UPDATE
-        # By identity: two equal twins would pass ``==``, a frozen dataclass
-        # comparing by its fields.
         assert len(handed) == 2
         assert all(spec is variant for spec in handed)
 
@@ -211,8 +197,7 @@ class TestServiceUpdateView:
 
 class TestTheTarget:
     def test_a_put_s_own_row_is_asked_of_the_view_once(self) -> None:
-        """The view's object permission is asked of the row the spec's lookup
-        found, before the service runs, and the lookup runs once."""
+        """The view's object permission is asked of the row the spec's lookup found."""
         asked: list[Any] = []
 
         class _DenyObject(BasePermission):
@@ -234,9 +219,7 @@ class TestTheTarget:
     def test_the_view_s_object_permission_answers_before_an_affordance(
         self, allowed: bool, status: int
     ) -> None:
-        """A caller the view denies the row is refused before an affordance
-        answers for it, so it learns nothing of the row's state; one the view
-        allows meets the affordance's ``409``."""
+        """A caller the view denies the row is refused before an affordance answers for it."""
 
         class _Object(BasePermission):
             def has_object_permission(self, request: Any, view: Any, obj: Any) -> bool:
@@ -255,8 +238,7 @@ class TestTheTarget:
         assert response.status_code == status
 
     def test_a_row_the_view_resolved_is_looked_up_once(self) -> None:
-        """A caller handing the row it resolved is trusted with it: the spec's
-        lookup does not run again."""
+        """A caller handing the row it resolved is trusted with it."""
         author = Author.objects.create(name="orig")
 
         class _Update(APIView):
@@ -280,9 +262,7 @@ class TestTheTarget:
     def test_a_detail_view_s_kernel_spec_with_no_target_selector_is_refused_at_as_view(
         self, base: type
     ) -> None:
-        """A kernel spec never asks the view's ``get_object()``, so a spec
-        naming no target would run on no row. It is refused when the view is
-        built, before ``check_seeds`` answers anything of it."""
+        """A kernel spec never asks the view's ``get_object()``."""
 
         class _View(base):
             queryset = Author.objects.all()
@@ -296,9 +276,7 @@ class TestTheTarget:
         assert "which nothing fills" not in message
 
     def test_a_kernel_spec_with_no_target_selector_is_handed_no_row(self) -> None:
-        """Where nothing refused the spec when the view was built, the view's
-        ``get_object()`` is still never asked: the kernel would refuse the row
-        it found as a ``target=`` to a spec declaring no target selector."""
+        """Where nothing refused the spec when the view was built."""
 
         class _View:
             def get_object(self) -> Any:
@@ -364,9 +342,7 @@ class TestWhatAnUpdatePresents:
         assert response.data is None
 
     def test_an_output_selector_s_none_is_its_own_beside_the_spec_s_presenter(self) -> None:
-        """With the presenter on the service spec rather than the re-read, a
-        re-read finding nothing is still no content: the target is presented
-        in place of a ``None`` only where no re-read owns it."""
+        """With the presenter on the service spec rather than the re-read."""
         author = Author.objects.create(name="orig")
         spec = ServiceSpec(
             service=lambda *, instance: None,
@@ -400,9 +376,7 @@ class TestWhatAnUpdatePresents:
         assert response.data == {"id": author.pk, "name": "new"}
 
     def test_renders_fresh_related_data_after_the_service_mutates_a_relation(self) -> None:
-        """A target resolved with ``posts`` prefetched, then a row added through
-        the ``Post`` manager, which Django does not self-invalidate: presenting
-        the target in place reads the relation as it now is."""
+        """A target resolved with ``posts`` prefetched."""
         author = Author.objects.create(name="Ada")
         Post.objects.create(title="old", author=author)
 
@@ -434,8 +408,7 @@ class TestWhatAnUpdatePresents:
 
 
 def test_a_principal_reaches_the_lookup_s_permission_check() -> None:
-    """The spec's own permissions are the kernel's, asked of the row its lookup
-    found; a refusal there is DRF's 403."""
+    """The spec's own permissions are the kernel's, asked of the row its lookup found."""
 
     class _OwnerOnly(PermissionCheck):
         def has_permission(self, principal: Any, spec: Any) -> bool:

@@ -1,12 +1,3 @@
-"""The refusals a project configures are the project's to declare, as ``docs/openapi.md`` shows.
-
-The schema documents the 403 and 401 a spec's own checks answer. A view's
-``permission_classes`` and its authenticators refuse before the spec is asked,
-and a principal who cannot act is refused on an ``Unrestricted`` spec too; the
-package documents none of these, and a project declares them with
-``@extend_schema(responses=...)``, beside what the spec documents.
-"""
-
 from __future__ import annotations
 
 import json
@@ -86,7 +77,6 @@ def test_the_declared_refusals_document_what_the_view_sends(user: Any, status: i
     response.render()
     assert response.status_code == status
     documented = responses[str(status)]["content"]["application/json"]["schema"]
-    # The package's own components, which the recipe declares.
     component = "NotAuthenticated" if status == 401 else "PermissionDenied"
     assert documented == {"$ref": f"#/components/schemas/{component}"}
     jsonschema.validate(

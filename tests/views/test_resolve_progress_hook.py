@@ -1,5 +1,3 @@
-"""Tests for ``resolve_progress_hook`` — the view's own progress sink."""
-
 from __future__ import annotations
 
 from typing import Any
@@ -15,8 +13,7 @@ def _sink(_: Any) -> None: ...
 
 
 def test_a_view_offering_nothing_yields_none() -> None:
-    # Which leaves the seed as ``null_progress``: opting out is the default and
-    # costs a view exactly nothing.
+    # Which leaves the seed as ``null_progress``.
     assert resolve_progress_hook(_NoHooks(), None, action="create") is None
 
 

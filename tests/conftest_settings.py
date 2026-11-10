@@ -1,5 +1,3 @@
-"""Django settings used by the test suite."""
-
 from __future__ import annotations
 
 SECRET_KEY = "test-secret-key"

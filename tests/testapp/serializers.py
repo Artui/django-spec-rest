@@ -1,5 +1,3 @@
-"""Serializers used by the view/viewset tests."""
-
 from __future__ import annotations
 
 from rest_framework import serializers

@@ -1,15 +1,3 @@
-"""The kernel's ``apresent`` over a ``SerializerPresenter``: the render step, off the event loop.
-
-A lazy queryset's first iteration and the serializer context callable's query
-are ORM work, refused on the loop. Each list case runs under ``adispatch`` and ``apresent`` from a
-coroutine, so each fails with ``SynchronousOnlyOperation`` if ``present`` ran
-on the loop instead; a single row ``adispatch`` already fetched renders either
-way, and holds only that the result is the same. With no request carried, the
-serializer still finds one, an offline request whose ``user`` is the call's
-principal.
-The passthrough cases, a spec with no presenter, are the kernel's own.
-"""
-
 from __future__ import annotations
 
 from typing import Any

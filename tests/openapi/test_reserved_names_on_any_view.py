@@ -1,15 +1,3 @@
-"""A component name the package documents a refusal by is refused on any undocumented view.
-
-``ValidationErrors``, ``PermissionDenied`` and ``NotAuthenticated`` are the
-bodies of a spec's 400, 403 and 401. drf-spectacular keeps the first component
-registered under a name and answers it for every later one with a warning only,
-so a project's own view on drf-spectacular's ``AutoSchema`` resolving a
-serializer of one of these names after the package's refusal would have its
-request and response documented by the refusal's body. Each order is driven
-for each name; only the public surface is imported, so the tests run against a
-tree without the guard.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -30,7 +18,6 @@ def _generate(*patterns: URLPattern) -> dict[str, Any]:
 
 
 class TestAReservedName:
-    # drf-spectacular walks the paths in order: "a-" resolves before "b-".
     @pytest.mark.parametrize("serializer", SERIALIZERS, ids=lambda cls: cls.__name__)
     def test_a_reserved_name_is_refused_on_drf_spectacular_s_schema(
         self, serializer: type[serializers.Serializer]
@@ -49,14 +36,9 @@ class TestAReservedName:
     def test_is_refused_when_the_project_s_view_comes_first(
         self, serializer: type[serializers.Serializer]
     ) -> None:
-        """The project's serializer first: the package's own schema refuses it, naming the class.
-
-        The registry holds the project's serializer by then, so the package
-        meets it while it documents its refusal, before the hook runs.
-        """
+        """The project's serializer first: the package's own schema refuses it, naming the class."""
         with pytest.raises(ImproperlyConfigured) as raised:
             _generate(theirs("a-theirs", serializer), ours("b-ours"))
-        # Module and all: the package exports serializers of these class names.
         assert str(raised.value).startswith(f"{serializer.__module__}.{serializer.__qualname__} ")
         assert "component_name" in str(raised.value)
 

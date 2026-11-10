@@ -1,11 +1,3 @@
-"""``ActionSerializerResolver`` beside kernel ``action_specs`` entries.
-
-A kernel spec renders through its own ``presenter``, and declares no
-``output_serializer`` for the resolver to hand DRF, so a kernel entry's action
-resolves to the view's ``serializer_class``: what a kernel spec declaring no
-presenter is rendered by.
-"""
-
 from __future__ import annotations
 
 import pytest

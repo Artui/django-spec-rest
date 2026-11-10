@@ -1,11 +1,3 @@
-"""A ``@service_action`` ``PATCH`` is validated whole, so it is documented whole.
-
-Only an update route asks the kernel for a partial call; a decorated action
-dispatches the spec as declared, so a spec declaring ``partial`` is the way to a
-partial one. Each test reads the required list off the document and off a real
-request, since the two must state one thing.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Mapping

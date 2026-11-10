@@ -1,11 +1,3 @@
-"""A ``many`` kernel spec's rows over HTTP: what reaches the service and what is refused.
-
-The kernel validates each row through the spec's
-Validator and refuses every failing row in one ``InvalidArguments`` addressed
-by the row's index under ``many_argument``. That error tree's shape is the
-refusal map's; this module holds which rows are refused and that nothing runs.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -151,8 +143,7 @@ class _OwnerAsUserRow(serializers.Serializer):
 
 
 def test_a_bulk_row_field_sourced_onto_user_keeps_its_value() -> None:
-    """The way through the two cases above: a wire name that is no seed, whose
-    ``source`` puts the value under ``user`` in the row the service is handed."""
+    """The way through the two cases above: a wire name that is no seed."""
     response = _post(_view(_OwnerAsUserRow), [{"title": "a", "owner": 3}])
     assert response.status_code == 201, response.data
     assert ran == [[{"title": "a", "user": 3}]]
@@ -173,10 +164,7 @@ class _DistinctRow(_Row):
 
 
 def test_a_lists_own_checks_judge_the_rows_the_kernel_passed() -> None:
-    """The kernel refuses the row that is no object before the Validator binds a
-    row, and the Validator binds the rows left, so the list's own ``validate()``
-    runs over them and its refusal sits beside the row's, every row keyed by the
-    index it was sent at."""
+    """The kernel refuses the row that is no object before the Validator binds a row."""
     response = _post(_view(_DistinctRow), [{"title": "a"}, 5, {"title": "a"}])
     assert response.status_code == 400
     rows = response.data["items"]
@@ -200,10 +188,7 @@ def _refused(call: Callable[..., Any]) -> None:
 
 
 def test_a_kwargs_value_named_like_a_row_field_is_refused() -> None:
-    """A ``many`` spec's ``kwargs`` provider is held to what a single-object
-    spec's is: its answer naming a row field's wire name would reach the
-    service unvalidated, beside the rows the Validator checked, so the request
-    is refused and the service never runs."""
+    """A ``many`` spec's ``kwargs`` provider is held to what a single-object spec's is."""
     _refused(post)
 
 

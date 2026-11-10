@@ -1,15 +1,3 @@
-"""``kernel_spec_variant`` over a kernel spec: the per-request ``partial`` and ``lenient``, derived.
-
-A kernel spec is dispatched as declared, so the variants a request of the DRF
-edge may still ask of it are two: a ``PATCH``'s, the spec with ``partial``
-set and relaxed by the kernel's ``relax_partial`` when it is dispatched, and a
-lenient one, its ``SerializerValidator`` declared ``lenient`` so DRF's own
-coercion answers. Both are built through the kernel's own ``derive``. Every
-other variant is a seat a kernel spec declares itself, and asking for one is
-refused. Each test reads the function through its
-public signature.
-"""
-
 from __future__ import annotations
 
 import gc
@@ -121,7 +109,6 @@ def test_each_variant_is_derived_once_per_source() -> None:
     first = kernel_spec_variant(spec, partial=True)
 
     assert kernel_spec_variant(spec, partial=True) is first
-    # Equal declarations are two sources: a Grant binds the spec by identity.
     assert kernel_spec_variant(twin, partial=True) is not first
 
 
@@ -183,13 +170,7 @@ class _Plain:
 def test_a_variant_with_nothing_to_change_is_the_spec_itself(
     spec: Any, keywords: dict[str, Any]
 ) -> None:
-    """Returned as it is and held by nothing, so no source is kept alive by its own variant.
-
-    A spec with no Validator has nothing a partial call may leave out, and the
-    kernel refuses ``partial=True`` on one, so a ``PATCH`` runs it whole. A Validator other than
-    a ``SerializerValidator`` declares what it takes as it validates it, so
-    ``lenient`` has nothing to relax. A selector spec has neither.
-    """
+    """Returned as it is and held by nothing, so no source is kept alive by its own variant."""
     assert kernel_spec_variant(spec, **keywords) is spec
     assert id(spec) not in module._VARIANTS
 
@@ -202,11 +183,7 @@ def test_a_variant_with_nothing_to_change_is_the_spec_itself(
 def test_a_partial_variant_over_a_validator_that_cannot_be_partial_is_the_spec_itself(
     validator: Any,
 ) -> None:
-    """Validated whole: a ``PATCH`` to a dataclass is not partial.
-
-    Such a Validator builds every field, so the kernel refuses ``partial=True``
-    at ``derive``; the variant is the spec instead, and held by nothing.
-    """
+    """Validated whole: a ``PATCH`` to a dataclass is not partial."""
     spec = _spec(validator=validator)
 
     assert kernel_spec_variant(spec, partial=True) is spec
@@ -335,8 +312,7 @@ def test_a_live_view_validates_a_form_body_by_its_serializer_alone(fmt: str | No
     ("lenient", "status"), [(False, 400), (True, 204)], ids=["undeclared", "declared"]
 )
 def test_a_json_body_meets_the_spec_s_own_validator(lenient: bool, status: int) -> None:
-    """A JSON ``"true"`` for a boolean is the typed check's to refuse, unless the
-    spec's own Validator is declared lenient, which takes it as DRF does."""
+    """A JSON ``"true"`` for a boolean is the typed check's to refuse."""
     view, seen = _flag_view(lenient=lenient)
 
     response = view(APIRequestFactory().post("/", {"published": "true"}, format="json"))

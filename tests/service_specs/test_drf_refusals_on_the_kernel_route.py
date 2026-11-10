@@ -1,30 +1,3 @@
-"""On a kernel spec, an author's DRF refusal leaves as the kernel's class where the author asks.
-
-Nothing compiles an author's callable any more, so a kernel spec's service
-raising DRF's ``ValidationError`` reaches the kernel's ``dispatch`` as DRF's
-class and nothing else. Two things translate it, and only those two:
-
-- ``translating_drf_refusals``, applied by the author to a callable of the
-  spec (a service, a precondition, a ``kwargs`` provider, a selector, an
-  ``extend_queryset``);
-- ``DRFPermissionCheck``, which asks each DRF permission class inside
-  ``translate_drf_refusals``.
-
-Each refusal DRF names is then answered as the kernel's:
-
-- ``ValidationError`` as the kernel's ``ServiceValidationError``, with DRF's
-  detail and codes, still DRF's class;
-- ``PermissionDenied`` as the kernel's ``NotPermitted``, with the class's
-  message and code;
-- ``NotAuthenticated`` as the kernel's ``NotPermitted``, still DRF's
-  ``NotAuthenticated``, so a DRF handler answering it still answers 401;
-- a raise already of the kernel's class leaves exactly as raised.
-
-Asserted against the kernel's classes and DRF's alone, so each test fails on
-a tree with no translator, and the undecorated seats are held to leave DRF's
-class as it was raised.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -195,8 +168,7 @@ def test_a_validation_error_leaves_as_the_kernel_s_service_validation_error(
         run(_spec(seat, _raising(error)))
 
     refusal = excinfo.value
-    # Still DRF's class, so an ``except`` written against DRF's still catches it,
-    # with DRF's detail and its codes.
+    # Still DRF's class, so an ``except`` written against DRF's still catches it.
     assert isinstance(refusal, ValidationError)
     assert refusal.detail == {"title": ["Too long."]}
     assert refusal.get_codes() == {"title": ["too_long"]}

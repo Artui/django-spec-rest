@@ -1,11 +1,3 @@
-"""``ServiceAutoSchema`` documenting a ``DiscriminatedAction``, end to end through drf-spectacular.
-
-The request is one component, ``{View}_{action}_Request``, an ``anyOf`` over the
-bodies of the variants that take one; the responses are the variants' merged
-per status. Every route here is built from variants named for what they take,
-so the expected component reads off the test.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -470,9 +462,7 @@ class TestTheRequestAgreesWithOptions:
     def test_a_body_two_variants_accept_is_valid_for_what_both_document(
         self, schema: dict[str, Any]
     ) -> None:
-        # A member's schema is open, since the edge drops a key it does not
-        # know, so this body matches both. The wire accepts it; a ``oneOf``
-        # would document it as invalid.
+        # A member's schema is open, since the edge drops a key it does not know.
         body = {"alpha": "x", "beta": 1}
         view = _viewset(
             "AcceptsBoth",
@@ -542,8 +532,7 @@ class TestTheResponses:
     def test_a_400_is_documented_whatever_the_variants_declare(
         self, schema: dict[str, Any]
     ) -> None:
-        # No variant of ``Bare`` declares a Validator: the discriminator may
-        # still refuse, as a 400.
+        # No variant of ``Bare`` declares a Validator: the discriminator may still refuse, as a 400.
         bare = _op(schema, "/bare/", "post")["responses"]
         mixed = _op(schema, "/mixed/", "post")["responses"]
         assert bare["400"] == mixed["400"]
@@ -560,8 +549,7 @@ class TestTheResponses:
     def test_nothing_presented_by_any_variant_is_no_body_at_either_status(
         self, schema: dict[str, Any]
     ) -> None:
-        # A variant's service may return a value as well as nothing, and
-        # with no presenter a document cannot tell which one a call answers.
+        # A variant's service may return a value as well as nothing.
         responses = _op(schema, "/bare/", "post")["responses"]
         assert set(responses) == {"201", "204", "400"}
         assert "content" not in responses["201"]

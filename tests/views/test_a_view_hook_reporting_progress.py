@@ -1,16 +1,3 @@
-"""A view's ``get_progress_reporter`` hook reaches a kernel spec's service as ``progress``.
-
-A project tracking a long-running job (a task writing to a workflow model, a
-view pushing to a websocket) supplies its own reporter through the view's
-``get_progress_reporter`` hook, which joins the call's reporter.
-
-``progress`` is a pool seed, so the kernel refuses a ``get_service_kwargs``
-value of that name, rather than dropping it silently as ``ImproperlyConfigured`` per request,
-because a provider's value must never outrank a seeded one (the kernel's rule for any key a call
-seeds itself, ``view`` among them). The reporter comes only through the progress
-hook.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -40,8 +27,7 @@ def test_an_http_view_supplies_a_reporter_through_its_progress_hook() -> None:
         return {"ok": True}
 
     def get_progress_reporter(self: Any) -> ProgressReporter:
-        # Whatever this project already has: a websocket group send, a workflow-model
-        # row, a Celery ``update_state``.
+        # Whatever this project already has: a websocket group send, a workflow-model row.
         return lambda p, *, total=None, message=None: seen.append((p, total, message))
 
     response = _post(

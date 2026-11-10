@@ -1,14 +1,3 @@
-"""Over HTTP, a key the server fills is the route's and never the body's, on a kernel spec.
-
-A kernel spec declares no parameter for it and fills it through a ``kwargs`` provider,
-which may read the route through the seeded ``view``: the URLconf is the
-author's, so a route capture fills it, and a body naming it is a key the spec
-declares no argument for, answered by the edge's unknown-argument policy.
-
-``view`` is a call seed, as ``request`` is: every callable declaring it is
-handed the calling view, and a body key of that name never stands in for it.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -117,12 +106,7 @@ def test_without_a_route_capture_the_key_keeps_its_default(seen: list[Any]) -> N
 def test_the_body_s_value_for_the_key_never_fills_it(
     seen: list[Any], monkeypatch: pytest.MonkeyPatch, policy: UnknownArguments
 ) -> None:
-    """The spec declares no ``team`` argument, so the edge's policy answers the body's:
-    a ``400`` "Unknown argument." under ``REJECT``, dropped unseen under ``IGNORE``.
-    Under neither does the lookup see it. Under ``REJECT`` the target lookup runs
-    before the shape check refuses the body, with the route's value, so the lookup
-    selector (and its kwargs provider) is called for a call that is then refused:
-    this is the decided answer."""
+    """The spec declares no ``team`` argument, so the edge's policy answers the body's."""
     monkeypatch.setattr(kernel_edge, "UNKNOWN_ARGUMENTS", policy)
     post = Post.objects.create(title="p")
 
@@ -192,9 +176,7 @@ def test_a_selector_declaring_view_is_handed_the_calling_view(seen: list[Any]) -
 def test_a_query_string_naming_view_never_stands_in_for_it(
     seen: list[Any], monkeypatch: pytest.MonkeyPatch, policy: UnknownArguments
 ) -> None:
-    """``view`` is a seed and no parameter, so a client's ``?view=`` is an unknown
-    argument: refused under ``REJECT``, dropped under ``IGNORE``, and the selector
-    is handed the calling view either way it runs."""
+    """``view`` is a seed and no parameter, so a client's ``?view=`` is an unknown argument."""
     monkeypatch.setattr(kernel_edge, "UNKNOWN_ARGUMENTS", policy)
     Post.objects.create(title="p")
 
@@ -310,10 +292,7 @@ class _HookFillingTheKey(_TeamRetrieveView):
 def test_a_selector_view_s_kwargs_hook_is_refused_when_the_view_is_built(
     seen: list[Any], view: type
 ) -> None:
-    """A kernel selector spec is handed its own ``kwargs`` provider's
-    values and no view hook's, so an override would be silently unasked. It is refused
-    at ``as_view()``, naming the hook and the provider to move it to, before any
-    request runs the selector."""
+    """A kernel selector spec is handed its own ``kwargs`` provider's values and no view hook's."""
     with pytest.raises(
         ImproperlyConfigured,
         match=r"overrides get_selector_kwargs, which never reaches a kernel spec.*"

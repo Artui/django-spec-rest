@@ -1,11 +1,3 @@
-"""OPTIONS and the OpenAPI body read a spec under the ``rest`` stamp, as dispatch does.
-
-A Validator may declare fields by call (``parameters(self, *, call_context=None)``).
-Dispatch asks it under the view's stamped dict, so each describing seat asks the
-same: OPTIONS with the call's own dict, OpenAPI with a dict naming the transport
-and no request, since a document describes the transport and never one caller.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -291,15 +283,13 @@ class TestADescriptionThatRaises:
             _document(_route(_view(_spec(_Unguarded())), "u/"))
 
     def test_it_is_left_out_of_options(self) -> None:
-        # A real request here, with no such attribute: the method stays routed
-        # and is not described.
+        # A real request here, with no such attribute: the method stays routed and is not described.
         response = _view(_spec(_Unguarded())).as_view()(APIRequestFactory().options("/"))
         assert response.status_code == 200
         assert "POST" not in response.data.get("actions", {})
 
     def test_any_other_exception_is_not_left_out_of_options(self) -> None:
-        # Only AttributeError, KeyError and TypeError leave a method out; a
-        # ValueError is a 500, as the docs say.
+        # Only AttributeError, KeyError and TypeError leave a method out; a ValueError is a 500.
         with pytest.raises(ValueError, match="not describable"):
             _view(_spec(_Refusing())).as_view()(APIRequestFactory().options("/"))
 

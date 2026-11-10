@@ -1,13 +1,3 @@
-"""A refused caller's oversized form answers before Django can report it as suspicious.
-
-``TooManyFieldsSent`` is a ``SuspiciousOperation``. Left to escape, Django's handler answers 400
-and logs it to ``django.security.TooManyFieldsSent``, which only happens through that handler,
-so these go through the test client rather than calling the view.
-
-A refusal comes first now, so that line is written only for a caller who was admitted: a project
-alerting on it no longer hears from anonymous callers sending too many fields.
-"""
-
 from __future__ import annotations
 
 from typing import Any

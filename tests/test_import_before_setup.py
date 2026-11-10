@@ -1,18 +1,3 @@
-"""Every module of the package imports before the app registry is ready.
-
-A project may import ``django_spec_rest`` at the top of an ``AppConfig`` module or an
-app's ``__init__``, which Django runs while ``apps.populate()`` is still importing app
-configs, or anywhere before ``django.setup()``. A module that imports a concrete Django
-model at import time raises ``AppRegistryNotReady`` there. The package is not itself an
-installed app, so neither the suite (whose settings are populated before any test runs)
-nor the example project would see such an import: this test is what holds the rule
-``CLAUDE.md`` states under *Imports inside the package*.
-
-It runs in a subprocess because this process already ran ``django.setup()``, and it
-walks every module rather than the package root, because a leaf the root does not
-re-export would otherwise go unimported.
-"""
-
 from __future__ import annotations
 
 import subprocess

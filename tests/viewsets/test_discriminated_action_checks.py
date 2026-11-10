@@ -1,9 +1,3 @@
-"""What ``as_view()`` and ``@service_action`` refuse of a ``DiscriminatedAction``.
-
-Each refusal asserts its own sentence, so a tree refusing the entry for being
-no spec at all fails here rather than passing by accident.
-"""
-
 from __future__ import annotations
 
 from typing import Any

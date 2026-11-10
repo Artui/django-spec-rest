@@ -1,29 +1,3 @@
-"""What a live view owes a kernel spec.
-
-Each case is written against the public surface, a view over a kernel spec
-driven through ``as_view()``.
-
-- **A description of the input serializer is handed the call's request and
-  view.** The kernel route describes the serializer the call validates with in
-  the call's own context, so a ``get_fields`` scoped by
-  ``self.context["request"]`` declares the fields the call validates, built for
-  the caller (``test_a_request_scoped_serializer_describes_the_fields_the_call_validates``).
-- **A view's ``get_*_kwargs`` hooks and its ``get_input_serializer_context``
-  layer reach the call.** A hook value for a service keyword arrives at the
-  service, and the view's input context layer at the input serializer
-  (``test_a_service_kwargs_hook_value_reaches_the_service``,
-  ``test_the_view_s_input_context_layer_reaches_the_input_serializer``).
-- **A nested selector's ``permissions`` are refused by the kernel, not the view.**
-  The kernel asks the spec being dispatched, never the selector resolving its
-  target, so checks declared there would guard nothing: building the
-  ``ServiceSpec`` raises ``ImproperlyConfigured`` on each of the three seats,
-  naming the seat (``test_a_nested_selector_s_permissions_are_refused_by_the_kernel``),
-  and for ``Unrestricted()`` too, which guards nothing either
-  (``test_an_unrestricted_nested_selector_is_refused_too``). The refusal is of
-  a declaration, so a nested selector declaring none mounts
-  (``test_a_nested_selector_declaring_no_permissions_mounts``).
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -187,9 +161,7 @@ _SEATS = pytest.mark.parametrize(
 )
 
 
-# A nested selector is a step of the call, so the kernel never asks its
-# ``permissions``, and refuses one declared when the ServiceSpec is built, on each
-# seat: the view is never reached, so building the spec is what raises.
+# A nested selector is a step of the call, so the kernel never asks its ``permissions``.
 @_SEATS
 def test_a_nested_selector_s_permissions_are_refused_by_the_kernel(seat: str, build: Any) -> None:
     with pytest.raises(ImproperlyConfigured, match=f"ServiceSpec.{seat} declares permissions"):

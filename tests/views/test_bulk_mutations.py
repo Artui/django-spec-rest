@@ -1,10 +1,3 @@
-"""Bulk mutations through the HTTP views over kernel specs: ``many`` bodies and collection targets.
-
-A kernel service spec's arguments are its body and the
-route captures it declares, so a collection selector's reads come from those
-and the query string is no argument of a write.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -68,11 +61,7 @@ _MANY = ServiceSpec(
 
 
 class _NamedByTheCall(Validator):
-    """Takes ``title`` when handed the call's dict, and ``subject`` when asked without it.
-
-    A Validator other than a serializer's that opted into ``call_context``, so
-    an ask that hands it nothing describes another row than the call's.
-    """
+    """Takes ``title`` when handed the call's dict, and ``subject`` when asked without it."""
 
     def parameters(self, *, call_context: dict[str, Any] | None = None) -> Parameters:
         name = "subject" if call_context is None else "title"
@@ -99,8 +88,7 @@ class TestBulkCreateMany:
         assert [row["title"] for row in response.data] == ["a", "b"]
 
     def test_a_list_body_is_never_looked_up(self) -> None:
-        """A ``many`` call resolves no target, so the view's object permissions
-        are asked of nothing, and the rows are created."""
+        """A ``many`` call resolves no target."""
 
         class _DenyObject(BasePermission):
             def has_object_permission(self, request: Any, view: Any, obj: Any) -> bool:
@@ -139,11 +127,7 @@ class TestBulkCreateMany:
         assert response.data == [{"title": "x"}, {"title": "x"}]
 
     def test_a_get_service_kwargs_value_pins_the_row_an_opted_in_validator_names(self) -> None:
-        """The rows' names are asked of the Validator with the call's dict, as dispatch asks.
-
-        Asked without it, ``_NamedByTheCall`` names ``subject``, so ``title``
-        stays in the overlay rather than going over each row.
-        """
+        """The rows' names are asked of the Validator with the call's dict, as dispatch asks."""
 
         def create(*, data: list[dict[str, Any]]) -> list[dict[str, Any]]:
             return [dict(row) for row in data]
@@ -157,9 +141,7 @@ class TestBulkCreateMany:
         assert response.data == [{"title": "x"}, {"title": "x"}]
 
     def test_an_update_view_takes_a_many_spec_s_list_body_as_its_rows(self) -> None:
-        """A ``many`` spec names no target selector, the kernel refusing one,
-        since its list body is its rows: an update view mounts it, where a
-        single-object spec naming no target is refused."""
+        """A ``many`` spec names no target selector, the kernel refusing one."""
         posts = [Post.objects.create(title="a"), Post.objects.create(title="b")]
 
         def retitle(*, data: list[dict[str, Any]]) -> list[Post]:

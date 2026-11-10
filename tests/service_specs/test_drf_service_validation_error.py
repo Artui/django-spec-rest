@@ -1,5 +1,3 @@
-"""Tests for ``DRFServiceValidationError``: a DRF refusal as the kernel's validation error."""
-
 from __future__ import annotations
 
 from django_service_specs.parameters.invalid_arguments import (

@@ -1,28 +1,3 @@
-"""A validated key named like a seed stays in ``data`` and never replaces the seed, on the kernel.
-
-DRF's canonical ``HiddenField(default=CurrentUserDefault())`` named ``user``
-validates the principal into ``validated_data["user"]``; a ``validate()`` may
-add a key named like any seed. The service is handed ``validated_data`` whole
-as ``data``, and each seed under its own name, so the kernel's refusal of a
-validated value named like a seed never fires for one ``SerializerValidator``
-hands on in ``data`` alone.
-
-Held elsewhere, and so not repeated here:
-
-- a writable field named ``user``, ``result`` or ``serializer`` validating
-  from a JSON or a form body while the seed keeps its own value:
-  ``test_kernel_views``' ``test_a_writable_field_named_like_a_seed_validates_into_data``
-  and ``test_a_seed_named_field_validates_from_a_form_body``;
-- the serializer refusing such a field:
-  ``test_a_seed_named_field_the_serializer_refuses_is_drf_s_400``;
-- a body that is no object, refused before any field is set aside:
-  ``test_a_body_that_is_no_object_is_refused_as_a_whole``;
-- a field named like a seed a project registers: the HTTP views register no
-  seed of their own, so the case is the kernel's dispatch with a ``PoolSeeds``,
-  held by the kernel's
-  ``test_a_field_named_like_a_registered_seed_validates_into_data_and_the_pool_keeps_the_seed``.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Callable

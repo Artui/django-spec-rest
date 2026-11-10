@@ -1,5 +1,3 @@
-"""``renderable_serializer_class`` — what an output declaration renders through."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -53,8 +51,7 @@ class TestResolution:
         ]
 
     def test_a_dataclass_instance_is_not_wrapped(self) -> None:
-        """Holds the ``isinstance(declared, type)`` conjunct: ``is_dataclass`` alone
-        is true of an instance too, which has no ``__name__`` to build a class from."""
+        """Holds the ``isinstance(declared, type)`` conjunct."""
         instance = _Word(word="hi")
         assert renderable_serializer_class(instance) is instance  # ty: ignore[no-matching-overload]
 

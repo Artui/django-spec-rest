@@ -1,12 +1,3 @@
-"""``DRFPermissionCheck``: DRF permission classes as a kernel spec's own ``permissions``.
-
-Every case hands a kernel spec to the kernel's ``authorize``, ``authorize_target``
-or ``dispatch``, so the kernel's own reading of each opt-in - ``arguments``,
-``call_context``, ``request`` and ``view`` - is what is tested, not a direct call
-that would pass whether or not the kernel ever handed them over. The route a
-kernel spec's check fills onto an offline view is ``route_reads`` alone.
-"""
-
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -337,8 +328,7 @@ class TestTheCallsRequestAndView:
         post = Post.objects.create(title="t")
         request, view = _real_pair("in-context")
         spec = _retrieve(_Pairs)
-        # Minted for this very spec, which the check is asked about again: a
-        # ``Grant`` covers only the spec it was minted for, by identity.
+        # Minted for this very spec, which the check is asked about again.
         grant = authorize(spec, AnonymousUser(), arguments={"pk": post.pk})
         _ASKED.clear()
 
@@ -354,9 +344,7 @@ class TestTheCallsRequestAndView:
         assert _asked() == (request, view)
 
     def test_the_offline_view_s_action_is_the_operation_s_name(self) -> None:
-        # A transport running the kernel's dispatch builds no DRF view and names
-        # the operation in the context, so a class branching on ``view.action``
-        # reads it.
+        # The kernel's dispatch builds no DRF view; the operation is named in the context instead.
         authorize(self._spec(), AnonymousUser(), call_context={"view": None, "action": "publish"})
 
         _, view = _asked()
@@ -410,8 +398,7 @@ class TestTheCallsRequestAndView:
         assert _asked()[1].action == "role"
 
     def test_a_carried_django_request_is_wrapped_with_an_empty_query_string(self) -> None:
-        # The arrived-on request's query string is its endpoint's, not this
-        # operation's, and a kernel spec's check routes no query parameter.
+        # The arrived-on request's query string is its endpoint's, not this operation's.
         principal = AnonymousUser()
         arrived = RequestFactory().get("/chat/", {"thread": "7"})
 
@@ -454,13 +441,7 @@ class TestTheCallsRequestAndView:
 
 @pytest.mark.django_db
 class TestRequestAuth:
-    """A wrapped or offline request's ``auth`` is ``None``, set without DRF's authenticators.
-
-    DRF's ``request.auth`` authenticates on first read, and a request built off
-    DRF has no authenticator, so the read would set ``request.user`` to
-    ``AnonymousUser`` and a class reading ``auth`` before ``user`` - a token
-    scope check - would refuse a signed-in caller.
-    """
+    """A wrapped or offline request's ``auth`` is ``None``, set without DRF's authenticators."""
 
     @pytest.fixture
     def principal(self) -> User:

@@ -1,21 +1,3 @@
-"""A kernel spec's input serializer reading ``self.context`` unguarded, over HTTP.
-
-DRF builds an input serializer with its view's context, so a serializer may
-read the request or the view while it is built or while its fields are: a
-``PrimaryKeyRelatedField`` scoped to the caller, a field a query value turns
-on, a field the route names. A ``SerializerValidator`` describes its
-serializer to learn its parameters, and describes it with the call's own
-request and view, so each answers as the view always did. The scope holds in
-the serializer that validates: a caller picks a row of its own and is refused
-another's.
-
-The call's context is meant to be DRF's serializer context, one dict per
-request handed to every serializer of the call as the very object.
-``test_the_call_s_context_is_every_serializer_s_context`` holds that as a
-strict xfail: the serializers and the service share one dict, but not yet the
-one ``get_serializer_context()`` returned.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -156,9 +138,7 @@ def test_a_live_view_scopes_the_field_to_the_caller(
 def test_a_live_view_scopes_the_field_to_the_caller_on_a_form_body(
     owner: User, own_post: Post, other_post: Post
 ) -> None:
-    """A form body is dispatched through a lenient copy of the spec's Validator,
-    which describes the serializer as the edge's own too, with the call's
-    request."""
+    """A form body is dispatched through a lenient copy of the spec's Validator."""
     seen: dict[str, Any] = {}
     spec = _spec(_ScopedToTheCaller, seen)
 
@@ -180,10 +160,7 @@ def test_a_live_view_builds_the_fields_from_its_query_string(owner: User) -> Non
 
 
 def test_a_kwargs_answer_is_checked_against_the_fields_the_call_validates(owner: User) -> None:
-    """The twin's ``kwargs`` seat checks an answer against the Validator's
-    parameters, read in the edge's own call: described under the call's request,
-    so a serializer reading ``self.context["request"]`` is built as the call
-    builds it, not unbound."""
+    """The twin's ``kwargs`` seat checks an answer against the Validator's parameters."""
     seen: dict[str, Any] = {}
 
     def service(*, data: Any, scope: str) -> None:
@@ -256,8 +233,7 @@ class _FailsToBuild(serializers.Serializer):
 
 
 def test_a_serializer_its_description_cannot_build_raises_as_it_is(owner: User) -> None:
-    """With no context callable to ask, the description is not rebuilt: what the
-    serializer raised is what the view raises, not a refusal of the call."""
+    """With no context callable to ask, the description is not rebuilt."""
     seen: dict[str, Any] = {}
 
     with pytest.raises(KeyError, match="a key the serializer's own code lacks"):
@@ -291,9 +267,7 @@ class _ReadsItsContext(serializers.Serializer):
     ),
 )
 def test_the_call_s_context_is_every_serializer_s_context(owner: User) -> None:
-    """A key the input serializer's ``validate()`` writes is read by the service and by
-    the output serializer, and the context is the object ``get_serializer_context()``
-    returned."""
+    """A key ``validate()`` writes is read by both the service and the output serializer."""
     seen: dict[str, Any] = {}
 
     def service(*, data: Any, call_context: dict[str, Any]) -> dict[str, Any]:
@@ -347,9 +321,7 @@ _ROWS = ServiceSpec(
 def test_a_kernel_call_inside_the_service_presents_every_row_under_one_offline_request(
     owner: User,
 ) -> None:
-    """A kernel call the service makes carries no request, so each row is
-    presented under an offline request for the principal it was handed, and the
-    rows of the call share the one the edge call built for it."""
+    """A kernel call the service makes carries no request."""
     _PRESENTED_UNDER.clear()
 
     def service(*, data: Any) -> None:
@@ -368,9 +340,7 @@ def _spec_of(service: Any) -> ServiceSpec:
 def test_a_kernel_call_for_another_principal_is_presented_under_its_own_offline_request(
     owner: User,
 ) -> None:
-    """Two kernel calls the service makes with one arguments object, for two
-    principals: each is presented under an offline request for its own, so a
-    serializer reading ``request.user`` never reads the other's."""
+    """Two kernel calls the service makes with one arguments object, for two principals."""
     _PRESENTED_UNDER.clear()
     other = User.objects.create(username="other")
     arguments: dict[str, Any] = {}
@@ -411,9 +381,7 @@ _TITLED = ServiceSpec(
 def test_a_kernel_call_for_another_principal_never_validates_under_the_view_s_request(
     owner: User,
 ) -> None:
-    """Only the edge's own call reads the view's request and view: a kernel call
-    the service makes for another principal validates under the offline pair
-    for that principal, as it would outside the view."""
+    """Only the edge's own call reads the view's request and view."""
     _VALIDATED_UNDER.clear()
     other = User.objects.create(username="other")
 
@@ -429,9 +397,7 @@ def test_a_kernel_call_for_another_principal_never_validates_under_the_view_s_re
 def test_a_kernel_call_for_another_principal_is_never_described_under_the_view_s_request(
     owner: User,
 ) -> None:
-    """The parameters a kernel call the service makes are read off a description
-    of its serializer, and that description is not the edge's own call's either:
-    it is built as outside any call, with no request and no view."""
+    """Parameters are read off a serializer description built outside any call."""
     _DESCRIBED_UNDER.clear()
     other = User.objects.create(username="other")
 
@@ -446,12 +412,7 @@ def test_a_kernel_call_for_another_principal_is_never_described_under_the_view_s
 def test_a_kernel_call_of_the_view_s_own_spec_for_another_principal_is_never_described_under_the_view_s_request(  # noqa: E501
     owner: User,
 ) -> None:
-    """The service dispatches the view's own spec for another principal: the
-    parameters that call is checked against are read off a description built as
-    outside any call, never the one the edge built under the view's request.
-    The edge's own call and the inner one declare the same serializer through
-    the same Validator, and the kernel tells them apart by the dict each asks
-    ``parameters()`` with (``EdgeCallState.call_context``)."""
+    """The service dispatches the view's own spec for another principal."""
     _DESCRIBED_UNDER.clear()
     other = User.objects.create(username="other")
     by_the_edge: list[Any] = []
@@ -469,12 +430,10 @@ def test_a_kernel_call_of_the_view_s_own_spec_for_another_principal_is_never_des
         validator=SerializerValidator(_ReadsItsRequestWhileValidating),
         atomic=False,
     )
-    # Building the spec and the view describes the serializer outside any call.
     built = len(_DESCRIBED_UNDER)
 
     assert _create(spec, {"title": "outer"}, owner).status_code == 204
     assert by_the_edge
-    # The edge's own call is described once, under the view that dispatched it.
     (under_the_view,) = [pair for pair in by_the_edge if pair != (None, None)]
     assert isinstance(under_the_view[1], ServiceCreateView)
     assert by_the_inner_call
@@ -484,9 +443,7 @@ def test_a_kernel_call_of_the_view_s_own_spec_for_another_principal_is_never_des
 def test_a_dispatch_handed_the_request_s_call_context_is_described_as_the_request_s_call(
     owner: User,
 ) -> None:
-    """The documented gap (docs/recipes/off-http-inputs.md): a service handing
-    its own ``call_context`` to a dispatch of the view's spec makes that the
-    request's call again, so it is described under the view."""
+    """The documented gap (docs/recipes/off-http-inputs.md)."""
     _DESCRIBED_UNDER.clear()
     other = User.objects.create(username="other")
     by_the_inner_call: list[Any] = []
@@ -520,8 +477,7 @@ class _ReadsItsCaller(serializers.Serializer):
 
 
 def _dispatches_itself_for_another(*, title: str, user: Any) -> None:
-    # The edge dispatches this very spec, Validator and all: a JSON body and
-    # nothing for the recording twin to wrap, so the twin is the spec itself.
+    # The edge dispatches this very spec, Validator and all.
     assert edge_call_state().validator is _SAME.validator
     if user.username == "owner":
         other = User.objects.get(username="other")
@@ -539,10 +495,7 @@ _SAME = ServiceSpec(
 def test_a_kernel_call_of_the_view_s_own_spec_for_another_principal_validates_offline(
     owner: User,
 ) -> None:
-    """The service dispatches the view's own spec, the very Validator the edge
-    dispatched, for another principal: that call is not the edge's, so it
-    validates under the offline pair for its own principal, never the view's
-    request and view."""
+    """The service dispatches the view's own spec, the very Validator the edge dispatched."""
     _SAME_SEEN.clear()
     other = User.objects.create(username="other")
 
@@ -557,8 +510,7 @@ def test_a_kernel_call_of_the_view_s_own_spec_for_another_principal_validates_of
 def test_a_kernel_call_of_the_view_s_own_spec_for_another_principal_binds_its_own_arguments(
     owner: User,
 ) -> None:
-    """Nor does that call bind the edge's body: it validates the arguments its
-    caller handed it, never the client's request body."""
+    """Nor does that call bind the edge's body: it validates the arguments its caller handed it."""
     _SAME_SEEN.clear()
     User.objects.create(username="other")
 
@@ -578,17 +530,12 @@ def test_a_kernel_call_of_the_view_s_own_spec_for_another_principal_binds_its_ow
 def test_a_kernel_call_of_the_view_s_own_spec_for_an_equal_principal_is_not_the_edge_s(
     owner: User, authenticated: bool, equal_principal: Any
 ) -> None:
-    """The edge's call is told apart by its principal's identity, not equality:
-    a row fetched again and a fresh ``AnonymousUser`` each equal the edge's
-    principal, yet the service's call for one binds the arguments it was handed
-    and validates under its own offline pair, never the view's."""
+    """The edge's call is told apart by its principal's identity, not equality."""
     _SAME_SEEN.clear()
     inner: list[Any] = []
 
     def service(*, title: str, user: Any) -> None:
-        # Once only, guarded on neither the title nor the principal: a call taken
-        # for the edge's binds the edge's body, so both would read as the outer
-        # call's, and the inner call would dispatch again without end.
+        # Once only, guarded on neither the title nor the principal.
         if not inner:
             principal = equal_principal(user)
             inner.append(principal)
@@ -629,10 +576,7 @@ def _dispatches_another_for_its_own_principal(*, title: str, user: Any) -> None:
 def test_a_kernel_call_of_another_spec_for_the_edge_s_own_principal_reads_none_of_the_edge_s(
     owner: User,
 ) -> None:
-    """The service hands another spec the edge's very principal: that call's
-    Validator is not the one the edge dispatched, so it validates its own
-    arguments under the offline pair, never the client's body under the view's
-    request and view."""
+    """The service hands another spec the edge's very principal."""
     _SAME_SEEN.clear()
     spec = ServiceSpec(
         service=_dispatches_another_for_its_own_principal,
@@ -688,10 +632,7 @@ def _dispatches_another_declaring_it(*, title: str) -> None:
 def test_a_kernel_call_of_another_spec_declaring_the_serializer_is_not_described_as_the_edge_s(
     owner: User,
 ) -> None:
-    """Another spec declaring the same serializer class, dispatched by the
-    service for another principal, is described as outside any call, never
-    with the edge's description, which the owner's request scoped: a field only
-    the owner declares is no parameter of that call."""
+    """Another spec declaring the same serializer class."""
     _REFUSED.clear()
     User.objects.create(username="other")
     spec = ServiceSpec(

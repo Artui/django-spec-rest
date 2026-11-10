@@ -1,11 +1,3 @@
-"""A viewset's ``action_specs`` handed to ``as_view()``: checked at mount, as a class attribute is.
-
-A viewset's specs are its ``action_specs``, one per action, which its mixins
-read off the instance; so ``as_view(actions, action_specs=...)`` is the
-viewset's ``as_view(spec=...)``. A viewset has no ``spec``, so DRF refuses that
-keyword itself.
-"""
-
 from __future__ import annotations
 
 from typing import Any

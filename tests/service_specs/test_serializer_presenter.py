@@ -1,5 +1,3 @@
-"""Tests for ``SerializerPresenter``, the kernel's Presenter over a DRF serializer."""
-
 from __future__ import annotations
 
 import dataclasses
@@ -100,7 +98,6 @@ class _Flat(serializers.Serializer):
 def test_output_reads_order_types_formats_labels_and_presence() -> None:
     output = SerializerPresenter(_Flat).output()
 
-    # ``secret`` is write-only: never rendered, so never declared.
     assert output.names() == (
         "id",
         "name",
@@ -121,22 +118,17 @@ def test_output_reads_order_types_formats_labels_and_presence() -> None:
     assert shapes == {
         # Read-only with no default: DRF drops the key when it cannot read it.
         "id": ("integer", None, False, None, False),
-        # An author's label is kept; DRF's derived one (``Nick``) is not.
         "name": ("string", None, False, "Full name", True),
-        # ``allow_null`` renders ``None`` rather than dropping the key.
         "nick": ("string", None, True, None, True),
-        # Neither required nor defaulted: ``allow_null`` alone keeps the key.
         "maybe": ("string", None, True, None, True),
         "ratio": ("number", None, False, None, False),
         "price": ("string", "decimal", False, None, True),
         "at": ("string", "date-time", False, None, True),
         "on": ("string", "date", False, None, True),
-        # Formats the kernel does not name are left off rather than refused.
         "when": ("string", None, False, None, True),
         "lasts": ("string", None, False, None, True),
         "uid": ("string", None, False, None, True),
         "email": ("string", None, False, None, True),
-        # A default is substituted, so the key is always there.
         "active": ("boolean", None, False, None, True),
         "meta": ("object", None, False, None, True),
     }
@@ -152,8 +144,7 @@ def test_a_field_with_no_json_type_is_declared_any() -> None:
 
     output = SerializerPresenter(_Untyped).output()
 
-    # A computed value or a JSON column may hold any type, and a schema must not
-    # claim it is a string.
+    # A computed value or a JSON column may hold any type.
     assert [(f.name, f.type) for f in output] == [("computed", "any"), ("blob", "any")]
 
 
@@ -179,20 +170,15 @@ def test_choices_are_value_display_pairs_typed_by_their_values() -> None:
         "level": "integer",
         "flag": "boolean",
         "half": "number",
-        # ``None`` names no type of its own, so the other values decide.
         "maybe": "string",
-        # Values of two types share none, and the field is untyped like any other.
         "mixed": "any",
-        # A value JSON has no type for names none either.
         "amount": "any",
         "perms": "array",
     }
-    # The kernel lists no choices on an untyped value, so the labels of a mixed
-    # set are not declared rather than declared against a type they do not have.
+    # The kernel lists no choices on an untyped value.
     assert {f.name: f.choices for f in output if f.type == "any"} == {"mixed": None, "amount": None}
     perms = output.get("perms")
     assert perms is not None
-    # A list's choices are its element's, as the kernel's other adapters declare them.
     assert (perms.items, perms.choices) == ("string", (("r", "Read"), ("w", "Write")))
 
 
@@ -220,14 +206,10 @@ def test_nested_serializers_and_lists_nest_their_output() -> None:
     assert by_name["rows"] == OutputField("rows", "array", items=row_output)
     assert by_name["wrapped"] == OutputField("wrapped", "array", items=row_output)
     assert by_name["scores"] == OutputField("scores", "array", items="integer", items_nullable=True)
-    # A nullable element of no declared type: the kernel refuses ``items_nullable``
-    # without ``items``, so it is left off rather than declared.
+    # A nullable element of no declared type.
     assert by_name["loose"] == OutputField("loose", "array")
     assert by_name["grid"] == OutputField("grid", "array", items="array")
-    # An element with no JSON type is left undeclared, which an array allows.
     assert by_name["anything"] == OutputField("anything", "array")
-    # No choices are read off a list's element: declaring them here would have the
-    # kernel substitute displays for the element's values.
     assert by_name["picks"] == OutputField("picks", "array", items="string")
     assert by_name["related"] == OutputField("related", "array", always_present=False)
 
@@ -247,8 +229,7 @@ def test_a_serializer_that_nests_itself_is_truncated_rather_than_recursing() -> 
         field = field.fields.get("child")
         depth += 1
 
-    # Four appearances on the path are described;
-    # the next is a bare object, which is the one thing still known to be true.
+    # Four appearances on the path are described; the next is a bare object.
     assert depth == 4
     assert field == OutputField("child", "object", always_present=False)
 
@@ -317,8 +298,7 @@ def test_a_base_serializer_declaring_no_fields_outputs_nothing_and_still_present
 
 
 def test_field_audiences_on_an_output_declaring_no_fields_are_refused() -> None:
-    # The output has no field to carry the marking, so honouring it is
-    # impossible, and dropping it would present ``v`` to an agent told to hide it.
+    # The output has no field to carry the marking, so honouring it is impossible.
     presenter = SerializerPresenter(_Raw, field_audiences={"v": FieldMarking.hidden()})
 
     with pytest.raises(ImproperlyConfigured, match=r"field_audiences names \['v'\]"):
@@ -345,7 +325,6 @@ def test_field_audiences_are_layered_over_the_top_level_markings() -> None:
     output = presenter.output()
     by_name = {field.name: field for field in output}
 
-    # Replaced, added, and left alone.
     assert by_name["etag"].marking == FieldMarking()
     assert by_name["note"].marking == FieldMarking.hidden()
     assert by_name["number"].marking == FieldMarking.label()
@@ -436,9 +415,7 @@ def test_the_projection_of_a_nested_serializer() -> None:
 
 
 def test_feeding_field_audiences_back_as_overrides_changes_nothing() -> None:
-    """A transport that reads ``field_audiences`` off the registry entry and hands
-    them back as ``overrides=``, as the published agent transports do, layers them
-    over markings that already carry them, and the projection does not move."""
+    """Overrides layered over markings carrying the same audiences leave the projection unmoved."""
     spec = _spec(SerializerPresenter(_Invoice, field_audiences=_OVERRIDES))
 
     declared = audience_projection_for_spec(spec)
@@ -483,8 +460,7 @@ def test_a_set_of_mixed_choices_is_an_array_of_any_that_keeps_its_choices() -> N
 
     picks = SerializerPresenter(_Mixed).output().get("picks")
 
-    # ``items="any"`` is a spelling the kernel refuses: an array with no items
-    # already takes any element, and the array may list its choices.
+    # ``items="any"`` is a spelling the kernel refuses.
     assert picks == OutputField("picks", "array", choices=((1, "One"), ("two", "Two")))
 
 
@@ -867,7 +843,6 @@ def test_a_carried_django_request_is_wrapped_with_the_shapes_as_its_query_string
     assert payload["query"] == {"fields": ["name"]}
     assert payload["action"] == "publish"
     assert payload["user"] is principal
-    # The caller's request is never written to.
     assert dict(arrived.GET.lists()) == {"thread": ["7"]}
 
 

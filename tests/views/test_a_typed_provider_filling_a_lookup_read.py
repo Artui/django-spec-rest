@@ -1,15 +1,3 @@
-"""A ``kwargs`` provider and the name a target lookup reads.
-
-The spec's ``kwargs`` provider's values reach the service once the target is
-resolved, so a key its return annotation fills never reaches the lookup. The
-kernel refuses such a spec when it is built, rather than demand that key of the
-caller, so a kernel spec is refused before a view or route holds it. The lookup's own
-``kwargs`` provider is the one that fills its reads, and over HTTP its key picks the row.
-
-The spec's provider never reaches the lookup, typed or not, so a lookup requiring ``pk`` that
-nothing of its own fills is refused at ``as_view()``.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Callable

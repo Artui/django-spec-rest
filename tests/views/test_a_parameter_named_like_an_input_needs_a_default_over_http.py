@@ -1,20 +1,3 @@
-"""A service parameter named like an input field or a read, and what fills it.
-
-Dispatch hands a service each validated value, and each declared read, by
-name. A read the caller may leave out over a keyword with no default is
-refused at ``as_view()`` by the kernel's ``check_seeds``, since a call leaving
-it out would be refused as missing. Beside a Validator the kernel judges none
-of the service's keywords, since a Validator may hand it a value it does not
-declare, so such a spec is built and a call is answered by what it sends: a
-missing value is a 400 naming it, a sent one is handed over. A parameter with a
-default is handed the value the call sends. A selector takes its arguments
-from its reads, so a required read is a required argument.
-
-A service spec's reads are the body's on the kernel route
-(``kernel_arguments``), so each value here is sent in the body. A ``kwargs``
-provider waives a keyword by its annotated keys (``test_spec_validation_e2e``).
-"""
-
 from __future__ import annotations
 
 from typing import Any

@@ -1,13 +1,3 @@
-"""The status a viewset's operation documents is the one its action answers with.
-
-The per-action value outranks the viewset's: a decorated action's
-``success_status`` and an ``action_specs`` entry's ``get_<action>_success_status``
-are documented where they are an ``int``, and a per-action callable documents
-the action's default rather than the viewset-wide ``int`` it replaces. The
-viewset is built inside the fixture, so a tree whose ``@service_action`` takes
-no ``success_status`` fails these tests, not the module's import.
-"""
-
 from __future__ import annotations
 
 from typing import Any

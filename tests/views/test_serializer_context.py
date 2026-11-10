@@ -1,20 +1,3 @@
-"""The serializer context a view's kernel spec validates and presents under, over HTTP.
-
-A kernel spec's serializers are its seats', ``SerializerValidator`` and
-``SerializerPresenter``, and each is built under the context DRF builds on
-HTTP: the view's ``get_serializer_context()`` (``request``, ``view``,
-``format`` and whatever an override adds), then the view's directional and
-per-action hooks, then the seat's own ``serializer_context``, later winning.
-
-The call's context is DRF's serializer context: one dict per request, the very
-object every serializer of the call is handed. So a key one layer writes is
-there for every later serializer of the call, the output serializer included.
-
-What the kernel route does not carry yet is a strict xfail naming the file
-that owes it: a kernel selector is handed none of the view's output serializer
-context hooks.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -144,8 +127,7 @@ class TestTheInputSerializer:
 
     @pytest.mark.parametrize("form", ["json", "multipart"])
     def test_the_directional_hook_layers_over_drf_s(self, form: str) -> None:
-        """A form body is validated by a lenient twin of the spec's Validator, and
-        the hook reaches it all the same: the edge's own call is the twin's."""
+        """A form body is validated by a lenient twin of the spec's Validator."""
 
         class _View(ServiceCreateView):
             spec = _spec()
@@ -157,8 +139,7 @@ class TestTheInputSerializer:
         assert _CapturingIn.captured["origin"] == "input"
 
     def test_the_directional_hook_s_key_is_there_for_the_output(self) -> None:
-        """The context being one dict per request, the input hook's key reaches the
-        output serializer after it."""
+        """The context being one dict per request."""
 
         class _View(ServiceCreateView):
             spec = _spec()
@@ -170,8 +151,7 @@ class TestTheInputSerializer:
         assert _CapturingOut.captured["origin"] == "input"
 
     def test_a_dataclass_validator_s_serializer_is_built_under_it(self) -> None:
-        """The serializer a dataclass input is wrapped in carries the context too,
-        read here off the bound serializer the service is handed."""
+        """The serializer a dataclass input is wrapped in carries the context too."""
 
         @dataclass
         class _Payload:
@@ -211,8 +191,7 @@ class TestTheOutputSerializer:
         assert isinstance(_CapturingOut.captured["view"], _View)
 
     def test_the_directional_hook_layers_over_drf_s_and_never_reaches_the_input(self) -> None:
-        """The output hook runs after validation, so its key is in the one dict
-        only once the input serializer has validated."""
+        """The output hook runs after validation."""
 
         class _View(ServiceCreateView):
             spec = _spec()
@@ -287,8 +266,7 @@ class TestTheSeatsOwnContext:
         assert _CapturingIn.captured["spec_key"] == "input"
 
     def test_the_validator_s_context_is_there_for_the_output(self) -> None:
-        """One dict per request: the input seat's key reaches the output
-        serializer."""
+        """One dict per request: the input seat's key reaches the output serializer."""
 
         class _View(ServiceCreateView):
             spec = _spec(

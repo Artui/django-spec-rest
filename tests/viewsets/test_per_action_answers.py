@@ -1,18 +1,3 @@
-"""A viewset's ``success_status`` and ``response_finalizer`` per action.
-
-A kernel spec declares no HTTP answer, so the viewset does, and one action may
-answer differently from another without a callable switching on
-``view.action``: ``@service_action(..., success_status=..., response_finalizer=...)``
-for a decorated action, and a ``get_<action>_success_status`` /
-``get_<action>_response_finalizer`` hook for an ``action_specs`` entry. Most
-specific first: the decorator's value, then the hook, then the viewset's own,
-then the action's default.
-
-Every viewset carrying a decorator keyword is built inside its test, so a tree
-whose ``@service_action`` takes no such keyword fails that test, not the
-module's import.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -212,8 +197,7 @@ class TestAnActionSpecsEntryAnswersThroughItsHook:
         assert (response.status_code, response["X-Answer"]) == (202, "viewset")
 
     def test_partial_update_reads_its_own_name_not_update_s(self) -> None:
-        # The per-action hooks are spelled with the action DRF names, as
-        # ``get_<action>_service_kwargs`` is: a ``PATCH`` is ``partial_update``.
+        # The per-action hooks are spelled with the action DRF names.
         viewset = _hooked_viewset(
             get_update_success_status=201, get_partial_update_success_status=203
         )
@@ -229,8 +213,7 @@ class TestAnActionSpecsEntryAnswersThroughItsHook:
 
 
 class TestTheMountedChecksReadThePerActionValue:
-    # ``partial_update`` has no entry of its own: a PATCH dispatches the
-    # ``update`` spec, and reads the hook named for its own action.
+    # ``partial_update`` has no entry of its own: a PATCH dispatches the ``update`` spec.
     @pytest.mark.parametrize("action", ["create", "update", "partial_update", "destroy"])
     def test_a_status_hook_the_view_cannot_resolve_is_refused(self, action: str) -> None:
         def hook(self: Any, *, tenant: Any) -> int:
@@ -240,8 +223,7 @@ class TestTheMountedChecksReadThePerActionValue:
         with pytest.raises(ImproperlyConfigured, match=rf"\b{action}\b.*success_status"):
             viewset.as_view({"post": action})
 
-    # ``partial_update`` has no entry of its own: a PATCH dispatches the
-    # ``update`` spec, and reads the hook named for its own action.
+    # ``partial_update`` has no entry of its own: a PATCH dispatches the ``update`` spec.
     @pytest.mark.parametrize("action", ["create", "update", "partial_update", "destroy"])
     def test_a_finalizer_hook_the_view_cannot_call_is_refused(self, action: str) -> None:
         def hook(self: Any, response: Response, /) -> None: ...
@@ -289,11 +271,7 @@ class TestTheMountedChecksReadThePerActionValue:
 
 
 class TestAStaticHookIsReadAsTheInstanceReadsIt:
-    """A ``staticmethod`` hook has no ``self``, at dispatch or at ``as_view()``.
-
-    Read off the class it is a plain function, which must not be bound as a
-    method is, or the check would take its first parameter for the view's.
-    """
+    """A ``staticmethod`` hook has no ``self``, at dispatch or at ``as_view()``."""
 
     def test_it_mounts_and_answers(self) -> None:
         def accepted() -> int:
@@ -325,8 +303,7 @@ class TestAStaticHookIsReadAsTheInstanceReadsIt:
         assert _call(viewset, "post", "create", {"name": "Ada"}).status_code == 201
 
     def test_a_hook_handed_to_as_view_is_asked_as_handed(self) -> None:
-        # A keyword is set on the instance, where nothing binds it, so the
-        # check asks it unbound, and asks it rather than the class's.
+        # A keyword is set on the instance, where nothing binds it, so the check asks it unbound.
         def needs_tenant(*, tenant: Any) -> int:
             return 200
 
@@ -340,8 +317,7 @@ class TestAStaticHookIsReadAsTheInstanceReadsIt:
 
 class TestAHookThatIsNoMethod:
     def test_a_plain_function_hook_is_refused_by_name(self) -> None:
-        # Read off an instance a function is bound, so one with no ``self``
-        # cannot be called; ``staticmethod`` keeps it unbound.
+        # Read off an instance a function is bound, so one with no ``self`` cannot be called.
         def accepted(*, result: Author) -> int:
             return 203
 

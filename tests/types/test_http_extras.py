@@ -1,5 +1,3 @@
-"""Tests for the generic ``HttpExtras[UserT]`` ``TypedDict``."""
-
 from __future__ import annotations
 
 from typing import Any
@@ -19,8 +17,7 @@ class _User:
 
 
 def test_keys_are_not_required() -> None:
-    # ``request`` and ``user`` are ``NotRequired`` — the framework's kwargs
-    # pool may omit them (or the service may be called outside HTTP scope).
+    # ``request`` and ``user`` are ``NotRequired`` — the framework's kwargs pool may omit them.
     assert HttpExtras.__required_keys__ == frozenset()
     assert HttpExtras.__optional_keys__ == frozenset({"request", "user"})
 

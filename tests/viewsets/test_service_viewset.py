@@ -1,17 +1,3 @@
-"""``ServiceViewSet`` serving kernel specs from ``action_specs``.
-
-Every entry here is the kernel's own ``ServiceSpec`` or ``SelectorSpec``, with
-the DRF seats ``SerializerValidator`` and ``SerializerPresenter``, and every
-test drives the viewset through ``as_view()``, so each fails against a tree
-whose ``as_view()`` refuses a kernel spec in ``action_specs``.
-
-The actions dispatch through the standalone views' own edge
-(``dispatch_mutation_for_spec`` and ``dispatch_kernel_selector``), and
-``as_view()`` asks each entry the standalone views' own kernel checks
-(``validate_mutation_view_spec`` / ``validate_selector_view_spec``), keyed by
-the action the entry serves.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -502,10 +488,7 @@ class TestAsView:
             viewset.as_view({"post": "create"})
 
     def test_a_kernel_spec_under_a_custom_key_is_refused(self) -> None:
-        """A custom key feeds ``get_permissions`` and the serializer resolver
-        only, and a kernel spec's checks are asked by ``dispatch`` alone, so
-        such an entry would guard nothing: ``@service_action`` /
-        ``@selector_action`` are the way to serve one."""
+        """A custom key feeds ``get_permissions`` and the serializer resolver only."""
         viewset = _viewset(action_specs={"publish": _create()})
         with pytest.raises(ImproperlyConfigured, match="service_action"):
             viewset.as_view({"post": "create"})
