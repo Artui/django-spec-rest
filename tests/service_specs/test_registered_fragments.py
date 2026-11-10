@@ -1,10 +1,3 @@
-"""A ``JsonSchemaRegistry`` fragment, split onto the kernel's ``Parameter`` and ``OutputField``.
-
-The keywords a field of the declaration spells set that field; the rest is
-``json_schema_extra``; and whatever the kernel refuses to build the
-declaration with is dropped, the kernel's own refusal being the oracle.
-"""
-
 from __future__ import annotations
 
 from decimal import Decimal
@@ -279,8 +272,7 @@ def test_what_the_kernel_refuses_is_dropped_and_the_rest_kept(
 
 
 def test_a_bound_the_format_makes_legal_is_kept() -> None:
-    # Each keyword is asked about beside the ones kept before it: ``minimum``
-    # on a string is refused unless the string is a decimal.
+    # Each keyword is asked about beside the ones kept before it.
     parameter = _parameter({"type": "string", "format": "decimal", "minimum": 1})
     assert (parameter.format, parameter.minimum) == ("decimal", 1)
 
@@ -337,8 +329,7 @@ def test_a_rule_wins_over_the_walk_of_a_nested_serializer() -> None:
     registry = JsonSchemaRegistry(fields=((_RegisteredRow, {"type": "object"}),))
     row, rows = input_parameters(describe_serializer(_In), registry=registry)
     assert (row.type, row.fields) == ("object", None)
-    # ``many=True`` wraps the registered class in a ``ListSerializer``, which is
-    # matched by its own class, so the rows are walked, as drfs walks them.
+    # ``many=True`` wraps the registered class in a ``ListSerializer``.
     assert rows.type == "array"
     assert not isinstance(rows.items, str)
     one, many = _output(describe_serializer(_In), path=(), registry=registry)
@@ -395,12 +386,7 @@ def test_without_a_registry_the_walk_is_unchanged() -> None:
 
 
 def test_every_keyword_the_kernel_refuses_is_set_or_dropped() -> None:
-    """Each keyword the kernel's tables refuse in ``json_schema_extra`` is handled.
-
-    Set where a field spells it, else dropped, whatever the tables hold the
-    day a kernel release adds to them, so the split never hands the kernel a
-    keyword it refuses.
-    """
+    """Each keyword the kernel's tables refuse in ``json_schema_extra`` is handled."""
     parameter = _parameter(dict.fromkeys(PARAMETER_SCHEMA_KEYWORDS))
     field = _output_field(dict.fromkeys(OUTPUT_FIELD_SCHEMA_KEYWORDS))
     assert (parameter.type, parameter.json_schema_extra) == ("any", None)

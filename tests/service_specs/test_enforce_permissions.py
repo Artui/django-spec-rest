@@ -1,21 +1,3 @@
-"""DRF permission classes enforced on a kernel spec, by the kernel's own ``dispatch``.
-
-A kernel spec declares DRF permission classes as a
-``DRFPermissionCheck`` in its ``permissions``, and the kernel asks them: the
-class-level check always, the object check only of a model row. The cases
-``test_drf_permission_check`` already holds - a refusal's message and code,
-the first refusing class answering, a create or a collection never asked about
-an object, a target that is no model - are not repeated here.
-
-A kernel call never reaches a class without a request, where DRF would raise
-``AttributeError`` from the caller's class, since the check builds the offline pair it lacks,
-so a call with no ``call_context`` at all is answered rather than refused.
-
-The kernel asks the spec being dispatched, never a nested selector, and refuses
-a nested selector that declares ``permissions`` when the ``ServiceSpec`` is built
-(test_what_the_edge_owes_a_kernel_spec holds that refusal).
-"""
-
 from __future__ import annotations
 
 from typing import Any

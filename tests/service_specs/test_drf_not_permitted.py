@@ -1,12 +1,3 @@
-"""Tests for the dual-base ``DRFNotPermitted``: the kernel's denial that DRF answers 403.
-
-The kernel's ``__init__`` reaches DRF's through ``super()`` in this order of
-bases, so ``detail`` is DRF's either way; what a reversed order loses is the
-kernel's ``message``, which never gets set. Both are asserted, with the codes
-and the ``ErrorDetail`` type rather than a response body, which a broken class
-answers identically.
-"""
-
 from __future__ import annotations
 
 import pytest
@@ -28,8 +19,7 @@ class TestItIsBothClasses:
 
     @pytest.mark.parametrize("service_error", [KernelServiceError, ServiceError])
     def test_it_is_never_a_service_error(self, service_error: type[Exception]) -> None:
-        # A model reading a denial as a service refusal routes around it and
-        # keeps trying, where a denial should end the attempt.
+        # A model reading a denial as a service refusal routes around it and keeps trying.
         assert not issubclass(DRFNotPermitted, service_error)
 
 

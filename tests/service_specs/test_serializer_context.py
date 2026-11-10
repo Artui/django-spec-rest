@@ -1,13 +1,3 @@
-"""Context callables of a kernel spec's ``SerializerValidator`` and ``SerializerPresenter``.
-
-Each seat's ``serializer_context`` is the fourth layer of its serializer's
-context: merged over DRF's own context (the first), and over the view hooks a
-DRF edge carries (the second and third), with the final say on any key they
-share. These tests dispatch kernel specs through the kernel directly, with no
-edge and so none of the view-hook layers, which is how a transport speaking
-the kernel's language reaches them.
-"""
-
 from __future__ import annotations
 
 from types import MappingProxyType, SimpleNamespace

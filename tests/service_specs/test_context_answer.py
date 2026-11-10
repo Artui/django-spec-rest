@@ -1,5 +1,3 @@
-"""``context_answer`` asks a spec's context callable once per question in a call."""
-
 from __future__ import annotations
 
 from collections.abc import Iterator
@@ -38,8 +36,7 @@ def test_a_context_answer_is_held_for_the_names_its_objects_came_under() -> None
 
 
 def test_another_callable_handed_the_same_objects_is_asked_itself() -> None:
-    """The answer is held by the callable as well as its objects, so another
-    spec's callable handed the very same request is asked for its own."""
+    """The answer is held by the callable as well as its objects."""
     request = object()
 
     def first(*, request: Any) -> dict[str, Any]:

@@ -1,5 +1,3 @@
-"""Tests for ``SerializerValidator``."""
-
 from __future__ import annotations
 
 import dataclasses
@@ -329,10 +327,7 @@ def test_a_declared_dataclass_serializer_s_own_validate_refuses() -> None:
 
 
 def test_supports_partial_is_answered_per_declaration() -> None:
-    # The kernel reads it from the instance, so one adapter class answers for
-    # each declaration it was built over: held by the three declarations
-    # (a Serializer, a dataclass, a declared DataclassSerializer) failing
-    # one conjunct each.
+    # The kernel reads it from the instance.
     assert SerializerValidator(_Note).supports_partial is True
     assert SerializerValidator(_Order).supports_partial is False
     assert SerializerValidator(_MoveInSerializer).supports_partial is False
@@ -397,16 +392,14 @@ def test_a_current_user_default_reads_the_principal_under_dispatch() -> None:
     spec = ServiceSpec(
         service=service, permissions=[Unrestricted()], validator=SerializerValidator(S)
     )
-    # REJECT, the default: the hidden field is no Parameter, and no argument
-    # names it, so the closed argument set has nothing to refuse.
+    # REJECT, the default: the hidden field is no Parameter, and no argument names it.
     dispatch(spec, principal=user, arguments={"title": "hi"})
     assert received == {"title": "hi", "owner": user}
 
 
 @pytest.mark.django_db
 def test_a_key_a_validate_adds_named_like_a_registered_seed_stays_in_data() -> None:
-    """``tenant`` is a seed the caller registered: the service's ``tenant`` is the
-    seed's, and the key the serializer added is the service's in ``data`` alone."""
+    """``tenant`` is a seed the caller registered: the service's ``tenant`` is the seed's."""
     received: dict[str, Any] = {}
 
     class S(serializers.Serializer):
@@ -443,8 +436,7 @@ def test_a_many_spec_validates_once_and_binds_one_list_serializer() -> None:
     )
     dispatch(spec, principal=None, arguments={"items": [{"title": "a"}, {"title": "b"}]})
     assert received["data"] == [{"title": "a"}, {"title": "b"}]
-    # One bound serializer for the call, and it is DRF's list serializer, so a
-    # service reading ``serializer.validated_data`` sees every row.
+    # One bound serializer for the call, and it is DRF's list serializer.
     assert isinstance(received["serializer"], serializers.ListSerializer)
     assert received["serializer"].validated_data == received["data"]
 
@@ -463,9 +455,7 @@ def test_validated_many_hands_the_rows_values_under_the_argument_and_binds_once(
 
 
 def test_validated_many_keys_a_row_s_refusal_by_the_caller_s_index_not_the_position() -> None:
-    # The shape check refused row 1, so the Validator is handed rows 0 and 2;
-    # DRF counts the second as position 1. The caller's list is what the
-    # error must name.
+    # The shape check refused row 1, so the Validator is handed rows 0 and 2.
     with pytest.raises(DRFInvalidArguments) as raised:
         SerializerValidator(_Note).validated_many(
             {0: {"title": "ok"}, 2: {"title": "too long"}}, _context(), many_argument="items"
@@ -501,8 +491,7 @@ class _Listed(serializers.Serializer):
 
 
 def test_a_list_level_refusal_sits_under_non_field_errors() -> None:
-    # Only a call validated as a list can reach the list serializer's own
-    # validate(): a per-row loop never builds one.
+    # Only a call validated as a list can reach the list serializer's own validate().
     with pytest.raises(DRFInvalidArguments) as raised:
         SerializerValidator(_Listed).validated_many(
             {0: {"title": "a"}, 1: {"title": "b"}}, _context(), many_argument="items"
@@ -592,12 +581,10 @@ def test_dispatch_reports_a_many_call_s_rows_under_the_argument_beside_the_shape
             principal=None,
             arguments={"items": [{"title": "ok"}, {"title": "too long"}, {"count": "x"}]},
         )
-    # The kernel's own class raises out of dispatch; the edge translates it.
     rows = raised.value.detail["items"]
     assert set(rows) == {1, 2}
     assert rows[1] == {"title": ["Ensure this field has no more than 5 characters."]}
-    # DRF's code survives the kernel re-raising the list's tree and the edge's
-    # translation, so the wire a many call answers with keeps its codes.
+    # DRF's code survives the kernel re-raising the list's tree and the edge's translation.
     with pytest.raises(DRFInvalidArguments) as translated, translate_dispatch_errors():
         raise raised.value
     assert translated.value.get_codes()["items"][1] == {"title": ["max_length"]}

@@ -1,5 +1,3 @@
-"""Tests for the serializer field walk in ``service_specs/utils.py``."""
-
 from __future__ import annotations
 
 import dataclasses
@@ -231,8 +229,7 @@ def test_a_model_serializer_declares_its_writable_fields_in_order() -> None:
     title, body = params.get("title"), params.get("body")
     assert title is not None and body is not None
     assert (title.type, title.required) == ("string", True)
-    # A model default is not the serializer field's default: ModelSerializer
-    # makes the field optional and leaves the default to the model.
+    # A model default is not the serializer field's default.
     assert (body.required, body.default) == (False, KERNEL_UNSET)
     author, tags = params.get("author"), params.get("tags")
     assert author is not None and tags is not None
@@ -477,7 +474,6 @@ def test_the_shape_check_passes_what_the_field_takes(field: serializers.Field, v
             list(range(1001)),
             id="past-the-kernel-s-list-cap",
         ),
-        # Python values, which only an in-process caller can send.
         pytest.param(serializers.DateField(), datetime.date(2026, 10, 14), id="a-date"),
         pytest.param(
             serializers.DateTimeField(), datetime.datetime(2026, 10, 14, 10), id="a-datetime"
@@ -493,13 +489,7 @@ def test_the_shape_check_passes_what_the_field_takes(field: serializers.Field, v
 def test_the_shape_check_refuses_what_drf_coerces_across_json_types(
     field: serializers.Field, value: Any
 ) -> None:
-    # The named exceptions to never-stricter: a value of another JSON type
-    # that DRF coerces, which the declared type refuses as the JSON Schema it
-    # renders would; a Python value no JSON body carries, which the kernel's
-    # check, reading JSON values only, refuses where DRF reads it as parsed;
-    # and the kernel's default bound on a list's length. Each is a difference
-    # the CHANGELOG states; a case here that
-    # starts passing is one to strike from it.
+    # The named exceptions to never-stricter: a value of another JSON type that DRF coerces.
     assert _shape_check(field, value) == (True, False)
 
 
@@ -614,8 +604,7 @@ def _depth(param: Parameter | None, step: str) -> int:
 
 def test_a_recursive_serializer_is_truncated_to_an_open_object() -> None:
     params = _walk(_Tree)
-    # The root is the first appearance, and three more nest below it before the
-    # next one is truncated.
+    # The root is the first appearance.
     assert _depth(params.get("parent"), "parent") == 3
     assert _depth(params.get("children"), "children") == 3
     deepest = params.get("parent")
@@ -665,8 +654,7 @@ def test_a_call_context_is_offered_to_the_callable_as_the_call_s_own_dict() -> N
 
 
 def test_a_parameter_with_a_default_is_not_looked_for_in_the_pool() -> None:
-    """A defaulted parameter is answered by its default where the pool lacks it,
-    so the callable is still asked."""
+    """A defaulted parameter is answered by its default where the pool lacks it."""
 
     def fn(request: Any, tenant: Any = None) -> dict[str, Any]:
         return {}
@@ -676,8 +664,7 @@ def test_a_parameter_with_a_default_is_not_looked_for_in_the_pool() -> None:
 
 
 def test_a_var_positional_parameter_is_not_looked_for_in_the_pool() -> None:
-    """``*args`` has no default, yet the pool is keyed by name and never fills
-    it, so only the named parameters decide."""
+    """``*args`` has no default, yet the pool is keyed by name and never fills it."""
 
     def fn(request: Any, *args: Any) -> dict[str, Any]:
         return {}

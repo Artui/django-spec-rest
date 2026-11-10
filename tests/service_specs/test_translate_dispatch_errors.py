@@ -1,10 +1,3 @@
-"""Tests for ``translate_dispatch_errors``: the kernel's refusals leave as the dual-base classes.
-
-Every published ladder in the family catches DRF's ``ValidationError`` and
-``PermissionDenied`` by name, and none catches the kernel's bare classes, so
-what dispatch raises has to reach them as both.
-"""
-
 from __future__ import annotations
 
 import pytest
@@ -92,8 +85,7 @@ class TestTheKernelsRefusals:
             await refuse()
 
     async def test_as_a_decorator_on_an_async_def_it_translates_nothing(self) -> None:
-        # The decorator wraps the call that creates the coroutine, which raises
-        # nothing; the refusal comes later, from the await, outside the block.
+        # The decorator wraps the call that creates the coroutine, which raises nothing.
         @translate_dispatch_errors()
         async def refuse() -> None:
             raise KernelNotPermitted()
@@ -113,8 +105,7 @@ class TestWhatItLeavesAlone:
         ],
     )
     def test_a_refusal_drf_already_answers_passes_through(self, error: DispatchError) -> None:
-        # A validator raising the dual class directly is already caught by both
-        # ladders; rebuilding it would only lose its traceback.
+        # A validator raising the dual class directly is already caught by both ladders.
         left = _raised_through(error)
         assert left is error
         assert left.__cause__ is None

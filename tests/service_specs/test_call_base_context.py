@@ -1,12 +1,3 @@
-"""``call_base_context``: the view's baseline, reused in an edge call only for its request and view.
-
-Each case runs inside one edge call, a POST to a live view whose service makes
-kernel calls of its own, handing each a call context the edge did not build.
-Those calls share the edge call's state, so they are where a held baseline
-could be handed to a call it was not asked for: one per guard of
-``call_base_context``, each failing without it.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -75,7 +66,6 @@ def _contexts(calls: list[tuple[ServiceSpec, dict[str, Any]]]) -> list[dict[str,
     _SEEN.clear()
     response = post(open_spec(service, _Records), {"title": "outer"})
     assert response.status_code == 204, response.data
-    # The first is the edge call's own.
     return _SEEN[1:]
 
 
@@ -86,8 +76,7 @@ def test_a_call_carrying_another_view_is_answered_for_it() -> None:
 
 
 def test_a_call_carrying_another_request_is_answered_for_it() -> None:
-    """One view, two requests the calls arrived on: each call's offline request
-    is built around its own, and the baseline over the first is not the second's."""
+    """One view, two requests the calls arrived on."""
     view = _Plain()
     first, second = (
         factory.get("/", HTTP_X_ARRIVED="first"),
@@ -108,10 +97,7 @@ def test_a_call_carrying_another_request_is_answered_for_it() -> None:
 
 
 def test_a_layer_one_call_lays_on_its_copy_never_reaches_the_next() -> None:
-    """Three calls under one view and no request share the held baseline. The
-    first two lay their spec's context layer on it, and the third, whose spec
-    declares none, must not see it, whichever of the first two was handed the
-    held dict itself rather than a copy."""
+    """Three calls under one view and no request share the held baseline."""
     view = _Plain()
     layered = _inner(serializer_context=lambda: {"layer": "first spec's"})
 

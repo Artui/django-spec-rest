@@ -1,11 +1,3 @@
-"""A service whose output re-reads nothing presents its own return as rows.
-
-The kernel spells it ``returns_many=True`` beside no output selector: its own
-``dispatch`` answers a list, ``present`` hands each row to the
-``SerializerPresenter``, and the output schema is an array of the row. Over
-HTTP a create view serving such a spec answers the presented rows.
-"""
-
 from __future__ import annotations
 
 from typing import Any

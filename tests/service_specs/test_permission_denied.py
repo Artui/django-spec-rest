@@ -1,12 +1,3 @@
-"""``permission_denied``: the refusal DRF's view decides, for the request a caller is on.
-
-The two halves of its one condition are each held: a caller an authenticator
-recognised is denied (test_a_recognised_caller_is_denied_with_the_message_and_code,
-which fails without the second), and so is a request with no authenticator
-(test_off_http_a_refusal_is_the_denial, which fails without the first, since the
-offline request reports no successful authenticator either).
-"""
-
 from __future__ import annotations
 
 from typing import Any

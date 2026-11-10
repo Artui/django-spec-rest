@@ -1,12 +1,3 @@
-"""A ``json_schema_registry`` handed to the DRF seats reaches the kernel spec they serve.
-
-A kernel spec declares its seats itself, so the registry is the seat's own
-argument: ``SerializerValidator(..., json_schema_registry=)`` for the input,
-``SerializerPresenter(..., json_schema_registry=)`` for the output. The
-kernel's schema of the spec then states what the rule spells, less a format
-outside the kernel's four.
-"""
-
 from __future__ import annotations
 
 import dataclasses
@@ -81,8 +72,7 @@ def test_a_spec_s_input_fields_take_the_validator_s_rules() -> None:
 
 
 def test_a_rule_an_extension_prepends_wins_over_the_registrys_own() -> None:
-    """``extend`` puts its rules first, so they answer before the ones it extends,
-    and the registry extended is left as it was."""
+    """``extend`` puts its rules first, so they answer before the ones it extends."""
     integer = DEFAULT_JSON_SCHEMA_REGISTRY.extend(fields=[(_MoneyField, {"type": "integer"})])
 
     assert _amount_parameter(_service_spec(_REGISTRY.extend(fields=[]))).type == "string"
@@ -167,8 +157,7 @@ class _Order:
 
 
 def test_a_dataclass_input_takes_a_rule_on_the_field_class_it_is_read_through() -> None:
-    """A dataclass is read through its ``DataclassSerializer``'s fields, so a rule
-    on the field class a ``Decimal`` is read through reaches it."""
+    """A dataclass is read through its ``DataclassSerializer``'s fields."""
     by_field = JsonSchemaRegistry(
         fields=((serializers.DecimalField, {"type": "string", "pattern": "^1"}),)
     )

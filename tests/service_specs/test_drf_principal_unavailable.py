@@ -1,10 +1,3 @@
-"""Tests for dual-base ``DRFPrincipalUnavailable``: the kernel's refusal of a principal (403).
-
-As for ``NotPermitted``: the codes, the ``ErrorDetail`` type and the kernel's
-``message`` are asserted, because a response body is identical for a class
-whose bases are in the wrong order.
-"""
-
 from __future__ import annotations
 
 import pytest
@@ -33,8 +26,7 @@ class TestItIsBothClasses:
 
 class TestBothInitsRan:
     def test_the_default_is_the_kernels_message_not_a_permission_denial(self) -> None:
-        # DRF's default reads as a permission refusal; this one says there is
-        # nobody to refuse, and the kernel's wording is the one kept.
+        # DRF's default reads as a permission refusal; this one says there is nobody to refuse.
         exc = DRFPrincipalUnavailable()
         assert exc.message == KernelPrincipalUnavailable.default_message
         assert exc.detail == KernelPrincipalUnavailable.default_message

@@ -1,5 +1,3 @@
-"""``build_offline_context``: the request and view a kernel spec's DRF seats use off HTTP."""
-
 from __future__ import annotations
 
 from typing import Any
@@ -59,25 +57,17 @@ def test_supplied_http_request_is_wrapped_and_forced_to_post() -> None:
     assert ctx.request._request is not base
     assert ctx.request._request.method == "POST"
     assert base.method == "GET"
-    # Pre-existing META survives, so headers a real transport carries are visible.
     assert ctx.request.META["HTTP_X_CUSTOM"] == "kept"
     assert ctx.request.data == {"a": 1}
 
 
 def test_wrapping_a_real_wsgi_request_keeps_the_attributes_pickling_drops() -> None:
-    # ``HttpRequest.__getstate__`` deliberately omits ``non_picklable_attrs``, so a
-    # copy taken through ``copy.copy`` / ``__reduce_ex__`` silently loses ``environ``
-    # and ``_stream``. ``WSGIRequest._get_scheme`` reads ``environ``, so the loss only
-    # surfaces when something builds an absolute URI -- what a serializer carrying a
-    # ``FileField`` or ``HyperlinkedIdentityField`` does on a perfectly ordinary read.
+    # ``HttpRequest.__getstate__`` deliberately omits ``non_picklable_attrs``.
     from django.test import RequestFactory
 
     base = RequestFactory().post("/hook/")
     carried = set(base.__dict__)
     wrapped = build_offline_context(_USER, http_request=base).request._request
-    # Nothing the caller's request held may be missing from the copy. Asserting the
-    # whole set rather than naming ``environ`` keeps this true across Django versions:
-    # which attributes are deemed non-picklable has changed, and the invariant has not.
     assert carried - set(wrapped.__dict__) == set()
     assert wrapped.build_absolute_uri("/x/") == "http://testserver/x/"
 
@@ -88,8 +78,7 @@ def test_wrapping_shares_meta_session_and_body_with_the_caller() -> None:
     base._body = b"{}"
     ctx = build_offline_context(_USER, http_request=base)
     wrapped = ctx.request._request
-    # The copy is shallow on purpose: everything the dispatched code reads through
-    # the request keeps working, and a session write reaches the real session.
+    # The copy is shallow on purpose.
     assert wrapped.META is base.META
     assert wrapped.session is base.session
     assert wrapped._body is base._body
@@ -102,8 +91,7 @@ def test_wrapped_request_keeps_its_own_user() -> None:
     caller_user = object()
     base.user = caller_user  # ty: ignore[unresolved-attribute]
     ctx = build_offline_context(_USER, http_request=base)
-    # DRF's ``Request.user`` setter writes through to the request it wraps, so
-    # without the copy this would reassign the live request's principal.
+    # DRF's ``Request.user`` setter writes through to the request it wraps.
     assert ctx.request.user is _USER
     assert base.user is caller_user  # ty: ignore[unresolved-attribute]
 
@@ -113,8 +101,7 @@ def test_dispatching_twice_does_not_leak_query_params_between_calls() -> None:
     base.GET = QueryDict("owner=real")
     build_offline_context(_USER, http_request=base, query_params={"owner": "alice"})
     second = build_offline_context(_USER, http_request=base)
-    # The second dispatch sees the request's real query string, not the first
-    # dispatch's params, and the caller's own ``GET`` is untouched throughout.
+    # The second dispatch sees the request's real query string, not the first dispatch's params.
     assert second.request.query_params["owner"] == "real"
     assert base.GET["owner"] == "real"
 
@@ -158,8 +145,7 @@ def test_query_params_replace_a_wrapped_requests_get() -> None:
 
 @pytest.mark.django_db
 def test_auth_is_none_and_reading_it_keeps_the_user() -> None:
-    # DRF authenticates on the first read of ``auth``; with no authenticator
-    # that read would replace the user with ``AnonymousUser``.
+    # DRF authenticates on the first read of ``auth``.
     principal = User.objects.create(username="signed-in")
     ctx = build_offline_context(principal)
 
@@ -169,10 +155,7 @@ def test_auth_is_none_and_reading_it_keeps_the_user() -> None:
 
 @pytest.mark.django_db
 def test_reading_the_successful_authenticator_first_keeps_the_user() -> None:
-    # ``successful_authenticator`` authenticates on first read just as ``auth``
-    # does, and a request with no authenticator answers that by replacing the
-    # user with ``AnonymousUser``; a class asking which authenticator vouched
-    # for the call before it reads the user must still see the principal.
+    # ``successful_authenticator`` authenticates on first read just as ``auth`` does.
     principal = User.objects.create(username="signed-in")
     ctx = build_offline_context(principal)
 
@@ -206,9 +189,7 @@ class _FieldsFromTheQueryString(serializers.Serializer):
 
 @pytest.mark.django_db
 def test_a_serializer_branching_on_query_params_reads_the_spec_s_shapes() -> None:
-    # Off HTTP the offline request's query string is the call's read-shaping
-    # arguments, so a serializer reading ``request.query_params`` finds the
-    # ``fields`` the caller sent.
+    # Off HTTP the offline request's query string is the call's read-shaping arguments.
     post = Post.objects.create(title="shipped", published=True)
     spec = SelectorSpec(
         kind=SelectorKind.RETRIEVE,

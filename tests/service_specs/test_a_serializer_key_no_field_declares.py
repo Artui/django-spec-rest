@@ -1,20 +1,3 @@
-"""A ``serializer`` key no field declares is unknown; a field of that name is the serializer's.
-
-The kernel route strips nothing: the key reaches the kernel's
-closed argument set, which refuses it as "Unknown argument." under
-``UnknownArguments.REJECT`` and drops it under ``IGNORE``, as every other
-transport answers. That is a change by design, and each test asserts both
-policies' answers, so the policy ``UNKNOWN_ARGUMENTS`` sets for the HTTP edge
-can change without a test changing.
-
-A serializer was always free to declare a field named ``serializer``, and it
-still is: ``SerializerValidator`` leaves such a field out of its parameters,
-the edge hands the body's value to the serializer, and it validates into
-``data`` under either policy while the service's ``serializer`` stays the
-bound one. Off HTTP the kernel's own ``dispatch`` has nowhere to put that
-value, which is why ``unsendable`` names the field when it is required.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -83,7 +66,6 @@ def test_a_selector_callers_serializer_key_is_unknown(policy: UnknownArguments) 
     spec = SelectorSpec(
         kind=SelectorKind.LIST,
         selector=titles,
-        # Required, since the mount check refuses an optional read over a keyword with no default.
         reads=Parameters.of(Parameter("title", "string", required=True)),
         permissions=_OPEN,
     )
@@ -198,8 +180,7 @@ def test_an_input_field_named_serializer_is_required_in_the_serializers_words(
 def test_off_http_the_field_cannot_be_sent(
     unknown: UnknownArguments, expected: dict[str, list[str]]
 ) -> None:
-    """The kernel's own ``dispatch`` hands a Validator only its parameters, and
-    the field is none: refused as unknown, or dropped and then missing."""
+    """The kernel's own ``dispatch`` hands a Validator only its parameters."""
     spec = _sees_the_bound_serializer({})
 
     with pytest.raises(InvalidArguments) as excinfo:

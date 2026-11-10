@@ -1,5 +1,3 @@
-"""``base_serializer_context``: DRF's baseline context, on and off the HTTP path, for a spec."""
-
 from __future__ import annotations
 
 from typing import Any
@@ -86,14 +84,7 @@ class _FileFieldShapedSerializer(serializers.Serializer):
 
 @pytest.mark.django_db
 class TestFileFieldsOffHttp:
-    """A request in the context must not be worse than none.
-
-    A synthesized request with an empty ``META`` would raise
-    ``KeyError: 'SERVER_NAME'`` from ``build_absolute_uri``, so a serializer
-    with a ``FileField`` would break on a path that renders a relative URL with
-    no request at all. A transport carries the offline pair in the call's
-    context, as one with no DRF view of its own does.
-    """
+    """A request in the context must not be worse than none."""
 
     def _render(self, host: str | None) -> Any:
         Post.objects.create(title="a")

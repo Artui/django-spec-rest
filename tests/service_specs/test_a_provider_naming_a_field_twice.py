@@ -1,22 +1,3 @@
-"""A provider naming one field by both its wire name and its ``source``.
-
-A serializer field ``tenant = CharField(source="org")`` validates the wire
-name's value into ``data`` under ``org``, and the Validator's values are keyed
-by the source too, so a service's ``org`` parameter is handed that value and
-its ``tenant`` parameter nothing. Off HTTP, through the kernel's own
-``dispatch``, a spec whose providers name both keys gets each to the parameter
-of its name, neither dropped for the other, through the kernel's two seats:
-``input_data``'s ``tenant`` is the field's, validated into ``data`` over what
-the client sent, and ``kwargs``' ``tenant`` and ``org`` are the service's own,
-outranking what the Validator returns.
-
-Over HTTP a ``kwargs`` answer naming a field's wire name is refused with
-``ImproperlyConfigured`` on the request that gets it: the kernel's ``kwargs``
-seat feeds the service alone, so such a value reaches it unvalidated. ``input_data``
-fills a field. A key named like the field's ``source`` is no parameter of the
-Validator, so it stays the service's.
-"""
-
 from __future__ import annotations
 
 import dataclasses
@@ -128,9 +109,7 @@ _FMT = pytest.mark.parametrize("fmt", ["json", "multipart"])
     ids=["kwargs-alone", "beside-input-data"],
 )
 def test_a_kwargs_value_named_like_a_field_is_refused(fmt: str, providers: Any) -> None:
-    """The wire name is a parameter of the Validator, so the provider's value
-    would reach the service unvalidated: the request is refused, pointing at
-    ``input_data``, and the service never runs."""
+    """The wire name is a parameter of the Validator."""
     seen: dict[str, Any] = {}
 
     with pytest.raises(ImproperlyConfigured, match=r"answered 'tenant'.*ServiceSpec\.input_data"):
@@ -153,8 +132,7 @@ def test_a_declined_wire_name_is_not_refused(fmt: str) -> None:
 
 @_FMT
 def test_a_kwargs_value_named_like_a_source_is_the_service_s(fmt: str) -> None:
-    """``org`` is no parameter of the Validator: the provider's value is the
-    service's ``org``, over the validated one, and ``data`` keeps the field's."""
+    """``org`` is no parameter of the Validator: the provider's value is the service's ``org``."""
     seen: dict[str, Any] = {}
     spec = _spec(
         seen,
@@ -179,9 +157,7 @@ class _TenantIn:
 
 
 def test_another_validator_s_kwargs_provider_is_not_checked() -> None:
-    """A Validator that is no serializer's declares what it takes itself, and
-    the kernel holds its seats as it holds them everywhere: the edge adds no
-    check of its own."""
+    """A Validator that is no serializer's declares what it takes itself."""
     seen: dict[str, Any] = {}
 
     def service(*, data: Any, tenant: str) -> None:

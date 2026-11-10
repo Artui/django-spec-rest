@@ -1,17 +1,3 @@
-"""``SerializerValidator.unsendable``: the required fields no call can send.
-
-A field named in ``RESERVED_POOL_SEEDS``, in ``BOUND`` or in ``excluded`` is no
-parameter, so a call through the kernel's own ``dispatch`` has nowhere to put
-its value, while the DRF edge reads it from the body. A transport reads the
-attribute to refuse a spec whose call could never validate. Each spec here is
-the kernel's own ``ServiceSpec`` with a ``SerializerValidator`` on its seat,
-and each test reads the attribute off that seat.
-
-The kernel's ``Validator`` does not declare the attribute yet, so a reader
-holding any other Validator still reads it with ``getattr`` and a default.
-The test of that default is a strict xfail until the kernel declares it.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -129,11 +115,7 @@ def test_a_field_named_like_no_seed_is_a_parameter_and_not_unsendable() -> None:
 
 
 def test_a_field_the_validator_excludes_is_unsendable_when_required() -> None:
-    """The name ``excluded`` takes out of ``parameters()`` is the one ``unsendable`` names.
-
-    Held against the case above: only the omission differs, so the attribute
-    follows the parameters rather than a list of names of its own.
-    """
+    """The name ``excluded`` takes out of ``parameters()`` is the one ``unsendable`` names."""
     validator = SerializerValidator(_TenantIn, excluded=frozenset({"tenant"}))
 
     assert validator.parameters().names() == frozenset({"title"})
@@ -158,14 +140,7 @@ def test_a_partial_spec_names_the_same_fields() -> None:
 
 @pytest.mark.django_db
 def test_a_many_specs_row_fields_are_read_through_the_row_serializer() -> None:
-    """The Validator of a ``many`` spec holds the row serializer, so a row is what is read.
-
-    A row's required ``user`` is named because the kernel's ``dispatch`` cannot
-    send it either: ``parameters()`` omits it from the row's own Parameters, and
-    a call over ``items`` is refused for it under ``REJECT`` (an unknown
-    argument) and under ``IGNORE`` (required). A row field named like no seed is
-    no different from the single-object case: declared, so not named.
-    """
+    """The Validator of a ``many`` spec holds the row serializer, so a row is what is read."""
     spec = _spec(_RequiredUserIn, many=True)
     principal = AnonymousUser()
 
@@ -211,11 +186,7 @@ class _Bare(Validator):
 
 
 def test_a_validator_that_does_not_define_it_answers_the_empty_default() -> None:
-    """The kernel's ``Validator`` declares the empty default, so a reader needs no ``getattr``.
-
-    Asked of a subclass defining only the abstract methods, so the default is
-    the ABC's own and not one the kernel's validators each define.
-    """
+    """The kernel's ``Validator`` declares the empty default, so a reader needs no ``getattr``."""
     validator: Any = _Bare()
 
     assert validator.unsendable == frozenset()

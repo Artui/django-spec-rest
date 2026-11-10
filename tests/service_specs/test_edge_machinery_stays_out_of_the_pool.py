@@ -1,15 +1,3 @@
-"""What the DRF edge carries for its own machinery never reaches a kernel spec's callables.
-
-The edge keeps its state for a call - the body the serializer binds, the view's
-serializer context layers, the descriptions it builds - in a context variable,
-never in the call's pool. So a callable taking a bare ``**kwargs`` is handed
-the kernel's pool alone: ``user``, ``progress``, the Validator's values and
-what the stage itself binds, with no name of the edge's, and, by the kernel's
-own rule, neither ``request``, ``view`` nor ``call_context``, which are handed
-by name only. Each case runs over a live view, and the service case through
-the edge's ``dispatch_kernel_spec`` directly.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -100,8 +88,7 @@ def test_over_http_a_bare_kwargs_stage_sees_no_edge_machinery() -> None:
     assert set(SEEN) == {"service", "input", "output", "precondition"}
     for stage in ("service", "precondition"):
         assert _edge_s(SEEN[stage]) == [], stage
-    # A seat's own context callable is this package's, and its pool holds the
-    # serializer's ``request`` and ``view`` by design; nothing of the edge's.
+    # A seat's own context callable is this package's.
     for stage in ("input", "output"):
         assert _private(SEEN[stage]) == [], stage
         assert "call_context" not in SEEN[stage], stage

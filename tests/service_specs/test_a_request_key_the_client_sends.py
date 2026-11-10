@@ -1,16 +1,3 @@
-"""A ``request`` or ``view`` key a client sends, which no field or parameter declares.
-
-The kernel seeds ``request`` and ``view`` from the call's context, so a client
-sending either names no argument of the spec. The edge strips nothing before it
-calls the kernel's ``dispatch``: under ``REJECT`` the key is refused as
-"Unknown argument.", a 400 naming it, as on every other transport; under
-``IGNORE`` it is dropped unseen, and a callable declaring ``request`` is handed
-the view's own.
-
-HTTP runs under ``IGNORE``, set by one line, ``UNKNOWN_ARGUMENTS`` in
-``dispatch/kernel_edge.py``; each test sets it and asserts both answers.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -148,8 +135,7 @@ def test_a_row_key_no_field_declares(policy: UnknownArguments) -> None:
     response = _post(spec, [{"title": "a", "request": "spoofed"}])
 
     if policy is UnknownArguments.REJECT:
-        # Keyed by the row, under the spec's ``many_argument``, as the kernel
-        # refuses each row.
+        # Keyed by the row, under the spec's ``many_argument``, as the kernel refuses each row.
         assert response.status_code == 400, response.data
         assert "Unknown argument." in str(response.data["items"][0]["request"])
         assert received == []

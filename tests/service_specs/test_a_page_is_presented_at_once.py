@@ -1,19 +1,3 @@
-"""A list is presented as one ``many=True`` render, its context asked once for the page.
-
-The kernel hands a list's rows to ``SerializerPresenter.presented_rows`` in one
-call: a page's rows over HTTP, a ``returns_many`` service's return elsewhere.
-The ``serializer_context`` callable is asked once for them, offered the rows
-under ``page`` and under the presenter's ``value_keyword``, so a lookup it
-batches over the rows runs once a page rather than once a row. The rows are
-rendered by the serializer with ``many=True``, so a ``Meta.list_serializer_class``
-and its ``to_representation`` run as they do behind a DRF view. One value is
-still presented through ``presented()``, with the value under
-``value_keyword``.
-
-The kernel adds affordances to each presented row by its position, so the
-answer is one presented value per row, in order.
-"""
-
 from __future__ import annotations
 
 import json
@@ -119,8 +103,7 @@ class TestThePageIsAskedForOnce:
     def test_the_queries_a_page_costs_do_not_grow_with_its_rows(self) -> None:
         _posts(6)
 
-        # Declares no value, so it is answered whether it is asked once for the
-        # page or once per row: the count alone tells the two apart.
+        # Declares no value, so the count alone shows whether it is asked once per page or per row.
         def one_query() -> dict[str, Any]:
             return {"seen": dict.fromkeys(Post.objects.values_list("pk", flat=True), 1)}
 
@@ -348,9 +331,7 @@ class TestAPageWithNoNone:
         )
         view = type("_View", (SelectorListView,), {"spec": spec})
 
-        # With no ``None`` on the page the presenter hands the render back as it
-        # is, so the check that answers is the kernel's, on the rows it handed
-        # over, and not the presenter's own ("its list serializer answered").
+        # With no ``None`` on the page the presenter hands the render back as it is.
         with pytest.raises(
             ImproperlyConfigured,
             match=r"^SerializerPresenter\.presented_rows answered with a list of 1 for 2 rows\.",

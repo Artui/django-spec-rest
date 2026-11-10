@@ -1,19 +1,3 @@
-"""A serializer refusing to render leaves the presenter as the kernel's ``InvalidArguments``.
-
-The kernel's ``present`` and ``present_for_audience`` call the presenter, and
-a kernel route reads the kernel's refusal of the arguments, never DRF's
-``ValidationError``. So ``SerializerPresenter.presented`` answers a
-serializer's refusal as the dual ``DRFInvalidArguments``, still DRF's class:
-
-- a mapping detail passes as it is;
-- a list detail, which is all DRF makes of a message, goes under the
-  kernel's non-field key;
-- each message keeps its code.
-
-A view serving a kernel spec presents through the kernel's ``present``, so the
-refusal reaches HTTP as the dual class, a ``400`` whose body is the mapping.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -161,9 +145,7 @@ class _CreateView(ServiceCreateView):
 @pytest.mark.parametrize(
     ("error", "body"),
     [
-        # Not DRF's bare list, ``["Cannot render."]``: a kernel spec presents through the kernel's
-        # ``present``, where the refusal is the dual class with the message
-        # under the kernel's non-field key, and that mapping is the body.
+        # Not DRF's bare list, ``["Cannot render."]``.
         (ValidationError("Cannot render."), b'{"non_field_errors":["Cannot render."]}'),
         (ValidationError({"fields": ["nope"]}), b'{"fields":["nope"]}'),
     ],
@@ -184,8 +166,7 @@ def test_a_live_view_answers_the_refusal_as_a_400(error: ValidationError, body: 
 
 
 def test_a_retrieve_view_answers_the_refusal_as_a_400() -> None:
-    """A retrieve view presents a kernel spec through the spec's presenter, so the
-    refusal is the dual class and the body is its mapping, as on a create view."""
+    """A retrieve view presents a kernel spec through the spec's presenter."""
     spec = _retrieve(ValidationError({"fields": ["nope"]}))
 
     class _View(SelectorRetrieveView):
@@ -204,8 +185,7 @@ def test_a_retrieve_view_answers_the_refusal_as_a_400() -> None:
 @pytest.mark.parametrize(
     ("error", "body"),
     [
-        # A page renders as one ``many=True`` serializer, and its list refusal is keyed
-        # under the non-field key as a single row's is, not DRF's bare list.
+        # A page renders as one ``many=True`` serializer.
         (ValidationError("Cannot render."), b'{"non_field_errors":["Cannot render."]}'),
         (ValidationError({"fields": ["nope"]}), b'{"fields":["nope"]}'),
     ],

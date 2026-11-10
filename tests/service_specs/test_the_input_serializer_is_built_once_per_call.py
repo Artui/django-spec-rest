@@ -1,16 +1,3 @@
-"""A call's input serializer is built for the call's own body, row and context.
-
-DRF's view builds one serializer for a request, with the request's data, the
-row it updates and its context, so a ``get_fields`` or an ``__init__`` reading
-``self.initial_data``, ``self.instance`` or ``self.partial`` reads the call's.
-A kernel spec whose Validator is a ``SerializerValidator`` keeps that: the
-fields the kernel checks the arguments against are the fields the serializer
-validates with over a live view, where the serializer is built, and queries as it
-is built, once. Through the kernel's own ``dispatch`` there is no call to
-describe the serializer for, so a serializer whose fields depend on the body, the
-row or ``partial`` is not covered off HTTP: that is the decided answer.
-"""
-
 from __future__ import annotations
 
 import collections
@@ -199,8 +186,7 @@ def _spec(
 
 
 def _by_lookup(serializer: type[serializers.Serializer], **options: Any) -> ServiceSpec:
-    """An update whose row is the spec's own lookup's: a kernel spec's target is its
-    ``instance_selector_spec``'s, never the view's ``get_object()``."""
+    """An update whose row is the spec's own lookup's."""
     return _spec(serializer, update=True, instance_selector_spec=_LOOKUP, **options)
 
 
@@ -300,9 +286,7 @@ class TestOverALiveView:
         assert response.status_code == 201, response.data
 
     def test_a_guarded_body_read_validates_the_field_it_adds(self, db: Any) -> None:
-        """The way through the gap the cases above name: the description reads
-        no body and adds no field, and the serializer that validates is bound
-        to the body, so the field it adds there is required and validated."""
+        """The way through the gap the cases above name."""
         response = _create(_spec(GuardedInitialDataKind), {"kind": "long", "extra": "x"})
 
         assert response.status_code == 201, response.data
@@ -342,13 +326,7 @@ class TestOverALiveView:
 
 
 class TestAnUpdateOverALiveViewIsDescribedForItsRow:
-    """The one case of the description the kernel route already gets right.
-
-    The row the spec's own lookup finds is the one the shape check's description sees, so a
-    field that is read-only on an update is not required of the body. It stays
-    unmarked beside the cases that still fail: it holds only if the description the
-    shape check reads sees the row (without it ``title`` is required and the call is
-    a ``400``)."""
+    """The one case of the description the kernel route already gets right."""
 
     def test_a_field_an_update_never_writes_is_not_required(self, post: Post) -> None:
         response = _lookup_update(_by_lookup(InstanceMakesReadOnly), {"body": "b"}, post)
@@ -359,9 +337,7 @@ class TestAnUpdateOverALiveViewIsDescribedForItsRow:
 
 @_BUILT_AGAIN
 class TestBuiltOnceOverALiveView:
-    # ``Row`` reads neither the body nor the row as it is built, so each of these
-    # counts builds and nothing else: the description gap the live-view cases above
-    # name would fail a serializer that reads either before the count was reached.
+    # ``Row`` reads neither the body nor the row as it is built.
     def test_a_create(self, db: Any) -> None:
         response = _create(_spec(Row), {"kind": "k"})
 
@@ -395,12 +371,7 @@ class TestBuiltOnceOverALiveView:
 
 
 class TestAContextCallableTheDescriptionCannotAsk:
-    """A callable taking ``**kwargs`` is asked by the serializer that validates.
-
-    The description holds none of the call's seeds, so it reads the fields
-    without the callable's answer, and the serializer that validates is built
-    with it: the limit the answer sets is the one the body is refused by.
-    """
+    """A callable taking ``**kwargs`` is asked by the serializer that validates."""
 
     @_CORES
     def test_through_the_kernel_s_dispatch(

@@ -1,11 +1,3 @@
-"""A kernel selector's request-scoped ``FilterSet`` is handed the request the call carries.
-
-As ``DjangoFilterBackend`` hands it, a ``FilterSet`` declaring ``request`` finds
-the call's: the offline pair's, for a caller outside HTTP (the bridges to other
-transports build one), and the DRF request itself on a live view. The kernel
-hands it by the declare-to-receive rule from the call's context.
-"""
-
 from __future__ import annotations
 
 from typing import Any

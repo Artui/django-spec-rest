@@ -1,19 +1,3 @@
-"""Over HTTP, every serializer of a kernel spec's call is handed the request's one dict.
-
-The view builds one call context per request and hands it to the kernel's
-``dispatch``. The ``SerializerValidator``'s serializer and the
-``SerializerPresenter``'s are built with that very object as their ``context``,
-not a copy, so a key the input serializer's ``validate()`` writes is there for
-the service and for the output serializer, as one serializer validating and
-rendering in a stock ``ModelViewSet`` already sees it.
-
-Off a request - a kernel ``dispatch`` with no request in its context, or with
-the Django request a run arrived on - the serializers are built over the
-offline pair as before, and nothing of that pair is written into the
-transport's dict, where kernel-native code learns from ``request`` whether the
-call came from one.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -144,21 +128,13 @@ def test_the_route_s_suffix_outranks_an_overriding_get_serializer_context_for_fo
     _post(_spec(seen), {"name": "Ada"}, base=_ExtendingView, format="json")
 
     call_context = seen.contexts["service"]
-    # ``format`` is the route's suffix as DRF's view answers it (``format_kwarg``), so an
-    # override of ``get_serializer_context`` answering another value for it does not
-    # displace it: the view's input and output hook layers both default to that answer,
-    # and both are written into this one dict, which is read here after the output's.
+    # ``format`` is the route's suffix as DRF's view answers it (``format_kwarg``).
     assert call_context["format"] == "json"
     assert call_context["extra"] == 1
 
 
 def test_a_suffix_route_s_format_is_in_the_one_dict_the_validator_reads() -> None:
-    """DRF's ``format`` is the route's suffix, as ``get_serializer_context`` answers it.
-
-    A serializer building a hyperlink reads ``self.context["format"]`` to carry the
-    suffix of the route it was reached by; a dict holding ``None`` there builds
-    the link with none.
-    """
+    """DRF's ``format`` is the route's suffix, as ``get_serializer_context`` answers it."""
     seen = _Seen()
 
     response = _post(_spec(seen), {"name": "Ada"}, format="json")
@@ -224,8 +200,7 @@ def test_a_view_hook_answering_a_transport_key_leaves_the_stamp_to_every_stage()
 
     _post(_spec(seen), {"name": "Ada"}, base=_StampingView)
 
-    # The kernel's contract is that the transport stamps last: both hook layers
-    # (input and output) are written into the one dict and neither displaces the stamp.
+    # The kernel's contract is that the transport stamps last: both hook layers.
     assert _stages(seen) == {
         "input": REST_TRANSPORT,
         "service": REST_TRANSPORT,

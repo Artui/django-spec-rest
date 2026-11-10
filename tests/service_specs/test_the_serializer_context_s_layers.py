@@ -1,13 +1,3 @@
-"""The serializer context's four layers, on a view serving a kernel spec.
-
-DRF's own context (the view's ``get_serializer_context``), the directional and
-per-action view hooks, then the seat's own callable (``SerializerValidator``'s
-and ``SerializerPresenter``'s ``serializer_context``), each later layer winning
-on a key it shares with an earlier one. Each reaches the input serializer the
-kernel validates through and the output serializer it presents through, and
-nothing else: no service's pool.
-"""
-
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -127,9 +117,7 @@ class TestTheSeatsCallable:
         assert output == {"base": "view", "shared": "spec", "spec_out": "hi"}
 
     def test_an_input_key_is_the_output_s_too_for_both_share_one_dict(self) -> None:
-        """A kernel route builds one context dict per request and hands it to every
-        serializer, so the input callable's key is on the output serializer and the
-        output callable's key lands on the very dict the input serializer holds."""
+        """A kernel route builds one context dict per request and hands it to every serializer."""
         contexts: list[dict[str, Any]] = []
 
         class _Recording(serializers.Serializer):
@@ -224,8 +212,7 @@ class TestTheViewsHooks:
         assert seen == [{"base": "view", "shared": "hook", "hook_in": "in"}]
 
     def test_layer_over_the_view_s_own_context_on_the_output_with_the_result(self) -> None:
-        """The input hook's key is on the output serializer too: the kernel route's
-        one dict per request carries every layer to every serializer."""
+        """The input hook's key is on the output serializer too."""
         output, _ = _post(_spec([]), _HookedView)
 
         assert output == {
@@ -311,12 +298,7 @@ class TestOnASelectorView:
     ),
 )
 def test_one_dict_per_request_reaches_both_serializers_and_the_service() -> None:
-    """A key the input serializer's ``validate()`` writes is the output's and the service's.
-
-    The context the input
-    serializer is built under is the dict the view's ``get_serializer_context()``
-    returned, the one dict of the request.
-    """
+    """A key the input serializer's ``validate()`` writes is the output's and the service's."""
     written: list[Any] = []
     contexts: list[Any] = []
 

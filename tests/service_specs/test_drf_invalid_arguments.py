@@ -1,13 +1,3 @@
-"""Tests for the dual-base ``DRFInvalidArguments``: the kernel's refusal that DRF answers 400.
-
-A response body cannot tell a working class from a broken one. When the
-kernel's ``__init__`` alone runs, ``detail`` is a tree of plain strings, and
-DRF's handler still answers 400 with a byte-identical body, while
-``get_codes()`` raises. So these assert the codes and the ``ErrorDetail`` type,
-and the status assertions are paired with the kernel's own class, which DRF's
-handler does not recognise and Django answers 500.
-"""
-
 from __future__ import annotations
 
 import pytest
@@ -40,8 +30,7 @@ class TestItIsBothClasses:
 
     @pytest.mark.parametrize("service_error", [KernelServiceError, ServiceError])
     def test_it_is_never_a_service_error(self, service_error: type[Exception]) -> None:
-        # A service refusal is something an agent routes around; a refusal of
-        # the arguments is not, and an MCP server tells the two apart by type.
+        # A service refusal is something an agent routes around; a refusal of the arguments is not.
         assert not issubclass(DRFInvalidArguments, service_error)
 
 
@@ -69,8 +58,7 @@ class TestDrfsInitRan:
         assert DRFInvalidArguments(_tree()).message == KernelInvalidArguments.default_message
 
     def test_it_reads_as_drf_s_validation_error_does(self) -> None:
-        # A ladder that turns the refusal into text, as an agent retry does,
-        # reads what it read when the class raised was DRF's alone.
+        # A ladder that turns the refusal into text, as an agent retry does.
         assert str(DRFInvalidArguments(_tree())) == str(ValidationError(_tree()))
 
 
@@ -79,8 +67,7 @@ class TestDrfAnswersIt:
         assert served_status(DRFInvalidArguments(_tree())) == 400
 
     def test_the_kernels_class_alone_is_a_500(self) -> None:
-        # The DRF base is what earns the 400: without it, DRF's handler returns
-        # nothing and the view's exception reaches Django unanswered.
+        # The DRF base is what earns the 400: without it.
         assert served_status(KernelInvalidArguments(_tree())) == 500
 
 

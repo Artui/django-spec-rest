@@ -1,13 +1,3 @@
-"""What ``SerializerValidator``'s ``json_schema_registry`` enforces under kernel dispatch.
-
-A keyword a kernel field spells is checked as a built-in field's would be, by
-the kernel's shape check before the serializer runs; a keyword left in
-``json_schema_extra`` is advertised and not checked.
-
-A selector's reads take no registry: a kernel spec declares each read as a
-``Parameter`` with its own type.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -68,8 +58,7 @@ def test_a_keyword_a_field_spells_is_checked(arguments: dict[str, Any], code: st
     with pytest.raises(InvalidArguments) as excinfo:
         _dispatch(arguments)
 
-    # The kernel's shape check answers, before the serializer runs, with a
-    # ``CodedMessage`` carrying DRF's code for the same mistake.
+    # The kernel's shape check answers, before the serializer runs.
     (message,) = excinfo.value.detail["count"]
     assert message.code == code
 

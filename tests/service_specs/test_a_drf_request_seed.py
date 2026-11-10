@@ -1,11 +1,3 @@
-"""The ``request`` seed the off-HTTP recipe registers, as a tool's dispatch resolves it.
-
-``django-spec-mcp`` is no dependency of this package, so this drives what its
-tool route does: the kernel's ``dispatch`` with the server's ``pool_seeds`` and
-the Django request in ``call_context``. ``drf_request`` is the recipe's own text
-(test_the_recipe_shows_this_seed).
-"""
-
 from __future__ import annotations
 
 import inspect
