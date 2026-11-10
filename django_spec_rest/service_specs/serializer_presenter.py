@@ -79,7 +79,7 @@ class SerializerPresenter(Presenter):
         shaped: bool = False,
         json_schema_registry: JsonSchemaRegistry | None = None,
     ) -> None:
-        # Resolved at construction but never instantiated: specs are built at import time, and a ``ModelSerializer`` reads the app registry when its fields are built.
+        # Resolved, not instantiated: specs load at import, and fields need the app registry.
         if not isinstance(serializer_class, type):
             raise ImproperlyConfigured(_REFUSED.format(declared=serializer_class))
         resolved = renderable_serializer_class(serializer_class)

@@ -212,7 +212,7 @@ TWINS = {
 def test_a_check_s_denial_of_a_twin_the_edge_dispatched_asks_to_sign_in(
     twin: str, caller: str
 ) -> None:
-    """The kernel names the spec it was handed, the twin, so that is the spec the denial is the call's own for.
+    """The kernel names the spec it was handed (the twin), so that spec's denial is the call's own.
 
     Fails where the edge compares the denial's spec with the view's
     declaration: the twin is another object, and its check's denial of an
@@ -256,7 +256,7 @@ def _author(*, pk: int) -> Author | None:
 
 @pytest.mark.parametrize("caller", CALLERS)
 def test_an_object_level_check_s_denial_is_answered_as_drf_answers_it(caller: str) -> None:
-    """The row the spec's own lookup finds is checked inside the edge too, and refused as the class-level check is.
+    """The row the spec's lookup finds is checked in the edge too, refused as the class check is.
 
     DRF's ``check_object_permissions`` answers through the same
     ``permission_denied``, so a caller nobody authenticated is asked to.
@@ -353,7 +353,7 @@ class _RaisesNotPermitted(PermissionCheck):
 
 
 def test_a_check_raising_not_permitted_is_answered_as_raised() -> None:
-    """The kernel marks only a check answering ``False`` as its denial, so a raise is the check's own word.
+    """The kernel marks only a check answering ``False`` as a denial; a raise is the check's word.
 
     An anonymous caller behind a challenge is answered 403 with the raised
     message and no challenge, as DRF answers a permission class that raises

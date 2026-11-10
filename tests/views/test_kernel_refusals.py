@@ -154,7 +154,7 @@ def test_a_check_s_denial_of_an_anonymous_caller_is_a_challenge() -> None:
 
 
 def test_a_check_s_denial_out_of_no_dispatch_is_403() -> None:
-    """With no spec dispatched, as around presenting a result, a check's denial is any other ``NotPermitted``."""
+    """With no spec dispatched, as in presenting a result, a check's denial is ``NotPermitted``."""
     check = _Deny()
     spec = ServiceSpec(service=lambda: None, permissions=(check,))
     answer = answer_refusal(PermissionCheckDenied(check=check, spec=spec))

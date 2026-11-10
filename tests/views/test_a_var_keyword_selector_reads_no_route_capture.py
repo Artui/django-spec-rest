@@ -1,4 +1,4 @@
-"""A kernel selector taking a bare ``**kwargs`` is handed no route capture its spec does not declare.
+"""A kernel selector taking a bare ``**kwargs`` is handed no route capture its spec omits.
 
 The kernel hands a selector the arguments its ``reads`` declare and the seeds,
 so a capture no read declares never reaches it: a retrieve scoped by that

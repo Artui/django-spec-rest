@@ -1,4 +1,4 @@
-"""A spec with no presenter answers ``204`` for a service returning nothing, and is documented at either.
+"""A spec with no presenter answers ``204`` for a service returning nothing, documented at both.
 
 The edge answers ``204`` only where the service returned ``None``, and the
 kernel's ``present`` hands a value back as it is, so a document cannot tell

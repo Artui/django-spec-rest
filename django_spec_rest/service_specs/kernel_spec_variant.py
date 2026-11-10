@@ -35,7 +35,7 @@ def kernel_spec_variant(
 
 
 def _held(spec: Any, key: _Variant, build: Callable[[], Any]) -> Any:
-    """The variant ``key`` of ``spec``, built by ``build`` on first use and held while ``spec`` lives."""
+    """The variant ``key`` of ``spec``: built by ``build`` on first use, held for its life."""
     with _LOCK:
         held = _VARIANTS.get(id(spec))
         if held is None:
@@ -52,7 +52,7 @@ def _held(spec: Any, key: _Variant, build: Callable[[], Any]) -> Any:
 def _derived(
     spec: KernelServiceSpec | KernelSelectorSpec, key: _Variant
 ) -> KernelServiceSpec | KernelSelectorSpec:
-    """A kernel spec's variant: ``partial`` and ``lenient`` derived, and nothing else asked of it."""
+    """A kernel spec's variant: ``partial`` and ``lenient`` derived, and nothing else asked."""
     partial, lenient = key
     changes = _kernel_changes(spec, partial, lenient) if isinstance(spec, KernelServiceSpec) else {}
     if not changes:

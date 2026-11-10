@@ -1,4 +1,4 @@
-"""``drf_query_keys`` and ``kernel_query``: DRF's own query keys, kept off a kernel spec's arguments.
+"""``drf_query_keys`` and ``kernel_query``: DRF's query keys, kept off a kernel spec's arguments.
 
 The hand-off into the dispatch is not built yet (``test_selector_list_view``'s
 ``TestDRFsOwnQueryKeys`` holds it as a strict xfail), so the two are held here

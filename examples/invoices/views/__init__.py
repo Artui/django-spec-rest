@@ -265,7 +265,7 @@ SENT_SPEC = SelectorSpec(
     partial_update=extend_schema(responses={409: ServiceConflictSerializer}),
 )
 class InvoiceViewSet(ServiceViewSet):
-    """``/invoices/`` and ``/invoices/<pk>/``, plus ``POST /invoices/<pk>/send/``, which answers 202.
+    """``/invoices/`` and ``/invoices/<pk>/``, plus ``POST /invoices/<pk>/send/``, answers 202.
 
     No ``"destroy"`` spec: ``DELETE`` answers 405 and the detail route's
     ``Allow`` header leaves it out. ``PATCH`` falls back to the ``"update"``

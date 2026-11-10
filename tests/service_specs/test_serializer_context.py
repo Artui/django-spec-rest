@@ -1,4 +1,4 @@
-"""The serializer context callables of a kernel spec's ``SerializerValidator`` and ``SerializerPresenter``.
+"""Context callables of a kernel spec's ``SerializerValidator`` and ``SerializerPresenter``.
 
 Each seat's ``serializer_context`` is the fourth layer of its serializer's
 context: merged over DRF's own context (the first), and over the view hooks a

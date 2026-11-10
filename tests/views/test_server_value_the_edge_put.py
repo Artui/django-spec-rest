@@ -1,4 +1,4 @@
-"""The server's value for an input field is the value the server put, however the field reads a body.
+"""The server's value for an input field is what the server put, however the field reads a body.
 
 On the kernel route the one seat filling a ``SerializerValidator`` field is the
 spec's ``input_data``: the kernel merges its answer over the caller's
@@ -25,9 +25,9 @@ A form body's prefixed keys (``v.tenant``) are read as the field reads them,
 so under either policy they are the field's value and the server's value
 stands over it. ``input_data``'s value is validated
 as the author returned it, so a form body's reading of it (one value for a
-list, an empty string left out) is not this route's answer. A field named like a seed a project registers is not
-ported: the HTTP views register none, and the kernel's dispatch holds that
-case.
+list, an empty string left out) is not this route's answer. A field named like a seed a
+project registers is not ported: the HTTP views register none, and the kernel's dispatch holds
+that case.
 """
 
 from __future__ import annotations

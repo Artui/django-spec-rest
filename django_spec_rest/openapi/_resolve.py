@@ -29,7 +29,7 @@ def resolve_selector_spec(view: Any) -> KernelSelectorSpec | None:
 
 
 def _served(view: Any, kind: type[_Served], stamp: str) -> _Served | None:
-    """What ``view`` serves that is a ``kind``: its ``spec``, its handler's ``stamp``, or its ``action_specs`` entry."""
+    """What ``view`` serves as a ``kind``: its ``spec``, its ``stamp``, or ``action_specs``."""
     spec = getattr(view, "spec", None)
     if isinstance(spec, kind):
         return spec

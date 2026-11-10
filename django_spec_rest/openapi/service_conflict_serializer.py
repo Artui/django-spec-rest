@@ -6,7 +6,7 @@ from rest_framework import serializers
 class ServiceConflictSerializer(serializers.Serializer):
     """The call conflicts with the state of what it acts on. Why is under `detail`."""
 
-    # The docstring above is the component's description in the generated document, so it is written for a client; the reference is docs/openapi.md.
+    # The docstring above is the component's description, for a client; see docs/openapi.md.
 
     detail = serializers.CharField()
     code = serializers.CharField(

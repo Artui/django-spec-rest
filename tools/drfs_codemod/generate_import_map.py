@@ -68,7 +68,8 @@ DROP_REASONS = {
         "action; permission_strategy= is dropped"
     ),
     "UrlKwarg": "declare the capture as a kernel Parameter in reads=",
-    "QueryParam": "declare the read as a kernel Parameter in reads= (or shapes= where no callable names it)",
+    "QueryParam": "declare the read as a kernel Parameter in reads= "
+    "(or shapes= where no callable names it)",
     "ArgumentBinding": _DECLARING,
     "OfflineContract": (
         "declare its parts on their seats: field_audiences on SerializerPresenter, url_kwargs as a "
@@ -128,7 +129,7 @@ def _module_name(root: Path, package: str, path: Path) -> str:
 
 
 def _top_level(body: list[ast.stmt]) -> list[ast.stmt]:
-    """The module's statements, with the branches of a top-level ``if`` or ``try`` read as its own."""
+    """The module's statements, with a top-level ``if`` or ``try``'s branches read as its own."""
     out: list[ast.stmt] = []
     for node in body:
         out.append(node)
@@ -200,7 +201,7 @@ def resolve(trees: dict[str, dict[str, Definition]], module: str, name: str) -> 
 def _rest_target(
     rest: dict[str, dict[str, Definition]], definition: Definition, name: str
 ) -> tuple[str, str] | None:
-    """Where this package keeps a drfs definition: its root if the root exports it, else its module."""
+    """Where this package keeps a drfs definition: its root if exported there, else its module."""
     same_path = REST + definition.module[len(DRFS) :]
     found = resolve(rest, same_path, name)
     if found is None:

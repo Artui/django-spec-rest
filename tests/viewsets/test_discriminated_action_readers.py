@@ -344,6 +344,6 @@ def test_options_shows_exactly_the_variants_whose_write_is_not_refused_first(
 
 
 def test_a_method_only_a_discriminated_action_serves_answers_from_the_specs_not_drf() -> None:
-    """No ``serializer_class`` and no ``get_object``: DRF's own metadata would raise probing them."""
+    """No ``serializer_class`` or ``get_object``: DRF's metadata would raise probing them."""
     view = _viewset(_action()).as_view({"post": "create"})
     assert _options(view).status_code == 200

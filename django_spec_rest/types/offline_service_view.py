@@ -8,7 +8,7 @@ from rest_framework.request import Request
 
 @dataclass(frozen=True)
 class OfflineServiceView:
-    """A concrete [`ServiceView`][django_spec_rest.types.service_view.ServiceView] for dispatching a spec outside an HTTP request."""
+    """A concrete [`ServiceView`][django_spec_rest.types.service_view.ServiceView] for dispatching a spec outside an HTTP request."""  # noqa: E501
 
     request: Request
     action: str | None = None

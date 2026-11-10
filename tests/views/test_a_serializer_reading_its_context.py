@@ -443,7 +443,7 @@ def test_a_kernel_call_for_another_principal_is_never_described_under_the_view_s
     assert all(pair == (None, None) for pair in _DESCRIBED_UNDER)
 
 
-def test_a_kernel_call_of_the_view_s_own_spec_for_another_principal_is_never_described_under_the_view_s_request(
+def test_a_kernel_call_of_the_view_s_own_spec_for_another_principal_is_never_described_under_the_view_s_request(  # noqa: E501
     owner: User,
 ) -> None:
     """The service dispatches the view's own spec for another principal: the

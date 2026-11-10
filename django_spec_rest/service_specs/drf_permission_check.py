@@ -37,7 +37,7 @@ class DRFPermissionCheck(PermissionCheck):
         request: Any = None,
         view: Any = None,
     ) -> bool:
-        """Whether every class's ``has_permission`` admits ``principal``, raising on the first that does not."""
+        """Whether every ``has_permission`` admits ``principal``, raising on the first refusal."""
         request, view = self._pair(principal, arguments, call_context, request=request, view=view)
         for permission in self._permissions():
             with translate_drf_refusals():
@@ -57,7 +57,7 @@ class DRFPermissionCheck(PermissionCheck):
         request: Any = None,
         view: Any = None,
     ) -> bool:
-        """Whether every class's ``has_object_permission`` admits ``principal`` to a model ``target``."""
+        """Whether every ``has_object_permission`` admits ``principal`` to the ``target``."""
         if not isinstance(target, Model):
             return True
         request, view = self._pair(principal, arguments, call_context, request=request, view=view)
@@ -91,7 +91,7 @@ class DRFPermissionCheck(PermissionCheck):
         request: Any,
         view: Any,
     ) -> tuple[Any, Any]:
-        """The request and view to ask the classes against: the call's, its offline pair's for each it lacks."""
+        """The request and view to ask against: the call's, else its offline pair's."""
         seeds = {"request": request, "view": view}
         request = carried("request", seeds, call_context)
         view = carried("view", seeds, call_context)

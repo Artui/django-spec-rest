@@ -15,7 +15,7 @@ class _NotAuthenticatedList(serializers.ListSerializer):
 class NotAuthenticatedSerializer(serializers.Serializer):
     """No caller was authenticated. Why is under `detail`."""
 
-    # The docstring above is the component's description in the generated document, so it is written for a client; the reference is docs/openapi.md.
+    # The docstring above is the component's description, for a client; see docs/openapi.md.
 
     detail = serializers.CharField()
 

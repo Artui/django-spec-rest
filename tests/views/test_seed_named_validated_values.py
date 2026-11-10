@@ -1,4 +1,4 @@
-"""A validated key named like a seed stays in ``data`` and never replaces the seed, on the kernel route.
+"""A validated key named like a seed stays in ``data`` and never replaces the seed, on the kernel.
 
 DRF's canonical ``HiddenField(default=CurrentUserDefault())`` named ``user``
 validates the principal into ``validated_data["user"]``; a ``validate()`` may
@@ -13,7 +13,8 @@ Held elsewhere, and so not repeated here:
   from a JSON or a form body while the seed keeps its own value:
   ``test_kernel_views``' ``test_a_writable_field_named_like_a_seed_validates_into_data``
   and ``test_a_seed_named_field_validates_from_a_form_body``;
-- the serializer refusing such a field: ``test_a_seed_named_field_the_serializer_refuses_is_drf_s_400``;
+- the serializer refusing such a field:
+  ``test_a_seed_named_field_the_serializer_refuses_is_drf_s_400``;
 - a body that is no object, refused before any field is set aside:
   ``test_a_body_that_is_no_object_is_refused_as_a_whole``;
 - a field named like a seed a project registers: the HTTP views register no
@@ -42,7 +43,7 @@ class _CurrentUserIn(serializers.Serializer):
 
 
 class _AddsSeedsIn(serializers.Serializer):
-    """A ``validate()`` adding keys named like three seeds: two the kernel's, one the Validator's."""
+    """A ``validate()`` adding keys named like three seeds: two kernel ones, one Validator's."""
 
     title = serializers.CharField()
 

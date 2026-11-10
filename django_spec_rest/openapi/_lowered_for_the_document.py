@@ -8,7 +8,7 @@ _NULL = "null"
 
 
 def lowered_for_the_document(schema: dict[str, Any]) -> dict[str, Any]:
-    """``schema`` as the document's OpenAPI version reads it: untouched, or lowered from JSON Schema."""
+    """``schema`` as the OpenAPI version reads it: untouched, or lowered from JSON Schema."""
     if not spectacular_settings.OAS_VERSION.startswith("3.0"):
         return schema
     return _lowered(schema)
@@ -18,7 +18,7 @@ def _lowered(schema: dict[str, Any]) -> dict[str, Any]:
     node = dict(schema)
     _nullable(node)
     for keyword in ("anyOf", "oneOf"):
-        # One branch to coverage, so the guard's operands are named: a schema already holding an ``enum`` keeps it (test_an_enum_already_there_is_never_replaced).
+        # An ``enum`` already there is kept (test_an_enum_already_there_is_never_replaced).
         if "enum" not in node:
             values = _constants(node.get(keyword))
             if values is not None:
@@ -38,12 +38,12 @@ def _lowered(schema: dict[str, Any]) -> dict[str, Any]:
 
 
 def _walked(value: Any) -> Any:
-    """``value`` lowered where it is a schema; a boolean schema, or a tuple form's list, is as it was."""
+    """``value`` lowered where it is a schema; a boolean schema or tuple-form list is kept."""
     return _lowered(value) if isinstance(value, dict) else value
 
 
 def _nullable(node: dict[str, Any]) -> None:
-    """``node``'s ``[t, "null"]`` type as ``t`` and ``nullable``, in place on the copy ``_lowered`` made."""
+    """``node``'s ``[t, "null"]`` type as ``t`` and ``nullable``, in place on the copy."""
     kinds = node.get("type")
     if not isinstance(kinds, list):
         return

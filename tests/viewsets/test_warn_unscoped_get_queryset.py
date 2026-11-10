@@ -140,7 +140,7 @@ class TestAnOverrideBesideASpecIsReported:
         assert _reports(V, {"put": "update"})
 
     def test_from_a_mixin_below_the_package_s_own_bases(self) -> None:
-        """Python resolves ``get_queryset`` to the package's method here, whose ``super()`` runs it."""
+        """Python resolves ``get_queryset`` to the package's method, whose ``super()`` runs it."""
 
         class V(SelectorListMixin, _Scoped, GenericViewSet):
             action_specs = {"list": _LIST}

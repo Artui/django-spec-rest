@@ -5,7 +5,7 @@ from rest_framework.exceptions import NotAuthenticated
 
 
 class DRFNotAuthenticated(KernelNotPermitted, NotAuthenticated):
-    """No principal was authenticated, as both the kernel's ``NotPermitted`` and DRF's ``NotAuthenticated``."""
+    """No principal authenticated: the kernel's ``NotPermitted`` and DRF's ``NotAuthenticated``."""
 
     def __init__(self, message: str | None = None, code: str | None = None) -> None:
         KernelNotPermitted.__init__(

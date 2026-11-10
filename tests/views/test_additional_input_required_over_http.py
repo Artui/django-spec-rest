@@ -154,8 +154,8 @@ def test_the_http_body_carries_the_schema_as_it_was_raised(entry: str) -> None:
     ids=["ServiceUpdateView", "ServiceDeleteView"],
 )
 def test_a_view_that_loads_its_row_with_get_object_is_refused_at_as_view(view: type) -> None:
-    """A kernel spec's target is its own lookup's, so one naming none would run on no row, and the view is
-    refused when it is built rather than answering anything."""
+    """A kernel spec's target is its own lookup's; one naming none would run on no row, and the
+    view is refused when it is built rather than answering anything."""
     with pytest.raises(ImproperlyConfigured, match="declares no target selector"):
         view.as_view()
 

@@ -1,4 +1,4 @@
-"""The author's values for a service outrank every key its Validator hands back, on the kernel route.
+"""The author's values for a service outrank every key its Validator hands back, on the kernel.
 
 The spec's ``kwargs`` provider is the server's, and the kernel merges its
 answer into the service's pool after the validated values, so a service is

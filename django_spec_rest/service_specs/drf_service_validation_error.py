@@ -9,7 +9,7 @@ from rest_framework.exceptions import ValidationError
 
 
 class DRFServiceValidationError(KernelServiceValidationError, ValidationError):
-    """A service refused its input, as both the kernel's ``ServiceValidationError`` and DRF's ``ValidationError``."""
+    """Refused input: the kernel's ``ServiceValidationError`` and DRF's ``ValidationError``."""
 
     def __init__(self, detail: Any, code: str | None = None) -> None:
         KernelServiceValidationError.__init__(self, detail)

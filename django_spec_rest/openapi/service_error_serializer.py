@@ -4,9 +4,9 @@ from rest_framework import serializers
 
 
 class ServiceErrorSerializer(serializers.Serializer):
-    """The service could not complete the call. Why is under `detail`, and the values still needed under `schema` where it asks for more input."""
+    """Could not complete the call. Why is under `detail`; values still needed under `schema`."""
 
-    # The docstring above is the component's description in the generated document, so it is written for a client; the reference is docs/openapi.md.
+    # The docstring above is the component's description, for a client; see docs/openapi.md.
 
     detail = serializers.CharField()
     schema = serializers.DictField(

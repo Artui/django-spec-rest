@@ -1,4 +1,4 @@
-"""The ``tools/`` tests: the codemod is no part of the package, so its directory goes on the path."""
+"""``tools/`` tests: the codemod is not the package, so its directory goes on the path."""
 
 from __future__ import annotations
 

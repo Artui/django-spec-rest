@@ -60,13 +60,13 @@ class SelectorListView(_ServesRaisedSchema, ListModelMixin, GenericAPIView):
 
     def get_queryset(self) -> Any:
         s: SelectorSpec | None = get_class_attr(self, "spec")
-        # The spec's set answers the list's own request alone: DRF's ``DjangoModelPermissions`` asks ``get_queryset()`` before any handler runs, so an OPTIONS (a CORS preflight) or an unserved method beside a spec with a required read answered the list's 400.
+        # DRF's permissions ask ``get_queryset()`` before any handler, so an OPTIONS got the 400.
         if s is None or self.request.method not in _THE_LIST_S_METHODS:
             return super().get_queryset()
         return dispatch_list_once(self, s).value
 
     def list(self, request: Request, *args: Any, **kwargs: Any) -> Response:
-        # The answers are added here rather than in ``get`` so a subclass that extends ``list`` keeps running once its spec declares affordances -- the same seam ``SelectorListMixin`` uses.
+        # Answers are added here, not in ``get``, so a subclass extending ``list`` keeps running.
         s: SelectorSpec | None = get_class_attr(self, "spec")
         if s is None:
             return super().list(request, *args, **kwargs)

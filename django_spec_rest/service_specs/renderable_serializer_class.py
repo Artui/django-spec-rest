@@ -23,7 +23,7 @@ def renderable_serializer_class(declared: type | None) -> type[BaseSerializer[An
     return cast("type[BaseSerializer[Any]] | None", declared)
 
 
-# Cached per dataclass type, so each dataclass renders through one class for the life of the process: the same class from every render site and from the OpenAPI coercion, and no class pair built per render.
+# Cached per dataclass type, so every render site and the OpenAPI coercion share one class.
 @functools.cache
 def _dataclass_serializer_class(dataclass_type: type) -> type[DataclassSerializer[Any]]:
     return type(

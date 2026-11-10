@@ -20,7 +20,7 @@ from django_spec_rest.service_specs.drf_principal_unavailable import DRFPrincipa
 
 @contextmanager
 def translate_dispatch_errors() -> Generator[None]:
-    """Re-raise the kernel's ``DispatchError``s inside the block as this package's dual-base classes."""
+    """Re-raise the kernel's ``DispatchError``s as this package's dual-base classes."""
     try:
         yield
     except DispatchError as exc:

@@ -341,7 +341,7 @@ def _queryset_update(*, instance: Document, data: dict[str, Any]) -> Document:
 def test_a_service_writing_data_itself_clears_the_file(
     settings: Any, tmp_path: Any, service: Any
 ) -> None:
-    """``setattr`` then ``save()`` raises on ``False``, and ``update(**data)`` stores ``'False'``."""
+    """``setattr`` then ``save()`` raises on ``False``; ``update(**data)`` stores ``'False'``."""
     document = _held(settings, tmp_path)
     assert _patch(_spec(_MayClear, service), document, {"upload": None}).status_code == 200
     assert document.upload.name == ""
@@ -377,7 +377,7 @@ def test_a_patch_leaving_out_a_file_defaulting_to_none_keeps_it(
 
 
 def test_a_dataclass_s_field_keeps_its_none(settings: Any, tmp_path: Any) -> None:
-    """A dataclass instance is as built: its field keeps the ``None``, ``""`` being no value of it."""
+    """A dataclass instance is as built: its field keeps ``None``, ``""`` being no value."""
 
     class _Declared(DataclassSerializer):
         upload = serializers.FileField(allow_null=True, required=False)
@@ -453,7 +453,7 @@ def test_an_upload_replaces_the_file(settings: Any, tmp_path: Any) -> None:
 
 
 def test_an_upload_off_http_arrives_as_the_file_itself(settings: Any, tmp_path: Any) -> None:
-    """Fails with ``""`` handed for the file, were the empty file returned for every file field's value.
+    """Fails with ``""`` handed for the file, were an empty file returned for each file value.
 
     Off HTTP only: a multipart body is a ``MultiValueDict``, which never reaches
     the clear (test_a_form_s_blank_keeps_the_file), so a dict of arguments holding

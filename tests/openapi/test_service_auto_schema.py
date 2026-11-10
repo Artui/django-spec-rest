@@ -203,7 +203,7 @@ def _update(**fields: Any) -> ServiceSpec:
 
 
 def _task(**fields: Any) -> ServiceSpec:
-    """A spec over ``TaskInSerializer`` whose ``input_data`` fills ``owner`` and may fill ``note``."""
+    """A spec over ``TaskInSerializer`` whose ``input_data`` fills ``owner``, may fill ``note``."""
     return _create(
         **{"validator": SerializerValidator(TaskInSerializer), "input_data": _row_fill, **fields}
     )
@@ -280,7 +280,7 @@ class _AnnotatedUpdateView(ServiceUpdateView):
 
 
 class _AnnotatedTaskView(ServiceCreateView):
-    """The author's ``TaskInSerializer`` itself, documented beside a spec over it reaching nothing."""
+    """The author's ``TaskInSerializer`` itself, documented beside a spec reaching nothing."""
 
     queryset = Author.objects.all()
     spec = _create()

@@ -282,7 +282,7 @@ def _read_call(
 
 
 def _lenient_json_body(view: Any) -> bool:
-    """Whether ``view`` has its serializer alone answer a JSON body: its own word, else the project's."""
+    """Whether ``view``'s serializer alone answers a JSON body: its word, else the project's."""
     own = getattr(view, "lenient_json_body", None)
     return lenient_json_body() if own is None else own
 
@@ -340,7 +340,7 @@ def _edge_state(
 def _overlay(
     spec: KernelSpec, hooks: ViewHooks
 ) -> tuple[dict[str, Any], frozenset[str], dict[str, Any]]:
-    """The view's ``extra_kwargs`` for ``dispatch``'s overlay, the keys pinned out of it, and the server's input."""
+    """``extra_kwargs`` for ``dispatch``'s overlay, the keys pinned out, the server's input."""
     overlay = dict(hooks.extra_kwargs or {})
     call_context = edge_call_state().call_context
     names = spec.parameters(call_context=call_context).names()
@@ -353,7 +353,7 @@ def _overlay(
 
 
 _DENIALS = (NotPermitted, PrincipalUnavailable)
-"""The kernel's two ways of refusing the caller rather than the call: the edge answers them first."""
+"""The kernel's two refusals of the caller, not the call: the edge answers them first."""
 
 _RAISED_REFUSALS = (PermissionDenied, APIException)
 """What a check may raise to refuse rather than answer ``False``: Django's
@@ -397,7 +397,7 @@ def judge_without_arguments(
     call_context: dict[str, Any] | None,
     pool_seeds: PoolSeeds,
 ) -> None:
-    """Raise the denial ``spec``'s checks give ``principal`` asked with no arguments, if they give one."""
+    """Raise the denial ``spec``'s checks give ``principal`` with no arguments, if any."""
     try:
         authorize_without_arguments(
             spec, principal, call_context=call_context, pool_seeds=pool_seeds

@@ -1,4 +1,4 @@
-"""``requestBody.required`` where the body is a schema given whole, which drf-spectacular marks optional.
+"""``requestBody.required`` where the body is a whole schema, which drf-spectacular marks optional.
 
 The wire is the check: where every spec the route may run takes a body with a
 required field, an empty body is refused, and the document says so. Where one may

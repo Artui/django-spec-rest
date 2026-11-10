@@ -81,7 +81,7 @@ def describe_serializer(
 
 
 def bound_instance(target: Any) -> Any:
-    """The row a serializer binds for ``target``: none for a collection, which is no row to update."""
+    """The row a serializer binds for ``target``: none for a collection, no row to update."""
     return None if isinstance(target, QuerySet) else target
 
 
@@ -227,7 +227,7 @@ def provider_owned(validator: Any, principal: Any) -> frozenset[str]:
 
 
 def _names(state: EdgeCallState, validator: Any, principal: Any) -> bool:
-    """Whether ``validator``, validating for ``principal``, is the edge's own call, which holds a body."""
+    """Whether ``validator`` for ``principal`` is the edge's own call, which holds a body."""
     held = state.validator_input
     return held is not None and held[0] is validator and _own_principal(state, principal)
 
@@ -245,7 +245,7 @@ def input_view_layers(validator: Any, principal: Any) -> Mapping[str, Any] | Non
 
 
 def output_view_layers(ambient: Mapping[str, Any], value: Any) -> Mapping[str, Any] | None:
-    """The output half of the view hooks the call registered, resolved for ``value``, or ``None``."""
+    """The output half of the view hooks the call registered, for ``value``, or ``None``."""
     hooks: ViewHooks | None = ambient.get(SERIALIZER_CONTEXT_SEED)
     if hooks is None or hooks.output_serializer_context is None:
         return None
@@ -310,7 +310,7 @@ def serializer_context(
 
 
 def carried(name: str, seeds: Mapping[str, Any], call_context: Mapping[str, Any] | None) -> Any:
-    """The ``request`` or ``view`` a call carries under ``name``, or ``None`` when it carries none."""
+    """The ``request`` or ``view`` a call carries as ``name``, else ``None``."""
     seeded = seeds.get(name)
     if seeded is not None:
         return seeded
@@ -483,7 +483,7 @@ def input_parameter(
 def registered_fragment(
     registry: JsonSchemaRegistry | None, field: serializers.Field
 ) -> Mapping[str, Any] | None:
-    """The fragment of the first ``registry.fields`` rule ``field`` is an instance of, or ``None``."""
+    """Fragment of the first ``registry.fields`` rule ``field`` is an instance of, or ``None``."""
     if registry is None:
         return None
     for rule_type, fragment in registry.fields:
@@ -496,7 +496,7 @@ _JSON_TYPES: Final = frozenset({"string", "integer", "number", "boolean", "array
 
 
 def fragment_keywords(fragment: Mapping[str, Any], *, output: bool) -> dict[str, Any]:
-    """A registry fragment as keyword arguments for a ``Parameter``, or an ``OutputField`` when ``output``."""
+    """A registry fragment as keywords for a ``Parameter``, or an ``OutputField`` if ``output``."""
     declared: dict[str, Any] = {}
     kind = fragment.get("type")
     if isinstance(kind, list) and "null" in kind and len(kind) == 2:
@@ -557,7 +557,7 @@ def _states(declaration: type[Parameter] | type[OutputField], keywords: dict[str
 
 
 def _named(value: Any, names: frozenset[str]) -> bool:
-    """Whether ``value`` is one of ``names``; a list or a mapping, which JSON Schema allows in places, is none."""
+    """Whether ``value`` is one of ``names``, which a list or mapping never is."""
     return isinstance(value, str) and value in names
 
 

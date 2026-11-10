@@ -1,4 +1,4 @@
-"""Tests for ``DRFServiceValidationError``: a service's DRF refusal as the kernel's service validation error."""
+"""Tests for ``DRFServiceValidationError``: a DRF refusal as the kernel's validation error."""
 
 from __future__ import annotations
 

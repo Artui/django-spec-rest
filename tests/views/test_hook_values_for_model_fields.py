@@ -10,8 +10,8 @@ the spec's and beneath it the view's ``get_input_data``, so the validating
 cases are given there. ``kwargs`` fills the pool: its value reaches the
 service parameter as given, never through the field, which is what a
 read-only field's case asks of it. A ``get_service_kwargs`` value naming a
-field is the pool's too, never validated by the field. The view's hooks reach the kernel call, so each case is given
-through the spec and through the view.
+field is the pool's too, never validated. The view's hooks reach the kernel call, so each case
+is given through the spec and through the view.
 """
 
 from __future__ import annotations

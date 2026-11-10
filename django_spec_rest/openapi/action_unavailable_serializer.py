@@ -6,8 +6,8 @@ from django_spec_rest.openapi.service_conflict_serializer import ServiceConflict
 
 
 class ActionUnavailableSerializer(ServiceConflictSerializer):
-    """The action is unavailable in the state of what it acts on. Why is under `detail`, and the action's stable code under `code`."""
+    """Unavailable in its target's state: ``detail`` says why, ``code`` is stable."""
 
-    # The docstring above is the component's description in the generated document, so it is written for a client; the reference is docs/openapi.md.
+    # The docstring above is the component's description, for a client; see docs/openapi.md.
 
     code = serializers.CharField(help_text="The stable code of the action that is unavailable.")

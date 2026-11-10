@@ -7,7 +7,7 @@ from rest_framework.exceptions import ValidationError
 
 
 def register_drf_row_errors() -> None:
-    """Register DRF's ``ValidationError`` as a refusal the kernel re-roots under the row that raised it."""
+    """Register DRF's ``ValidationError`` as a refusal the kernel re-roots under its row."""
     register_row_error(ValidationError, _validation_error_detail)
 
 

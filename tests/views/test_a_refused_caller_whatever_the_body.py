@@ -431,7 +431,7 @@ class _Row(serializers.Serializer):
 
 
 def test_a_many_call_s_refused_row_stands_on_its_checked_top_level() -> None:
-    """The kernel asked the checks of the top level before it refused the row, so the row's 400 is told.
+    """The kernel asked the top level's checks before refusing the row, so the row's 400 is told.
 
     Fails where a refused row is judged again on no arguments, as a failed
     shape is: the check denies that call, and the caller is told 403.
@@ -517,7 +517,7 @@ def test_a_read_is_not_judged_on_the_scope_of_nothing() -> None:
 
 @pytest.mark.parametrize("caller", REFUSED)
 def test_a_refused_caller_sending_a_body_that_is_no_object_is_refused(caller: str) -> None:
-    """The edge refuses such a body before ``check_call`` runs, and judges it on no arguments first."""
+    """The edge refuses such a body before ``check_call`` runs, judging it on no arguments."""
     authentication, username, expected = REFUSED[caller]
     view = _view(_check("drf-class"), authentication)
     assert _answer(_post(view, [1, 2], username=username)) == expected
@@ -655,7 +655,7 @@ def test_a_misconfigured_spec_fails_on_a_body_that_cannot_be_read() -> None:
 
 @pytest.mark.parametrize("method", ["options", "post"])
 def test_a_misconfigured_spec_fails_as_a_well_formed_call_fails(method: str) -> None:
-    """A spec declaring no permissions is a configuration error, never judged as a check that cannot answer.
+    """A spec declaring no permissions is a configuration error, never a check that cannot answer.
 
     Fails where the judgment on no arguments swallows it with the rest: OPTIONS
     then describes the method and an incomplete POST is told its 400, while
@@ -792,7 +792,7 @@ def test_a_refused_caller_is_refused_where_a_hook_s_read_raises_django_s_own(cal
 
 
 class _Disconnected:
-    """A server's ``wsgi.input`` whose client went away, which Django reads as ``UnreadablePostError``.
+    """A ``wsgi.input`` whose client went away, which Django reads as ``UnreadablePostError``.
 
     Handed in as ``wsgi.input``, so Django builds its own ``WSGIRequest`` and ``LimitedStream``
     around it as it does for a server. Swapped in as ``request._stream`` instead, it would answer
@@ -872,7 +872,7 @@ def test_a_misconfigured_spec_fails_on_a_hook_s_failed_read() -> None:
 def test_options_hides_a_method_exactly_when_a_hook_s_failed_read_is_refused_first(
     case: str,
 ) -> None:
-    """A hook reading the body moves nothing here: OPTIONS runs no hook, and the write judges alike."""
+    """A hook reading the body moves nothing: OPTIONS runs no hook, and the write judges alike."""
     build, username, described = OPTIONS_CASES[case]
     view = _hooked(build(), [SessionAuthentication], get_input_data=_reads_the_body)
     user = None if username is None else User.objects.create(username=username)
@@ -990,7 +990,7 @@ def test_a_hook_catching_the_failed_read_is_answered_by_the_checks() -> None:
 
 
 def test_a_hook_raising_what_a_read_raises_is_judged_like_a_read() -> None:
-    """A hook's own ``ParseError`` cannot be told from its read's, and a refused caller is told that."""
+    """A hook's ``ParseError`` is not told from its read's; a refused caller is told that."""
     view = _hooked(
         _check("kernel-check"), [BasicAuthentication], get_input_data=_raising(ParseError("Bad."))
     )

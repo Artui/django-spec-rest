@@ -5,7 +5,7 @@ from rest_framework.exceptions import PermissionDenied
 
 
 class DRFNotPermitted(KernelNotPermitted, PermissionDenied):
-    """A permission check refused the principal, as both the kernel's ``NotPermitted`` and DRF's ``PermissionDenied``."""
+    """Refused by a check: the kernel's ``NotPermitted`` and DRF's ``PermissionDenied``."""
 
     def __init__(self, message: str | None = None, code: str | None = None) -> None:
         KernelNotPermitted.__init__(self, message)

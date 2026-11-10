@@ -1,4 +1,4 @@
-"""The ``PermissionDenied`` and ``NotAuthenticated`` components are this schema's, and no serializer may take their names.
+"""This schema's ``PermissionDenied`` and ``NotAuthenticated`` components: no serializer takes them.
 
 drf-spectacular strips ``Serializer`` from a class's name, so a project's
 ``PermissionDeniedSerializer`` is the component ``PermissionDenied`` too, and

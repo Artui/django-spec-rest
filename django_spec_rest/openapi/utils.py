@@ -65,7 +65,7 @@ class ValidationErrorsIdentity:
 
 
 class Reserved(NamedTuple):
-    """A component name the package keeps, the object it registers under it, and what it documents."""
+    """A component name the package keeps, its registered object, and what it documents."""
 
     owner: type
     body: str
@@ -127,7 +127,7 @@ drf-spectacular copies the mapping of a ``$ref`` it adds a field's
 
 
 def place(registry: Any, ref: dict[str, Any]) -> dict[str, Any]:
-    """Record ``ref``'s string as one the package wrote in the generation ``registry`` belongs to."""
+    """Record ``ref``'s string as one the package wrote, in the generation's ``registry``."""
     _PLACED.setdefault(registry, []).append(ref["$ref"])
     return ref
 
@@ -138,7 +138,7 @@ def placed(registry: Any) -> list[str]:
 
 
 class _PlacedComponent(ResolvedComponent):
-    """A reserved component of the package's, whose next ``$ref`` is recorded once its class asks."""
+    """A package-reserved component, whose next ``$ref`` is recorded once its class asks."""
 
     registry: Any = None
     armed = False
@@ -154,7 +154,7 @@ class _PlacedComponent(ResolvedComponent):
 
 
 class _ReservedBodyExtension(OpenApiSerializerExtension):
-    """Names the package's own 403 or 401 body by its reserved component, wherever it is resolved."""
+    """Names the package's own 403 or 401 body by its reserved component wherever resolved."""
 
     def get_name(self, auto_schema: Any, direction: Any) -> str | None:
         name = get_class(self.target).__name__.removesuffix("Serializer")
@@ -182,7 +182,7 @@ class _ReservedBodyExtension(OpenApiSerializerExtension):
         return name
 
     def map_serializer(self, auto_schema: Any, direction: Any) -> dict[str, Any]:
-        # Written out rather than read off the serializer: the reading that bypasses this extension is not in every drf-spectacular the floor admits.
+        # Written out, not read off the serializer: older drf-spectacular lacks that path.
         return {
             "type": "object",
             "description": inspect.cleandoc(get_class(self.target).__doc__ or ""),

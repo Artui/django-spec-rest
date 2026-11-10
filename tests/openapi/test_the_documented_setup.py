@@ -239,7 +239,7 @@ class _ProjectSchema(ServiceAutoSchema):
 
 
 def test_a_mixin_listed_first_overrides_a_project_s_default_schema_class() -> None:
-    """The mixin's ``ServiceAutoSchema`` wins over the default; a ``schema`` on the class keeps its own.
+    """The mixin's ``ServiceAutoSchema`` wins over the default; a class's ``schema`` keeps its own.
 
     Fails if ``enable_openapi()`` leaves the mixin without a schema: the
     composed viewset would then be documented by the project's default class.

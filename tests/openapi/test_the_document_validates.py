@@ -1,4 +1,4 @@
-"""The whole test app's document validates under OpenAPI 3.0 and 3.1, for every shape the kernel writes.
+"""The test app's whole document validates under OpenAPI 3.0 and 3.1, for every kernel shape.
 
 The kernel's schemas are JSON Schema, which 3.1 is and 3.0, drf-spectacular's
 default ``OAS_VERSION``, is not (no ``const``, no type list), so the document
