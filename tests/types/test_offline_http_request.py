@@ -1,5 +1,3 @@
-"""``OfflineHttpRequest`` — absolute-URI building with and without a host."""
-
 from __future__ import annotations
 
 import pytest
@@ -10,8 +8,7 @@ from django_spec_rest import OfflineHttpRequest, build_offline_context
 
 class TestWithoutAHost:
     def test_build_absolute_uri_returns_the_location_unchanged(self) -> None:
-        # The regression this guards: a bare HttpRequest has an empty META, so
-        # Django's host lookup raises ``KeyError: 'SERVER_NAME'`` here.
+        # The regression this guards: a bare HttpRequest has an empty META.
         assert OfflineHttpRequest().build_absolute_uri("/media/doc.pdf") == "/media/doc.pdf"
 
     def test_build_absolute_uri_without_a_location_is_the_full_path(self) -> None:
@@ -24,11 +21,7 @@ class TestWithoutAHost:
 
 
 class TestWithAHost:
-    """A configured host is the project's own, so no ``ALLOWED_HOSTS`` check.
-
-    These hosts are absent from the test settings' ``ALLOWED_HOSTS`` on purpose:
-    a worker that renders links for a site it doesn't serve must still work.
-    """
+    """A configured host is the project's own, so no ``ALLOWED_HOSTS`` check."""
 
     def test_bare_hostname_defaults_to_http(self) -> None:
         request = build_offline_context(user=None, host="example.com").request
@@ -76,13 +69,11 @@ class TestWithAHost:
 
 class TestHostAndAmbientRequest:
     def test_a_real_request_keeps_its_own_host(self) -> None:
-        # ``host`` configures the *synthesized* request only, so a caller can
-        # pass both unconditionally: the ambient request when there is one.
+        # ``host`` configures the *synthesized* request only.
         http_request = RequestFactory().post("/hook/")
         request = build_offline_context(
             user=None, http_request=http_request, host="ignored.example.com"
         ).request
-        # ``testserver`` is RequestFactory's own host — the real request's, not ours.
         assert request.build_absolute_uri("/x/") == "http://testserver/x/"
 
     def test_no_host_still_yields_a_usable_request(self) -> None:

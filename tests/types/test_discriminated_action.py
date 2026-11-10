@@ -1,5 +1,3 @@
-"""``DiscriminatedAction`` is no kernel spec: asked to compile, it says so and names variants."""
-
 from __future__ import annotations
 
 import dataclasses
