@@ -1,12 +1,3 @@
-"""Permissions on a viewset whose actions serve kernel specs.
-
-A kernel spec declares no ``permission_classes``: its checks are its
-``permissions``, which the kernel's ``dispatch`` asks after DRF has asked the
-view's own classes. So ``get_permissions`` answers the view's classes for a
-kernel entry, from ``action_specs`` or stamped on a decorated handler, and the
-spec's checks still refuse.
-"""
-
 from __future__ import annotations
 
 from typing import Any

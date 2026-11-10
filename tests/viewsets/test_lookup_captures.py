@@ -1,15 +1,3 @@
-"""A router-mounted detail route is refused at ``as_view()`` if its row lookup ignores the capture.
-
-A DRF router captures a detail route's lookup under ``lookup_url_kwarg``, else
-``lookup_field``, and the edge hands a spec only the captures it declares as
-parameters, so a retrieve selector, or a write's target selector, that does not
-declare the capture would look its row up without its key at every request. The
-viewset's ``as_view()`` refuses it instead, naming the viewset, the action and
-the capture (``viewsets.utils._validate_lookup_captures``). A router marks the
-detail route by handing ``detail=True``; a viewset mounted by hand, and a
-standalone view, have the URLconf's captures, and are not asked.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -54,10 +42,7 @@ def _reads(name: str) -> Parameters:
 
 
 def _row(*, by: str | None = "pk", nested: bool = False) -> SelectorSpec:
-    """A retrieve selector reading ``by``, or reading nothing where ``by`` is ``None``.
-
-    ``nested`` for a write's target, which declares no permissions of its own.
-    """
+    """A retrieve selector reading ``by``, or reading nothing where ``by`` is ``None``."""
     permissions = None if nested else _OPEN
     if by is None:
         return SelectorSpec(
@@ -132,8 +117,7 @@ class TestARowLookupMissingTheCaptureIsRefused:
         )
 
     def test_a_capture_only_the_write_itself_reads(self) -> None:
-        """The kernel hands the target selector its own reads alone, so the
-        write's ``reads`` declaring the capture does not bring it to the row."""
+        """The kernel hands the target selector its own reads alone."""
         viewset = _viewset(action_specs={"update": _write(by="other", reads=_reads("pk"))})
         assert _refusal(viewset, {"put": "update"}).startswith("_Notes.update:")
 
@@ -168,8 +152,7 @@ class TestWhatIsNotAsked:
         assert _refusal(viewset, {"patch": "partial_update"}).startswith("_Notes.partial_update:")
 
     def test_only_the_actions_the_route_maps(self) -> None:
-        """The router mounts each route with the actions it maps there; an
-        entry the route does not map is that other route's to answer."""
+        """The router mounts each route with the actions it maps there."""
         _mount(
             _viewset(action_specs={"retrieve": _row(), "destroy": _write(by="other")}),
             {"get": "retrieve"},
@@ -185,8 +168,7 @@ class TestWhatIsNotAsked:
         _mount(_viewset(peek=peek), {"get": "peek"})
 
     def test_a_collection_route(self) -> None:
-        """A router mounts the list route and a ``detail=False`` action with
-        ``detail=False``: no lookup capture there to read."""
+        """A router mounts the list route and a ``detail=False`` action with ``detail=False``."""
 
         @service_action(_write(by="other"), methods=["post"])
         def touch(self: Any, request: Any) -> None: ...
@@ -243,8 +225,7 @@ class _MeViewSet(SelectorViewSet):
 class TestOnlyARouterMountedDetailRouteIsAsked:
     @pytest.mark.django_db
     def test_a_singleton_mounted_by_hand_serves(self) -> None:
-        """``path("me/", MeViewSet.as_view({"get": "retrieve"}))``: no capture
-        on the route, and none to read."""
+        """``path("me/", MeViewSet.as_view({"get": "retrieve"}))``: no capture on the route."""
         view = _MeViewSet.as_view({"get": "retrieve"})
         request = APIRequestFactory().get("/me/")
         force_authenticate(request, User.objects.create(username="ada"))

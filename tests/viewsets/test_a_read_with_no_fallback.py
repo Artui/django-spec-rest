@@ -1,12 +1,3 @@
-"""A read with no spec, on a viewset whose fallback cannot run, answers 405 as an unserved write.
-
-A router maps ``list`` and ``retrieve`` on every ``ServiceViewSet``, whatever it declares. DRF's
-fallback for them reads rows and a serializer, and with either missing it could only assert, so
-a create-only viewset answered 500 on the reads and on OPTIONS of its detail route. Every route
-here is mounted through a real router and asked through a client that hands back the 500, so
-a failure reads as the status it was and not as a raised ``AssertionError``.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -355,8 +346,7 @@ class TestItIsTheMappingThatDecides:
         assert _allow(response) == {"POST", "OPTIONS"}
 
     def test_options_of_a_write_alone_with_no_spec_answers(self) -> None:
-        """No read is mapped, so only the viewset can open the gate: DRF's metadata asks
-        ``get_object()`` for a PUT left in ``Allow``."""
+        """No read is mapped, so only the viewset can open the gate."""
         response = _client().options("/mapped/put/1/")
         assert response.status_code == 200
         assert _allow(response) == {"OPTIONS"}

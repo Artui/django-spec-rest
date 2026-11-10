@@ -1,9 +1,3 @@
-"""``variant``: the chosen key, offered to an action's answers on a discriminated action only.
-
-Both answers stay the view's or the action's, one per action, and ``as_view()``
-refuses one declaring ``variant`` anywhere else.
-"""
-
 from __future__ import annotations
 
 from typing import Any

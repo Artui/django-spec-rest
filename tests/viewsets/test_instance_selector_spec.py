@@ -1,11 +1,3 @@
-"""A kernel write spec's target on a viewset is its own target selector's.
-
-The viewset's ``get_object()`` and its ``"retrieve"`` entry are never asked for
-a kernel write's row: the spec's ``instance_selector_spec`` (or
-``collection_selector_spec``) finds it inside the kernel's dispatch, and the
-view's object permission is asked of what it finds.
-"""
-
 from __future__ import annotations
 
 from typing import Any

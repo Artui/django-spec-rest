@@ -1,10 +1,3 @@
-"""``@service_action`` serving a kernel ``ServiceSpec``.
-
-The decorated action dispatches through the standalone mutation views' own
-edge (``dispatch_mutation_for_spec``), and the spec is asked at decoration what
-``validate_mutation_view_spec`` asks of a standalone view's.
-"""
-
 from __future__ import annotations
 
 import json
@@ -253,8 +246,7 @@ class TestAtDecoration:
         assert _viewset(_collection(), detail=False).act.detail is False
 
     def test_a_keyword_the_viewset_s_hook_fills_is_not_refused(self) -> None:
-        """The decorated class is unknown, so a keyword nothing the spec
-        declares fills may be its hook's: ``check_seeds`` is not asked."""
+        """The decorated class is unknown."""
 
         def announce(*, data: dict[str, Any], tag: str) -> None: ...
 
@@ -282,8 +274,7 @@ class TestRouting:
         assert response.data["name"] == "hi"
 
     def test_with_none_given_drf_s_defaults_route_it(self) -> None:
-        """No ``methods``, ``url_path`` or ``url_name``: DRF's ``@action`` routes
-        ``GET`` under the method's own name."""
+        """No ``methods``, ``url_path`` or ``url_name``."""
 
         @service_action(_collection(validator=None, service=lambda: None), detail=False)
         def ping(self: Any, request: Any) -> None:
@@ -394,13 +385,7 @@ def _purging_through(decorator: str, bases: str, *mixins: type) -> Any:
 
 @pytest.mark.parametrize("bases", list(_BASES["service_action"]))
 def test_service_action_serves_the_schema_as_raised_on_any_viewset(bases: str) -> None:
-    """Read off the rendered bytes: the boolean default arrives as ``false`` and
-    the bound as ``3``. The configured handler runs once and sees DRF's
-    ``ErrorDetail`` leaves. ``GenericViewSet``, ``ViewSet`` and
-    ``GenericViewSet, ActionSerializerResolver`` reach no restore of the
-    package's bases, so they serve the strings without the decorator's own.
-    ``@selector_action``'s twin is in
-    ``tests/views/test_a_selector_asking_for_more_input.py``."""
+    """Read off the rendered bytes."""
     _seen.clear()
     with _handled_by("_recording"):
         response = _purging_through("service_action", bases)
@@ -436,8 +421,7 @@ class _Redacting:
 def test_an_overriding_handle_exception_has_the_last_word_on_every_route(
     decorator: str, bases: str
 ) -> None:
-    """The restore runs inside the handler, beneath any ``handle_exception``
-    override, so what the override writes is what the client gets."""
+    """The restore runs inside the handler, beneath any ``handle_exception`` override."""
     response = _purging_through(decorator, bases, _Redacting)
 
     assert response.status_code == 422
@@ -466,8 +450,7 @@ class _OwnHandler:
 def test_a_viewsets_own_exception_handler_still_answers_on_any_viewset(
     decorator: str, bases: str
 ) -> None:
-    """The handler is asked through the view's own ``get_exception_handler``, as
-    DRF asks it, and the schema is restored on what that handler built."""
+    """The handler is asked through the view's own ``get_exception_handler``, as DRF asks it."""
     response = _purging_through(decorator, bases, _OwnHandler)
 
     assert response.status_code == 422

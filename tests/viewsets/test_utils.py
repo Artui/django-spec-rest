@@ -1,10 +1,3 @@
-"""The action-spec resolution helpers over kernel specs.
-
-``as_view()`` refuses a kernel spec of the wrong kind under a built-in action,
-so the backstops below are reachable only when ``action_specs`` is built or
-swapped after the view is wired. Exercised directly for that reason.
-"""
-
 from __future__ import annotations
 
 from typing import Any

@@ -1,10 +1,3 @@
-"""``@selector_action`` serving a kernel ``SelectorSpec``.
-
-The decorated action dispatches through the standalone selector views' own
-edge (``dispatch_kernel_selector``), and the spec is asked at decoration what
-``validate_selector_view_spec`` asks of a standalone view's.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -160,10 +153,7 @@ class TestPermissions:
 
 class TestAtMount:
     def test_a_keyword_nothing_fills_is_refused(self) -> None:
-        """The edge hands a kernel selector no view hook, so a keyword the
-        spec's own declarations and the viewset's seeds leave unfilled can be
-        filled by nothing. Asked at ``as_view()``, once the viewset's
-        ``pool_seeds`` exist, so the class is built outside the refusal."""
+        """The edge hands a kernel selector no view hook."""
         viewset = _viewset(_rows(selector=lambda *, owner: None), base=SelectorViewSet)
         with pytest.raises(ImproperlyConfigured, match=r"_ViewSet\.act: .*\['owner'\]"):
             viewset.as_view({"get": "act"})
@@ -177,8 +167,7 @@ class TestAtMount:
 
 
 def test_methods_url_path_and_url_name_reach_the_route() -> None:
-    """What the decorator forwards to DRF's ``@action`` is what the router
-    routes: a ``POST`` read under its own path and name."""
+    """What the decorator forwards to DRF's ``@action`` is what the router routes."""
     Author.objects.create(name="Ada")
 
     @selector_action(_rows(), methods=["post"], url_path="by-name", url_name="named")

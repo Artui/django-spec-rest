@@ -1,12 +1,3 @@
-"""One action, several kernel specs, chosen by the request: what a discriminated action serves.
-
-Every test drives a viewset through ``as_view()`` and reads the answer off the
-response. The type is imported from its leaf module, so against a tree whose
-views know nothing of it the module still compiles once the type's own file is
-copied in, and each test fails by what that tree answers: ``as_view()`` refuses
-the entry, or the decorator refuses the spec.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -463,8 +454,7 @@ class TestAPatchVariantOverAList:
 
     def test_a_list_body_is_its_rows_each_partial(self) -> None:
         post = Post.objects.create(title="old")
-        # ``body`` is required by the serializer and absent from the row, so the
-        # row validates only under the partial variant a PATCH dispatches.
+        # ``body`` is required by the serializer and absent from the row.
         request = factory.patch("/", [{"id": post.pk, "title": "new"}], format="json")
         answer = self._view()(request, pk=post.pk)
         assert (answer.status_code, answer.data) == (200, [{"id": post.pk, "title": "new"}])
@@ -712,12 +702,7 @@ class TestThePreGate:
     def test_the_chosen_variant_s_class_level_check_is_asked_twice_and_every_other_once(
         self,
     ) -> None:
-        """Pre-gate and dispatch each ask the chosen variant's check; the pre-gate asks all.
-
-        Chosen second, so a pre-gate stopping at the first variant that admits
-        asks it once and fails here, and a dispatch that skipped its own check
-        would too.
-        """
+        """Pre-gate and dispatch each ask the chosen variant's check; the pre-gate asks all."""
         first, second = _Allow("ada"), _Allow("ada")
         action = _login(password=(first,), token=(second,))
         assert _post(_create_view(action), GOOD_TOKEN, username="ada").status_code == 201

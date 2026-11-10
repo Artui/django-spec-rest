@@ -1,15 +1,3 @@
-"""A decorated action's seeds: checked against its viewset's ``pool_seeds`` at ``as_view()``.
-
-``@service_action`` and ``@selector_action`` run before their viewset exists,
-so the seed check is the viewset's: ``as_view()`` on any viewset built on this
-package's mixins asks each decorated method's spec against the seeds the
-viewset dispatches with. A seed it registers serves; one nobody registers is
-refused there, naming the seed, rather than answering each request with a
-``TypeError``. Each class is built outside ``pytest.raises`` and only
-``as_view()`` inside it, so a refusal at decoration does not pass for one at
-mount.
-"""
-
 from __future__ import annotations
 
 import json
@@ -178,8 +166,7 @@ class TestAServiceAction:
         )
 
     def test_a_catch_all_hook_filling_the_keyword_mounts_and_fills_it(self) -> None:
-        """A hook's keys reach the service's pool, which ``check_seeds`` cannot
-        see, so a hooked viewset is not asked it, as a standalone view is not."""
+        """A hook's keys reach the service's pool, which ``check_seeds`` cannot see."""
         viewset = _with_service(
             _SERVICES["precondition"],
             ServiceViewSet,
@@ -223,8 +210,7 @@ class TestASelectorAction:
         assert [row["id"] for row in view(factory.get("/")).data] == [published.pk]
 
     def test_a_service_kwargs_hook_does_not_excuse_it(self) -> None:
-        """The edge hands a kernel selector no view hook, so a viewset's
-        service-kwargs hook fills nothing it reads."""
+        """The edge hands a kernel selector no view hook."""
         viewset = _with_selector(ServiceViewSet, get_service_kwargs=lambda self: {"frozen": True})
         with pytest.raises(ImproperlyConfigured, match="frozen"):
             viewset.as_view({"get": "posts"})
