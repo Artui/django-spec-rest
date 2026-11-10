@@ -1,5 +1,3 @@
-"""Schema-only ``Serializer`` standing for the ``400`` a service's ``ServiceValidationError`` is answered with."""
-
 from __future__ import annotations
 
 from rest_framework import serializers
