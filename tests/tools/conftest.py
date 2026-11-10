@@ -1,5 +1,3 @@
-"""``tools/`` tests: the codemod is not the package, so its directory goes on the path."""
-
 from __future__ import annotations
 
 import sys

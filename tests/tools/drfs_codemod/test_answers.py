@@ -1,15 +1,3 @@
-"""A drfs spec's ``success_status`` and ``response_finalizer`` move to the views serving it.
-
-A kernel spec declares no HTTP answer, so the codemod moves each onto the
-views in the same module that serve the spec: the ``@service_action``
-keyword, a ``get_<action>_<name>`` hook beside an ``action_specs`` entry (an
-``update`` entry's ``partial_update`` too), or the view's own attribute. Each
-placement is proven by a real request through the rewritten module.
-
-The target selector reads ``pk`` as the kernel does, as a hand-finished
-``reads=`` marker leaves it.
-"""
-
 from __future__ import annotations
 
 import textwrap
@@ -313,8 +301,7 @@ _BOTH_ENTRIES = textwrap.dedent(
 def test_a_partial_update_entry_of_its_own_keeps_its_answer(
     entries: str, method: str, action: str, status: int
 ) -> None:
-    # drfs reads the partial_update entry's spec for a PATCH when the view has
-    # one, so the update entry's answer reaches only its own action.
+    # drfs reads the partial_update entry's spec for a PATCH when the view has one.
     output, findings = rewrite_source(
         _BOTH_ENTRIES.replace("{ENTRIES}", entries), Path("app/views.py")
     )
@@ -469,7 +456,6 @@ def test_a_spec_built_inside_a_class_is_not_a_module_level_name() -> None:
         ("201", "get_update_success_status = 201\n"),
         ("status.HTTP_201_CREATED", "get_update_success_status = status.HTTP_201_CREATED\n"),
         ("created", "get_update_success_status = staticmethod(created)\n"),
-        # The pattern is anchored: a status inside a longer expression or name is a callable.
         (
             "201 if flag else 202",
             "get_update_success_status = staticmethod(201 if flag else 202)\n",
@@ -480,8 +466,7 @@ def test_a_spec_built_inside_a_class_is_not_a_module_level_name() -> None:
 def test_a_hook_is_spelled_direct_for_a_status_and_wrapped_for_a_callable(
     value: str, written: str
 ) -> None:
-    # A plain status reads back the same either way; the output is the
-    # codemod's product, so the spelling a person reviews is pinned.
+    # A plain status reads back the same either way; the output is the codemod's product.
     source = (
         "from rest_framework import status\n"
         "from rest_framework_services import ServiceSpec, ServiceViewSet\n\n"

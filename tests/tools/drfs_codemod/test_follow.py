@@ -1,10 +1,3 @@
-"""A spec's answers follow its import into the view serving it from another module.
-
-Every test drives ``main``, the codemod as it is run. A move is proven by a
-real request through the rewritten view, imported from the written files; what
-is left is proven by its note, and by the view still importing as it stands.
-"""
-
 from __future__ import annotations
 
 import ast
@@ -416,9 +409,7 @@ def test_a_symlinked_file_is_written_through_and_stays_a_link(project: Project) 
 def test_a_file_named_twice_through_a_symlink_is_written_once(
     project: Project, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    # A link beside its target is one module to the analysis, which keys modules
-    # on the resolved path, so it is no second server; the run keys its files the
-    # same way, so the file is staged and counted once, not written twice over.
+    # A link beside its target is one module to the analysis.
     project.spec()
     view = project.view()
     (view.parent / "alias.py").symlink_to(view)

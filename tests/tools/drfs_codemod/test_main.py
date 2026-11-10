@@ -1,5 +1,3 @@
-"""``python -m drfs_codemod``: the files it rewrites, the report it writes, and ``--check``."""
-
 from __future__ import annotations
 
 import re
