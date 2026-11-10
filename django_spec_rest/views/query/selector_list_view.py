@@ -1,5 +1,3 @@
-"""``GET`` list endpoint backed by a kernel selector spec or DRF queryset."""
-
 from __future__ import annotations
 
 from typing import Any, ClassVar
@@ -62,26 +60,16 @@ class SelectorListView(_ServesRaisedSchema, ListModelMixin, GenericAPIView):
 
     def get_queryset(self) -> Any:
         s: SelectorSpec | None = get_class_attr(self, "spec")
-        # The spec's set answers the list's own request alone: DRF's
-        # ``DjangoModelPermissions`` asks ``get_queryset()`` before any handler
-        # runs, so an OPTIONS (a CORS preflight) or an unserved method beside a
-        # spec with a required read answered the list's 400. Off the list it is
-        # DRF's own, the view's ``queryset`` (test_selector_list_view's
-        # TestUnderDjangoModelPermissions).
+        # The spec's set answers the list's own request alone: DRF's ``DjangoModelPermissions`` asks ``get_queryset()`` before any handler runs, so an OPTIONS (a CORS preflight) or an unserved method beside a spec with a required read answered the list's 400.
         if s is None or self.request.method not in _THE_LIST_S_METHODS:
             return super().get_queryset()
         return dispatch_list_once(self, s).value
 
     def list(self, request: Request, *args: Any, **kwargs: Any) -> Response:
-        # The answers are added here rather than in ``get`` so a subclass that
-        # extends ``list`` keeps running once its spec declares affordances --
-        # the same seam ``SelectorListMixin`` uses.
+        # The answers are added here rather than in ``get`` so a subclass that extends ``list`` keeps running once its spec declares affordances -- the same seam ``SelectorListMixin`` uses.
         s: SelectorSpec | None = get_class_attr(self, "spec")
         if s is None:
             return super().list(request, *args, **kwargs)
-        # DRF's ``list`` steps over the set the dispatch read, presented
-        # by the spec, shared with the viewset's ``list``: the one dispatch a
-        # permission class's ``get_queryset()`` made, if one asked first.
         data, paginated = present_kernel_list(self, s, dispatch_list_once(self, s), filtered=True)
         return self.get_paginated_response(data) if paginated else Response(data)
 
