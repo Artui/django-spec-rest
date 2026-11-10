@@ -162,7 +162,7 @@ class _Index:
         *,
         classes: bool = False,
     ) -> _Spec | None:
-        """The spec (or, for ``classes``, the class) ``name`` in ``file`` is, through any re-export made under the same name."""
+        """The spec (or class) ``name`` in ``file`` is, through any same-name re-export."""
         if file is None or (file, name) in seen:
             return None
         analysis = self.modules[file].analysis
@@ -194,7 +194,8 @@ class _Index:
     def _star(self, module: _Module, site: ImportSite) -> None:
         """A star import may bind any spec there, unseen (``test_a_star_import_leaves_it``).
 
-        Not one from outside the run (``test_a_star_import_of_what_is_outside_the_run_blocks_nothing``)
+        Not one from outside the run
+        (``test_a_star_import_of_what_is_outside_the_run_blocks_nothing``)
         or in a test (``test_a_test_module_star_import_is_no_second_view``).
         """
         where = self.display(module.file)
@@ -204,8 +205,8 @@ class _Index:
             return
         analysis = self.modules[file].analysis
         names = [(file, variable) for variable in analysis.answers]
-        # A package re-exporting a spec binds it in whoever star-imports the package, under
-        # whatever name it re-exports it (``test_a_star_import_of_a_re_exporting_package_is_a_second_view``).
+        # A package re-exporting a spec binds it in whoever star-imports it, under whatever
+        # name it re-exports it (``test_a_star_import_of_a_re_exporting_package_is_a_second_view``)
         for imported in analysis.imported:
             carried = imported.carried
             if carried.obj not in (None, "*"):
@@ -372,7 +373,7 @@ class _Index:
         bound = analysis.module_scope.assignments[variable]
         if len(bound) != 1:
             return f"{variable} is bound more than once"
-        # A view in its own module is such a use: it takes the answer there, as a run over one file does.
+        # A view in its own module is such a use: it takes the answer there, as a run would.
         if any(assignment.references for assignment in bound):
             return "used otherwise in its own module"
         return None
@@ -431,7 +432,8 @@ class _Index:
     ) -> str | tuple[str | None, Carried | None]:
         """What ``value`` needs in the view, as (the name, its import), or why it cannot go there.
 
-        Each refusal is a case of ``test_a_value_that_would_not_resolve_is_left_and_the_view_imports``,
+        Each refusal is a case of
+        ``test_a_value_that_would_not_resolve_is_left_and_the_view_imports``,
         but for ``reach``: ``test_a_spec_s_own_name_through_a_re_export_is_left``.
         """
         try:
@@ -460,8 +462,10 @@ class _Index:
     ) -> str | tuple[str | None, Carried | None]:
         """The spec module's own import of ``head``, carried only if it reads the same in a view.
 
-        Each refusal is a case of ``test_a_value_that_would_not_resolve_is_left_and_the_view_imports``;
-        ``top_level`` is ``test_a_function_local_import_of_the_value_s_name_is_not_the_one_carried``.
+        Each refusal is a case of
+        ``test_a_value_that_would_not_resolve_is_left_and_the_view_imports``;
+        ``top_level`` is
+        ``test_a_function_local_import_of_the_value_s_name_is_not_the_one_carried``.
         """
         if bindings != 1:
             return f"{head} is imported more than once"
@@ -477,7 +481,7 @@ class _Index:
 
 
 def rewrite_files(sources: Mapping[Path, str], roots: Sequence[Path]) -> dict[Path, Rewritten]:
-    """Each file of the run rewritten, its answers followed. ``Unreadable`` if one does not parse."""
+    """Each file rewritten, its answers followed; ``Unreadable`` if one does not parse."""
     index = _Index(sources, roots)
     plans = index.plan()
     placed: dict[tuple[_Spec, str], list[str]] = {}

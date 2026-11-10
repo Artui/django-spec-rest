@@ -1,4 +1,4 @@
-"""What a ``SerializerValidator``'s ``json_schema_registry`` enforces under the kernel's ``dispatch``.
+"""What ``SerializerValidator``'s ``json_schema_registry`` enforces under kernel dispatch.
 
 A keyword a kernel field spells is checked as a built-in field's would be, by
 the kernel's shape check before the serializer runs; a keyword left in

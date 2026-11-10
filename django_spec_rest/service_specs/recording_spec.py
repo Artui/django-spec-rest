@@ -104,7 +104,7 @@ def _providing(provider: Callable[..., Any] | None, validator: SerializerValidat
 
 
 def _beneath(answer: Mapping[str, Any], owned: frozenset[str]) -> dict[str, Any]:
-    """The view hooks' values ``answer`` leaves standing, as the kernel's ``overlaid`` leaves its overlay's."""
+    """The view hooks' values ``answer`` leaves standing, as the kernel's ``overlaid`` does."""
     return {
         name: value
         for name, value in edge_call_state().author_values.items()

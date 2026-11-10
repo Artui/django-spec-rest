@@ -12,7 +12,7 @@ outranking what the Validator returns.
 
 Over HTTP a ``kwargs`` answer naming a field's wire name is refused with
 ``ImproperlyConfigured`` on the request that gets it: the kernel's ``kwargs``
-seat feeds the service alone, so such a value would reach it unvalidated. ``input_data`` is the seat that
+seat feeds the service alone, so such a value reaches it unvalidated. ``input_data``
 fills a field. A key named like the field's ``source`` is no parameter of the
 Validator, so it stays the service's.
 """
@@ -205,7 +205,7 @@ def test_another_validator_s_kwargs_provider_is_not_checked() -> None:
 def test_a_declined_wire_name_leaves_the_parameter_to_its_default(
     run: Callable[..., None],
 ) -> None:
-    """The wire name declined with ``UNSET`` claims nothing, and the source's value is the service's."""
+    """The wire name declined with ``UNSET`` claims none; the source's value is the service's."""
     seen: dict[str, Any] = {}
 
     run(_spec(seen, kwargs=lambda: {"tenant": UNSET, "org": "B"}), {"tenant": "evil"})

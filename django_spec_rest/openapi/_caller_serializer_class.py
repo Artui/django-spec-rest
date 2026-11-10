@@ -23,7 +23,7 @@ def caller_serializer_class(
     )
 
     def get_fields(self: Any) -> dict[str, Any]:
-        # The author's own ``get_fields``, which ``derived`` overrides: a ``ModelSerializer``'s builds its fields from the model, a ``DataclassSerializer``'s from the dataclass.
+        # The author's ``get_fields``, which ``derived`` overrides from model or dataclass.
         fields = serializer.get_fields(self)
         for field in owned:
             fields.pop(field, None)
@@ -54,4 +54,4 @@ def _spelled(field: str) -> str:
 
 
 _SNAKE = re.compile(r"[a-z][a-z0-9]*(?:_[a-z][a-z0-9]*)*")
-"""A lower ``snake_case`` name, each word starting with a letter: one ``PascalCase`` reads back to."""
+"""A ``snake_case`` name, letter-led in each word, that a ``PascalCase`` reads back to."""

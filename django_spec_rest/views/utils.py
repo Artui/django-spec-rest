@@ -146,7 +146,7 @@ def get_class_attr(view: Any, name: str) -> Any:
 
 
 def action_answer(view: Any, name: str) -> Any:
-    """The view's ``success_status`` or ``response_finalizer`` (``name``) for the action it serves."""
+    """The view's ``success_status`` or ``response_finalizer`` (``name``) for its action."""
     action = getattr(view, "action", None)
     if isinstance(action, str):
         stamped = getattr(getattr(view, action, None), f"_{name}", None)
@@ -229,7 +229,7 @@ def resolve_view_hooks(
     *,
     instance: Any = None,
 ) -> ViewHooks:
-    """Resolve the calling view's hook chains into a [`ViewHooks`][django_spec_rest.types.view_hooks.ViewHooks] carrier."""
+    """Resolve the calling view's hook chains into a [`ViewHooks`][django_spec_rest.types.view_hooks.ViewHooks] carrier."""  # noqa: E501
     action: str | None = getattr(view, "action", None)
     extra_kwargs = resolve_extra_kwargs(
         view,
@@ -276,7 +276,7 @@ class _JsonNullResponse(Response):
     def rendered_content(self) -> Any:
         rendered: Any = super().rendered_content
         renderer: Any = self.accepted_renderer
-        # One boolean, so each operand is held by a named test in tests/views/test_selector_retrieve_view.py: ``rendered`` by test_a_json_renderer_that_wraps_none_keeps_its_wrapper, and the renderer type by test_a_non_json_renderer_that_renders_none_as_nothing_still_does.
+        # Each operand held by test_a_json_renderer_that_wraps_none_keeps_its_wrapper and kin.
         if rendered or not isinstance(renderer, JSONRenderer):
             return rendered
         charset: str | None = renderer.charset

@@ -45,7 +45,7 @@ class _SpecMetadata(SimpleMetadata):
         self.served = served
 
     def determine_actions(self, request: Request, view: Any) -> dict[str, Any]:
-        # Built here, from the OPTIONS request itself, before a clone carrying a described method is swapped onto the view: the context is kept on the view once built, so built inside the swap it would name the first clone's method for every method after it (test_spec_options' test_authorize_is_asked_with_the_views_call_context).
+        # Built before the clone is swapped on: kept on the view, it would name the first method.
         call_context = view_call_context(view, request)
         allowed = set(view.allowed_methods)
         actions: dict[str, Any] = {}
@@ -98,7 +98,7 @@ def _spec_described(
     spec: KernelServiceSpec | KernelSelectorSpec,
     call_context: dict[str, Any],
 ) -> dict[str, Any] | None:
-    """The JSON Schema of what the caller sends ``spec`` by ``method``, or ``None`` if it may not."""
+    """The JSON Schema of what the caller sends ``spec`` by ``method``, or ``None`` if refused."""
     if not _grants(view, request, method, spec, call_context):
         return None
     try:
@@ -120,7 +120,7 @@ def _grants(
     spec: KernelServiceSpec | KernelSelectorSpec,
     call_context: dict[str, Any],
 ) -> bool:
-    """Whether the caller may send ``method``: the view's own check, then the edge's judgment of the spec."""
+    """Whether the caller may send ``method``: the view's check, then the edge's judgment."""
     view.request = clone_request(request, method)
     try:
         view.check_permissions(view.request)
@@ -140,7 +140,7 @@ def _grants(
 def _described(
     spec: KernelServiceSpec | KernelSelectorSpec, asked: dict[str, Any], view: Any
 ) -> dict[str, Any]:
-    """The JSON Schema of what the caller sends ``spec``: the kernel's ``asked`` less this transport's."""
+    """JSON Schema of the caller's ``spec`` body: the kernel's ``asked``, less this transport's."""
     dropped = set(view.kwargs)
     target = spec.target_selector_spec() if isinstance(spec, KernelServiceSpec) else None
     if target is not None:

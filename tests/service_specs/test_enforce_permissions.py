@@ -8,7 +8,7 @@ the first refusing class answering, a create or a collection never asked about
 an object, a target that is no model - are not repeated here.
 
 A kernel call never reaches a class without a request, where DRF would raise
-``AttributeError`` from inside the caller's class, since the check builds the offline pair for whatever the call lacks,
+``AttributeError`` from the caller's class, since the check builds the offline pair it lacks,
 so a call with no ``call_context`` at all is answered rather than refused.
 
 The kernel asks the spec being dispatched, never a nested selector, and refuses

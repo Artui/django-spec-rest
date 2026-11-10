@@ -28,7 +28,7 @@ from django_spec_rest.views.mutation.map_service_error import map_service_error
 
 
 class KernelDispatchRefused(APIException):
-    """A bare ``DispatchError`` the kernel route refuses a call with: ``400``, ``{"detail": ...}``."""
+    """A bare ``DispatchError`` the kernel route refuses with: ``400``, ``{"detail": ...}``."""
 
     status_code = drf_status.HTTP_400_BAD_REQUEST
     default_detail = "The request was refused."
@@ -49,14 +49,14 @@ def _alone(answer: Callable[[Any], APIException]) -> Callable[[Any, RefusedCall]
 
 
 def _check_denied(exc: PermissionCheckDenied, call: RefusedCall) -> APIException:
-    """A check's denial, as DRF's ``permission_denied`` where the check is the dispatched spec's own."""
+    """A check's denial as DRF's ``permission_denied``, when the check is the dispatched spec's."""
     if call.spec is not None and exc.spec is kernel_spec(call.spec):
         return permission_denied(call.request, exc.message)
     return DRFNotPermitted.from_kernel(exc)
 
 
 def _as_raised(exc: Any) -> APIException:
-    """A refusal that is a DRF exception already, as the author raised it where it was translated."""
+    """A refusal already a DRF exception, as the author raised it at its translation."""
     return getattr(exc, TRANSLATED_FROM, exc)
 
 

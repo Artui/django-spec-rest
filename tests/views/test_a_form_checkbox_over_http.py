@@ -1,4 +1,4 @@
-"""A browser's checked checkbox sends ``on``; a kernel ``FormValidator`` over a form body reads it as ``True``.
+"""A checked box sends ``on``; a kernel ``FormValidator`` over a form body reads it as ``True``.
 
 ``coerce_flat`` spells a boolean as ``true``, ``false``, ``1`` or ``0`` alone, so
 without the edge's reading a form body's ``on`` for a parameter declared
@@ -65,7 +65,7 @@ def _post(body: Any, fmt: str | None = "multipart", path: str = "/") -> Any:
 
 @pytest.mark.parametrize("fmt", ["multipart", None], ids=["multipart", "urlencoded"])
 def test_a_boolean_field_posted_as_on_arrives_as_true(fmt: str | None) -> None:
-    """Fails with ``Enter true, false, 1 or 0.`` on the field, without ``_checked_boxes``'s boolean arm."""
+    """Fails with ``Enter true, false, 1 or 0.`` on the field, without ``_checked_boxes``' arm."""
     response = _post({"published": "on"} if fmt else "published=on", fmt)
 
     assert response.status_code == 204, response.data
@@ -153,7 +153,7 @@ def test_a_query_string_s_on_is_still_refused() -> None:
 
 
 def test_a_query_string_s_on_beside_a_form_body_is_still_refused() -> None:
-    """Fails with the query string's ``on`` read as ``True``, were ``_checked_boxes`` handed the scope beside the body.
+    """Fails with the query string's ``on`` as ``True``, were ``_checked_boxes`` handed the scope.
 
     ``flag`` is a target read, so the body's own ``flag`` is dropped and the query
     string's is what scopes the call: typed by its client, as it is on a ``GET``.

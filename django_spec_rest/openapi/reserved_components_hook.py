@@ -33,7 +33,7 @@ def reserved_components_hook(
 def _refuse_foreign(
     node: Any, where: str, reserved: Collection[str], skip: set[int], own: str | None = None
 ) -> None:
-    """Raise for a ``$ref`` under ``node`` to a ``reserved`` name, unless its string is in ``skip``."""
+    """Raise for a ``$ref`` under ``node`` to a ``reserved`` name not in ``skip``."""
     if isinstance(node, dict):
         ref = node.get("$ref")
         for name in reserved:

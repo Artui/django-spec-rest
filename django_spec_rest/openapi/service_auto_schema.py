@@ -84,7 +84,7 @@ class ServiceAutoSchema(AutoSchema):
     """``AutoSchema`` that derives its request / response from a kernel spec."""
 
     def is_excluded(self) -> bool:
-        """Whether this method is left out, as ``Allow`` leaves it out, or as drf-spectacular does."""
+        """Whether this method is left out, as ``Allow`` or drf-spectacular leaves it out."""
         refuses = getattr(self.view, "_refuses_without_a_spec", None)
         if refuses is not None and refuses(self.method):
             return True
@@ -125,7 +125,7 @@ class ServiceAutoSchema(AutoSchema):
         return spec
 
     def _parameters_body(self, spec: KernelServiceSpec) -> Any:
-        """The kernel's caller schema of ``spec``, less what the body does not choose, or ``None``."""
+        """The caller schema of ``spec`` less what the body does not choose, or ``None``."""
         schema = self._caller_schema(spec)
         if not schema["properties"]:
             return None
@@ -136,7 +136,7 @@ class ServiceAutoSchema(AutoSchema):
         return OpenApiRequest(_DemandedBody(schema) if demanded else schema)
 
     def _caller_schema(self, spec: KernelServiceSpec) -> dict[str, Any]:
-        """What a caller sends ``spec`` as an object schema: the kernel's less what stays this transport's."""
+        """What a caller sends ``spec`` as an object: the kernel's, less this transport's."""
         target = spec.target_selector_spec()
         return _without(
             spec_caller_input_schema(
@@ -154,7 +154,7 @@ class ServiceAutoSchema(AutoSchema):
         )
 
     def _discriminated_request_body(self, action: DiscriminatedAction) -> Any:
-        """The request of a ``DiscriminatedAction``: one component, an ``anyOf`` over its variants' bodies."""
+        """A ``DiscriminatedAction``'s request: an ``anyOf`` over its variants' bodies."""
         members: list[dict[str, Any]] = []
         for variant in action.specs.values():
             member = self._variant_body(variant)
@@ -203,7 +203,7 @@ class ServiceAutoSchema(AutoSchema):
         if spec is None and resolve_discriminated_action(self.view) is None:
             return super()._get_request_body(direction)
         if self.method == "DELETE":
-            # drf-spectacular documents no body on a ``DELETE``, and a kernel spec's is whatever ``_kernel_request_body`` reads, none included, so the call is presented as a ``POST``, which no body depends on (test_a_delete_with_a_validator_documents_its_body, test_a_spec_taking_nothing_documents_no_body).
+            # drf-spectacular documents no body on a DELETE, so the call is shown as a POST.
             return self._as_method("POST", direction)
         if spec is not None and self.method == "PATCH" and not self._dispatched(spec).partial:
             return self._as_method("PUT", direction)
@@ -331,7 +331,7 @@ class ServiceAutoSchema(AutoSchema):
         return OpenApiResponse(response={"anyOf": distinct})
 
     def _response_schema(self, answer: Any) -> dict[str, Any] | None:
-        """The schema a response in a ``_kernel_responses`` mapping documents, or ``None`` for no body."""
+        """The schema a ``_kernel_responses`` entry documents, or ``None`` for no body."""
         body = answer.response if isinstance(answer, OpenApiResponse) else answer
         if body is None:
             return None
@@ -342,7 +342,7 @@ class ServiceAutoSchema(AutoSchema):
         )
 
     def documents_service_error(self, spec: KernelServiceSpec | KernelSelectorSpec) -> bool:
-        """Whether this operation documents the ``422`` a plain ``ServiceError`` is answered with."""
+        """Whether this operation documents the ``422`` a plain ``ServiceError`` gets."""
         declared = (spec.metadata or {}).get(SERVICE_ERROR_METADATA_KEY, False)
         if not isinstance(declared, bool):
             raise ImproperlyConfigured(
@@ -352,7 +352,7 @@ class ServiceAutoSchema(AutoSchema):
         return declared
 
     def _caller_refusals(self, spec: KernelServiceSpec | KernelSelectorSpec) -> dict[int, Any]:
-        """The ``403`` a spec's checks are refused with, and the ``401`` where DRF asks to sign in."""
+        """The ``403`` a spec's checks refuse with, and the ``401`` DRF asks to sign in."""
         checks = spec.permissions or ()
         if all(isinstance(check, Unrestricted) for check in checks):
             return {}
@@ -373,7 +373,7 @@ class ServiceAutoSchema(AutoSchema):
         return refusals
 
     def _validation_errors_response(self) -> OpenApiResponse:
-        """The ``400`` the edge sends over a Validator: the ``ValidationErrors`` tree, a ``detail`` or a list."""
+        """A Validator's ``400``: a ``ValidationErrors`` tree, a ``detail`` or a list."""
         component = ResolvedComponent(
             name=VALIDATION_ERRORS,
             type=ResolvedComponent.SCHEMA,
@@ -393,7 +393,7 @@ class ServiceAutoSchema(AutoSchema):
         )
 
     def resolve_serializer(self, serializer: Any, *args: Any, **kwargs: Any) -> Any:
-        # Passed through whole: the base's later parameters differ by version (``bypass_extensions`` is not in every release the floor admits).
+        # Passed whole: ``bypass_extensions`` is absent from some releases the floor admits.
         resolved = super().resolve_serializer(serializer, *args, **kwargs)
         reserved = RESERVED_COMPONENTS.get(resolved.name)
         if reserved is not None:
@@ -439,7 +439,7 @@ class ServiceAutoSchema(AutoSchema):
         )
 
     def _get_filter_parameters(self) -> list[Any]:
-        # A spec-level FilterSet must drop ``DjangoFilterBackend`` (the ``as_view()`` guard forbids running both), so it is invisible to the base's backend-driven path and its parameters would silently vanish.
+        # The spec's FilterSet drops ``DjangoFilterBackend``, else its parameters silently vanish.
         parameters = super()._get_filter_parameters()
         if not self._is_list_view():
             return parameters
@@ -508,7 +508,7 @@ def _declared_path_parameter(variable: str, read: Parameter) -> Any:
 
 
 def _is_decorated_action(view: Any) -> bool:
-    """Whether ``view`` serves this operation by a ``@service_action``, which asks for no partial call."""
+    """Whether ``view`` serves this by a ``@service_action``, which takes no partial call."""
     action = getattr(view, "action", None)
     return isinstance(action, str) and hasattr(getattr(view, action, None), "_service_spec")
 
@@ -521,7 +521,7 @@ def _partial_variant(spec: KernelServiceSpec) -> KernelServiceSpec:
 def _input_data_reach(
     provider: Callable[..., Any] | None, parameters: Parameters
 ) -> tuple[frozenset[str], frozenset[str]]:
-    """The fields in ``parameters`` that ``provider`` is annotated to fill, and those it fills or may fill."""
+    """The ``parameters`` that ``provider`` is annotated to fill, or may fill."""
     keys = provider_keys(provider)
     names = parameters.names()
     if keys is None:
@@ -543,7 +543,7 @@ def _without(schema: dict[str, Any], names: Iterable[str]) -> dict[str, Any]:
 
 
 class _DemandedBody(dict[str, Any]):
-    """A request schema the wire refuses an empty body for, which the document states as ``required``."""
+    """A request schema the wire refuses an empty body for: the document says ``required``."""
 
 
 _MESSAGES: dict[str, Any] = {"type": "array", "items": {"type": "string"}}
@@ -612,7 +612,7 @@ def _kernel_filter_parameters(filter_set: Any) -> list[Any]:
 
 
 def _merged(own: dict[Any, Any], declared: dict[Any, Any]) -> dict[Any, Any]:
-    """``declared`` laid over ``own``: each status declared replaces ``own``'s, a ``2xx`` every success."""
+    """``declared`` over ``own``: a declared status replaces it; ``2xx`` is any success."""
     statuses = {_status(code) for code in declared}
     success = any(status.startswith("2") for status in statuses)
     kept = {
@@ -639,7 +639,7 @@ def _under_extend_schema(schema_type: type) -> type[AutoSchema] | None:
 
 
 def _success_with_a_body(code: Any) -> bool:
-    """Whether a key of a ``responses`` mapping is a success the edge sends a body with: never a ``204``."""
+    """Whether a ``responses`` key is a success the edge sends a body with: never a ``204``."""
     status = _status(code)
     return status.startswith("2") and status != str(HTTP_204_NO_CONTENT)
 
@@ -650,7 +650,7 @@ def _status(code: Any) -> str:
 
 
 class _ServiceValidationErrorExtension(OpenApiSerializerExtension):
-    """Renders ``ServiceValidationErrorSerializer`` as the body DRF sends for a ``ServiceValidationError``."""
+    """Renders ``ServiceValidationErrorSerializer`` as the body DRF sends for that error."""
 
     target_class = ServiceValidationErrorSerializer
 

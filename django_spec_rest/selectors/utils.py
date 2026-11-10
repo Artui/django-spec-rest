@@ -96,7 +96,7 @@ class _ViewObjectPermission(PermissionCheck):
         *,
         call_context: Mapping[str, Any] | None = None,
     ) -> bool:
-        # The kernel hands every check declaring ``call_context`` the call's dict, so ``None`` is a caller asking outside a dispatch, with no view to ask: refused, never allowed unasked (test_the_view_s_check_asked_with_no_call_context_refuses).
+        # ``None``, a caller outside any dispatch, is refused rather than allowed unasked.
         if call_context is None:
             return False
         if isinstance(target, Model):

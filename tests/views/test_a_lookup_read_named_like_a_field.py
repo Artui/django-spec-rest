@@ -2,8 +2,8 @@
 
 A lookup by ``title`` beside a body ``title`` declares two sources for one name,
 and a kernel spec declares one source per name, so its ``parameters()`` is
-refused in the kernel's words, and with it ``as_view()``. The lookup reads a name of its own instead, which the route captures
-and the client's body never moves.
+refused in the kernel's words, and with it ``as_view()``. The lookup reads its own name, which
+the route captures and the client's body never moves.
 """
 
 from __future__ import annotations

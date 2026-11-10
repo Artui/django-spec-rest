@@ -8,7 +8,7 @@ from typing import Any
 _Rule = tuple[type, dict[str, Any]]
 
 
-# The built-in mappings live with the walkers, not here: a registry carries only consumer additions, so the empty default stays dependency-free.
+# Built-in mappings live with the walkers; a registry holds only consumer additions.
 @dataclass(frozen=True)
 class JsonSchemaRegistry:
     """Consumer-extensible ``type → JSON Schema fragment`` rules for the DRF seats."""

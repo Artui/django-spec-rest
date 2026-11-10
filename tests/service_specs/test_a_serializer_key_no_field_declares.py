@@ -1,4 +1,4 @@
-"""A caller's ``serializer`` key no field declares is an unknown argument; a field of that name is the serializer's.
+"""A ``serializer`` key no field declares is unknown; a field of that name is the serializer's.
 
 The kernel route strips nothing: the key reaches the kernel's
 closed argument set, which refuses it as "Unknown argument." under

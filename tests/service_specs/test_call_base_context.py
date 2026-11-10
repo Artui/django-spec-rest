@@ -1,4 +1,4 @@
-"""``call_base_context``: the view's baseline, reused in an edge call only for its own request and view.
+"""``call_base_context``: the view's baseline, reused in an edge call only for its request and view.
 
 Each case runs inside one edge call, a POST to a live view whose service makes
 kernel calls of its own, handing each a call context the edge did not build.

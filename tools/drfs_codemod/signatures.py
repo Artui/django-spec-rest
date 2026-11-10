@@ -57,7 +57,7 @@ def _name(node: ast.expr) -> str | None:
 
 
 def _kernel_type(annotation: ast.expr | None) -> tuple[str, str | None, bool, bool]:
-    """``(type, items, optional, guessed)`` for an annotation, as a kernel ``Parameter`` spells them."""
+    """``(type, items, optional, guessed)`` for an annotation, as a kernel ``Parameter`` spells."""
     if annotation is None:
         return "string", None, False, True
     inner, optional = _unwrap_optional(annotation)

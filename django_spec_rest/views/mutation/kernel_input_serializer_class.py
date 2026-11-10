@@ -12,7 +12,7 @@ from django_spec_rest.service_specs.serializer_validator import SerializerValida
 
 
 def kernel_input_serializer_class(spec: KernelServiceSpec) -> type[BaseSerializer[Any]]:
-    """The class ``get_serializer_class()`` answers for a kernel service spec on a route with none."""
+    """The class ``get_serializer_class()`` answers for a kernel spec on a route with none."""
     if isinstance(spec.validator, SerializerValidator):
         return _unbound(renderable_serializer_class(spec.validator.serializer))
     return _unbound(Serializer)

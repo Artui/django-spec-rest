@@ -95,7 +95,7 @@ def service_action(
 
     def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
         fn_label = getattr(fn, "__qualname__", repr(fn))
-        # The viewset class is unknown at decoration time, so any ``get_<action>_service_kwargs`` / ``get_service_kwargs`` it may carry has to be assumed permissive until its ``as_view()``.
+        # Viewset unknown here, so its ``get_<action>_service_kwargs`` is assumed permissive.
         checks: dict[str, Any] = {
             "label": f"@service_action {fn_label}",
             "detail": detail,
@@ -119,7 +119,7 @@ def service_action(
                         render_instance_on_none=detail,
                     )
                 instance: Any = resolve_mutation_instance(self, spec) if detail else None
-                # The action's ``success_status`` (the one stamped below, else the viewset's) is resolved per request inside the dispatch, since it may be a callable keyed on the result, so the decorator passes only the action default (200).
+                # ``success_status`` resolves per request, so only the default (200) passes here.
                 return dispatch_mutation_for_spec(
                     self,
                     request,

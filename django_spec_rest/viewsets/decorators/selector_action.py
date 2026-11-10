@@ -78,7 +78,7 @@ def _refuse_a_spec_that_is_not_a_selector(spec: Any, fn: Callable[..., Any]) -> 
 
 
 def _serve_kernel_spec(view: Any, spec: KernelSelectorSpec) -> Response:
-    """A kernel spec's answer: its row, ``null`` under ``allow_none``, or its rows, a page where paginated."""
+    """A kernel spec's answer: its row, ``null`` under ``allow_none``, or its rows (paged)."""
     if spec.kind is SelectorKind.RETRIEVE:
         row, data = present_kernel_row(view, spec)
         return _JsonNullResponse() if row is None else Response(data)

@@ -30,7 +30,7 @@ class ActionSerializerResolver(_ActionSpecsMixin):
     """
 
     def get_serializer_class(self) -> type[BaseSerializer[Any]]:
-        # A kernel service spec answers with its input serializer where the view sets none: only DRF's browsable renderer asks, building a form per write method under the action that method routes to, and a spec-only kernel viewset ended every HTML page in DRF's assertion (``kernel_input_serializer_class``).
+        # Answers the input serializer where no view sets one (``kernel_input_serializer_class``).
         spec = resolve_action_spec(self, self.action)
         if isinstance(spec, DiscriminatedAction):
             spec = next(iter(spec.specs.values()))

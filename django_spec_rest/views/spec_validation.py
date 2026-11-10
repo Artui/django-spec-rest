@@ -29,7 +29,7 @@ def _required_kw_params(fn: Callable[..., Any]) -> dict[str, inspect.Parameter]:
 
 
 def _positional_only(fn: Callable[..., Any]) -> list[str]:
-    """The parameters of ``fn`` taking a value by position alone and declaring no default, sorted."""
+    """The ``fn`` parameters taking a value by position alone, with no default, sorted."""
     return sorted(
         name
         for name, p in inspect.signature(fn).parameters.items()

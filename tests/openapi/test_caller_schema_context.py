@@ -59,7 +59,7 @@ class _ByTransport(_Echo):
 
 
 class _ByAction(_Echo):
-    """``via_<action>`` is required where the call names an action, as a Validator keyed on it may."""
+    """``via_<action>`` is required where a call names an action, as a keyed Validator may."""
 
     def parameters(self, *, call_context: dict[str, Any] | None = None) -> Parameters:
         action = call_context["action"] if call_context is not None else None
@@ -134,7 +134,7 @@ BY_TRANSPORT = _view(_spec(_ByTransport()))
 
 
 class ByAction(ServiceViewSet):
-    """``create`` and a ``PUT`` action, each a spec naming the action its call is dispatched under."""
+    """``create`` and a ``PUT`` action, each spec naming the action its call dispatches under."""
 
     queryset = Author.objects.all()
     action_specs = {"create": _spec(_ByAction())}
@@ -283,7 +283,7 @@ class TestASerializerValidatorDoesNotMove:
 
 
 class TestADescriptionThatRaises:
-    """Reading an attribute of ``request`` raises where nothing gave one: each seat keeps its handling."""
+    """Reading ``request``'s attribute raises when none was given; each seat keeps its handling."""
 
     def test_it_raises_out_of_generation(self) -> None:
         # The document has no request, so ``call_context["request"]`` is ``None``.

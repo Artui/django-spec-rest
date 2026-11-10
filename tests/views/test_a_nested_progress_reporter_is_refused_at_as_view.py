@@ -1,8 +1,8 @@
 """A nested selector's ``progress_reporter`` is refused before any view is built.
 
 Only the spec being dispatched runs, so only its ``progress_reporter`` reports.
-The kernel refuses one declared on a nested selector when the spec is built, in the same words for each nested role, so a
-view is never handed such a spec.
+The kernel refuses one declared on a nested selector when the spec is built, in the same words
+for each nested role, so a view is never handed such a spec.
 """
 
 from __future__ import annotations

@@ -44,7 +44,7 @@ class TestImportsByModulePath:
 
             def refuse(kernel: bool) -> None:
                 raise KernelNotPermitted() if kernel else NotPermitted()
-            """
+            """  # noqa: E501
         )
         assert "from django_service_specs import NotPermitted\n" in output
         assert (
@@ -92,8 +92,8 @@ class TestImportsByModulePath:
             """
         )
         assert (
-            "from django_spec_rest.service_specs.drf_not_permitted import DRFNotPermitted as Refused"
-            in output
+            "from django_spec_rest.service_specs.drf_not_permitted import "
+            "DRFNotPermitted as Refused" in output
         )
         assert "ERROR = Refused" in output
 
@@ -302,7 +302,7 @@ class TestSeats:
             spec = ServiceSpec(
                 service=print, input_serializer=In, output_serializer=Out, json_schema_registry=SHARED
             )
-            """
+            """  # noqa: E501
         )
         assert "SerializerValidator(In, json_schema_registry=SHARED)" in output
         assert "SerializerPresenter(Out, json_schema_registry=SHARED)" in output
@@ -310,7 +310,7 @@ class TestSeats:
 
 
 class TestTheOutputSelectorHoist:
-    """drfs said a service's output on its output selector; the kernel's is the service's presenter."""
+    """drfs said a service's output on its output selector; the kernel's is its presenter."""
 
     def test_a_serializer_only_selector_becomes_the_presenter(self) -> None:
         output, findings = _rewrite(
@@ -373,7 +373,7 @@ class TestTheOutputSelectorHoist:
             from rest_framework_services import ServiceSpec
 
             spec = ServiceSpec(service=print, many=True, output_serializer=Out, output_serializer_context=ctx)
-            """
+            """  # noqa: E501
         )
         assert "SerializerPresenter(Out, serializer_context=ctx, value_keyword=None)" in output
 
@@ -608,7 +608,7 @@ class TestReads:
             from rest_framework_services import QueryParam, SelectorKind, SelectorSpec
 
             spec = SelectorSpec(kind=SelectorKind.LIST, selector=lambda: [], reads=[QueryParam(name="q")])
-            """,
+            """,  # noqa: E501
             (root,),
         )
         # The list leaves the call for the marker, so its import goes with it.

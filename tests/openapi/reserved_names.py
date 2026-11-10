@@ -93,7 +93,7 @@ def ours_refusing_nothing(prefix: str) -> URLPattern:
 
 
 def theirs(prefix: str, serializer: type[serializers.Serializer]) -> URLPattern:
-    """A project's own view on drf-spectacular's ``AutoSchema``, posting and answering ``serializer``."""
+    """A project view on drf-spectacular's ``AutoSchema``, posting and answering ``serializer``."""
 
     class _Theirs(GenericAPIView):
         schema = AutoSchema()

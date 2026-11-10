@@ -85,7 +85,7 @@ ABSOLUTE = "from {package}.specs.enrolment import enrol"
 
 
 class Project:
-    """A package on ``sys.path`` under a name no other test imports, with ``specs/`` and ``views/``."""
+    """A package on ``sys.path`` under a name no other test imports: ``specs/`` and ``views/``."""
 
     def __init__(self, root: Path) -> None:
         self.root = root
@@ -307,7 +307,7 @@ def _tree(project: Project) -> dict[str, bytes]:
 
 
 def _chain(project: Project) -> tuple[Path, Path, Path]:
-    """``enrol`` (spec) is served by ``m``, which builds ``sm``, served by ``n``: ``m`` receives and empties."""
+    """``enrol`` (spec) served by ``m``, which builds ``sm``, served by ``n``; ``m`` empties it."""
     spec = project.spec()
     project.write(
         "views/m.py",
@@ -734,7 +734,7 @@ def test_a_spec_registered_beside_its_one_view_moves(project: Project) -> None:
     project.run()
     assert _answers(view) == ["success_status", "response_finalizer"]
     assert "success_status=202," not in spec.read_text()
-    # The registration is left as the tool writes it today: the spec is still imported and registered.
+    # The registration stays as the tool writes it: the spec is still imported and registered.
     written = registry.read_text()
     assert f"from {project.package}.specs.enrolment import enrol\n" in written
     assert 'enrolment_spec_registry.register("ENROL", enrol)\n' in written
@@ -1467,7 +1467,8 @@ def test_a_subclass_the_run_cannot_resolve_is_not_seen(project: Project) -> None
         "import {package}.specs.plain as Plain\n\n\n"
         "def load():\n    from .enrolment import Enrol\n\n    return Enrol\n\n\n"
         "Enrol = load()\n\n\nclass Child(Enrol):\n    spec = None\n\n\n"
-        "class Module(Plain):\n    spec = None\n\n\nclass Missing(Plain.nothing):\n    spec = None\n\n\n"
+        "class Module(Plain):\n    spec = None\n\n\n"
+        "class Missing(Plain.nothing):\n    spec = None\n\n\n"
         "Alias = Enrol\n\n\nclass Renamed(Alias):\n    spec = None\n",
     )
     project.run()
@@ -1497,7 +1498,8 @@ def test_a_subclass_in_the_specs_own_module_does_not_inherit_the_answer(
             "from rest_framework_services import ServiceSpec",
             f"from rest_framework_services import {server}, ServiceSpec",
         )
-        + "\nplain = ServiceSpec(\n    service=create_author,\n    input_serializer=AuthorSerializer,"
+        + "\nplain = ServiceSpec(\n    service=create_author,\n"
+        "    input_serializer=AuthorSerializer,"
         f"\n    permission_classes=[AllowAny],\n)\n\n\nclass Base({server}):\n    {serving}\n"
         f"\n\nclass Child(Base):\n    {redeclared}\n"
     )

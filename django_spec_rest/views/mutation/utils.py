@@ -67,7 +67,7 @@ def dispatch_mutation_for_spec(
     partial: bool = False,
     variant: str | None = None,
 ) -> Response:
-    """End-to-end dispatch for one ``ServiceSpec`` call over HTTP: the kernel's ``dispatch``, then DRF's response."""
+    """One ``ServiceSpec`` call over HTTP: the kernel's ``dispatch``, then DRF's response."""
     resolved: Any = None if instance is UNSET else instance
     result = dispatch_kernel_spec(
         kernel_spec_variant(spec, partial=True if partial else None),
@@ -119,7 +119,7 @@ def dispatch_mutation_for_spec(
 def _view_hooks(
     view: Any, request: Request, spec: KernelServiceSpec, *, instance: Any
 ) -> ViewHooks:
-    """The view's hook chains for this call, a failed read of the body judged where a hook made it."""
+    """The view's hook chains for this call; a failed body read is judged where a hook made it."""
     try:
         return resolve_view_hooks(view, request, instance=instance)
     except _FAILED_BODY_READS:
@@ -143,7 +143,7 @@ def dispatch_discriminated_action(
     render_instance_on_none: bool,
     partial: bool = False,
 ) -> Response:
-    """Serve one request of a ``DiscriminatedAction``: refuse, choose, then run the chosen variant."""
+    """Serve a ``DiscriminatedAction`` request: refuse, choose, then run the chosen variant."""
     _refuse_a_caller_every_variant_refuses(view, request, action)
     key = _chosen_key(view, request, action)
     chosen = action.specs[key]
@@ -271,7 +271,7 @@ def restore_schema_when_handled(view: Any) -> None:
     get_exception_handler: Callable[[], Callable[..., Any]] = view.get_exception_handler
 
     def restoring_exception_handler() -> Callable[[Exception, dict[str, Any]], Response | None]:
-        # Asked through the bound method when ``handle_exception`` asks, as DRF asks it, so a ``get_exception_handler`` of the viewset's own still chooses the handler.
+        # Via the bound method, so the viewset's own ``get_exception_handler`` still chooses.
         handler: Callable[..., Any] = get_exception_handler()
 
         def restoring(exc: Exception, context: dict[str, Any]) -> Response | None:

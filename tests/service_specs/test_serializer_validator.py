@@ -511,7 +511,7 @@ def test_a_list_level_refusal_sits_under_non_field_errors() -> None:
 
 
 class _OldShapedErrors(serializers.ListSerializer):
-    """A list serializer reporting item errors as DRF below 3.18 does: a list, a blank per valid row."""
+    """A list serializer reporting item errors as DRF below 3.18: a list, a blank per valid row."""
 
     @property
     def errors(self) -> Any:  # ty: ignore[invalid-method-override]

@@ -342,7 +342,7 @@ def _row_lookup(spec: KernelServiceSpec | KernelSelectorSpec) -> KernelSelectorS
 def _validate_lookup_captures(
     view_cls: MountedView, actions: Mapping[str, str] | None, initkwargs: Mapping[str, Any]
 ) -> None:
-    """Refuse a router-mounted detail route whose row lookup declares no parameter for the capture."""
+    """Refuse a detail route whose row lookup declares no parameter for the router's capture."""
     if initkwargs.get("detail") is not True or not actions:
         return
     capture = _lookup_capture(view_cls)
@@ -409,7 +409,7 @@ class _ActionSpecsMixin(_ServesRaisedSchema):
 
     @classmethod
     def as_view(cls, *args: Any, **initkwargs: Any) -> Any:
-        # Checked as the instances will be, keywords included: an ``action_specs`` handed here is the one the mixins dispatch, and is this viewset's ``as_view(spec=...)`` (``mounted_view``).
+        # Checked as instances will be, keywords included (``mounted_view``).
         mounted = mounted_view(cls, initkwargs)
         pool_seeds = view_pool_seeds(mounted)
         for action, spec in mounted.action_specs.items():
@@ -465,7 +465,7 @@ class _ActionSpecsMixin(_ServesRaisedSchema):
         return unserved or self._has_no_fallback(action)
 
     def _has_no_fallback(self, action: str) -> bool:
-        """Whether a read has no spec, no handler of the project's, and a fallback that cannot run."""
+        """Whether a read has no spec, no project handler, and a fallback that cannot run."""
         return (
             action in _READ_HANDLERS
             and resolve_action_spec(self, action) is None

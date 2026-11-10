@@ -170,7 +170,7 @@ def test_a_suffix_route_s_format_is_in_the_one_dict_the_validator_reads() -> Non
 
 
 class TestOffARequest:
-    """A kernel ``dispatch`` with no DRF request in its context leaves the transport's dict as it was."""
+    """A kernel ``dispatch`` with no DRF request leaves the transport's dict as it was."""
 
     def _dispatch(self, call_context: dict[str, Any]) -> _Seen:
         seen = _Seen()
@@ -233,7 +233,7 @@ def test_a_view_hook_answering_a_transport_key_leaves_the_stamp_to_every_stage()
     }
 
 
-def test_a_serializer_context_callable_answering_a_transport_key_leaves_the_stamp_to_every_stage() -> (
+def test_a_serializer_context_callable_answering_a_transport_key_leaves_the_stamp_to_every_stage() -> (  # noqa: E501
     None
 ):
     seen = _Seen()

@@ -1,4 +1,4 @@
-"""Tests for the dual-base ``DRFPrincipalUnavailable``: the kernel's refusal of a principal, answered 403.
+"""Tests for dual-base ``DRFPrincipalUnavailable``: the kernel's refusal of a principal (403).
 
 As for ``NotPermitted``: the codes, the ``ErrorDetail`` type and the kernel's
 ``message`` are asserted, because a response body is identical for a class

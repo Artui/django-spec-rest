@@ -33,7 +33,7 @@ class _AdditionalInputAPIException(_ServiceAPIException):
 
 
 class _ConflictAPIException(drf_exceptions.APIException):
-    """DRF mapping for [`ServiceConflict`][django_service_specs.services.service_conflict.ServiceConflict]."""
+    """DRF mapping for [`ServiceConflict`][django_service_specs.services.service_conflict.ServiceConflict]."""  # noqa: E501
 
     status_code = drf_status.HTTP_409_CONFLICT
     default_detail = "Conflict."

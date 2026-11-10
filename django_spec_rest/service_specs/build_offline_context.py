@@ -22,7 +22,7 @@ def build_offline_context(
     query_params: Mapping[str, Any] | None = None,
     host: str | None = None,
 ) -> OfflineContext:
-    """Build the [`OfflineContext`][django_spec_rest.types.offline_context.OfflineContext] for dispatching a spec outside an HTTP request."""
+    """Build the [`OfflineContext`][django_spec_rest.types.offline_context.OfflineContext] for dispatching a spec outside an HTTP request."""  # noqa: E501
     base: HttpRequest = (
         _copy_request(http_request) if http_request is not None else _synthesize_request(host)
     )

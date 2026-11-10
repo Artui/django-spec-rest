@@ -2,8 +2,8 @@
 
 The view builds the dict on first use with DRF's four standard entries,
 ``request``, ``view``, ``format`` (the view's ``format_kwarg``, ``None`` off a
-suffix route) and the view's ``action`` or ``None``, and hands that very object to the kernel's ``dispatch`` as
-``call_context``. Every stage declaring ``call_context`` is handed it: the
+suffix route) and the view's ``action`` or ``None``, and hands that very object to the kernel's
+``dispatch`` as ``call_context``. Every stage declaring ``call_context`` is handed it: the
 spec's ``kwargs`` provider and ``input_data``, a target lookup, the selector,
 the service, and each seat's serializer context callable. A dict the kernel is
 handed reaches every stage by the kernel's own rule; these cases hold that the

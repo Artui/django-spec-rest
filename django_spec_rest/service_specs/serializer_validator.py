@@ -51,7 +51,7 @@ class SerializerValidator(Validator):
         server_owned: frozenset[str] = frozenset(),
         json_schema_registry: JsonSchemaRegistry | None = None,
     ) -> None:
-        # One branch to coverage, so each condition is held by its own test: the ``type`` by test_anything_but_a_serializer_class_or_a_dataclass_is_refused_when_declared[an-instance], which ``issubclass`` would raise on; the serializer class by test_parameters_are_the_walked_fields, and the dataclass by test_a_dataclass_s_data_is_its_instance_and_its_values_its_fields, each of which is refused without its own; and [another-class] holds that the two are the only declarations taken.
+        # Each operand is held by its own test (test_parameters_are_the_walked_fields, et al.).
         if not (
             isinstance(serializer, type)
             and (
@@ -60,7 +60,8 @@ class SerializerValidator(Validator):
             )
         ):
             raise ImproperlyConfigured(
-                f"SerializerValidator takes a Serializer subclass or a dataclass; got {serializer!r}."
+                "SerializerValidator takes a Serializer subclass or a dataclass; "
+                f"got {serializer!r}."
             )
         self.serializer = serializer
         self.serializer_context = serializer_context
@@ -93,18 +94,18 @@ class SerializerValidator(Validator):
         )
 
     def _seeded(self) -> frozenset[str]:
-        """The field names this Validator leaves out of ``parameters()``: the one place that list is written."""
+        """The field names this Validator leaves out of ``parameters()``: the one list written."""
         return RESERVED_POOL_SEEDS | BOUND | self.excluded
 
     def _walk(self, call_context: dict[str, Any] | None = None) -> Parameters:
-        """Every input field of the described serializer as a Parameter, seed-named ones included."""
+        """Every input field of the serializer as a Parameter, seed-named ones included."""
         return input_parameters(
             describe_serializer(self.serializer, self, call_context=call_context),
             registry=self.json_schema_registry,
         )
 
     def validate(self, arguments: Mapping[str, Any], context: ValidationContext) -> dict[str, Any]:
-        """The validated values, keyed by source, or ``DRFInvalidArguments`` carrying DRF's detail."""
+        """The validated values by source, or ``DRFInvalidArguments`` with DRF's detail."""
         return self._validated(arguments, context).values
 
     def validated(self, arguments: Mapping[str, Any], context: ValidationContext) -> Validated:
@@ -118,7 +119,7 @@ class SerializerValidator(Validator):
         *,
         many_argument: str,
     ) -> Validated:
-        """The rows validated once as DRF's list serializer, the one serializer bound for the call."""
+        """Rows validated once as DRF's list serializer: the call's one bound serializer."""
         self._refuse_partial(context)
         indices = list(rows)
         serializer = self._serializer(
@@ -134,7 +135,7 @@ class SerializerValidator(Validator):
         )
 
     def _validated(self, arguments: Mapping[str, Any], context: ValidationContext) -> Validated:
-        # Neither public method calls the other, so a subclass may extend either through the other without the two calling each other forever.
+        # Neither public method calls the other: a subclass may extend either without recursing.
         self._refuse_partial(context)
         serializer = self._bind(arguments, context)
         if not serializer.is_valid():
@@ -168,7 +169,7 @@ class SerializerValidator(Validator):
         return {name: value for name, value in values.items() if name not in owned}
 
     def _refuse_partial(self, context: ValidationContext) -> None:
-        # One branch to coverage: test_a_partial_call_over_a_dataclass_is_refused holds both together, and each alone is held by a call it must not refuse: test_a_partial_call_takes_a_required_field_left_out_and_returns_what_was_sent (a partial serializer) and test_a_dataclass_s_data_is_its_instance_and_its_values_its_fields (a whole dataclass call).
+        # Each arm is held by a test (test_a_partial_call_over_a_dataclass_is_refused and kin).
         if context.partial and not self.supports_partial:
             raise ImproperlyConfigured(
                 f"SerializerValidator({self.serializer.__qualname__}) cannot validate a partial "
@@ -208,7 +209,7 @@ class SerializerValidator(Validator):
 
 
 def _server_values(serializer: serializers.Serializer, put: Mapping[str, Any]) -> dict[str, Any]:
-    """The server's value for each field of ``put``, validated as DRF's field loop validates one, on its own."""
+    """The server's value for each field of ``put``, validated as DRF's field loop does."""
     fields = serializer.fields
     held: dict[str, Any] = {}
     errors: dict[str, Any] = {}
@@ -261,7 +262,7 @@ def _sources(serializer: serializers.Serializer, name: str) -> tuple[str, ...]:
 
 
 def _lay_back(data: Any, serializer: serializers.Serializer, held: Mapping[str, Any]) -> None:
-    """Each of ``held`` written back over its field's ``source`` key in ``data``, where it still is."""
+    """Each of ``held`` written back over its field's ``source`` key in ``data``."""
     for name, value in held.items():
         *path, last = serializer.fields[name].source_attrs or [None]
         target: Any = data
@@ -288,7 +289,7 @@ def _cleared(field: serializers.Field | None, value: Any) -> Any:
 
 
 def _cleared_at(value: Any, attrs: list[str], field: serializers.Field) -> Any:
-    """``value`` with what ``field`` validated at ``attrs`` cleared, or itself if nothing changed."""
+    """``value`` with what ``field`` validated at ``attrs`` cleared, or itself if unchanged."""
     if not isinstance(value, Mapping) or attrs[0] not in value:
         return value
     head, *rest = attrs

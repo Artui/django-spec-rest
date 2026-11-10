@@ -7,7 +7,7 @@ from rest_framework.exceptions import PermissionDenied
 
 
 class DRFPrincipalUnavailable(KernelPrincipalUnavailable, PermissionDenied):
-    """The principal cannot act, as both the kernel's ``PrincipalUnavailable`` and DRF's ``PermissionDenied``."""
+    """The kernel's ``PrincipalUnavailable`` and DRF's ``PermissionDenied``, for a principal."""
 
     def __init__(self, message: str | None = None, code: str | None = None) -> None:
         KernelPrincipalUnavailable.__init__(self, message)

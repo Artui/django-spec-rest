@@ -4,7 +4,7 @@ from typing import Any, cast
 
 
 def enable_openapi() -> None:
-    """Set [`ServiceAutoSchema`][django_spec_rest.openapi.service_auto_schema.ServiceAutoSchema] as the schema on every library view class."""
+    """Set [`ServiceAutoSchema`][django_spec_rest.openapi.service_auto_schema.ServiceAutoSchema] as the schema on every library view class."""  # noqa: E501
     from drf_spectacular.settings import spectacular_settings
 
     from django_spec_rest.openapi.reserved_components_hook import (

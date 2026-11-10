@@ -5,8 +5,8 @@ view pushing to a websocket) supplies its own reporter through the view's
 ``get_progress_reporter`` hook, which joins the call's reporter.
 
 ``progress`` is a pool seed, so the kernel refuses a ``get_service_kwargs``
-value of that name, rather than dropping it silently, as ``ImproperlyConfigured`` raised per request, because a provider's
-value must never outrank a seeded one (the kernel's rule for any key a call
+value of that name, rather than dropping it silently as ``ImproperlyConfigured`` per request,
+because a provider's value must never outrank a seeded one (the kernel's rule for any key a call
 seeds itself, ``view`` among them). The reporter comes only through the progress
 hook.
 """
