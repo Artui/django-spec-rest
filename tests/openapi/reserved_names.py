@@ -1,10 +1,3 @@
-"""Routes and serializers for the tests of the component names the package keeps.
-
-A spec documenting the package's 400, 403 and 401 on one side; on the other, a
-project's own view on drf-spectacular's ``AutoSchema`` posting and answering a
-serializer named like one of them.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -53,13 +46,7 @@ class _Deny(BasePermission):
 
 
 def ours(prefix: str, responses: Any = None) -> URLPattern:
-    """A spec documenting all three: a Validator, a DRF check, an authenticator with a challenge.
-
-    Its 201 is the ``Author`` component, a ``$ref`` to a name no one reserves.
-    ``responses``, given, is the project's ``@extend_schema(responses=...)`` on
-    the view, laid over what the spec documents; ``enable_openapi()`` must run
-    first, since ``extend_schema`` subclasses the schema the view has.
-    """
+    """A spec documenting all three: a Validator, a DRF check, an authenticator with a challenge."""
     spec = ServiceSpec(
         service=lambda: None,
         permissions=(DRFPermissionCheck([_Deny]),),

@@ -1,17 +1,3 @@
-"""The test app's whole document validates under OpenAPI 3.0 and 3.1, for every kernel shape.
-
-The kernel's schemas are JSON Schema, which 3.1 is and 3.0, drf-spectacular's
-default ``OAS_VERSION``, is not (no ``const``, no type list), so the document
-spells them as ``nullable`` and ``enum`` under 3.0
-(``lowered_for_the_document``, tested alone in test_lowered_for_the_document).
-This generates every route of ``test_service_auto_schema``'s test app and of
-``kernel_shapes`` (a nullable and a labelled field, in a request body, a
-response body, a route capture, a real ``FilterSet``'s query parameters and a
-``DiscriminatedAction``'s request component), and holds that ``validate_schema``
-accepts it. A schema an author writes by hand (``json_schema_extra``) is not
-the kernel's and is not lowered: it reaches the document as written.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -95,8 +81,7 @@ class TestUnderOpenAPI3_0:
                 "maybe": {"type": "string", "nullable": True},
                 "kind": {"type": "string", "enum": ["a", "b"]},
                 "maybe_kind": {"type": "string", "nullable": True, "enum": ["a", "b", None]},
-                # A null choice on a field whose ``type`` refuses null stays
-                # non-nullable: the server answers 400 for a null.
+                # A null choice on a field whose ``type`` refuses null stays non-nullable.
                 "closed": {"type": "string", "enum": [None, "a", "b"]},
                 "plain": {"type": "string", "nullable": True, "enum": ["x", "y", None]},
                 "tags": {
@@ -154,19 +139,14 @@ class TestUnderOpenAPI3_0:
         }
 
     def test_a_route_capture_is_an_enum(self, document_3_0: dict[str, Any]) -> None:
-        # drf-spectacular drops ``nullable`` (and ``default``) from a path
-        # parameter's schema itself, since a captured segment is always there;
-        # the ``None`` the lowering put in the enum goes with it, since a
-        # segment cannot be null.
+        # drf-spectacular drops ``nullable``.
         assert _parameter(document_3_0, "/shapes/by/{kind}/", "kind") == {
             "type": "string",
             "enum": ["a", "b"],
         }
 
     def test_a_real_filter_is_an_enum(self, document_3_0: dict[str, Any]) -> None:
-        # The kernel's own ``filter_set_parameters`` for ``PostFilter``: a
-        # choice filter, a multiple choice filter and an ordering filter, each
-        # written with its labels (test_a_real_filter_keeps_its_labels).
+        # The kernel's own ``filter_set_parameters`` for ``PostFilter``: a choice filter.
         route = "/shapes/filtered/"
         assert _parameter(document_3_0, route, "kind") == {"type": "string", "enum": ["a", "b"]}
         assert _parameter(document_3_0, route, "several")["items"] == {
@@ -196,10 +176,7 @@ class TestUnderOpenAPI3_0:
     def test_a_named_component_has_its_enum_moved_out_by_drf_spectacular(
         self, document_3_0: dict[str, Any]
     ) -> None:
-        # Inside a registered component (a ``DiscriminatedAction``'s request),
-        # drf-spectacular's ``postprocess_schema_enums`` moves the values to
-        # ``*Enum`` components, as it does for a serializer's choice field, and
-        # the nullable property reads them as a ``oneOf`` of two references.
+        # Inside a registered component (a ``DiscriminatedAction``'s request).
         components = document_3_0["components"]["schemas"]
         kind = components["Chosen_create_Request"]["anyOf"][0]["properties"]["kind"]
         assert kind == {
@@ -217,8 +194,7 @@ class TestUnderOpenAPI3_1:
     """The schema as the kernel writes it, titles and type lists included."""
 
     def test_a_real_filter_keeps_its_labels(self, document_3_1: dict[str, Any]) -> None:
-        # What the lowering takes away under 3.0, so the 3.0 test above is about
-        # labels the kernel wrote and not a bare ``enum`` it passed through.
+        # What the lowering takes away under 3.0.
         route = "/shapes/filtered/"
         assert _parameter(document_3_1, route, "kind")["anyOf"] == [
             {"const": "a", "title": "A"},
@@ -261,8 +237,7 @@ class TestUnderOpenAPI3_1:
             "type": ["string", "null"],
             "anyOf": [*_AB, {"type": "null"}],
         }
-        # A real filter's choices, labelled by the kernel or not (the floor's
-        # kernel writes none), are the kernel's as they are: never ``nullable``.
+        # A real filter's choices, labelled by the kernel or not (the floor's kernel writes none).
         kind = _parameter(document_3_1, "/shapes/filtered/", "kind")
         assert kind["type"] == "string"
         assert "nullable" not in kind
@@ -301,9 +276,7 @@ def _extra_document(oas_version: str) -> dict[str, Any]:
 
 
 def test_what_an_author_writes_in_json_schema_extra_reaches_the_document_as_written() -> None:
-    # No kernel adapter writes these keys, so nothing here lowers them: under 3.0
-    # a type list inside an ``anyOf``, ``exclusiveMinimum`` as a number and the
-    # like are the author's to write as 3.0 reads them.
+    # No kernel adapter writes these keys, so nothing here lowers them.
     document = _extra_document("3.0.3")
 
     item = _answer(document, "/extra/")["items"]

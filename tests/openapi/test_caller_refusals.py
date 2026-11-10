@@ -1,15 +1,3 @@
-"""The 403 and 401 a spec's permission checks are refused with, against what the edge sends.
-
-A spec declaring any check but ``Unrestricted`` documents a 403: a check's
-denial and a principal who cannot act are both answered 403 with a ``detail``.
-Any such check denying (answering ``False`` to) a caller nobody authenticated,
-a kernel check or a ``DRFPermissionCheck``, is answered 401 where the view's
-first authenticator sends a challenge, so such an operation documents the 401
-too; a check raising ``NotPermitted`` itself is answered as raised, 403. Each
-test that drives a view validates the wire body against the schema the
-operation documents for the status it was answered.
-"""
-
 from __future__ import annotations
 
 import json
@@ -206,21 +194,14 @@ class TestTheWire:
     @pytest.mark.parametrize(
         ("key", "signed_in"),
         [
-            # A kernel check's denial on a view with no authenticator.
             ("kernel", False),
             ("kernel-read", False),
-            # An adapted DRF class denying a signed-in caller.
             ("drf-basic", True),
             ("drf-basic-read", True),
-            # An adapted DRF class denying a caller nobody authenticated,
-            # behind an authenticator sending no challenge.
+            # An adapted DRF class denying a caller nobody authenticated.
             ("drf-session", False),
-            # An adapted DRF class on a view with no authenticator.
             ("drf-none", False),
-            # A kernel check denying a caller nobody authenticated, behind an
-            # authenticator sending no challenge.
             ("kernel-session", False),
-            # A kernel check denying a signed-in caller behind a challenge.
             ("kernel-challenged", True),
             ("kernel-read-challenged", True),
         ],

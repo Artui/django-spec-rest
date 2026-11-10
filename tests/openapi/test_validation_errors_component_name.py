@@ -1,12 +1,3 @@
-"""The ``ValidationErrors`` component is this schema's, and no serializer may take its name.
-
-drf-spectacular only warns of two components of one name and keeps one for both,
-so a serializer named ``ValidationErrorsSerializer`` would be documented by the
-400's tree (or the 400 by the serializer's fields). Which of the two registers
-first depends on the order drf-spectacular walks the paths, so each order is
-driven.
-"""
-
 from __future__ import annotations
 
 from typing import Any

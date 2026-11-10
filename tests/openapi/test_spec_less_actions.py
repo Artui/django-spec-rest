@@ -1,20 +1,3 @@
-"""A viewset method this package's handler refuses for want of a spec is left out of the schema.
-
-A router binds every method of a ``ServiceViewSet``'s routes to a handler, and
-the handler answers 405 where no spec serves its action, so ``Allow`` leaves
-that method out on a route serving any spec. drf-spectacular reads the
-router's action map, never ``Allow``, and documented each such method; the
-schema now omits exactly what ``Allow`` omits. The list and retrieve handlers
-stay where their fallback to DRF can run, and go with the rest where a viewset
-has no rows or no serializer for it. A handler the view defines itself, a route
-serving no spec on a viewset that can fall back, and a standalone view stay as
-they were.
-
-Each viewset here is asked for its ``Allow`` too, so a test also fails where
-the schema and the header part, not only where a method is missing; the one
-that excludes a method with ``extend_schema`` is the exception.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -179,9 +162,7 @@ class TestARouteServingASpec:
         assert _documented(schema, "/no-destroy/") == {"GET"}
 
     def test_a_handler_the_view_defines_itself_stays(self, schema: dict[str, Any]) -> None:
-        # The route serves the retrieve spec, so PUT and PATCH, with no update
-        # spec, are left out; DELETE reaches the view's own handler, which
-        # needs no spec.
+        # The route serves the retrieve spec, so PUT and PATCH, with no update spec, are left out.
         assert _documented(schema, "/own-destroy/{id}/") == {"GET", "DELETE"}
 
     def test_a_put_with_only_a_partial_update_spec_is_left_out(
@@ -244,8 +225,7 @@ class TestWhereNothingIsLeftOut:
     def test_a_route_serving_no_spec_is_documented_as_drf_routes_it(
         self, schema: dict[str, Any]
     ) -> None:
-        # Neither list nor create has a spec, so the route answers as DRF does
-        # and its Allow names POST: the schema keeps it.
+        # Neither list nor create has a spec.
         assert _documented(schema, "/patch-only/") == {"GET", "POST"}
 
     @pytest.mark.django_db

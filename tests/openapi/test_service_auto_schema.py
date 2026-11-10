@@ -1,24 +1,3 @@
-"""``ServiceAutoSchema`` documenting kernel specs, end to end through drf-spectacular.
-
-Every view here carries the kernel's own ``ServiceSpec`` or ``SelectorSpec``,
-with no ``serializer_class``: the request body is read off the spec's
-Validator and the response off its presenter, never off the view's missing
-``serializer_class``.
-
-- **A ``SerializerValidator``** is documented by its serializer, under the
-  component name drf-spectacular gives that class, or, where ``input_data``
-  reaches a field, by a subclass less what it fills, under a name of its own;
-  **any other Validator** by
-  the kernel's ``parameters_schema`` over the parameters the body carries,
-  under the edge's unknown-argument policy.
-- **A ``SerializerPresenter``** is documented by its serializer; **any other
-  presenter** by the kernel's ``output_schema``. A spec presenting rows is an
-  array of them.
-- **The status** is the view's ``success_status`` over the action's default,
-  as the kernel route answers.
-- **A FilterSet's query parameters** are the kernel's ``filter_set_parameters``.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -553,8 +532,7 @@ class TestTheRequestBody:
     def test_a_serializer_validator_is_documented_by_its_serializer(
         self, schema: dict[str, Any]
     ) -> None:
-        # The component is drf-spectacular's name for the author's serializer,
-        # which a generated client keys on.
+        # The component is drf-spectacular's name for the author's serializer.
         assert _body(schema, "/create/", "post") == {"$ref": "#/components/schemas/NameIn"}
         assert schema["components"]["schemas"]["NameIn"]["required"] == ["name"]
 
@@ -569,8 +547,7 @@ class TestTheRequestBody:
     def test_a_patch_a_dataclass_validates_whole_is_documented_whole(
         self, schema: dict[str, Any]
     ) -> None:
-        # A dataclass builds its instance from every field, so the kernel route
-        # validates a PATCH whole, and the schema says so.
+        # A dataclass builds its instance from every field.
         body = _body(schema, "/update-whole/{id}/", "patch")
         assert "Patched" not in body["$ref"]
         assert _component(schema, body["$ref"])["required"] == ["name"]
@@ -578,8 +555,7 @@ class TestTheRequestBody:
     def test_an_extend_schema_request_is_documented_partial_on_a_patch(
         self, schema: dict[str, Any]
     ) -> None:
-        # The author's annotation wins, and drf-spectacular documents it under
-        # a PATCH as it does on any view.
+        # The author's annotation wins.
         assert _body(schema, "/update-annotated/{id}/", "patch") == {
             "$ref": "#/components/schemas/PatchedReason"
         }
@@ -616,24 +592,20 @@ class TestTheRequestBody:
         assert "required" not in body
 
     def test_the_target_s_reads_are_no_body_key(self, schema: dict[str, Any]) -> None:
-        # ``pk`` is the target lookup's read and no route capture here: the
-        # body still does not choose the row.
+        # ``pk`` is the target lookup's read and no route capture here.
         assert set(_body(schema, "/update-own/{author}/", "put")["properties"]) == {"name"}
 
     def test_a_route_capture_and_a_provider_s_key_are_no_body_key(
         self, schema: dict[str, Any]
     ) -> None:
-        # ``tenant`` is captured by the route and ``owner`` filled by the
-        # ``kwargs`` provider, so the client is asked for neither.
+        # ``tenant`` is captured by the route and ``owner`` filled by the ``kwargs`` provider.
         body = _body(schema, "/t/{tenant}/owned/", "post")
         assert set(body["properties"]) == {"name"}
 
     def test_a_read_a_provider_may_decline_is_offered_and_not_required(
         self, schema: dict[str, Any]
     ) -> None:
-        # The ``kwargs`` provider may answer ``owner`` with ``UNSET``, so
-        # dispatch does not demand it of the caller, whose value is kept
-        # beneath the provider's answer: offered, and not required.
+        # The ``kwargs`` provider may answer ``owner`` with ``UNSET``.
         body = _body(schema, "/owned-may-decline/", "post")
         assert set(body["properties"]) == {"name", "owner"}
         assert body["required"] == ["name"]
@@ -641,9 +613,7 @@ class TestTheRequestBody:
     def test_a_read_named_for_a_seed_the_view_registers_is_no_body_key(
         self, schema: dict[str, Any]
     ) -> None:
-        # ``stamp`` is a reflected read the view's own ``pool_seeds`` fill, so
-        # the kernel withholds it under those seeds and offers it under the
-        # defaults, which this body was once built with.
+        # ``stamp`` is a reflected read the view's own ``pool_seeds`` fill.
         assert set(_body(schema, "/stamped/", "post")["properties"]) == {"name"}
 
     def test_a_field_a_typed_input_data_fills_is_not_offered(self, schema: dict[str, Any]) -> None:
@@ -655,8 +625,7 @@ class TestTheRequestBody:
     def test_a_many_row_withholds_what_input_data_fills_and_relaxes_what_it_may(
         self, schema: dict[str, Any]
     ) -> None:
-        # ``input_data`` is merged over every row: ``owner`` is never the
-        # caller's in any row, and ``note`` is offered and not required.
+        # ``input_data`` is merged over every row: ``owner`` is never the caller's in any row.
         body = _body(schema, "/rows-filled/", "post")
         assert body["type"] == "array"
         assert set(body["items"]["properties"]) == {"name", "note"}
@@ -691,9 +660,7 @@ class TestASerializerBodyInputDataReaches:
     """A ``SerializerValidator`` body less what ``input_data`` fills, under a name of its own."""
 
     def test_the_body_agrees_with_options(self, schema: dict[str, Any]) -> None:
-        # ``owner`` is always ``input_data``'s, so it is not offered, and
-        # ``note`` it may decline, so it is offered and not required: what
-        # OPTIONS already says of the same route.
+        # ``owner`` is always ``input_data``'s, so it is not offered, and ``note`` it may decline.
         assert _asked(schema, _body(schema, "/task/", "post")) == _options_asked("task/", "POST")
         assert _asked(schema, _body(schema, "/task/{id}/", "put")) == _options_asked(
             "task/<int:pk>/", "PUT", pk=1
@@ -715,9 +682,7 @@ class TestASerializerBodyInputDataReaches:
     def test_a_spec_reaching_nothing_is_documented_by_the_author_s_class(
         self, schema: dict[str, Any]
     ) -> None:
-        # ``task-annotated/`` documents ``TaskInSerializer`` itself under
-        # ``TaskIn``; a second class under that name would be a collision
-        # (test_no_two_components_share_a_name).
+        # ``task-annotated/`` documents ``TaskInSerializer`` itself under ``TaskIn``.
         assert _body(schema, "/task-annotated/", "post") == {"$ref": "#/components/schemas/TaskIn"}
 
     def test_one_filled_field_and_one_relaxed_field_are_named_apart(
@@ -743,8 +708,7 @@ class TestASerializerBodyInputDataReaches:
         }
 
     def test_an_untyped_input_data_requires_no_field(self, schema: dict[str, Any]) -> None:
-        # It may fill any field, so dispatch demands none of the caller and
-        # OPTIONS requires none: every field is offered, none required.
+        # It may fill any field, so dispatch demands none of the caller and OPTIONS requires none.
         body = _body(schema, "/task-untyped/", "post")
         assert body == {"$ref": "#/components/schemas/TaskInOptionalName_Note_Owner"}
         assert _asked(schema, body) == ({"name", "owner", "note"}, set())
@@ -752,17 +716,14 @@ class TestASerializerBodyInputDataReaches:
 
     @pytest.mark.django_db
     def test_the_serializer_still_refuses_a_field_an_untyped_input_data_left_out(self) -> None:
-        # Required of no caller by the schema, and still validated: the
-        # provider fills ``owner`` only, so the serializer refuses the missing
-        # ``name``.
+        # Required of no caller by the schema, and still validated.
         view = next(p for p in urlpatterns if str(p.pattern) == "task-untyped/").callback
         response = view(APIRequestFactory().post("/", {"note": "n"}, format="json"))
         assert response.status_code == 400
         assert set(response.data) == {"name"}
 
     def test_a_dataclass_gets_a_component_of_its_own(self, schema: dict[str, Any]) -> None:
-        # drf-spectacular identifies a dataclass's component by the dataclass,
-        # so under the base's name it would reuse that component silently.
+        # drf-spectacular identifies a dataclass's component by the dataclass.
         derived = _body(schema, "/task-row/", "post")
         base = _body(schema, "/task-row-plain/", "post")
         assert derived == {"$ref": "#/components/schemas/TaskRowLessOwner__OptionalNote"}
@@ -779,8 +740,7 @@ class TestASerializerBodyInputDataReaches:
         }
 
     def test_no_two_components_share_a_name(self, capsys: pytest.CaptureFixture[str]) -> None:
-        # A plain serializer under its base's name warns, and the first
-        # component documented wins.
+        # A plain serializer under its base's name warns, and the first component documented wins.
         reset_generator_stats()
         SchemaGenerator(patterns=urlpatterns).get_schema(request=None, public=True)
         assert "identical names" not in capsys.readouterr().err
@@ -838,8 +798,7 @@ class TestTheResponse:
         }
 
     def test_a_list_re_read_presents_an_array(self, schema: dict[str, Any]) -> None:
-        # The output selector's presenter renders its rows, and a LIST re-read
-        # never presents nothing, so no 204 is documented beside them.
+        # The output selector's presenter renders its rows.
         responses = _op(schema, "/create-re-read-list/", "post")["responses"]
         assert set(responses) == {"201", "400"}
         assert _response(schema, "/create-re-read-list/", "post", "201") == {
@@ -858,9 +817,7 @@ class TestTheResponse:
     def test_an_undeclared_service_error_is_not_documented_with_or_without_a_validator(
         self, schema: dict[str, Any]
     ) -> None:
-        # Where the spec declares it, the 422 and its ``ServiceError`` body
-        # are held by test_service_error_declared, and end to end by
-        # test_validator_refusal_schema.
+        # Where the spec declares it.
         assert "422" not in _op(schema, "/create/", "post")["responses"]
         responses = _op(schema, "/create-no-input/", "post")["responses"]
         assert "422" not in responses
@@ -901,8 +858,7 @@ class TestTheReadSide:
         assert parameters["pks"]["schema"]["type"] == "array"
 
     def test_a_paged_list_is_the_paginator_s_envelope(self, schema: dict[str, Any]) -> None:
-        # Once, whichever the presenter: a serializer's rows under the paged
-        # component drf-spectacular names, a raw row inside the envelope.
+        # Once, whichever the presenter.
         assert _response(schema, "/authors-paged/", "get", "200") == {
             "$ref": "#/components/schemas/PaginatedAuthorList"
         }
@@ -917,8 +873,7 @@ class TestTheReadSide:
 
     @pytest.mark.django_db
     def test_an_array_filter_is_read_from_a_repeated_key(self) -> None:
-        # The documented style is OpenAPI's default for an array, one key per
-        # value, which the route reads as it reads a comma list.
+        # The documented style is OpenAPI's default for an array, one key per value.
         author = Author.objects.create(name="a")
         posts = [Post.objects.create(title=str(i), author=author) for i in range(3)]
         view = urlpatterns[[str(u.pattern) for u in urlpatterns].index("posts/")].callback
@@ -960,8 +915,7 @@ class TestViewsets:
         }
 
     def test_a_selector_action_s_raw_rows_are_an_array(self, schema: dict[str, Any]) -> None:
-        # drf-spectacular does not read the action as a list operation, so the
-        # schema wraps the presenter's row itself, once.
+        # drf-spectacular does not read the action as a list operation.
         body = _response(schema, "/actions/named/", "get", "200")
         assert body["type"] == "array"
         assert set(body["items"]["properties"]) == {"id", "name"}
@@ -987,8 +941,7 @@ def test_an_operation_with_no_service_spec_documents_drf_s_own_request_body() ->
 def test_a_split_request_component_is_named_from_the_author_s_stem(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # drf-spectacular appends ``Request`` to every request component, the
-    # derived one included, so the stem is read without it.
+    # drf-spectacular appends ``Request`` to every request component, the derived one included.
     monkeypatch.setattr(spectacular_settings, "COMPONENT_SPLIT_REQUEST", True)
     schema = SchemaGenerator(patterns=urlpatterns).get_schema(request=None, public=True)
     assert _body(schema, "/task/", "post") == {

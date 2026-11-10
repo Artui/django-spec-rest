@@ -1,16 +1,3 @@
-"""Views carrying every shape the kernel writes that OpenAPI 3.0 spells otherwise.
-
-The kernel's schemas are JSON Schema: a nullable field is ``{"type": [t,
-"null"]}``, a labelled parameter choice an ``anyOf`` of ``{"const", "title"}``
-(with ``{"type": "null"}`` for a null), and a labelled output choice a ``oneOf``
-of the same (with ``{"const": None}``). The test app of ``test_service_auto_schema``
-declares none of them, so these routes put each one in the document, in a
-request body, a response body, a route capture, a ``FilterSet``'s query
-parameter and a ``DiscriminatedAction``'s registered request component, for
-``test_the_document_validates``. ``test_labelled_parameters`` builds its own
-route captures.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -65,8 +52,7 @@ class Notes(Presenter):
                 OutputField("maybe", "string", nullable=True),
                 OutputField("kind", "string", choices=DISPLAYED),
                 OutputField("maybe_kind", "string", choices=DISPLAYED, nullable=True),
-                # A null choice on a field that is not nullable: the kernel's
-                # ``oneOf`` lists a ``{"const": None}`` beside a ``type`` that refuses it.
+                # A null choice on a field that is not nullable.
                 OutputField("closed", "string", choices=Closed.choices),
                 OutputField("plain", "string", choices=RESTATED, nullable=True),
                 OutputField(

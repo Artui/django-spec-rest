@@ -1,13 +1,3 @@
-"""The serializers a project declares a service's refusals with, against what the edge sends.
-
-Which refusals a service raises is the project's to declare, so the package
-exports a schema-only serializer per body ``map_service_error`` answers a
-``ServiceError`` with. Each view here declares one through
-``@extend_schema(responses=...)``, its service raises the refusal, and the body
-the edge sends is validated against the response the operation documents: the
-body is the producer's, never typed here.
-"""
-
 from __future__ import annotations
 
 import inspect

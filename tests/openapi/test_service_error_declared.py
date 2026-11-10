@@ -1,14 +1,3 @@
-"""The ``422`` of a plain ``ServiceError`` is documented only where a spec declares it.
-
-The edge answers a plain ``ServiceError`` 422, from the service, the selector,
-a precondition or a provider, and the schema cannot see which specs raise one.
-So a spec declares it, ``metadata={"document_service_error": True}``, and is
-documented with it on every surface that serves it; a spec declaring nothing,
-or ``False``, is documented without it. A project answering for many
-operations at once overrides ``ServiceAutoSchema.documents_service_error``, a
-public method, with nothing private imported.
-"""
-
 from __future__ import annotations
 
 from typing import Any

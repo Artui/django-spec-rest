@@ -1,14 +1,3 @@
-"""A spec with no presenter answers ``204`` for a service returning nothing, documented at both.
-
-The edge answers ``204`` only where the service returned ``None``, and the
-kernel's ``present`` hands a value back as it is, so a document cannot tell
-which one call answers: it lists the action's default status and the ``204``
-both, beside a destroy's ``204`` alone and the one status a view sets. The
-status is read off a real response beside the document's, so the two cannot
-drift apart; the merged responses of a ``DiscriminatedAction`` list each status
-any variant answers.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -410,20 +399,17 @@ class TestTheVariantsMerged:
     def test_a_declared_success_body_goes_to_the_status_a_variant_answers_a_body_at(
         self, schema: dict[str, Any]
     ) -> None:
-        # The first variant presents nothing, so its 204 leads the mapping: the
-        # declared body is still the 201's, the only status a body goes out at.
+        # The first variant presents nothing, so its 204 leads the mapping.
         responses = _responses(schema, "/declared/")
         assert responses["201"]["content"]["application/json"]["schema"] == {
             "$ref": "#/components/schemas/Declared"
         }
-        # A declared success replaces every one the spec documents (``_merged``).
         assert "204" not in responses
 
     def test_a_declared_success_body_lands_on_the_201_and_never_on_a_refusal(
         self, schema: dict[str, Any]
     ) -> None:
-        # No variant presents, so the lead is the 201 a value answers at, and
-        # the declared success replaces the 204 beside it (``_merged``).
+        # No variant presents, so the lead is the 201 a value answers at.
         responses = _responses(schema, "/declared-over-silence/")
         assert set(responses) == {"201", "400"}
         assert responses["201"]["content"]["application/json"]["schema"] == {
@@ -445,8 +431,7 @@ def test_a_validator_s_400_stays_beside_the_success_statuses(schema: dict[str, A
 
 
 def test_a_destroy_returning_a_value_answers_a_200_its_document_leaves_out() -> None:
-    # The limit the docs state: a destroy's default is the 204, so that is what it
-    # documents, and a bodyless 200 on every one would mislead more than it tells.
+    # The limit the docs state: a destroy's default is the 204, so that is what it documents.
     def _returns_a_value(**_: Any) -> dict[str, bool]:
         return {"raw": True}
 

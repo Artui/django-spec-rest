@@ -1,15 +1,3 @@
-"""A route capture's type, documented from the spec that reads it.
-
-drf-spectacular types an untyped path parameter (a router's ``{pk}``,
-documented as ``{id}``) from the view's model, which it finds through
-``queryset`` or ``get_queryset()``. Off ``list`` a spec viewset's
-``get_queryset()`` is DRF's own, so a viewset with no ``queryset`` gives it no
-model. The capture is a read the operation's spec declares (a retrieve's, a
-write target's, a decorated action's), so the schema types it from that
-declaration, and a viewset needs no ``queryset`` for its schema. Where
-drf-spectacular can type it (a model, a typed converter) its answer stands.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Iterator
@@ -153,8 +141,7 @@ class _RankIn(serializers.Serializer):
 
 
 def _shelved() -> ServiceSpec:
-    """A create whose service reads the route's ``shelf`` itself, and whose
-    Validator has an integer ``rank``: a body field, never the route's."""
+    """A create whose service reads the route's ``shelf`` itself."""
     return ServiceSpec(
         service=lambda *, shelf, data: Author.objects.first(),
         reads=Parameters.of(Parameter("shelf", "integer", required=True)),
@@ -285,15 +272,13 @@ def test_a_capture_no_spec_declares_is_left_to_drf_spectacular(
 
 
 def test_a_lookup_regex_types_the_capture_itself(schema: dict[str, Any]) -> None:
-    """The viewset's ``lookup_value_regex`` is the route's own type: it stands
-    over the spec's integer read."""
+    """The viewset's ``lookup_value_regex`` is the route's own type."""
     parameter = _path_parameter(schema, "/hex/{id}/", "get", "id")
     assert parameter["schema"] == {"type": "string", "pattern": "^[0-9a-f]+$"}
 
 
 def test_a_path_converter_types_the_capture_itself(schema: dict[str, Any]) -> None:
-    """A ``path()`` converter is the route's own type: ``<slug:pk>`` stands
-    over the spec's integer read."""
+    """A ``path()`` converter is the route's own type."""
     parameter = _path_parameter(schema, "/slugged/{id}/", "get", "id")
     assert parameter["schema"] == {"type": "string"}
     assert "description" not in parameter
@@ -307,8 +292,7 @@ def test_a_service_spec_s_own_read_types_the_capture(schema: dict[str, Any]) -> 
 def test_a_validator_s_field_never_types_the_capture(
     schema: dict[str, Any], warnings: list[str]
 ) -> None:
-    """The Validator's integer ``rank`` is the request body's, so the route's
-    ``rank`` is left to drf-spectacular."""
+    """The Validator's integer ``rank`` is the request body's."""
     parameter = _path_parameter(schema, "/shelves/{shelf}/{rank}/", "post", "rank")
     assert parameter["schema"] == {"type": "string"}
     assert [w for w in warnings if w.startswith("_Shelved:") and 'parameter "rank"' in w]
@@ -332,9 +316,7 @@ def test_each_capture_is_typed_from_its_own_read(schema: dict[str, Any]) -> None
 def test_a_suffixed_capture_is_typed_from_its_own_read(
     monkeypatch: pytest.MonkeyPatch, warnings: list[str]
 ) -> None:
-    """Under ``SCHEMA_COERCE_PATH_PK_SUFFIX`` the route's ``parent_pk`` is
-    documented as ``parent_id``: it is still the ``parent_pk`` read's, never
-    the ``pk``'s."""
+    """Under ``SCHEMA_COERCE_PATH_PK_SUFFIX``, ``parent_pk`` is documented as ``parent_id``."""
     monkeypatch.setattr(spectacular_settings, "SCHEMA_COERCE_PATH_PK_SUFFIX", True)
     schema = SchemaGenerator(patterns=urlpatterns).get_schema(request=None, public=True)
     assert _two_captures(schema, "/parents/{parent_id}/{id}/", "parent_id") == [
@@ -342,14 +324,12 @@ def test_a_suffixed_capture_is_typed_from_its_own_read(
         ("id", {"type": "integer"}, "The child."),
     ]
     assert not [w for w in warnings if w.startswith("_Parented:")]
-    # A capture with no ``_pk`` suffix keeps its name.
     shelf = _path_parameter(schema, "/shelves/{shelf}/{rank}/", "post", "shelf")
     assert shelf["schema"] == {"type": "integer"}
 
 
 def test_an_uncoerced_pk_is_typed_from_its_read(monkeypatch: pytest.MonkeyPatch) -> None:
-    """With DRF's ``SCHEMA_COERCE_PATH_PK`` off the router's ``{pk}`` is
-    documented as itself, and is still the ``pk`` read's."""
+    """With DRF's ``SCHEMA_COERCE_PATH_PK`` off the router's ``{pk}`` is documented as itself."""
     monkeypatch.setattr(api_settings, "SCHEMA_COERCE_PATH_PK", False)
     schema = SchemaGenerator(patterns=urlpatterns).get_schema(request=None, public=True)
     parameter = _path_parameter(schema, "/bare/{pk}/", "get", "pk")

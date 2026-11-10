@@ -1,14 +1,3 @@
-"""A project's ``@extend_schema(responses=...)`` is added to what the spec documents.
-
-drf-spectacular answers a declared ``responses`` as it is, which would drop the
-body, the 400, the 403 and any 422 the spec documents for the refusals a project
-declares. A mapping of statuses is laid over the spec's instead: a status
-declared replaces the spec's at that status, and a declared success replaces
-every success the spec documents. Held on each surface a project decorates: a
-standalone view's class and its method, a viewset's action through
-``extend_schema_view``, and a ``@service_action``.
-"""
-
 from __future__ import annotations
 
 import threading
@@ -305,8 +294,7 @@ class TestADeclaredStatusReplacesTheSpecS:
 
 class TestWhatIsNoMappingOfStatuses:
     def test_a_bare_serializer_declared_is_the_success_body(self, schema: dict[str, Any]) -> None:
-        # At the 201 the create answers with, where drf-spectacular alone
-        # documents a view's ``POST`` as a 200.
+        # At the 201 the create answers with.
         responses = _responses(schema, "/bare/")
         assert set(responses) == _OWN
         assert _ref(responses["201"]) == "#/components/schemas/ServiceNotFound"
@@ -321,22 +309,19 @@ class TestAProjectSSchemaSubclassKeepsItsCustomisation:
     """Only drf-spectacular's ``extend_schema`` subclass is merged over the spec's responses."""
 
     def test_a_subclass_dropping_a_status_keeps_it_dropped(self, schema: dict[str, Any]) -> None:
-        # Without ``extend_schema`` there is nothing to merge: the status
-        # ``get_response_serializers`` dropped must not return from the spec's own.
+        # Without ``extend_schema`` there is nothing to merge.
         assert sorted(_responses(schema, "/dropping/")) == ["201"]
 
     def test_and_so_does_one_under_a_class_level_extend_schema(
         self, schema: dict[str, Any]
     ) -> None:
-        # The merge reads the subclass's answer, not ``ServiceAutoSchema``'s,
-        # as what the declared statuses are laid over.
+        # The merge reads the subclass's answer, not ``ServiceAutoSchema``'s.
         assert sorted(_responses(schema, "/dropping-extended/")) == ["201", "404"]
 
     def test_a_project_class_named_for_it_is_not_extend_schema_s(
         self, schema: dict[str, Any]
     ) -> None:
-        # Beneath extend_schema's own class, the project's is the base the 404
-        # is laid over, though it bears the same name: its 204 is kept.
+        # Beneath extend_schema's own class, the project's is the base the 404 is laid over.
         assert sorted(_responses(schema, "/named/")) == ["204", "404"]
 
     def test_the_schema_with_no_such_subclass_documents_the_422(
@@ -347,8 +332,7 @@ class TestAProjectSSchemaSubclassKeepsItsCustomisation:
 
 class TestABareSerializerOnANoContentRoute:
     def test_keeps_the_no_content_204(self, schema: dict[str, Any]) -> None:
-        # The edge sends no body with a 204, so a bare serializer declared
-        # where the spec answers 204 has no success body to be.
+        # The edge sends no body with a 204.
         responses = _responses(schema, "/delete/{id}/", "delete")
         assert responses["204"] == {"description": "No response body"}
 
@@ -357,12 +341,9 @@ class TestConcurrentGeneration:
     def test_one_shared_class_level_schema_renders_in_two_threads(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        # ``extend_schema`` on a class leaves one ``ExtendedSchema`` on it,
-        # shared by every generation: nothing may be written to the instance.
+        # ``extend_schema`` on a class leaves one ``ExtendedSchema`` on it.
         view = extend_schema(responses=_NOT_FOUND)(_open_view())
         patterns = [path("race/", view.as_view())]
-        # drf-spectacular loads its extensions lazily and not thread-safely, so
-        # the first generation of a process is not the one raced.
         SchemaGenerator(patterns=patterns).get_schema(request=None, public=True)
         barrier = threading.Barrier(2, timeout=5)
         waited = threading.local()
@@ -370,8 +351,7 @@ class TestConcurrentGeneration:
         errors: list[BaseException] = []
 
         def meet(self: Any, *args: Any, **kwargs: Any) -> Any:
-            # Each thread meets the other once, inside its first render, which
-            # is where a write to the shared instance is still in place.
+            # Each thread meets the other once, inside its first render.
             if not getattr(waited, "done", False):
                 waited.done = True
                 barrier.wait()

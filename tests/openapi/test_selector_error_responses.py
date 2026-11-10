@@ -1,14 +1,3 @@
-"""What a selector operation documents for a refused read, against what the edge sends.
-
-A selector's parameters (its ``reads`` and ``shapes``, filters included) are
-read off the query string and refused with DRF's field errors under a ``400``,
-the same body a service spec's Validator answers; and a selector, a
-precondition or a provider can raise a plain ``ServiceError``, a ``422``,
-documented where the spec declares it (``document_service_error`` in its
-``metadata``). Each test drives the view, then validates the wire body against
-the schema the operation documents for that status.
-"""
-
 from __future__ import annotations
 
 import json
@@ -159,8 +148,7 @@ class TestARefusedReadIsA400:
         jsonschema.validate(sent, _documented(schema, "filtered", "400"))
 
     def test_a_route_capture_is_refused_under_its_name(self, schema: dict[str, Any]) -> None:
-        # The route's converter would match only digits; a ``str`` converter or
-        # a router's default lookup pattern lets any text through to the read.
+        # The route's converter would match only digits.
         status, sent = _get("captured", pk="abc")
         assert status == 400
         assert list(sent) == ["pk"]

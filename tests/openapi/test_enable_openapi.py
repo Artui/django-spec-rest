@@ -1,5 +1,3 @@
-"""Smoke tests for ``enable_openapi`` import-time and idempotence."""
-
 from __future__ import annotations
 
 import os
@@ -43,13 +41,7 @@ print(sorted(name for name in sys.modules if name.split(".")[0] == "drf_spectacu
 
 
 def test_importing_the_openapi_package_leaves_drf_spectacular_unimported() -> None:
-    """``django_spec_rest.openapi`` is importable without the optional ``drf-spectacular``.
-
-    Only ``enable_openapi()`` loads the schema-generator module, which imports
-    it. Run in a fresh interpreter, under the documented setup's settings
-    (whose ``DEFAULT_SCHEMA_CLASS`` DRF reads lazily, by name), since this
-    process imported ``drf-spectacular`` long ago.
-    """
+    """``django_spec_rest.openapi`` is importable without the optional ``drf-spectacular``."""
     result = subprocess.run(
         [sys.executable, "-c", _PROBE],
         capture_output=True,
@@ -89,10 +81,7 @@ def _projects_hook(result: Any, **kwargs: Any) -> Any:
 
 
 def test_the_hook_is_installed_once(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Inserted before the project's own hooks, and only once however often it is called.
-
-    Fails without the install's check that the hook is absent.
-    """
+    """Inserted before the project's own hooks, and only once however often it is called."""
     monkeypatch.setattr(spectacular_settings, "POSTPROCESSING_HOOKS", [_projects_hook])
     enable_openapi()
     enable_openapi()

@@ -1,5 +1,3 @@
-"""Unit tests for ``openapi._to_serializer.to_serializer_class``."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
