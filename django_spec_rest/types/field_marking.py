@@ -1,14 +1,3 @@
-"""``FieldMarking``, django-service-specs' own, plus the ``MARKING`` style key.
-
-The key is exported from the same module as the class it labels because the two
-are meaningless apart: ``MARKING`` exists only to carry a ``FieldMarking``, and a
-``FieldMarking`` is only ever found under it.
-
-The class is the kernel's, re-exported at this path. The key is this package's,
-because a serializer field's ``style`` bag is where a DRF declaration puts a
-marking, and the kernel reads a marking off its own Output instead.
-"""
-
 from __future__ import annotations
 
 from typing import Final
