@@ -1,12 +1,3 @@
-"""django-spec-rest: kernel specs served over Django REST Framework.
-
-Public API re-exports live here. Importing the top-level package is enough
-for typical usage; deeper imports (``django_spec_rest.types``,
-``django_spec_rest.views``, ``django_spec_rest.viewsets``) are stable and
-supported. A spec itself, and everything the kernel owns, is imported from
-``django_service_specs``.
-"""
-
 from django_spec_rest.service_specs.base_serializer_context import base_serializer_context
 from django_spec_rest.service_specs.build_offline_context import build_offline_context
 from django_spec_rest.service_specs.renderable_serializer_class import (
