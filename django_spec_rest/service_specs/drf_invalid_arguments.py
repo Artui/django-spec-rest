@@ -12,6 +12,8 @@ from rest_framework.exceptions import ValidationError
 class DRFInvalidArguments(KernelInvalidArguments, ValidationError):
     """Refused as both the kernel's ``InvalidArguments`` and DRF's ``ValidationError``."""
 
+    detail: Any
+
     def __init__(self, detail: Mapping[Any, Any], code: str | None = None) -> None:
         # Kernel first; DRF's init, via ``super()``, turns ``detail`` into ``ErrorDetail``s.
         KernelInvalidArguments.__init__(self, detail)

@@ -402,7 +402,7 @@ class _ActionSpecsMixin(_ServesRaisedSchema):
     requires a seed it does not register, and every call's checks, target
     lookup and ``dispatch`` are handed that object (test_pool_seeds)."""
 
-    action: str | None
+    action: str
     action_map: dict[str, str]
     kwargs: dict[str, Any]
     request: Any

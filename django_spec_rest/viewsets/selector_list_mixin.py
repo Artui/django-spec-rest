@@ -37,7 +37,6 @@ class SelectorListMixin(ListModelMixin, _ActionSpecsMixin):
     (test_selector_list_mixin).
     """
 
-    action: str | None
     request: Any
     kwargs: dict[str, Any]
 
