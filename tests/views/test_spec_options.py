@@ -1,23 +1,3 @@
-"""OPTIONS on every route serving a kernel spec.
-
-Every view and viewset base answers OPTIONS as DRF's ``APIView.options``
-does, with ``name``, ``description``, ``renders``, ``parses`` and, for a
-``POST`` or ``PUT`` the spec serves, ``actions``. The description is read off
-the spec, never off ``serializer_class`` or a spec stage, so:
-
-- a spec-only mutation view with no ``serializer_class`` answers, where DRF's
-  metadata reached ``GenericAPIView.get_serializer_class``'s assertion;
-- no selector, provider, service, precondition or affordance condition runs,
-  while ``initial()`` still does (authentication and throttles);
-- ``Allow`` names only the methods a spec serves;
-- a method's ``actions`` entry is the JSON Schema of ``spec.parameters()``
-  less what the server fills, under the edge's unknown-argument policy;
-- a method is described only where the kernel's ``authorize`` grants it.
-
-Every test drives the route through ``as_view()``, importing nothing the
-description added.
-"""
-
 from __future__ import annotations
 
 from typing import Any, TypedDict
@@ -295,7 +275,6 @@ def test_every_route_answers_options_from_its_spec(
     response = _options(_view(base, attrs, actions), captures)
 
     assert response.status_code == 200
-    # ``initial()`` ran, and nothing of the spec's did.
     assert _RAN == ["throttle"]
     assert set(response["Allow"].split(", ")) == allow | {"OPTIONS"}
     assert {"name", "description", "renders", "parses"} <= set(response.data)
@@ -303,11 +282,9 @@ def test_every_route_answers_options_from_its_spec(
     for method in described:
         schema = response.data["actions"][method]
         assert schema["type"] == "object"
-        # The caller's field is described; the key the ``kwargs`` provider
-        # fills, the one ``input_data`` fills and the seeded ``request`` are not.
+        # The caller's field is described; the key the ``kwargs`` provider fills.
         assert set(schema["properties"]) >= {"name"}
         assert not set(schema["properties"]) & {"owner", "slug", "request"}
-        # Under the edge's IGNORE an undeclared key is dropped, not refused.
         assert "additionalProperties" not in schema
 
 
@@ -335,8 +312,7 @@ def test_a_method_authorize_refuses_is_not_described() -> None:
 
 
 def test_a_method_the_views_own_permission_classes_refuse_is_not_described() -> None:
-    """DRF's own per-method check stays: ``IsAuthenticatedOrReadOnly`` lets an
-    anonymous OPTIONS through and refuses the POST it would describe."""
+    """DRF's own per-method check stays."""
     view = _view(
         ServiceCreateView,
         {"spec": _create(), "permission_classes": [IsAuthenticatedOrReadOnly]},
@@ -358,8 +334,7 @@ class _RecordsItsContext(PermissionCheck):
 
 
 def test_authorize_is_asked_with_the_views_call_context() -> None:
-    """The context is the OPTIONS request's own, built from the real request
-    rather than the per-method clone DRF swaps in."""
+    """The context is the OPTIONS request's own."""
     _RecordsItsContext.seen = []
     view = _view(ServiceCreateView, {"spec": _write(permissions=[_RecordsItsContext()])}, None)
 
@@ -373,8 +348,7 @@ def test_authorize_is_asked_with_the_views_call_context() -> None:
 
 
 def test_a_method_the_view_does_not_allow_is_not_described() -> None:
-    """Both verbs share the update view's spec; a view narrowing
-    ``http_method_names`` to PATCH serves no PUT to describe."""
+    """Both verbs share the update view's spec."""
     view = _view(
         ServiceUpdateView, {"spec": _update(), "http_method_names": ["patch", "options"]}, None
     )
@@ -450,10 +424,7 @@ def test_options_rendered_as_html_answers(
     captures: dict[str, str],
     form: bool,
 ) -> None:
-    """The browsable renderer builds a form per write method through
-    ``get_serializer()``, outside any ``try``. A spec-only kernel route
-    answers it with the spec's input serializer, or one of no fields where the
-    spec declares none, and nothing of the spec runs."""
+    """The browsable renderer builds a form per write method through ``get_serializer()``."""
     view = _view(base, {**_RENDERERS, **attrs}, actions)
 
     response = _options(view, captures, HTTP_ACCEPT="text/html")
@@ -466,8 +437,7 @@ def test_options_rendered_as_html_answers(
 
 @pytest.mark.usefixtures("_browsable")
 def test_a_get_rendered_as_html_on_an_update_route_answers_405() -> None:
-    """An update view serves no GET: the browsable 405 page builds its write
-    forms the same way, and answers rather than ending in a 500."""
+    """An update view serves no GET: the browsable 405 page builds its write forms the same way."""
     view = _view(ServiceUpdateView, {**_RENDERERS, "spec": _update()}, None)
 
     response = view(factory.get("/", HTTP_ACCEPT="text/html"), **_DETAIL)
@@ -479,9 +449,7 @@ def test_a_get_rendered_as_html_on_an_update_route_answers_405() -> None:
 
 @pytest.mark.usefixtures("_browsable")
 def test_a_get_rendered_as_html_on_a_kernel_detail_route_renders_its_forms() -> None:
-    """DRF binds the PUT form to the row the page presented. The spec's input
-    names ``slug``, which ``Author`` lacks, so a bound form read an attribute
-    the row does not have: the form is drawn unbound instead."""
+    """DRF binds the PUT form to the row the page presented."""
     author = Author.objects.create(name="Ada")
     retrieve = SelectorSpec(
         kind=SelectorKind.RETRIEVE,
@@ -522,8 +490,7 @@ class _OwnForm(serializers.Serializer):
 def test_a_kernel_views_own_serializer_class_draws_its_forms(
     base: type, attrs: dict[str, Any], actions: dict[str, str] | None
 ) -> None:
-    """A ``serializer_class`` the view declares outranks the spec's input
-    serializer in the forms the browsable renderer draws."""
+    """A view's ``serializer_class`` outranks the spec's input serializer in browsable forms."""
     view = _view(base, {**_RENDERERS, **attrs, "serializer_class": _OwnForm}, actions)
 
     response = _options(view, {}, HTTP_ACCEPT="text/html")
@@ -536,9 +503,7 @@ def test_a_kernel_views_own_serializer_class_draws_its_forms(
 
 @pytest.mark.usefixtures("_browsable")
 def test_a_kernel_list_without_a_presenter_still_needs_a_serializer_class() -> None:
-    """Only a service spec answers with an input serializer. A kernel list
-    selector with no presenter renders its rows through ``get_serializer()``,
-    so it still needs the view's ``serializer_class``, and DRF says so."""
+    """Only a service spec answers with an input serializer."""
     listed = SelectorSpec(
         kind=SelectorKind.LIST,
         selector=lambda: Author.objects.all(),

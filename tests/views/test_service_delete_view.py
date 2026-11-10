@@ -1,5 +1,3 @@
-"""``ServiceDeleteView`` over a kernel spec."""
-
 from __future__ import annotations
 
 from typing import Any
@@ -103,8 +101,7 @@ class TestServiceDeleteView:
         assert response.data == {"id": archive.pk, "name": "archive"}
 
     def test_a_destroy_presenting_a_row_answers_200_rather_than_204(self) -> None:
-        """A ``204`` carries no body, so a destroy whose service returns a row
-        it presents answers ``200``."""
+        """A ``204`` carries no body."""
 
         def soft_delete(*, instance: Author) -> Author:
             instance.name = "[deleted]"

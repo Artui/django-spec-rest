@@ -1,14 +1,3 @@
-"""The move-from-drfs guide's worked example on a nested route, as an agent is told it.
-
-``reads=Parameters.of(Parameter(..., required=True, help=...))`` is what
-replaced ``InputRequired`` and ``InputDescription`` on a route capture: the
-edge reads each capture from the route, and the kernel's
-``spec_caller_input_schema`` (the schema an agent's tool is described by)
-gives both keys as required and each ``help`` as its ``description``. The
-spec and the schema below are the guide's, the selector alone reading this
-suite's models in place of the guide's ``Task``.
-"""
-
 from __future__ import annotations
 
 import pytest

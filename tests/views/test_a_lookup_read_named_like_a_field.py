@@ -1,11 +1,3 @@
-"""A target lookup reading a name that is also a writable input field.
-
-A lookup by ``title`` beside a body ``title`` declares two sources for one name,
-and a kernel spec declares one source per name, so its ``parameters()`` is
-refused in the kernel's words, and with it ``as_view()``. The lookup reads its own name, which
-the route captures and the client's body never moves.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -43,8 +35,7 @@ class _UpdateView(ServiceUpdateView):
 
 def _spec(seen: dict[str, Any], *, lookup_reads: str) -> ServiceSpec:
     def selector(**pool: Any) -> Any:
-        # ``**`` takes the whole pool (``user``, ``progress``), so only the
-        # two reads are kept.
+        # ``**`` takes the whole pool (``user``, ``progress``), so only the two reads are kept.
         scope = {name: pool[name] for name in ("pk", lookup_reads)}
         seen["lookup"] = scope
         return Post.objects.get(pk=scope["pk"], title=scope[lookup_reads])
@@ -124,9 +115,7 @@ def test_a_body_value_never_moves_a_captured_lookup() -> None:
 
 @pytest.mark.django_db
 def test_a_lookup_read_the_route_does_not_capture_is_never_the_body_s() -> None:
-    """A target lookup's read comes from the route or the query string, so a
-    body naming it chooses nothing: with neither sending it, the required
-    read is missing, and the call is refused before the lookup runs."""
+    """A target lookup's read comes from the route or the query string."""
     seen: dict[str, Any] = {}
     post = Post.objects.create(title="old")
 

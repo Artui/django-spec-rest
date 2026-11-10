@@ -1,24 +1,3 @@
-"""A typed ``kwargs`` provider over a field whose wire name and ``source`` differ, on the kernel.
-
-``tenant = CharField(source="org")`` is one value under two names: the client
-sends ``tenant``, and ``SerializerValidator`` hands the service ``org``. The
-two names answer differently on a kernel spec:
-
-- **The wire name is a Validator parameter**, and the kernel refuses a typed
-  ``kwargs`` provider annotated to fill one, since its values reach the
-  service's pool and never the Validator; ``input_data`` is the seat that
-  fills a field. That refusal is the kernel's, raised when the spec's
-  parameters are assembled, so the refusal is what is asserted.
-- **The ``source`` is no parameter**, so a provider may own it, and what the
-  service is handed for it is the question the rest of this module asks.
-  A provider owning the ``source`` is how a key is kept from the client.
-
-A view's ``get_service_kwargs`` naming the wire name pins the field, as any
-value naming a Validator parameter does, and one naming the ``source`` goes
-beneath the spec's provider, which it outranks the Validator from
-(``test_author_values_outrank_the_validator``).
-"""
-
 from __future__ import annotations
 
 import dataclasses
@@ -115,13 +94,7 @@ def test_a_declined_owned_source_hands_its_parameter_none_of_the_clients_value_t
 
 @FORMATS
 def test_a_filled_owned_source_feeds_the_callable_and_leaves_data_the_clients(fmt: str) -> None:
-    """The decided answer: ``kwargs`` feeds the callable only.
-
-    A typed provider owning a ``source`` no field is named for puts its value in the
-    service's pool, so the provider's value never reaches ``data``, which keeps the
-    client's. A key named like a field is
-    ``test_a_kwargs_value_named_like_a_field_is_refused``'s (``tests/service_specs/``).
-    """
+    """The decided answer: ``kwargs`` feeds the callable only."""
     seen: dict[str, Any] = {}
 
     response = post(_spec(seen, owns="org", value="srv"), {"tenant": "evil"}, fmt=fmt)
@@ -132,9 +105,7 @@ def test_a_filled_owned_source_feeds_the_callable_and_leaves_data_the_clients(fm
 
 @FORMATS
 def test_a_filled_owned_source_is_the_providers_value_for_its_parameter(fmt: str) -> None:
-    """The half the kernel route already gives: the provider's value outranks
-    the validated one in the service's pool, and the wire name's parameter,
-    which nothing filled, keeps its default."""
+    """The half the kernel route already gives."""
     seen: dict[str, Any] = {}
 
     response = post(_spec(seen, owns="org", value="srv"), {"tenant": "evil"}, fmt=fmt)
@@ -163,10 +134,7 @@ _may_decline_the_source.__annotations__ = {
 
 @FORMATS
 def test_a_declinable_source_the_provider_declines_stays_the_clients(fmt: str) -> None:
-    """A key the provider may decline is not the server's alone: declined, the
-    client's value for it stands, in the parameter and in ``data``, as the
-    kernel answers a declinable key everywhere. The owned key's answer above
-    is the gap; this is the control that keeps a fix from taking both."""
+    """A key the provider may decline is not the server's alone: declined."""
     seen: dict[str, Any] = {}
     spec = dataclasses.replace(_spec(seen, owns="org", value=UNSET), kwargs=_may_decline_the_source)
 

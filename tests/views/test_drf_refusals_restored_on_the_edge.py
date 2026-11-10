@@ -1,16 +1,3 @@
-"""Over the kernel route, an author's DRF refusal leaves exactly as it was raised.
-
-An author applies ``translating_drf_refusals`` to a callable of a kernel spec,
-or asks a DRF permission class through ``DRFPermissionCheck``, so the kernel's
-``dispatch`` reads the refusal as its own. The edge restores the exception the
-author raised before DRF's handler reads it, so every route that answered the
-exception answers it as before: the status and body of a live view, byte for
-byte, and the class, detail and status a caller of the edge catches.
-
-The class checks are what fail with the restore removed; a ``403`` body would
-match without it.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -140,11 +127,7 @@ def test_the_exception_keeps_the_cause_it_was_raised_from() -> None:
 
 
 def test_a_refusal_raised_from_another_is_restored_from_the_marker_not_the_cause() -> None:
-    """The package's own ``DRFNotPermitted`` is left as raised, so it carries no marker to restore.
-
-    Its cause is a DRF ``PermissionDenied``, which a restore that read the
-    exception's cause rather than the marker would raise in its place.
-    """
+    """The package's own ``DRFNotPermitted`` is left as raised."""
     error = DRFNotPermitted("x")
 
     def service(**_: Any) -> None:

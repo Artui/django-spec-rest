@@ -1,19 +1,3 @@
-"""A caller the spec's checks refuse is refused before the body's shape is checked.
-
-DRF asks a view's permission classes in ``initial()``, before the handler reads
-the body, and drfs asked them there. The kernel's ``dispatch`` checks the
-arguments' shape first and asks the spec's checks second, so the edge asks the
-checks first itself (``_admitted`` in ``dispatch/kernel_edge.py``): a
-caller the checks refuse is answered 401 or 403 whatever the body, as for a
-well-formed one, and an admitted caller is told what its body lacks.
-
-A body that fails its shape has no checked arguments to show a check, so the
-checks are judged on none, as the OPTIONS answer judges whether to describe a
-method. A check that cannot answer without the arguments, raising on their
-absence, keeps the kernel's order: the shape's 400 is told, and the check is
-asked once the shape passes.
-"""
-
 from __future__ import annotations
 
 import contextlib
@@ -158,11 +142,7 @@ def _answer(response: Any) -> tuple[int, Any, str | None]:
 def test_a_refused_caller_is_refused_whatever_the_body(
     route: str, refusal: str, caller: str, body: str
 ) -> None:
-    """Anonymous: 401 or 403 asking to sign in; signed in and refused: the check's 403.
-
-    Fails where the edge leaves the checks to the kernel's order: each body
-    here fails its shape, so the caller was answered 400 with the field errors.
-    """
+    """Anonymous: 401 or 403 asking to sign in; signed in and refused: the check's 403."""
     authentication, username, expected = REFUSED[caller]
     view = ROUTES[route](_check(refusal), authentication)
     assert _answer(_post(view, BODIES[body], username=username)) == expected
@@ -204,12 +184,7 @@ def _post_raw(view: Any, body: str, *, username: str | None) -> Any:
 def test_a_refused_caller_is_refused_whatever_it_sends(
     route: str, refusal: str, caller: str, body: str
 ) -> None:
-    """A body DRF cannot read is judged on no arguments too, as a discriminated route's is.
-
-    Fails where the read's own refusal leaves first: DRF's 400 or 415, with no
-    challenge. The kernel check's row fails too where the denial is raised
-    with no spec for ``_check_denied`` to compare it with: 403, not 401.
-    """
+    """A body DRF cannot read is judged on no arguments too, as a discriminated route's is."""
     authentication, username, expected = REFUSED[caller]
     view = ROUTES[route](_check(refusal), authentication)
     assert _answer(_post_raw(view, body, username=username)) == expected
@@ -221,11 +196,7 @@ def test_a_refused_caller_is_refused_whatever_it_sends(
 def test_an_admitted_caller_is_told_its_body_cannot_be_read(
     route: str, refusal: str, body: str
 ) -> None:
-    """DRF's own refusal, never a second read of the empty body DRF leaves behind.
-
-    Fails where the edge carries on past the failed read: an unparseable body
-    reads as an empty form then, and is told the fields it lacks.
-    """
+    """DRF's own refusal, never a second read of the empty body DRF leaves behind."""
     view = ROUTES[route](_check(refusal), [BasicAuthentication])
     response = _post_raw(view, body, username="editor")
     assert response.status_code == UNREADABLE[body][2]
@@ -235,11 +206,7 @@ def test_an_admitted_caller_is_told_its_body_cannot_be_read(
 @override_settings(DATA_UPLOAD_MAX_NUMBER_FIELDS=1)
 @pytest.mark.parametrize("caller", REFUSED)
 def test_a_refused_caller_sending_a_body_django_refuses_to_read_is_refused(caller: str) -> None:
-    """Not every failed read is DRF's: too many form fields raises Django's own.
-
-    Fails where only DRF's exceptions are judged: ``TooManyFieldsSent`` leaves
-    as it was raised, for Django's 400.
-    """
+    """Not every failed read is DRF's: too many form fields raises Django's own."""
     authentication, username, expected = REFUSED[caller]
     request = factory.post("/", b"a=1&b=2", content_type="application/x-www-form-urlencoded")
     if username is not None:
@@ -357,11 +324,7 @@ def _owner_view() -> Any:
 
 
 def test_a_check_reading_the_arguments_keeps_the_kernel_s_order() -> None:
-    """It cannot be judged on no arguments, so the shape's refusal is told first.
-
-    Fails where a check raising on the absent arguments is read as a refusal:
-    the caller would be told 403 for a body it has not finished.
-    """
+    """It cannot be judged on no arguments, so the shape's refusal is told first."""
     response = _post(_owner_view(), {}, username="ada")
     assert response.status_code == 400
     assert set(response.data) == {"submission_id", "outcome"}
@@ -431,11 +394,7 @@ class _Row(serializers.Serializer):
 
 
 def test_a_many_call_s_refused_row_stands_on_its_checked_top_level() -> None:
-    """The kernel asked the top level's checks before refusing the row, so the row's 400 is told.
-
-    Fails where a refused row is judged again on no arguments, as a failed
-    shape is: the check denies that call, and the caller is told 403.
-    """
+    """The kernel asked the top level's checks before refusing the row, so the row's 400 is told."""
     spec = ServiceSpec(
         service=lambda *, data: data,
         permissions=(_ArgumentsOnly(),),
@@ -463,22 +422,14 @@ class _NoScopeOfNothing(PermissionCheck):
 
 
 def test_a_create_is_judged_on_the_scope_of_nothing_too() -> None:
-    """``dispatch`` asks a create the scope question of nothing, so the judgment asks it as well.
-
-    Fails without that question: the check admits the class-level one, and
-    the caller is told what its body lacks rather than refused.
-    """
+    """``dispatch`` asks a create the scope question of nothing, so the judgment asks it as well."""
     view = _view(_NoScopeOfNothing(), [SessionAuthentication])
     response = _post(view, {}, username="ada")
     assert (response.status_code, response.data["detail"]) == (403, "No scope of nothing.")
 
 
 def test_a_write_to_a_row_is_not_judged_on_the_scope_of_nothing() -> None:
-    """Its scope question is of the row its arguments name, so it stays unasked on none.
-
-    Fails where every service spec is asked the scope of nothing: the update
-    is refused 403 for a body it has not finished.
-    """
+    """Its scope question is of the row its arguments name, so it stays unasked on none."""
     spec = ServiceSpec(
         service=lambda *, instance, name: None,
         permissions=(_NoScopeOfNothing(),),
@@ -498,10 +449,7 @@ def test_a_write_to_a_row_is_not_judged_on_the_scope_of_nothing() -> None:
 
 
 def test_a_read_is_not_judged_on_the_scope_of_nothing() -> None:
-    """A selector spec's scope question is of the rows it reads, so it stays unasked on none.
-
-    Fails where the judgment asks every spec the scope of nothing.
-    """
+    """A selector spec's scope question is of the rows it reads, so it stays unasked on none."""
     spec = SelectorSpec(
         kind=SelectorKind.LIST,
         selector=lambda *, year: [],
@@ -539,9 +487,7 @@ def test_a_deactivated_caller_is_refused_as_unavailable_whatever_the_body() -> N
 
 
 def test_a_deactivated_caller_s_body_that_is_no_object_is_refused_as_unavailable() -> None:
-    """The body that is no object is judged on no arguments, where the
-    kernel's ``PrincipalUnavailable`` is a refusal of the caller, as on a
-    well-formed body."""
+    """The body that is no object is judged on no arguments."""
     request = factory.post("/", [1], format="json")
     force_authenticate(request, User.objects.create(username="editor", is_active=False))
     response = _view(_check("kernel-check"), [BasicAuthentication])(request)
@@ -587,9 +533,7 @@ RAISING_CHECKS = {
 
 @pytest.mark.parametrize("case", RAISING_CHECKS)
 def test_a_check_raising_a_refusal_refuses_whatever_the_body(case: str) -> None:
-    """A refusal raised is a refusal, never a check that cannot answer without
-    its arguments: OPTIONS hides the method and an incomplete POST is answered
-    403, as a well-formed one is."""
+    """A refusal raised is a refusal, never a check that cannot answer without its arguments."""
     view = _view(RAISING_CHECKS[case](), [SessionAuthentication])
     user = User.objects.create(username="ada")
     options, posted = factory.options("/"), factory.post("/", {}, format="json")
@@ -613,16 +557,7 @@ OPTIONS_CASES = {
 
 @pytest.mark.parametrize("case", OPTIONS_CASES)
 def test_options_hides_a_method_exactly_when_its_write_is_refused_first(case: str) -> None:
-    """OPTIONS describes the POST to exactly the callers whose incomplete POST is told its 400.
-
-    The disagreement this closes: OPTIONS hid the schema from a caller the
-    checks refuse, and the POST's 400 then listed its fields. Fails for the
-    scope check where OPTIONS asks ``authorize`` alone, and for the check
-    reading the arguments, which raises asked with none, where it does not
-    judge as the edge judges. A body DRF cannot parse is told its 400 to the same
-    callers, and fails where the read is answered before the checks: every
-    caller is told it then, whatever OPTIONS shows them.
-    """
+    """OPTIONS describes the POST to exactly the callers whose incomplete POST is told its 400."""
     build, username, described = OPTIONS_CASES[case]
     view = _view(build(), [SessionAuthentication])
     user = None if username is None else User.objects.create(username=username)
@@ -640,10 +575,7 @@ def test_options_hides_a_method_exactly_when_its_write_is_refused_first(case: st
 
 
 def test_a_misconfigured_spec_fails_on_a_body_that_cannot_be_read() -> None:
-    """A configuration error, as every well-formed call raises, never the read's 400.
-
-    Fails where the read's refusal leaves before the judgment.
-    """
+    """A configuration error, as every well-formed call raises, never the read's 400."""
     spec = ServiceSpec(
         service=lambda *, submission_id, outcome: None, validator=SerializerValidator(_Review)
     )
@@ -655,12 +587,7 @@ def test_a_misconfigured_spec_fails_on_a_body_that_cannot_be_read() -> None:
 
 @pytest.mark.parametrize("method", ["options", "post"])
 def test_a_misconfigured_spec_fails_as_a_well_formed_call_fails(method: str) -> None:
-    """A spec declaring no permissions is a configuration error, never a check that cannot answer.
-
-    Fails where the judgment on no arguments swallows it with the rest: OPTIONS
-    then describes the method and an incomplete POST is told its 400, while
-    every well-formed POST raises.
-    """
+    """A spec declaring no permissions is a configuration error."""
     spec = ServiceSpec(
         service=lambda *, submission_id, outcome: None, validator=SerializerValidator(_Review)
     )
@@ -733,12 +660,7 @@ HOOKED_ROUTES = {"view": _hooked, "viewset-action": _hooked_action}
 def test_a_refused_caller_is_refused_where_a_view_hook_reads_the_body_first(
     route: str, refusal: str, caller: str, body: str, hook: str
 ) -> None:
-    """The hooks run before the edge, so a read one of them makes is judged where they run.
-
-    Fails where the read's own refusal leaves first: DRF's 400 or 415, with no
-    challenge. The kernel check's row fails too where the denial is raised
-    with no spec for ``_check_denied`` to compare it with: 403, not 401.
-    """
+    """The hooks run before the edge, so a read one of them makes is judged where they run."""
     authentication, username, expected = REFUSED[caller]
     view = HOOKED_ROUTES[route](_check(refusal), authentication, **{hook: HOOKS_READING[hook]})
     assert _answer(_post_raw(view, body, username=username)) == expected
@@ -792,12 +714,7 @@ def test_a_refused_caller_is_refused_where_a_hook_s_read_raises_django_s_own(cal
 
 
 class _Disconnected:
-    """A ``wsgi.input`` whose client went away, which Django reads as ``UnreadablePostError``.
-
-    Handed in as ``wsgi.input``, so Django builds its own ``WSGIRequest`` and ``LimitedStream``
-    around it as it does for a server. Swapped in as ``request._stream`` instead, it would answer
-    for the stream too: Django 6.0's ``body`` asks that stream ``seekable()`` before reading.
-    """
+    """A ``wsgi.input`` whose client went away, which Django reads as ``UnreadablePostError``."""
 
     def read(self, *args: Any, **kwargs: Any) -> bytes:
         raise OSError("The client went away.")
@@ -932,11 +849,7 @@ def test_a_hook_that_does_not_read_the_body_still_runs_on_one_that_cannot_be_rea
 
 
 def test_a_hook_may_read_the_raw_body_of_a_multipart_request() -> None:
-    """Why the body is not read ahead of the hooks: a parsed multipart body has no raw bytes left.
-
-    Fails where it is: Django raises ``RawPostDataException`` at the hook's read,
-    the one a signature check over the raw bytes makes.
-    """
+    """Why the body is not read ahead of the hooks."""
     lengths: list[int] = []
 
     def get_service_kwargs(self: Any, request: Any) -> dict[str, Any]:
@@ -1014,7 +927,6 @@ def test_an_override_reading_the_body_in_initial_answers_what_the_read_raises(
     )
     response = _post_raw(view, "unparseable", username=None)
     assert (response.status_code, response.data["detail"].code) == (400, "parse_error")
-    # The same caller with no such override is told to sign in, so the read is what answered.
     no_override = _hooked(_check("kernel-check"), [BasicAuthentication])
     assert _post_raw(no_override, "unparseable", username=None).status_code == 401
 

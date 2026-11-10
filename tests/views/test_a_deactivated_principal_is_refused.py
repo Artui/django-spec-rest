@@ -1,13 +1,3 @@
-"""A deactivated user acting through a live view over a kernel spec is refused with a 403.
-
-The kernel refuses a principal whose ``is_active`` is false before any
-permission check runs, so a view declaring no ``permission_classes`` at all
-refuses it too. The refusal is ``DRFPrincipalUnavailable``:
-``{"detail": "The acting principal is unavailable."}``, code
-``permission_denied``. The same user, active, is served, so each test holds the
-flag rather than the view.
-"""
-
 from __future__ import annotations
 
 from typing import Any

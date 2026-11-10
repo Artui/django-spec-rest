@@ -1,10 +1,3 @@
-"""A route capture scopes a kernel selector, and what the spec's own provider says of it.
-
-Over the live view, the capture is the scope and a client's query value cannot
-move it (``test_url_kwarg_over_http``), while the spec's own ``kwargs``
-provider is the server's word and outranks the route.
-"""
-
 from __future__ import annotations
 
 from typing import Any

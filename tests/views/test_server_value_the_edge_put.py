@@ -1,35 +1,3 @@
-"""The server's value for an input field is what the server put, however the field reads a body.
-
-On the kernel route the one seat filling a ``SerializerValidator`` field is the
-spec's ``input_data``: the kernel merges its answer over the caller's
-arguments, and the edge puts it onto the request's body the serializer binds
-and records it as the server's value, which the Validator validates on its
-own. So where a field reads more of a body than its own key - a nested
-serializer, a dict, a nested ``many`` or a list a form body fills through
-``v.tenant`` or ``v[0]tenant``, or a field whose ``get_value`` reads another
-key - the server's value replaces the client's whole, and it is what the
-parameter, ``data`` and ``validated_data`` hold.
-
-A field named like a seed of the call is the serializer's alone, and
-``input_data`` naming one is bound over the client's value
-(``recording_spec``), so ``data``, ``validated_data`` and the serializer's
-``validate()`` all hold the server's value, while the service's parameter of
-that name stays the seed's.
-
-The spec's ``kwargs`` provider fills a service keyword and never the
-Validator, so over HTTP its answer naming a field's wire name is refused on the
-request that gets it (``test_a_kwargs_value_named_like_a_field_is_refused`` in
-``tests/service_specs/``); the wire-name case is asserted here too.
-
-A form body's prefixed keys (``v.tenant``) are read as the field reads them,
-so under either policy they are the field's value and the server's value
-stands over it. ``input_data``'s value is validated
-as the author returned it, so a form body's reading of it (one value for a
-list, an empty string left out) is not this route's answer. A field named like a seed a
-project registers is not ported: the HTTP views register none, and the kernel's dispatch holds
-that case.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -81,12 +49,7 @@ def _owner(request: Any) -> dict[str, Any]:
 
 @FORMATS
 def test_input_data_for_a_field_named_user_outranks_the_clients_over_http(fmt: str) -> None:
-    """The server's owner is the one validated, handed on in ``data``, and seen by ``validate()``.
-
-    Beyond ``test_kernel_views``' ``test_the_provider_s_value_outranks_the_client_s``,
-    which holds the value over an ``IntegerField``: a related field resolves
-    the server's primary key to its row in ``data`` and ``validated_data``
-    both, and ``validate()`` runs once, over the server's value alone."""
+    """The server's owner is the one validated, handed on in ``data``."""
     alice = User.objects.create(username="alice")
     bob = User.objects.create(username="bob")
     seen: dict[str, Any] = {}
@@ -118,11 +81,7 @@ def test_input_data_for_a_field_named_user_outranks_the_clients_through_the_edge
 def test_the_clients_value_for_a_field_named_user_stays_the_fields_with_no_input_data(
     fmt: str,
 ) -> None:
-    """Nothing the server put, so the field validates the client's value; the seed keeps its own.
-
-    The control for the case above, over the same related field and
-    ``validate()``; ``test_a_writable_field_named_like_a_seed_validates_into_data``
-    holds the plain field."""
+    """Nothing the server put, so the field validates the client's value; the seed keeps its own."""
     alice = User.objects.create(username="alice")
     bob = User.objects.create(username="bob")
     seen: dict[str, Any] = {}
@@ -232,8 +191,7 @@ def test_input_data_is_the_value_put_over_a_prefixed_form_key_under_reject(
 def test_a_spelling_its_field_does_not_read_is_an_unknown_argument(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A nested serializer reads ``v.tenant`` and never ``v[0]``, so ``v[0]`` is
-    no spelling of it: a key no parameter declares, refused under ``REJECT``."""
+    """A nested serializer reads ``v.tenant`` and never ``v[0]``."""
     monkeypatch.setattr(kernel_edge, "UNKNOWN_ARGUMENTS", UnknownArguments.REJECT)
     seen: dict[str, Any] = {}
 
@@ -277,8 +235,7 @@ class _Raw(serializers.Serializer):
 def test_a_key_only_a_fields_get_value_reads_is_an_unknown_argument_under_reject(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The key is no parameter, so the kernel's closed argument set refuses it
-    before the field could read it."""
+    """The key is no parameter, so the kernel's closed argument set refuses it."""
     monkeypatch.setattr(kernel_edge, "UNKNOWN_ARGUMENTS", UnknownArguments.REJECT)
     spec = open_spec(_reads({}), _Raw, input_data=lambda: {"v": "server"})
 
@@ -358,9 +315,7 @@ def _with_default(seen: dict[str, Any]) -> Callable[..., None]:
 
 @FORMATS
 def test_the_providers_value_by_wire_name_is_refused(fmt: str) -> None:
-    """The wire name is a parameter of the Validator, so the provider's value
-    would reach the service unvalidated: the request is refused, pointing at
-    ``input_data``, the seat that fills a field."""
+    """The wire name is a parameter of the Validator."""
     seen: dict[str, Any] = {}
     spec = open_spec(_with_default(seen), _Sourced, kwargs=lambda: {"tenant": "srv"})
 
@@ -374,9 +329,7 @@ def test_the_providers_value_by_wire_name_is_refused(fmt: str) -> None:
 def test_a_get_service_kwargs_value_by_wire_name_reaches_the_parameter_of_that_name(
     fmt: str,
 ) -> None:
-    """A view's ``get_service_kwargs`` naming a field by its wire name names the
-    parameter of that name too: the field validates the
-    value under its ``source`` and the parameter is handed it as well."""
+    """A ``get_service_kwargs`` key naming a field by its wire name names that parameter too."""
     seen: dict[str, Any] = {}
     hooked = type("_Hooked", (_CreateView,), {"get_service_kwargs": lambda self: {"tenant": "srv"}})
 
@@ -390,8 +343,7 @@ def test_a_get_service_kwargs_value_by_wire_name_reaches_the_parameter_of_that_n
 
 @FORMATS
 def test_input_data_by_wire_name_leaves_the_parameter_of_that_name_its_default(fmt: str) -> None:
-    """``input_data`` is the body's, never an author's naming of a parameter:
-    the field validates it under its ``source``."""
+    """``input_data`` is the body's, never an author's naming of a parameter."""
     seen: dict[str, Any] = {}
     spec = open_spec(_with_default(seen), _Sourced, input_data=lambda: {"tenant": "srv"})
 
@@ -402,11 +354,7 @@ def test_input_data_by_wire_name_leaves_the_parameter_of_that_name_its_default(f
 
 
 class _ReadOnlyWithADefault(serializers.Serializer):
-    """A read-only field with a default, whose key a ``validate()`` drops.
-
-    The drop is what makes the field's default visible: left in place, DRF's
-    own ``validated_data`` holds the default and the parameter takes it either
-    way."""
+    """A read-only field with a default, whose key a ``validate()`` drops."""
 
     ro = serializers.CharField(read_only=True, default="field-default")
     title = serializers.CharField()
@@ -417,9 +365,7 @@ class _ReadOnlyWithADefault(serializers.Serializer):
 
 
 def test_input_data_for_a_read_only_field_with_a_default_holds_no_server_value() -> None:
-    """A read-only field takes no value in DRF's loop, so a view's ``get_input_data``
-    naming it holds nothing: the field never validates to its default as the
-    server's."""
+    """A read-only field takes no value in DRF's loop."""
     seen: dict[str, Any] = {}
 
     def service(*, data: Any, ro: str = "parameter-default") -> None:
@@ -438,9 +384,7 @@ class _DottedTenant(serializers.Serializer):
 
 
 def test_a_dotted_fields_server_value_reaches_the_parameter_named_like_the_field() -> None:
-    """A dotted ``source`` has no key of its own in ``data``, where its value nests
-    under ``org``: the server's value is handed under the field's name, and
-    ``org`` stays the mapping it nests in."""
+    """A dotted ``source`` has no key of its own in ``data``."""
     seen: dict[str, Any] = {}
 
     def service(*, data: Any, tenant: str = "D-tenant", org: Any = "D-org") -> None:

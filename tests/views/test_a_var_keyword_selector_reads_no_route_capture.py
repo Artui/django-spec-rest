@@ -1,12 +1,3 @@
-"""A kernel selector taking a bare ``**kwargs`` is handed no route capture its spec omits.
-
-The kernel hands a selector the arguments its ``reads`` declare and the seeds,
-so a capture no read declares never reaches it: a retrieve scoped by that
-capture finds no row, a ``404`` naming nothing, and a list selector filtering
-only when the capture is present answers every row. Declaring the capture as a
-read hands it on, coerced to the read's type.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -116,8 +107,7 @@ class TestAVarKeywordSelector:
     def test_a_string_read_of_an_int_route_s_capture_is_refused(
         self, posts: tuple[Post, Post]
     ) -> None:
-        """The converter yields an ``int``, and a string read takes no number:
-        the read's type has to be the one the route yields."""
+        """The converter yields an ``int``, and a string read takes no number."""
         response = APIClient().get(f"/string/{posts[0].pk}/")
         assert response.status_code == 400
         assert "pk" in response.data

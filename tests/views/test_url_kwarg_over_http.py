@@ -1,13 +1,3 @@
-"""The route-capture rule on a kernel selector spec, over HTTP.
-
-A capture the spec declares as a read is its argument, coerced to the read's
-type and over whatever the query string sends under the same name. A capture
-it does not declare is no argument: the selector is not handed it, it stays on
-``view.kwargs`` for DRF's own machinery (a permission class, a queryset), and
-nothing refuses it, under either unknown-argument policy. A kernel read is the
-declaration.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -92,7 +82,6 @@ class TestTheRouteCaptureRule:
     ) -> None:
         monkeypatch.setattr(kernel_edge, "UNKNOWN_ARGUMENTS", policy)
         response = APIClient().get(f"/authors/{authors[0].pk}/tags/news/posts/")
-        # Not refused, under either policy, and no ``ImproperlyConfigured``.
         assert response.status_code == 200, response.data
         # The declared capture and the call's seeds, never the undeclared one.
         assert _SEEN["selector"]["author_pk"] == authors[0].pk
@@ -112,8 +101,7 @@ class TestTheRouteCaptureRule:
         assert response.data == [{"title": "a2-post"}]
 
     def test_the_route_outranks_the_query_string(self, authors: tuple[Author, Author]) -> None:
-        """A client naming the declared capture in the query string cannot
-        move the scope the route sets."""
+        """A query-string copy of the declared capture cannot move the route's scope."""
         response = APIClient().get(
             f"/authors/{authors[0].pk}/tags/news/posts/?author_pk={authors[1].pk}"
         )

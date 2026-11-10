@@ -1,17 +1,3 @@
-"""A singular relation's refusal is a mapping under ``non_field_errors``.
-
-The upgrade note states this shape, and each case here is one of its examples,
-asserted as the exact payload and run twice: through ``create_from_input``
-called directly, and through a live view serving a kernel ``ServiceSpec``
-whose service makes that call. The shape is the kernel's nested-write code's,
-so 0.57.0's bare list or string under the relation's name
-(``{"author": ["A.", "B."]}``) is gone on both paths at once.
-
-A refusal that already named its own fields is left as it was, a Django
-``ValidationError`` or a ``TypeError`` from a row service still propagates,
-and a collection row keeps its index key.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -128,8 +114,7 @@ def _a_post_author_whose_profile_refuses(create_service: Callable[..., Any]) -> 
 
 
 def _a_section_whose_profile_refuses(create_service: Callable[..., Any]) -> None:
-    # A singular relation inside one row of a collection: the index is the row's,
-    # the relation name below it is the singular relation's.
+    # A singular relation inside one row of a collection: the index is the row's.
     create_from_input(
         Catalog,
         {"name": "c", "sections": [{"title": "t", "profile": {"bio": "b"}}]},
@@ -265,8 +250,7 @@ def test_over_a_live_view_the_400_carries_the_stated_payload(name: str) -> None:
 
 
 def test_the_wrapper_is_the_kernel_s_so_a_bare_list_is_never_answered() -> None:
-    # The 0.57.0 shapes this replaces, pinned as absent: a client reading a
-    # singular relation's refusal reads it under ``non_field_errors``.
+    # The 0.57.0 shapes this replaces, pinned as absent.
     with pytest.raises(ServiceValidationError) as excinfo:
         _post_with_an_author(_refuses(["A.", "B."]))
 

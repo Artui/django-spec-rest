@@ -1,9 +1,3 @@
-"""A kernel spec's ``affordances`` over HTTP: the status, the body, and what a denied caller learns.
-
-Read off the rendered response, because the wire is what a client sees. The
-update view's row is found by the spec's own ``instance_selector_spec``.
-"""
-
 from __future__ import annotations
 
 import json
@@ -104,8 +98,7 @@ def test_an_available_row_is_served() -> None:
 
 
 def test_a_caller_the_spec_denies_the_row_learns_nothing_about_its_state() -> None:
-    """The spec's own object-level refusal comes before the affordance, so a
-    caller refused the row is answered 403, never told it is published."""
+    """The spec's own object-level refusal comes before the affordance."""
     post = Post.objects.create(title="t", published=True)
     response = _patch(_view(permissions=(_NotThisPost(),)), post.pk)
     assert response.status_code == 403
@@ -125,8 +118,7 @@ def test_a_row_condition_on_a_create_view_is_refused_at_as_view() -> None:
 
 
 def test_a_row_condition_on_a_create_view_is_refused_at_dispatch() -> None:
-    """Accepted at ``as_view()`` (the strict xfail above), the condition is
-    refused on the first request, before the service runs."""
+    """Accepted at ``as_view()`` (the strict xfail above)."""
     spec = ServiceSpec(service=lambda: None, permissions=_OPEN, affordances=[UNPUBLISHED])
     view = type("_View", (ServiceCreateView,), {"spec": spec}).as_view()
     with pytest.raises(ImproperlyConfigured, match="needs a resolved model instance"):
@@ -135,12 +127,7 @@ def test_a_row_condition_on_a_create_view_is_refused_at_dispatch() -> None:
 
 @pytest.mark.parametrize("published", [True, False], ids=["unavailable", "available"])
 def test_a_caller_the_view_denies_the_row_learns_nothing_about_its_state(published: bool) -> None:
-    """The subject: the view's own DRF ``has_object_permission``.
-
-    Both rows are answered 403 and leave the row as it was: the unavailable one
-    must not hear its affordance's 409, and the available one must not be
-    written before the view's refusal is asked.
-    """
+    """The subject: the view's own DRF ``has_object_permission``."""
     post = Post.objects.create(title="t", published=published)
     response = _patch(_view(permission_classes=[_DenyObject]), post.pk)
     assert response.status_code == 403
@@ -151,9 +138,7 @@ def test_a_caller_the_view_denies_the_row_learns_nothing_about_its_state(publish
 
 
 def test_the_view_s_denial_answers_alike_for_an_available_and_an_unavailable_row() -> None:
-    """Nothing about the row's state leaks to a caller the view denies: the status and
-    the whole body are the same for the row an affordance would refuse and the one it
-    would let through, so the denial cannot be used to probe whether a row is published."""
+    """Nothing about the row's state leaks to a caller the view denies."""
     answers = []
     for published in (True, False):
         post = Post.objects.create(title="t", published=published)

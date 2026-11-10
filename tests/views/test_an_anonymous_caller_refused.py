@@ -1,22 +1,3 @@
-"""A refused caller is answered as DRF's ``APIView.permission_denied`` answers it.
-
-A caller the request's authenticators did not recognise is asked to
-authenticate: DRF's ``NotAuthenticated``, which the view answers 401 with the
-first authenticator's ``WWW-Authenticate``, or 403 where that authenticator
-gives no header. A caller one did recognise, or a request with no
-authenticator at all, is refused with the permission's own message, 403.
-
-The rule holds for a DRF class adapted by ``DRFPermissionCheck`` answering
-``False``, and for a kernel ``PermissionCheck`` the dispatched spec declares,
-whose denial the kernel marks as ``PermissionCheckDenied``: at the class-level
-check, and at the object-level one asked of the row the spec's own lookup
-finds. Any other ``NotPermitted`` - a service's own, a refused inner
-dispatch's, a check's own raise rather than its ``False`` - is not the
-caller's to sign in for, and stays 403 with its message. Each route is served
-by a view and by a viewset action, and each answer is DRF's for a plain
-``APIView`` guarded by a class carrying the same message.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -212,12 +193,7 @@ TWINS = {
 def test_a_check_s_denial_of_a_twin_the_edge_dispatched_asks_to_sign_in(
     twin: str, caller: str
 ) -> None:
-    """The kernel names the spec it was handed (the twin), so that spec's denial is the call's own.
-
-    Fails where the edge compares the denial's spec with the view's
-    declaration: the twin is another object, and its check's denial of an
-    anonymous caller would be read as an inner dispatch's, 403.
-    """
+    """The kernel names the spec it was handed (the twin)."""
     seats, body_format = TWINS[twin]
     authentication, signed_in, expected = CALLERS[caller]
     spec = ServiceSpec(
@@ -256,11 +232,7 @@ def _author(*, pk: int) -> Author | None:
 
 @pytest.mark.parametrize("caller", CALLERS)
 def test_an_object_level_check_s_denial_is_answered_as_drf_answers_it(caller: str) -> None:
-    """The row the spec's lookup finds is checked in the edge too, refused as the class check is.
-
-    DRF's ``check_object_permissions`` answers through the same
-    ``permission_denied``, so a caller nobody authenticated is asked to.
-    """
+    """The row the spec's lookup finds is checked in the edge too, refused as the class check is."""
     authentication, signed_in, expected = CALLERS[caller]
     spec = ServiceSpec(
         service=lambda *, instance: None,
@@ -303,11 +275,7 @@ def _view_of(spec: ServiceSpec, authentication: list[type]) -> Any:
 
 
 def test_a_service_s_own_denial_is_not_asked_to_sign_in() -> None:
-    """The author's ``NotPermitted`` is no permission check refusing: 403 with their message.
-
-    Fails when the map's row for a check's denial is widened to every kernel
-    ``NotPermitted``: the author's is then read as a check's and answered 401.
-    """
+    """The author's ``NotPermitted`` is no permission check refusing: 403 with their message."""
 
     def archived() -> None:
         raise NotPermitted("Archived invoices are read-only.")
@@ -319,14 +287,7 @@ def test_a_service_s_own_denial_is_not_asked_to_sign_in() -> None:
 
 
 def test_a_refused_inner_dispatch_is_not_asked_to_sign_in() -> None:
-    """An inner ``dispatch`` its check refuses reaches the caller as that check's 403.
-
-    The caller reached the outer spec through its own check, so the inner's
-    refusal is the service's, not a request to authenticate. The kernel marks
-    the inner check's denial as it marks the outer's, so this fails when the
-    edge answers every ``PermissionCheckDenied`` as its own call's, rather than
-    only one naming the spec it dispatched.
-    """
+    """An inner ``dispatch`` its check refuses reaches the caller as that check's 403."""
 
     class Never(PermissionCheck):
         message = "Inner refused."
@@ -353,14 +314,7 @@ class _RaisesNotPermitted(PermissionCheck):
 
 
 def test_a_check_raising_not_permitted_is_answered_as_raised() -> None:
-    """The kernel marks only a check answering ``False`` as a denial; a raise is the check's word.
-
-    An anonymous caller behind a challenge is answered 403 with the raised
-    message and no challenge, as DRF answers a permission class that raises
-    ``PermissionDenied``. Fails when the map's row for a bare kernel
-    ``NotPermitted`` is routed through ``permission_denied``: the raise is then
-    read as a denial and answered 401 with the challenge.
-    """
+    """The kernel marks only a check answering ``False`` as a denial."""
     response = _anonymous_post(
         ServiceSpec(service=lambda: None, permissions=(_RaisesNotPermitted(),))
     )

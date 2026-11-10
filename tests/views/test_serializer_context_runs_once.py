@@ -1,12 +1,3 @@
-"""A kernel spec's serializer context callable runs once per request, on every view path.
-
-The seats' ``serializer_context`` callables are documented as the place for one
-batched query against the data being serialized, so a second run is a second
-query, and a run per row is N of them. Each path is driven over HTTP with a
-counting callable. A list is presented with the whole set under one context,
-never row by row, so a list of two rows still counts one.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Callable

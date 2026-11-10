@@ -1,11 +1,3 @@
-"""How long a ``many`` kernel spec's body may be over HTTP.
-
-A kernel spec's list is
-bounded by its ``many_max_length``, else by ``SERVICE_SPECS_MAX_ARRAY_LENGTH``
-(1000 by default), on HTTP as on every transport, so a view taking longer
-bodies declares it on the spec. A list serializer's own bound still refuses.
-"""
-
 from __future__ import annotations
 
 from typing import Any

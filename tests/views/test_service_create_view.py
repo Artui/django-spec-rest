@@ -1,13 +1,3 @@
-"""``ServiceCreateView`` over a kernel spec, and the view's hook chains on it.
-
-The view's hooks are its own layers, beneath the spec's providers, which the
-kernel calls itself: ``get_service_kwargs`` is ``dispatch``'s ``extra_kwargs``,
-``get_input_data`` goes into the arguments over the body, the serializer
-context hooks reach the spec's ``SerializerValidator`` and
-``SerializerPresenter``, and ``get_progress_reporter`` is ``dispatch``'s
-``progress``.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -98,8 +88,7 @@ class TestServiceCreateView:
         assert response.data == {"triggered": True}
 
     def test_a_create_is_handed_no_target(self) -> None:
-        """A create resolves nothing, so the view's object permissions are
-        asked of no row, and the call runs."""
+        """A create resolves nothing, so the view's object permissions are asked of no row."""
 
         class _DenyObject(BasePermission):
             def has_object_permission(self, request: Any, view: Any, obj: Any) -> bool:
@@ -201,8 +190,7 @@ class TestTheViewsHookChains:
         assert _post(view, {}).data == {"tenant": "spec"}
 
     def test_a_get_service_kwargs_value_named_like_a_field_pins_it(self) -> None:
-        """The serializer validates the server's value, never the client's, and
-        the service is handed the validated one."""
+        """The serializer validates the server's value, never the client's."""
 
         def fn(*, data: dict[str, Any], name: str) -> dict[str, Any]:
             return {"data": dict(data), "name": name}
@@ -223,9 +211,7 @@ class TestTheViewsHookChains:
         assert _post(view, {"user": 1}).data == {"user": 7}
 
     def test_a_get_service_kwargs_value_named_like_a_spec_read_pins_it(self) -> None:
-        """A hook's key naming one of the spec's own reads, not a Validator
-        field, is pinned into the arguments too: the kernel refuses an overlay
-        key naming a parameter, so left in the overlay it would be a 500."""
+        """A hook's key naming one of the spec's own reads, not a Validator field."""
         seen: dict[str, Any] = {}
         spec = ServiceSpec(
             service=lambda *, note: seen.update(note=note),
@@ -279,8 +265,7 @@ class TestTheViewsHookChains:
     def test_a_get_input_data_key_naming_no_field_is_the_policy_s(
         self, monkeypatch: pytest.MonkeyPatch, policy: UnknownArguments, status: int
     ) -> None:
-        """A view's key is an argument like the client's, so the unknown-argument
-        policy answers it: refused under ``REJECT``, dropped under ``IGNORE``."""
+        """A view's key is an argument like the client's."""
         monkeypatch.setattr(kernel_edge, "UNKNOWN_ARGUMENTS", policy)
         view = _view(_spec(presenter=_PRESENTER), get_input_data=lambda self, request: {"x": 1})
         response = _post(view, {"name": "Ada"})

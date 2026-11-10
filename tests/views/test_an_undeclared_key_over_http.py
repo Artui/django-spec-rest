@@ -1,11 +1,3 @@
-"""What the HTTP edge's ``IGNORE`` makes of a key no parameter declares, past a flat body.
-
-The edge dispatches under ``IGNORE``, so the kernel drops a key no parameter declares, as
-DRF drops a key no serializer field declares. These are the shapes where that drop is not
-the whole story: a bulk row, an update's body naming another row, and a form body whose
-nested and list fields DRF spells as prefixed keys.
-"""
-
 from __future__ import annotations
 
 from typing import Any

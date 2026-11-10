@@ -1,30 +1,3 @@
-"""A kernel service asking for more input is answered with its schema, as raised.
-
-``AdditionalInputRequired`` is a 422 that carries the JSON Schema of what the client
-should send next. DRF coerces every leaf of an exception's ``detail`` to an
-``ErrorDetail`` string, so the schema in the detail reads ``"default": "False"``;
-the schema as raised rides on the mapped exception's ``schema`` attribute and is put
-back into the body the configured ``EXCEPTION_HANDLER`` built (``restore_raised_schema``).
-These assert that over kernel specs served by the three mutation views, which is the
-whole of the restore on the kernel route: the same handler contract, the same body.
-
-The handler contract is what the cases hold, one conjunct each of
-``restore_raised_schema``'s guard: another error naming a ``schema`` field is left
-alone (the exception type), a handler answering with a ``str`` body is left alone (the
-dict), a handler whose body has no ``schema`` key of its own is left alone (the key),
-and a body of ``None`` or a Django response with no ``.data`` is left alone.
-
-An update or delete view that loads its row with ``get_object()`` over a kernel
-spec naming no selector is refused when the view is built, since a kernel spec's target
-is its own lookup's and ``get_object()`` is never asked for one. The update and delete
-cases declare ``instance_selector_spec`` instead, its ``pk`` read required, since the
-kernel's ``check_seeds`` refuses an optional read over a keyword with no default.
-
-The cases that reach the restore through ``@service_action``, a viewset's own
-``handle_exception`` or ``get_exception_handler``, and the order of a viewset's bases
-are the decorator's, in ``tests/viewsets/decorators/test_service_action.py``.
-"""
-
 from __future__ import annotations
 
 import json
@@ -140,8 +113,7 @@ def _handled_by(name: str) -> Any:
 
 @pytest.mark.parametrize("entry", list(_VIEWS))
 def test_the_http_body_carries_the_schema_as_it_was_raised(entry: str) -> None:
-    """Read off the rendered bytes, which is what a client parses: a boolean default
-    arrives as ``false`` and a bound as ``3``, not as the strings DRF's detail holds."""
+    """Read off the rendered bytes, which is what a client parses."""
     response = _respond(*_VIEWS[entry])
 
     assert response.status_code == 422
@@ -154,8 +126,7 @@ def test_the_http_body_carries_the_schema_as_it_was_raised(entry: str) -> None:
     ids=["ServiceUpdateView", "ServiceDeleteView"],
 )
 def test_a_view_that_loads_its_row_with_get_object_is_refused_at_as_view(view: type) -> None:
-    """A kernel spec's target is its own lookup's; one naming none would run on no row, and the
-    view is refused when it is built rather than answering anything."""
+    """A kernel spec's target is its own lookup's; one naming none would run on no row."""
     with pytest.raises(ImproperlyConfigured, match="declares no target selector"):
         view.as_view()
 
@@ -171,8 +142,7 @@ def _recording(exc: Exception, context: dict[str, Any]) -> Response | None:
 
 @pytest.mark.parametrize("entry", list(_VIEWS))
 def test_the_handler_runs_once_and_sees_drf_s_error_details(entry: str) -> None:
-    """The configured handler is handed the exception with DRF's ``ErrorDetail``
-    leaves, once, whichever view the error comes through."""
+    """The configured handler is handed the exception with DRF's ``ErrorDetail`` leaves, once."""
     _seen.clear()
     with _handled_by("_recording"):
         response = _respond(*_VIEWS[entry])
@@ -185,10 +155,7 @@ def test_the_handler_runs_once_and_sees_drf_s_error_details(entry: str) -> None:
 
 
 def test_the_exception_keeps_its_details_after_the_body_is_restored() -> None:
-    """DRF's default handler answers with ``exc.detail`` itself, so restoring the
-    schema in place would rewrite the exception too, and anything reading it after the
-    response (a logger, an error tracker) would see a different shape from the one the
-    handler saw."""
+    """DRF's default handler answers with ``exc.detail`` itself."""
     _seen.clear()
     with _handled_by("_recording"):
         response = _PurgeCreate.as_view()(_factory.post("/", {}, format="json"))
@@ -208,9 +175,7 @@ class _Redacting:
 
 @pytest.mark.parametrize("entry", list(_VIEWS))
 def test_an_overriding_handle_exception_has_the_last_word(entry: str) -> None:
-    """A subclass's ``handle_exception`` runs after the restore, so what it writes is
-    what the client gets. The restore runs inside the configured handler, beneath any
-    override: running it outside would put back the schema the override replaced."""
+    """A subclass's ``handle_exception`` runs after the restore."""
     base, method, detail = _VIEWS[entry]
     view = type(f"_Redacting{base.__name__}", (_Redacting, base), {})
 
@@ -240,9 +205,7 @@ class _OwnHandler:
 
 @pytest.mark.parametrize("entry", list(_VIEWS))
 def test_a_views_own_exception_handler_still_answers(entry: str) -> None:
-    """The restore asks the view for its handler rather than reading the setting, so a
-    view's own ``get_exception_handler`` still chooses it, and the schema comes back as
-    raised in the body that handler built."""
+    """The restore asks the view for its handler rather than reading the setting."""
     base, method, detail = _VIEWS[entry]
     view = type(f"_Own{base.__name__}", (_OwnHandler, base), {})
 
@@ -267,8 +230,7 @@ def _declining(exc: Exception, context: dict[str, Any]) -> Response | None:
 
 @pytest.mark.parametrize("entry", list(_VIEWS))
 def test_a_handler_declining_the_error_runs_once(entry: str) -> None:
-    """A handler returning ``None`` makes DRF's ``handle_exception`` re-raise, and the
-    request fails with the mapped error, having run the handler once."""
+    """A handler returning ``None`` makes DRF's ``handle_exception`` re-raise."""
     _declined.clear()
     with _handled_by("_declining"), pytest.raises(APIException) as caught:
         _respond(*_VIEWS[entry])
@@ -278,8 +240,7 @@ def test_a_handler_declining_the_error_runs_once(entry: str) -> None:
 
 
 def _flatten(detail: Any, attr: str = "") -> Iterator[dict[str, Any]]:
-    """drf-standardized-errors' walk, restated so the test takes no dependency on it:
-    every leaf of ``exc.detail`` is read for its ``.code``."""
+    """drf-standardized-errors' walk, restated so the test takes no dependency on it."""
     if isinstance(detail, dict):
         for key, value in detail.items():
             yield from _flatten(value, f"{attr}.{key}" if attr else key)
@@ -321,12 +282,7 @@ def _textual(exc: Exception, context: dict[str, Any]) -> Response | None:
 
 @pytest.mark.parametrize("entry", list(_VIEWS))
 def test_a_handler_reading_every_leafs_code_answers_with_its_own_body(entry: str) -> None:
-    """The handler sees the detail it saw before the schema was carried as raised, and
-    its body is left alone because it has no ``schema`` key of its own to restore.
-
-    With native leaves in ``exc.detail``, this walk read ``.code`` off the ``str``
-    ``"boolean"`` and raised, so the ``422`` became a ``500``.
-    """
+    """The handler sees the detail it saw before the schema was carried as raised."""
     base, method, detail = _VIEWS[entry]
     with _handled_by("_standardized_errors"):
         response = _respond(base, method, detail)
@@ -351,9 +307,7 @@ def test_a_handler_that_answers_with_no_body_is_left_alone() -> None:
 
 
 def test_a_handler_answering_with_a_string_body_is_left_alone() -> None:
-    """Only a dict body has a ``schema`` key to restore into. ``"schema" in`` a ``str``
-    is a substring test, so a body that merely says "schema" would otherwise be spread
-    as a mapping and the ``422`` become a ``TypeError``."""
+    """Only a dict body has a ``schema`` key to restore into."""
     with _handled_by("_textual"):
         response = _PurgeCreate.as_view()(_factory.post("/", {}, format="json"))
 
@@ -362,8 +316,7 @@ def test_a_handler_answering_with_a_string_body_is_left_alone() -> None:
 
 
 def test_a_handler_answering_with_a_django_response_is_left_alone() -> None:
-    """``EXCEPTION_HANDLER`` may return any ``HttpResponse``; DRF serves it as it is, so
-    there is no ``.data`` to read a ``schema`` key from."""
+    """``EXCEPTION_HANDLER`` may return any ``HttpResponse``; DRF serves it as it is."""
     with _handled_by("_plain_django"):
         response = _PurgeCreate.as_view()(_factory.post("/", {}, format="json"))
 

@@ -1,17 +1,3 @@
-"""A target lookup's typed reads are coerced and flattened as a query string's are.
-
-A target lookup's reads come from the route's captures and the query string
-alone, never the body (``kernel_arguments``), and both carry strings, a
-repeated query key carrying every value: so each is read against the type its
-declaration names, an integer and a boolean parsed from their string, an array
-as every value the key repeats, and a value that does not convert is a 400
-naming it. A ``reads`` entry on the target lookup is a parameter of the spec,
-so its type is the one the value is read against. A body's value for a read,
-typed or not, is no read at all. A name both the spec and its lookup read
-is refused, since a kernel spec declares one
-source per name.
-"""
-
 from __future__ import annotations
 
 from typing import Any

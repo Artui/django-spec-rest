@@ -1,12 +1,3 @@
-"""A name a ``SerializerValidator`` is told is ``server_owned``, over HTTP.
-
-The client may still send a field of that name: the serializer validates it
-into ``data`` as it always did, and the service's parameter of that name keeps
-its default, so the client's value never becomes the server's. A field's
-``source`` is one value under a second name, so it is owned too, and a dotted
-``source`` owns the key its value nests under and no deeper one.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -67,8 +58,7 @@ def test_the_clients_value_for_an_owned_name_is_data_and_never_the_parameter(fmt
 
 @FORMATS
 def test_an_owned_name_owns_its_fields_source(fmt: str) -> None:
-    """The client sends ``tenant`` and ``validated_data`` keys it ``org``: neither
-    parameter is the client's."""
+    """The client sends ``tenant`` and ``validated_data`` keys it ``org``."""
     seen: dict[str, Any] = {}
 
     response = post(_spec(_TenantIntoOrg, seen), {"tenant": "evil", "title": "t"}, fmt=fmt)
@@ -78,8 +68,7 @@ def test_an_owned_name_owns_its_fields_source(fmt: str) -> None:
 
 
 def test_a_dotted_source_owns_the_key_it_nests_under_and_no_deeper_one() -> None:
-    """``org`` holds the client's ``tenant`` and is owned; ``name``, a key as deep as
-    the dotted source reaches, is another field's and stays the client's."""
+    """``org`` holds the client's ``tenant`` and is owned; ``name``."""
     seen: dict[str, Any] = {}
 
     response = post(_spec(_TenantUnderOrg, seen), {"tenant": "evil", "name": "n"})
@@ -90,9 +79,7 @@ def test_a_dotted_source_owns_the_key_it_nests_under_and_no_deeper_one() -> None
 
 @FORMATS
 def test_the_servers_value_for_an_owned_name_reaches_its_source(fmt: str) -> None:
-    """Where the server put the owned field's value, the key it is handed under is
-    the server's to keep, though it is the owned name's ``source``: what is kept
-    comes off the owned set after the ``source`` is added to it."""
+    """Where the server put the owned field's value."""
     seen: dict[str, Any] = {}
     hooked = type("_Hooked", (_CreateView,), {"get_input_data": lambda self, *_: {"tenant": "srv"}})
 

@@ -1,13 +1,3 @@
-"""Over HTTP, the switch that lets a DRF serializer alone answer a JSON body.
-
-A JSON body is checked against the spec's declared types before its serializer
-runs, so ``{"title": 5}`` is refused for a ``CharField`` that a bare DRF
-serializer takes as ``"5"``. ``lenient_json_body`` on a view, or
-``SPEC_REST_LENIENT_JSON_BODY`` for a project, dispatches the lenient twin a form
-body already has: each expectation is what a bare serializer answers for the same
-body. The declared spec stays typed for every other transport, and off by default.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass

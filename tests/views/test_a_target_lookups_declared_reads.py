@@ -1,16 +1,3 @@
-"""A target lookup's declared reads come from the route and the query string, never the body.
-
-A kernel spec declares a read as a ``Parameter``, with no ``UrlKwarg`` or
-``QueryParam`` to say where it comes from. On the kernel route a target
-lookup's reads choose the row a write reaches, so the edge reads them from the
-route's captures and the query string alone, the route's over the query
-string's, and drops a body key of a read's name (``kernel_arguments``): a
-client's body never chooses the row. Nothing the body sends is written onto
-``view.kwargs`` or ``request.query_params``, which the view's permission
-classes have already read. Off HTTP a kernel spec is the kernel's own
-``dispatch``, which has no view to read, so no case here is off HTTP.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -52,8 +39,7 @@ def _spec(seen: dict[str, Any]) -> ServiceSpec:
         return Post.objects.get(pk=pk)
 
     def service(*, instance: Any, data: Any, view: Any) -> Any:
-        # ``view`` is the call's own seed, so what the call left on it is read
-        # after the lookup ran.
+        # ``view`` is the call's own seed, so what the call left on it is read after the lookup ran.
         seen.update(kwargs=dict(view.kwargs), query=dict(view.request.query_params))
         return instance
 

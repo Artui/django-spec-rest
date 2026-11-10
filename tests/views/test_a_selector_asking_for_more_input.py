@@ -1,19 +1,3 @@
-"""A kernel selector asking for more input is answered with its schema, as raised.
-
-A selector, a precondition or a provider may raise ``AdditionalInputRequired``,
-which the edge answers as a mutation's: a 422 whose ``schema`` is the JSON Schema
-of what the client should send next. DRF coerces every leaf of the error's
-``detail`` to a string, so the restore (``restore_raised_schema``) puts the schema
-back as raised. The standalone selector views and ``@selector_action`` on DRF's
-own viewsets reached no restore and served ``"default": "False"``; each case reads
-the rendered bytes, so a string leaf fails it.
-
-The mutation side is ``tests/views/test_additional_input_required_over_http.py``.
-The handler contract the restore keeps (a declining handler, a ``handle_exception``
-override, the viewset's own ``get_exception_handler``) runs through both decorators
-in ``tests/viewsets/decorators/test_service_action.py``.
-"""
-
 from __future__ import annotations
 
 import json
@@ -60,9 +44,7 @@ def _asking(*, pk: Any = None) -> None:
 
 
 def _spec(kind: SelectorKind) -> SelectorSpec:
-    # The ``pk`` read is the lookup capture a detail ``@selector_action``
-    # declares to mount (test_lookup_captures); optional, so a call sending
-    # none still reaches the selector and its 422.
+    # The ``pk`` read is the lookup capture a detail ``@selector_action`` declares to mount.
     return SelectorSpec(
         kind=kind,
         selector=_asking,
@@ -113,8 +95,7 @@ def _recording(exc: Exception, context: dict[str, Any]) -> Response | None:
 def test_a_selector_action_serves_the_schema_as_raised_on_any_viewset(
     bases: str, kind: SelectorKind
 ) -> None:
-    """The configured handler runs once and sees DRF's ``ErrorDetail`` leaves, as
-    it does under ``@service_action``; the restore puts them back afterwards."""
+    """The configured handler runs once and sees DRF's ``ErrorDetail`` leaves."""
 
     @selector_action(_spec(kind))
     def ask(self: Any, request: Any, *args: Any, **kwargs: Any) -> None: ...

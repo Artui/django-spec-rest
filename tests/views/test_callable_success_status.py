@@ -1,11 +1,3 @@
-"""A kernel spec's view's ``success_status`` as a callable (upsert 200/201).
-
-A kernel ``ServiceSpec`` has no ``success_status``, which is HTTP's alone, so
-its view declares it (``MutationFlowMixin.success_status``). Driven through the
-standalone views; the viewsets' ``action_specs`` and ``@service_action`` read it
-as their own lane decides.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -56,8 +48,7 @@ def _refetch(*, result: _UpsertResult) -> Author:
 
 
 def _upsert_status(*, result: _UpsertResult) -> int:
-    # 201 for a freshly created row, 200 for an existing one: keyed on the
-    # *service's* return value, not the re-read output row.
+    # 201 for a freshly created row, 200 for an existing one: keyed on the *service's* return value.
     return 201 if result.created else 200
 
 
@@ -116,9 +107,7 @@ class TestCallableSuccessStatus:
         assert Author.objects.filter(name="Ada").count() == 1
 
     def test_a_callable_status_applies_to_an_empty_answer(self) -> None:
-        """Resolved per request from the pool, ``instance`` the row the view
-        found; with nothing to present, the set status still applies rather
-        than the ``204`` an unset one falls back to."""
+        """Resolved per request from the pool, ``instance`` the row the view found."""
         author = Author.objects.create(name="Grace")
         response = _ArchiveView.as_view()(factory.put("/", {}, format="json"), pk=author.pk)
         assert response.status_code == 205
@@ -134,8 +123,7 @@ class TestCallableSuccessStatus:
         assert response.data["name"] == "Ada"
 
     def test_a_callable_taking_kwargs_is_accepted_and_handed_the_pool(self) -> None:
-        """A callable taking ``**kwargs`` names no key the pool could lack, so the
-        view is built, and the call hands it the pool's keys."""
+        """A callable taking ``**kwargs`` names no key the pool could lack, so the view is built."""
         seen: set[str] = set()
 
         def status(**kwargs: Any) -> int:
@@ -163,8 +151,7 @@ class TestASuccessStatusTheViewCannotResolve:
     def test_a_callable_taking_kwargs_beside_a_key_the_pool_lacks_is_refused_at_as_view(
         self,
     ) -> None:
-        """``**kwargs`` takes the pool, never a name the pool lacks: called, it
-        would still raise ``TypeError`` for ``call_context``."""
+        """``**kwargs`` takes the pool, never a name the pool lacks: called."""
 
         def status(*, call_context: Any, **kwargs: Any) -> int:
             return 202
@@ -174,9 +161,7 @@ class TestASuccessStatusTheViewCannotResolve:
             view.as_view()
 
     def test_a_callable_taking_a_positional_only_parameter_is_refused_at_as_view(self) -> None:
-        """The pool is handed by keyword, so a positional-only parameter with no
-        default is never supplied, a key of the pool's name included: called, it
-        would raise ``TypeError``."""
+        """The pool is handed by keyword."""
 
         def status(result: Any, /) -> int:
             return 202

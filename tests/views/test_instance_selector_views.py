@@ -1,10 +1,3 @@
-"""A kernel ``ServiceSpec``'s ``instance_selector_spec`` on the standalone mutation views.
-
-The spec carries the lookup, so the views need no ``queryset``. Its row is
-found by the kernel's dispatch from the route's declared capture; a
-``filter_set`` on the lookup narrows which row a mutation may reach.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -154,11 +147,7 @@ class TestALookupsFilterSet:
 
     @pytest.mark.parametrize("fmt", ["json", "multipart"])
     def test_what_the_body_sends_for_the_filter(self, fmt: str) -> None:
-        """The kernel has one argument namespace, so a body key named like the
-        lookup's filter would be that filter's value, and the client's body
-        would pick the row a write reaches past a permission that checks
-        ``?scope``. The edge drops it, so ``?scope=mine`` finds no row (404)
-        and the victim's row is unchanged."""
+        """The kernel has one argument namespace."""
         victim = Author.objects.create(name="victim")
         view = type(
             "_View",
@@ -176,9 +165,7 @@ class TestALookupsFilterSet:
 
     @pytest.mark.parametrize("fmt", ["json", "multipart"])
     def test_a_body_s_filter_key_alone_scopes_nothing(self, author: Author, fmt: str) -> None:
-        """With no ``?scope``, a body's ``scope`` is no filter value at all: the
-        row the route names is the one found, whatever the body says the scope
-        is. Read off the body, ``nobody`` would have found no row."""
+        """With no ``?scope``, a body's ``scope`` is no filter value at all."""
         request = factory.patch("/", {"name": "new", "scope": "nobody"}, format=fmt)
         response = _view(ServiceUpdateView, _update_spec(filter_set=_ByName))(
             request, pk=str(author.pk)
@@ -188,8 +175,7 @@ class TestALookupsFilterSet:
         assert author.name == "new"
 
     def test_the_rest_of_a_write_s_query_string_is_no_argument(self, author: Author) -> None:
-        """Only the filter's keys are read off a write's query string: ``?format``
-        and any other key there are DRF's, never an unknown argument."""
+        """Only the filter's keys are read off a write's query string."""
         request = factory.patch("/?scope=orig&format=json&page=2", {"name": "new"}, format="json")
         with pytest.MonkeyPatch.context() as patch:
             patch.setattr(kernel_edge, "UNKNOWN_ARGUMENTS", UnknownArguments.REJECT)

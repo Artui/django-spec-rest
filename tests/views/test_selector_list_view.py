@@ -1,11 +1,3 @@
-"""``SelectorListView`` over a kernel ``SelectorSpec``.
-
-The spec's own ``presenter`` renders the rows, the page's rows alone when the
-view paginates, and its affordance answers ride on each; a spec declaring
-neither is rendered by the view's ``serializer_class``. DRF's filter backends
-and paginator still wrap what the dispatch read.
-"""
-
 from __future__ import annotations
 
 import json
@@ -80,8 +72,7 @@ def three() -> list[Author]:
 
 class TestThePresenter:
     def test_the_spec_s_presenter_renders_the_rows(self, three: list[Author]) -> None:
-        """The presenter's serializer, not the view's ``serializer_class``:
-        ``_NameOnly`` has no ``id``, which ``AuthorSerializer`` would add."""
+        """The presenter's serializer, not the view's ``serializer_class``."""
         spec = _listing(presenter=SerializerPresenter(_NameOnly))
         body = _body(_get(spec, attrs={"serializer_class": AuthorSerializer}))
         assert body == [{"name": "a"}, {"name": "b"}, {"name": "c"}]
@@ -135,8 +126,7 @@ class TestThePresenter:
             _get(_listing(boom, presenter=SerializerPresenter(_NameOnly)))
 
     def test_get_queryset_is_the_set_the_dispatch_read(self, three: list[Author]) -> None:
-        """DRF's own machinery calling ``get_queryset()`` (a schema generator,
-        a subclass) is handed the spec's set, unpresented."""
+        """DRF's own machinery calling ``get_queryset()`` (a schema generator."""
         view = type("_View", (SelectorListView,), {"spec": _listing()})()
         view.setup(factory.get("/"))
         view.request = view.initialize_request(view.request)
@@ -174,8 +164,7 @@ class TestUnderDjangoModelPermissions:
     """``DjangoModelPermissions`` asks ``get_queryset()`` before any handler runs."""
 
     def test_the_selector_runs_once(self, three: list[Author]) -> None:
-        """The list presents the dispatch the permission class asked for,
-        rather than running the selector again."""
+        """The list presents the dispatch the permission class asked for."""
         calls: list[int] = []
 
         def counted() -> QuerySet[Author]:
@@ -199,8 +188,7 @@ class TestUnderDjangoModelPermissions:
         assert _as_admin(_guarded(_NEEDS_A_NAME), "post").status_code == 405
 
     def test_a_head_reads_the_spec_s_set_not_the_view_s_queryset(self) -> None:
-        """A HEAD is the list's own request: with no ``queryset`` attribute the
-        permission class reads the model off the spec's set."""
+        """A HEAD is the list's own request."""
         view = _guarded(_listing(presenter=SerializerPresenter(_NameOnly)), queryset=None)
         assert _as_admin(view, "head").status_code == 200
 
@@ -242,9 +230,7 @@ class TestTheArguments:
         assert received == {"tenant_id": 12}
 
     def test_get_selector_kwargs_beside_a_kernel_spec_is_refused_at_as_view(self) -> None:
-        """A kernel spec is handed its own providers' values and never a selector
-        view's hook, so a hook beside one would be silently unasked; it is
-        refused when the view is built, pointing at the spec's ``kwargs``."""
+        """A kernel spec is handed its own providers' values and never a selector view's hook."""
 
         def selector(*, tenant: str = "none") -> QuerySet[Author]:
             return Author.objects.none()
@@ -268,13 +254,7 @@ class TestTheArguments:
 
 
 class TestDRFsOwnQueryKeys:
-    """DRF's own keys are no argument of the spec's, under either policy.
-
-    Under ``IGNORE`` an undeclared key is dropped unseen already; under
-    ``REJECT`` it reaches the closed argument set and is refused, which the
-    strip is for. Each policy's answer is asserted, so the owner's choice
-    moves one line and no test.
-    """
+    """DRF's own keys are no argument of the spec's, under either policy."""
 
     @pytest.mark.parametrize(
         "policy",
@@ -377,16 +357,14 @@ class TestAffordances:
     def test_affordances_with_no_presenter_are_refused_rather_than_dropped(
         self, posts: tuple[Post, Post]
     ) -> None:
-        """``serializer_class`` cannot carry the answers, so the kernel's
-        ``present`` refuses the spec rather than serving rows without them."""
+        """``serializer_class`` cannot carry the answers."""
         spec = _listing(_posts, affordances={"publish": PUBLISH})
         with pytest.raises(ImproperlyConfigured, match="Declare a presenter"):
             _get(spec, attrs={"serializer_class": _PostOut})
 
 
 def test_a_view_with_no_spec_lists_as_drf_does() -> None:
-    """No ``spec``: the view's ``queryset`` and ``serializer_class`` answer, as
-    DRF's ``ListAPIView`` would."""
+    """No ``spec``: the view's ``queryset`` and ``serializer_class`` answer."""
     Author.objects.create(name="Ada")
     view = type(
         "_View",

@@ -1,11 +1,3 @@
-"""The name this package stamps on a call's context, and where it never does.
-
-A view's one dict per request carries it for every stage of the call and for
-whatever asks the same callables ahead of it. A serializer of this package also
-runs under another transport's ``dispatch``, whose stamp is not this package's
-to touch.
-"""
-
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -182,8 +174,7 @@ class TestOnAView:
         assert seen == {"discriminator": "rest"}
 
     def test_a_serializer_keeps_the_real_request_view_format_and_action(self) -> None:
-        """The builder leaves a standard key present as ``None`` where nothing gave one,
-        and ``setdefault`` reads that as filled, so each comes from the view or not at all."""
+        """The builder leaves a standard key present as ``None`` where nothing gave one."""
         contexts: list[dict[str, Any]] = []
 
         class _In(serializers.Serializer):

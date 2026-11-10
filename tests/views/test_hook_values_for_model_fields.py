@@ -1,19 +1,3 @@
-"""A server value for a ``ModelSerializer`` field is validated as the field validates it.
-
-A related field takes a primary key, not the row, and hands the service the
-row; a value its validators refuse is a 400 for the client; and a read-only
-field validates nothing, so a value for it reaches the service parameter as
-given.
-
-On the kernel route the seat that fills a Validator field is ``input_data``,
-the spec's and beneath it the view's ``get_input_data``, so the validating
-cases are given there. ``kwargs`` fills the pool: its value reaches the
-service parameter as given, never through the field, which is what a
-read-only field's case asks of it. A ``get_service_kwargs`` value naming a
-field is the pool's too, never validated. The view's hooks reach the kernel call, so each case
-is given through the spec and through the view.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Callable

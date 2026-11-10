@@ -1,9 +1,3 @@
-"""The kernel route's edge: ``dispatch_kernel_spec`` over a live view's request.
-
-Each case drives it with the parts a live view hands it (``_parts``), and the
-recording twin it dispatches in a spec's place (``recording_spec``).
-"""
-
 from __future__ import annotations
 
 import gc
@@ -53,9 +47,7 @@ _OPEN = (Unrestricted(),)
 
 
 def test_another_validator_s_body_is_stripped_of_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Only a ``SerializerValidator`` leaves a writable field out of its
-    parameters; any other Validator's body is the kernel's arguments as sent,
-    so under ``REJECT`` a ``user`` it does not declare is refused."""
+    """Only a ``SerializerValidator`` leaves a writable field out of its parameters."""
     monkeypatch.setattr(kernel_edge, "UNKNOWN_ARGUMENTS", UnknownArguments.REJECT)
 
     @dataclass
@@ -72,8 +64,7 @@ def test_another_validator_s_body_is_stripped_of_nothing(monkeypatch: pytest.Mon
 
 
 def test_a_read_only_field_named_like_a_seed_is_none_the_body_sends() -> None:
-    """A read-only field takes nothing from a body, so no seed-named field is
-    held for it, whatever its name; only the writable ones are."""
+    """A read-only field takes nothing from a body, so no seed-named field is held for it."""
 
     class _Input(serializers.Serializer):
         title = serializers.CharField()
@@ -153,8 +144,7 @@ def _dispatch_then_state(spec: Any, **kwargs: Any) -> Any:
 
 @pytest.mark.parametrize("outcome", ["returned", "refused", "raised"])
 def test_the_edge_s_state_ends_with_the_call(outcome: str) -> None:
-    """The state the edge sets for a call is gone after it, however the call
-    ended, so the next call on the same thread or task starts from none."""
+    """The state the edge sets for a call is gone after it, however the call ended."""
 
     class _Input(serializers.Serializer):
         title = serializers.CharField()
@@ -176,9 +166,7 @@ class _UserPk(serializers.Serializer):
 
 
 def test_the_provider_is_called_once_and_its_value_binds() -> None:
-    """The recording twin's provider is the spec's own, bound from the pool by
-    its signature and asked once, and its value for a seed-named field is what
-    the serializer binds, over what the client sent for it."""
+    """The recording twin's provider is the spec's own."""
     calls: list[Any] = []
     received: dict[str, Any] = {}
 
@@ -218,8 +206,7 @@ def test_a_spec_s_recording_twin_is_built_once_and_dropped_with_it() -> None:
 def test_a_stale_entry_under_a_live_spec_s_id_is_not_its_twin(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """An entry whose weak reference names another spec, as a reused ``id``
-    would leave one, is rebuilt rather than served."""
+    """An entry whose weak reference names another spec, as a reused ``id`` would leave one."""
 
     def spec() -> ServiceSpec:
         return ServiceSpec(
@@ -270,10 +257,7 @@ def test_a_spec_with_nothing_to_record_is_dispatched_as_it_is() -> None:
 
 
 class _StaffSeeds(serializers.Serializer):
-    """Declares a seed-named ``user`` for every caller, and a ``result`` for staff only.
-
-    Reads ``self.context["request"].user`` as a DRF serializer may, so it can
-    only be described with the call's request."""
+    """Declares a seed-named ``user`` for every caller, and a ``result`` for staff only."""
 
     title = serializers.CharField()
     user = serializers.CharField(required=False)
@@ -295,11 +279,7 @@ def _staff_seeds(received: dict[str, Any]) -> ServiceSpec:
 
 
 def test_the_twin_records_the_fields_the_call_s_own_serializer_declares() -> None:
-    """The twin is built inside the call, from the serializer described with
-    the call's request: a ``get_fields`` reading the request's user describes,
-    where unbound it would raise, and a staff caller's ``result`` field is
-    the provider's, where a description with no request declares none and
-    the client's value would bind."""
+    """The twin is built inside the call, from the serializer described with the call's request."""
     received: dict[str, Any] = {}
     staff = User.objects.create(username="staff", is_staff=True)
     body = {"title": "t", "user": "client-user", "result": "client-result"}
@@ -308,10 +288,7 @@ def test_the_twin_records_the_fields_the_call_s_own_serializer_declares() -> Non
 
 
 def test_one_spec_s_twin_records_what_each_call_s_serializer_declares() -> None:
-    """The first call's fields do not decide what a later call records: a
-    caller declaring ``user`` alone, then a staff caller declaring ``result``
-    too, each bind the provider's value for every field their own serializer
-    declares."""
+    """The first call's fields do not decide what a later call records."""
     received: dict[str, Any] = {}
     spec = _staff_seeds(received)
     plain = User.objects.create(username="plain")
@@ -379,8 +356,7 @@ def test_a_row_the_lookup_misses_is_not_found_and_asks_nothing() -> None:
 
 
 def test_a_row_the_kernel_s_lookup_misses_carries_no_output_layer() -> None:
-    """A missing row's answer has no presentation context to put the view's
-    output layer on, so it comes back as the kernel gave it."""
+    """A missing row's answer has no presentation context to put the view's output layer on."""
     hooks = ViewHooks(output_serializer_context=lambda context: {"shown": True})
     result = dispatch_kernel_spec(
         _rename_spec(), view_hooks=hooks, **_with_route(_parts({}), pk=999)
@@ -410,9 +386,7 @@ _POLICIES = pytest.mark.parametrize("policy", [UnknownArguments.REJECT, UnknownA
 def test_a_query_handed_over_is_read_in_place_of_the_request_s(
     monkeypatch: pytest.MonkeyPatch, policy: UnknownArguments
 ) -> None:
-    """A selector spec reads the query string its caller hands, so a key the
-    view's own pagination reads and the request carries is never the spec's
-    argument, under either policy."""
+    """A selector spec reads the query string its caller hands."""
     monkeypatch.setattr(kernel_edge, "UNKNOWN_ARGUMENTS", policy)
     seen: list[str] = []
     dispatch_kernel_spec(
@@ -441,8 +415,7 @@ def test_an_undeclared_body_key_is_dropped_by_default() -> None:
 def test_with_no_query_handed_the_request_s_is_read(
     monkeypatch: pytest.MonkeyPatch, policy: UnknownArguments
 ) -> None:
-    """Today's behaviour: the request's query string is the arguments, so its
-    ``page`` is refused under ``REJECT`` and dropped under ``IGNORE``."""
+    """Today's behaviour: the request's query string is the arguments."""
     monkeypatch.setattr(kernel_edge, "UNKNOWN_ARGUMENTS", policy)
     seen: list[str] = []
     parts = _listing("name=sent&page=2")

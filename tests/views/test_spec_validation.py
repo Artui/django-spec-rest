@@ -1,12 +1,3 @@
-"""A view's own checks of a kernel spec, and the checks the kernel holds instead.
-
-``as_view()`` asks a kernel spec what only the view can know (the ``filter_set``
-guard here, the kind and the seeds in ``test_spec_validation_e2e``). Every other
-check of a spec's fields is the kernel's when the spec is built:
-those are asserted below in the kernel's words, so a spec refused there never
-reaches a view.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -29,12 +20,7 @@ _OPEN = (Unrestricted(),)
 
 
 class DjangoFilterBackend:
-    """A no-op stand-in for django-filter's backend.
-
-    The guard detects the real backend by class name (django-filter is an
-    optional dependency this package never imports), so a same-named stub is
-    all the tests need.
-    """
+    """A no-op stand-in for django-filter's backend."""
 
     def filter_queryset(self, request: Any, queryset: Any, view: Any) -> Any:
         return queryset
@@ -153,8 +139,7 @@ class TestTheFilterSetGuardAtAsView:
         assert callable(type("_View", (SelectorListView,), attrs).as_view())
 
     def test_a_retrieve_view_is_not_asked(self) -> None:
-        """A retrieve overrides ``get_object()`` and never calls
-        ``filter_queryset``, so the two never both apply there."""
+        """A retrieve overrides ``get_object()`` and never calls ``filter_queryset``."""
         attrs = {
             "filter_backends": [DjangoFilterBackend],
             "spec": _spec(SelectorKind.RETRIEVE, filter_set=_ByName),
@@ -231,8 +216,7 @@ class TestTheKernelRefusesWhenTheSpecIsBuilt:
             ServiceSpec(service=_rows, permissions=_OPEN, preconditions=preconditions)
 
     def test_a_serializer_class_where_a_validator_goes(self) -> None:
-        """The kernel takes a Validator instance, and a DRF serializer is wrapped in
-        ``SerializerValidator``."""
+        """The kernel takes a Validator instance."""
         with pytest.raises(
             ImproperlyConfigured,
             match=r"ServiceSpec\.validator is the class _TitleIn, which is not a Validator "

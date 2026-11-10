@@ -1,13 +1,3 @@
-"""A nested row Django cannot write is the client's 400, naming the row.
-
-A relation's row is written by the model's constructor, so a key the model
-has no field for raises Django's ``TypeError`` there. The row's write
-translates it into a refusal under the row's index, carrying Django's own
-message, rather than letting the ``TypeError`` escape as a 500. The same key at
-the top level is still the 500 it was: the top-level write is the
-service's own, and its ``TypeError`` is never read as the client's mistake.
-"""
-
 from __future__ import annotations
 
 import pytest

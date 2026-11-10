@@ -1,14 +1,3 @@
-"""Over HTTP, a client's ``null`` for a file field clears the file where the field allows it.
-
-A ``null`` for a field declaring ``allow_null`` is the client asking for no
-file, so the ``SerializerValidator`` hands the service ``""`` for it: what the
-model field stores for no file, which ``save()``, ``create`` and ``update`` take
-as it is and the kernel's ``update_from_input`` reads as a clear (``None`` keeps
-the file the row holds). A field that does not allow the ``null`` refuses it.
-Every case drives a real file on a real row through the view, and reads the
-row back.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -428,11 +417,7 @@ def test_a_form_s_clear_checkbox_means_nothing_to_a_serializer(
 def test_a_form_validator_s_clear_checkbox_still_clears(
     settings: Any, tmp_path: Any, sent: str
 ) -> None:
-    """A browser's checked box sends ``on``, which the edge reads as ``True`` for a form body alone.
-
-    The ``on`` case fails with a 400 on ``upload-clear`` (``Enter true, false, 1 or 0.``)
-    without ``_checked_boxes`` in ``kernel_edge``.
-    """
+    """A browser's checked box sends ``on``."""
     spec = ServiceSpec(
         service=_update,
         validator=FormValidator(_Form),
@@ -453,12 +438,7 @@ def test_an_upload_replaces_the_file(settings: Any, tmp_path: Any) -> None:
 
 
 def test_an_upload_off_http_arrives_as_the_file_itself(settings: Any, tmp_path: Any) -> None:
-    """Fails with ``""`` handed for the file, were an empty file returned for each file value.
-
-    Off HTTP only: a multipart body is a ``MultiValueDict``, which never reaches
-    the clear (test_a_form_s_blank_keeps_the_file), so a dict of arguments holding
-    the file is the Validator's non-``None`` arm.
-    """
+    """Fails with ``""`` handed for the file, were an empty file returned for each file value."""
     document = _held(settings, tmp_path)
     upload = SimpleUploadedFile("new.txt", b"new")
     dispatch(

@@ -1,26 +1,3 @@
-"""How the server-value modules call a kernel spec: over HTTP, and through the edge directly.
-
-Shared by the ``test_*server_value*``, ``test_a_typed_provider*`` and
-``test_*seed_named*`` modules of this directory, which each ask one question of
-the kernel route: which value a service is handed when the server and the
-client both name a key. Every spec they declare is the kernel's own, with
-``SerializerValidator`` as its seat, and every call goes through the view or
-the edge, never a helper the kernel route added.
-
-- ``open_spec`` declares the spec most of them dispatch.
-- ``post`` drives ``_CreateView`` (``test_kernel_views``) through
-  ``as_view()``, as a client does.
-- ``dispatch_live`` drives ``dispatch_kernel_spec`` over a live view's
-  request, in either body format, past ``as_view()``'s own checks.
-
-Both ask the kernel's ``check_seeds`` of the spec first. ``as_view()`` does
-not run it on a kernel spec yet, but a mount will, so every spec these modules
-dispatch is held to it now: an optional read has a default on its keyword,
-and no keyword is left for nothing to fill. ``dispatch_live`` never passes
-through ``as_view()`` at all, so without it a spec no view could mount would
-still answer here.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Callable

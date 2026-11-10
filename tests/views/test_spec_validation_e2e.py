@@ -1,23 +1,3 @@
-"""What ``as_view()`` refuses for a kernel spec set on a view's ``spec``.
-
-A view builds no spec, so it refuses three things only it can know - a spec of
-the kind of operation it does not serve, a selector spec of the other
-``SelectorKind``, and (in ``test_spec_validation``) a ``filter_set`` beside
-DRF's own filter backend - and hands the rest to the kernel's ``check_seeds``,
-which refuses a declaration that cannot hold on a mount as written: a keyword
-nothing fills, a positional-only parameter, an optional read over a keyword
-that requires it, a parameter a seed occupies. Every refusal here is asserted
-in the kernel's own words, so a change of wording there is seen here.
-
-``check_seeds`` sees every keyword a call fills but those the edge's overlay
-fills from a mutation view's ``get_service_kwargs`` or
-``get_<action>_service_kwargs``, so a view overriding either is not asked it:
-an overridden hook is a source of keys it cannot see. It reads no output
-selector, so a keyword an ``output_selector_spec`` requires and nothing fills
-is not refused here. An undeclared route capture is no argument, and the kernel
-hands every service ``data``.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Sequence
@@ -153,9 +133,7 @@ class TestAMutationView:
 
     @pytest.mark.django_db
     def test_a_view_hook_fills_a_keyword_check_seeds_cannot_see(self) -> None:
-        """An overridden ``get_service_kwargs`` reaches the service through the
-        edge's overlay, which ``check_seeds`` cannot see, so the view is not
-        asked it and mounts; the request fills the keyword."""
+        """An overridden ``get_service_kwargs`` reaches the service through the edge's overlay."""
         received: dict[str, Any] = {}
 
         def service(*, tenant: str) -> None:
@@ -173,8 +151,7 @@ class TestAMutationView:
 
     @pytest.mark.django_db
     def test_a_per_action_hook_fills_a_keyword_check_seeds_cannot_see(self) -> None:
-        """The same for ``get_<action>_service_kwargs``, read for the view's own
-        ``action``, which a standalone view sets on its class to have one."""
+        """The same for ``get_<action>_service_kwargs``, read for the view's own ``action``."""
         received: dict[str, Any] = {}
 
         def service(*, tenant: str) -> None:
@@ -192,8 +169,7 @@ class TestAMutationView:
         assert received == {"tenant": "acme"}
 
     def test_a_per_action_hook_for_another_action_fills_nothing(self) -> None:
-        """A hook named for an action the view does not take is never asked, so
-        the keyword is unfilled and still refused."""
+        """A hook named for an action the view does not take is never asked."""
 
         def service(*, tenant: str) -> None: ...
 
@@ -219,8 +195,7 @@ class TestAMutationView:
         assert callable(_build(ServiceCreateView, spec))
 
     def test_data_is_handed_to_every_service(self) -> None:
-        """The kernel hands every service ``data``, the caller's checked
-        arguments, Validator or not."""
+        """The kernel hands every service ``data``, the caller's checked arguments."""
 
         def service(*, data: Any) -> None: ...
 
@@ -310,11 +285,7 @@ class TestASerializerThatCannotBeDescribedAtMount:
         assert received == {"acme": "x"}
 
     def test_a_keyword_nothing_fills_is_refused_on_the_first_request(self) -> None:
-        """Skipped at mount, the unfilled keyword is still met on the first
-        request, loudly: the kernel calls the target selector without it, and
-        Python's own ``TypeError`` naming the keyword leaves the view, a 500,
-        before the selector's body or the service runs. It is not
-        ``check_seeds``' wording, which only a mount-time check gives."""
+        """Skipped at mount, the unfilled keyword is still met on the first request, loudly."""
         ran: list[str] = []
 
         def row(*, tenant: str) -> None:
@@ -329,8 +300,7 @@ class TestASerializerThatCannotBeDescribedAtMount:
         assert ran == []
 
     def test_a_refusal_check_seeds_makes_of_a_describable_spec_still_raises(self) -> None:
-        """Only the description is caught: a serializer that describes at mount
-        meets every refusal ``check_seeds`` makes there."""
+        """Only the description is caught."""
 
         def row(*, tenant: str) -> None: ...
 
@@ -379,10 +349,7 @@ class TestASelectorView:
             _build(SelectorRetrieveView, spec)
 
     def test_a_route_capture_the_spec_does_not_declare_is_refused(self) -> None:
-        """A route capture nothing declares is no argument, so a retrieve
-        selector cannot require a keyword in the hope that a route capture fills
-        it. The kernel route reads only a declared capture, so an undeclared one fills nothing
-        (``kernel_arguments``) and the selector is refused here."""
+        """A route capture nothing declares is no argument."""
 
         def selector(*, pk: int) -> None: ...
 
@@ -444,8 +411,7 @@ class TestASelectorView:
             _build(base, spec)
 
     def test_the_kind_is_refused_before_the_seeds_are_checked(self) -> None:
-        """The view's own question first: a spec on the wrong mount is told so,
-        not told about a keyword it would be handed on the right one."""
+        """The view's own question first: a spec on the wrong mount is told so."""
 
         def selector(*, tenant: str) -> list[Any]:
             return []
@@ -462,13 +428,7 @@ class TestASelectorView:
 
 
 class TestAnArrayReadWithNoItems:
-    """An array read with no ``items`` over a keyword annotated with its element type.
-
-    A kernel array ``Parameter`` with no ``items`` takes any element, so a
-    selector annotated ``pks: list[int]`` behind one is handed the query
-    string's strings. The kernel's ``check_seeds`` is to refuse it, naming
-    ``items``; until it does, ``as_view()`` passes it.
-    """
+    """An array read with no ``items`` over a keyword annotated with its element type."""
 
     @pytest.mark.parametrize(
         "annotation",

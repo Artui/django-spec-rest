@@ -1,12 +1,3 @@
-"""A kernel spec's ``permissions`` and its view's ``permission_classes`` on the mutation views.
-
-A kernel spec has no ``permission_classes``; its checks are its ``permissions``, which the kernel's
-``dispatch`` asks, and the view's own classes are DRF's, asked first. Both
-hold, so neither can open what the other closes. DRF's classes reach a spec's
-``permissions`` through ``DRFPermissionCheck``. The selector views' cases are
-the query views'.
-"""
-
 from __future__ import annotations
 
 from typing import Any

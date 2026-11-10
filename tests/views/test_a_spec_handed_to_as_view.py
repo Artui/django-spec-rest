@@ -1,12 +1,3 @@
-"""A spec handed to ``as_view(spec=...)``: checked at mount and served, as a class attribute is.
-
-DRF's ``as_view(**initkwargs)`` sets each keyword on every instance it builds, so
-``as_view(spec=...)`` is DRF's own way to set the class attribute. Each refusal
-below is asked twice, once of the spec as a class attribute and once handed to
-``as_view()``, and each serving test drives the view a keyword built, so each
-fails against a tree whose checks read only the class.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -191,8 +182,7 @@ class TestAKeywordSpecServed:
     def test_a_keyword_spec_s_permissions_are_asked_over_the_class_s_queryset(
         self, base: type
     ) -> None:
-        """A view also declaring DRF's ``queryset`` is served by the keyword's spec,
-        never by DRF's own lookup, so the spec's checks refuse the stranger."""
+        """A view also declaring DRF's ``queryset`` is served by the keyword's spec."""
         ada = Author.objects.create(name="Ada")
         kind = SelectorKind.LIST if base is SelectorListView else SelectorKind.RETRIEVE
         spec = SelectorSpec(

@@ -1,32 +1,3 @@
-"""The kernel route's refusal map: total, ordered, and each row answering with its own DRF answer.
-
-Every row has a test asserting its own answer and asserting that it is not the
-answer of the row the refusal falls to with that row deleted, so mutating a
-row out fails a named test even where the map stays total:
-
-- ``APIException`` (falls to the ``DRFInvalidArguments`` row, which would rebuild
-  the dual-base refusal as a new one):
-  ``test_a_refusal_that_is_drf_s_already_leaves_as_raised``, and the author's
-  own exception where the refusal was translated from one
-  (``tests/views/test_drf_refusals_restored_on_the_edge.py``);
-- ``DRFInvalidArguments`` (falls to ``DispatchError``, a ``detail`` sentence):
-  ``test_a_missing_argument_is_drf_s_400_by_field``;
-- ``PermissionCheckDenied`` (falls to ``NotPermitted``, a ``403`` whoever the
-  caller is): ``test_a_check_s_denial_of_an_anonymous_caller_is_a_challenge``,
-  and every route in ``tests/views/test_an_anonymous_caller_refused.py``;
-- ``NotPermitted`` / ``PrincipalUnavailable`` (fall to ``DispatchError``, a
-  ``400``): ``test_a_denied_principal_is_403``,
-  ``test_a_deactivated_principal_is_403``;
-- ``DispatchError`` (unanswered without it, with the totality test):
-  ``test_a_bare_dispatch_error_is_400_with_its_sentence``;
-- ``ServiceError`` (unanswered without it, with the totality test):
-  ``test_a_service_s_refusal_is_answered_by_map_service_error``, one case per
-  subclass. The subclasses are one row on purpose: ``map_service_error`` is
-  the answer for all of them and a row each pointing at it could not be told
-  from the base row it falls to, so each subclass's answer is held by its
-  case here and by its branch in ``test_map_service_error.py``.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -141,11 +112,7 @@ def _anonymous_request() -> Request:
 
 
 def test_a_check_s_denial_of_an_anonymous_caller_is_a_challenge() -> None:
-    """The dispatched spec's own check denying a caller nobody authenticated asks them to.
-
-    With the row deleted the denial falls to ``NotPermitted``'s, the check's
-    message as a 403 whoever the caller is.
-    """
+    """The dispatched spec's own check denying a caller nobody authenticated asks them to."""
     check = _Deny()
     spec = ServiceSpec(service=lambda: None, permissions=(check,))
     denied = PermissionCheckDenied(check=check, spec=spec)
@@ -208,17 +175,14 @@ def test_a_bare_dispatch_error_is_400_with_its_sentence() -> None:
 def test_a_service_s_refusal_is_answered_by_map_service_error(
     raised: BaseException, status: int, body: dict[str, Any]
 ) -> None:
-    """``map_service_error``'s answers, the schema served as raised, ``False``
-    and all."""
+    """``map_service_error``'s answers, the schema served as raised, ``False`` and all."""
     response = _call(ServiceSpec(service=_raising(raised), permissions=(Unrestricted(),)))
     assert response.status_code == status
     assert response.data == body
 
 
 def test_a_presenter_s_refusal_is_answered_by_the_map_too() -> None:
-    """``present`` runs after the kernel's ``dispatch`` and inside the map, so
-    a kernel presenter refusing what it was asked to present is DRF's ``400``,
-    not a fault."""
+    """``present`` runs after the kernel's ``dispatch`` and inside the map."""
 
     class _Refusing(Presenter):
         def output(self) -> Output:

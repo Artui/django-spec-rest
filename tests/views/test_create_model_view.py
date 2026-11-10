@@ -1,9 +1,3 @@
-"""A ``create_model`` factory as a kernel spec's service, over a real HTTP request.
-
-Protects against view-layer regressions that would break the closure's shape
-(``is_async`` detection, keyword filtering, response rendering).
-"""
-
 from __future__ import annotations
 
 import pytest
