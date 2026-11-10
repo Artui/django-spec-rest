@@ -1,8 +1,3 @@
-"""The list and retrieve selector Protocols are the kernel's, and type a kernel spec's selector.
-
-The root re-exports them, and a kernel ``SelectorSpec`` takes a callable each one accepts.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass

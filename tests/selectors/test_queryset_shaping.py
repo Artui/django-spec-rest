@@ -1,12 +1,3 @@
-"""A kernel selector spec's queryset shaping, served by the query views.
-
-``select_related``, ``prefetch_related``, ``annotations``, ``extend_queryset``
-and ``filter_set`` are the kernel's own fields, applied by its dispatch in its
-order; these tests hold that the views serve what they shape. The viewset,
-``selector_action`` and output-selector sites are the viewsets' and the
-mutation views' own.
-"""
-
 from __future__ import annotations
 
 from typing import Any

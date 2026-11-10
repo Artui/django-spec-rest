@@ -1,10 +1,3 @@
-"""``drf_query_keys`` and ``kernel_query``: DRF's query keys, kept off a kernel spec's arguments.
-
-The hand-off into the dispatch is not built yet (``test_selector_list_view``'s
-``TestDRFsOwnQueryKeys`` holds it as a strict xfail), so the two are held here
-on their own.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -69,10 +62,6 @@ class _OwnFilter:
         (_View(filter_backends=(_OwnFilter,)), {"format", "tenant"}),
         (_View(versioning_class=QueryParameterVersioning), {"format", "version"}),
         (_View(versioning_class=_RenamedVersion), {"format", "v"}),
-        # ``version_param`` sits on ``BaseVersioning``, so every class reports it,
-        # but only the query-parameter one reads it: on the others an undeclared
-        # ``?version`` is no DRF key and stays the kernel's to refuse
-        # (the rows below hold the ``issubclass`` gate in ``drf_query_keys``).
         (_View(versioning_class=URLPathVersioning), {"format"}),
         (_View(versioning_class=AcceptHeaderVersioning), {"format"}),
         (_View(versioning_class=NamespaceVersioning), {"format"}),
@@ -80,9 +69,7 @@ class _OwnFilter:
     ],
 )
 def test_drf_query_keys(view: _View, keys: set[str]) -> None:
-    """A ``None`` key, ``PageNumberPagination``'s unset ``page_size_query_param``,
-    names none, an attribute not spelled ``*_param`` is no key, and a ``*_param`` that is
-    no string (a truthy number) is none either."""
+    """A ``None`` key, ``PageNumberPagination``'s unset ``page_size_query_param``, names none."""
     assert drf_query_keys(view) == keys
 
 
