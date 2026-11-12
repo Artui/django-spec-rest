@@ -131,6 +131,12 @@ array."]}`, and so is a list longer than the spec's `many_max_length`, else the
 kernel's `SERVICE_SPECS_MAX_ARRAY_LENGTH` (1000 by default), with a 400 under
 `items`. A view taking longer lists declares `many_max_length` on its spec.
 
+A row that is not an object is refused at its own index, as a failing row is:
+a list holding one answers
+`{"items": {"1": {"non_field_errors": ["Expected an object."]}}}`, not DRF's
+`Invalid data. Expected a dictionary` at the top level, so a client reads every
+row's refusal the same way.
+
 ## Hooks and providers
 
 Three layers feed a write beyond the client's body, the more specific winning
