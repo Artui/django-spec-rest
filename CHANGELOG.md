@@ -13,6 +13,7 @@ carries; releases up to 0.62.0 are in
 
 ### Changed
 
+- **The bulk body's refusal of a row that is not an object is documented as kept**: `concepts.md` gives its shape, the same index nesting as any failing row.
 - **Guides and a docs fix**: the serializer-context, extra-kwargs, selector-filtering,
   concepts and OpenAPI pages state what the code does where they were silent (a spec's
   context callable over the view's keys, the progress reporter, `HiddenField` and
