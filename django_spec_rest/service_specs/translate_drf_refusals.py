@@ -30,7 +30,46 @@ so it is never mistaken for one translated here.
 
 @contextmanager
 def translate_drf_refusals() -> Generator[None]:
-    """Re-raise the DRF refusals raised inside the block as the kernel's classes, still DRF's."""
+    """Re-raise the DRF refusals raised inside the block as the kernel's classes, still DRF's.
+
+    The reverse of
+    [`translate_dispatch_errors`][django_spec_rest.service_specs.translate_dispatch_errors.translate_dispatch_errors]:
+    an author writes a service, a selector, a precondition or a permission
+    class against DRF and refuses with DRF's exceptions, which a transport
+    over the kernel's ``dispatch`` reads as nothing it knows. So the compile
+    runs each author callable it hands the kernel inside this block, and
+    [`DRFPermissionCheck`][django_spec_rest.service_specs.drf_permission_check.DRFPermissionCheck]
+    asks each permission class inside it:
+
+    - ``ValidationError`` leaves as
+      [`DRFServiceValidationError`][django_spec_rest.service_specs.drf_service_validation_error.DRFServiceValidationError],
+      with the same detail and codes;
+    - ``PermissionDenied`` as
+      [`DRFNotPermitted`][django_spec_rest.service_specs.drf_not_permitted.DRFNotPermitted],
+      with its message and code;
+    - ``NotAuthenticated`` as
+      [`DRFNotAuthenticated`][django_spec_rest.service_specs.drf_not_authenticated.DRFNotAuthenticated],
+      which DRF still answers 401;
+    - a subclass of any of the three as that class's twin, with the subclass's
+      detail and ``status_code``.
+
+    Each is still DRF's class, so an ``except`` written against DRF's still
+    catches it, and DRF's handler answers it with the status the author's
+    exception had. It is raised ``from`` the author's, which it carries under
+    ``TRANSLATED_FROM`` too, so the DRF edge re-raises the exception itself
+    and every route that answered DRF's exception answers it as before.
+
+    Left exactly as raised:
+
+    - a refusal that is already the kernel's, the dual-base ``DRF`` classes and a
+      twin translated by an inner block among them, which a kernel route
+      already reads;
+    - any other exception, DRF's ``NotFound``, ``AuthenticationFailed`` and
+      ``Throttled`` included, which have no kernel class to leave as.
+
+    Use it as a ``with`` block, around ``await`` too, for the reason
+    ``translate_dispatch_errors`` gives.
+    """
     try:
         yield
     except APIException as exc:

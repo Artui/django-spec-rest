@@ -67,7 +67,99 @@ class _Shape:
 
 
 class SerializerPresenter(Presenter):
-    """An operation's output declared as a DRF serializer, rendered through it."""
+    """An operation's output declared as a DRF serializer, rendered through it.
+
+    ``output()`` reads the serializer's fields into the kernel's
+    [`Output`][django_service_specs.output.output.Output], in declaration order:
+
+    - A ``write_only`` field is never rendered, so it is not declared.
+    - **Type**: JSON's own, with ``decimal``, ``date-time`` and ``date`` as
+      formats. A nested serializer is an object carrying its own ``Output``; a
+      ``many=True`` serializer, and a ``ListField`` whose child is one, is an
+      array of that ``Output``; a ``MultipleChoiceField`` is an array of its
+      choices. A field DRF gives no type, a
+      ``SerializerMethodField`` or a ``JSONField`` say, is declared ``any``,
+      so a schema describes it with no ``type`` rather than as a string it may
+      not be.
+    - **Label**: the author's, when one was written. DRF derives ``Vat id`` from
+      ``vat_id`` when none was, and that is ``None`` here: a derived label
+      says nothing the name does not.
+    - **Choices**: every ``(value, display)`` pair a ``ChoiceField`` holds,
+      typed by the values when they share a type.
+    - **Presence**: ``always_present`` is true where DRF is bound to emit the
+      key: a required field, one with a default, and one allowing ``null``. A
+      read-only field with neither is dropped when DRF cannot read it.
+      Under ``shaped=True``, no field at any depth is: the spec compiles a
+      shape, an argument such as a ``fields`` selector that the serializer
+      reads off the request, and a key is always present only if it is
+      present under every value the caller may send. Such an argument
+      declares no choices, so the values are any string, and which keys
+      each one drops is the serializer's to decide when it renders, so the
+      keys present under all of them are none that can be named. The
+      default, ``False``, is the presence above.
+    - **Marking**: the ``FieldMarking`` found in the field's ``style``, under
+      ``MARKING`` or any other key, and a value under ``MARKING`` that is not
+      one refused. Nested outputs carry their own.
+
+    ``field_audiences`` is the spec's own output declaration, a field name to a
+    ``FieldMarking``, layered over the serializer's markings **at the top level
+    only**. The layered marking is the
+    compiled ``OutputField.marking``, which is the seat
+    [`audience_projection_for_spec`][django_service_specs.dispatch.audience_projection_for_spec.audience_projection_for_spec]
+    reads, so every engine projects the one declaration with no ``overrides=``,
+    which stays a mount's. A name that is no output field is refused when the
+    output is read: a hidden marking that silently applies to nothing is a field
+    shown to an agent.
+
+    ``presented(value, context)`` is what the kernel's ``present`` asks for:
+    the serializer's ``.data`` for one value, under the serializer context
+    derived from the call's ``PresentationContext``. The ``request`` and
+    ``view`` the call registered as pool seeds, read from ``ambient``, are the
+    serializer's own, and where a seed is absent or ``None``, the entry of
+    that name in ``call_context``; a call that carries neither gets an
+    offline request whose ``user`` is the principal, so a
+    ``SerializerMethodField`` reading ``self.context["request"].user``
+    renders for the principal the call ran for, and whose query string is
+    the call's ``shapes``, so a serializer reading a ``fields`` selector off
+    ``request.query_params`` finds the one the caller sent. A request the
+    call carries is left as it is.
+    Over that, the output half of the view hooks a DRF edge adds to the
+    result's context (``output_view_layers``), resolved with the value, then
+    this Presenter's own ``serializer_context``, each winning on a key it shares
+    with what it layers over (see
+    ``serializer_context`` in ``service_specs/utils.py``).
+    The callable declares what it reads from the call's pool, ``request``,
+    ``view``, ``user`` or a registered seed, and the value being presented
+    under ``value_keyword``: ``result`` for a service's output, ``instance``
+    for a retrieve, nothing where it is ``None``.
+
+    ``presented_rows(values, context)`` is what the kernel's ``present`` asks
+    for a list: a page's rows over HTTP, a ``many`` service's return. **The
+    callable is asked once for them all**, offered the rows under ``page``,
+    the name drfs gave a list's, and under ``value_keyword`` too where it
+    names one, so a ``many`` service's ``result`` is its whole return, as the
+    view's output hook is handed it. A lookup it batches over the rows runs
+    once a page, not once a row. The rows are a list, already evaluated:
+    not a queryset to filter further, nor DRF's ``Page``. They render as one
+    ``many=True`` serializer, so a ``Meta.list_serializer_class`` and its
+    ``to_representation`` run as behind a DRF view, and its answer must keep
+    one row per value, in order, which the kernel checks: it adds affordances
+    to each row by its position. A ``None`` row stays ``None`` in its place,
+    as ``presented`` answers it, and the serializer renders the others.
+
+    ``present(value)`` is the context-free form, and delegates to
+    ``presented(value, None)``: a ``None`` context is the serializer context
+    a serializer is described with outside any call (``request``, ``view``
+    and ``format`` present, each ``None``), so a ``get_fields`` reading
+    ``self.context["request"]`` neither raises there nor sees a principal. It
+    is what a ``DispatchResult`` a transport built by hand is presented with,
+    and with no call to resolve it against, ``serializer_context`` is not
+    asked (test_present_with_no_call_runs_no_callable).
+
+    A dataclass type is read and rendered through a ``DataclassSerializer``
+    built for it, and a ``BaseSerializer`` that is not a ``Serializer``
+    declares no fields, so its output is empty while it still presents.
+    """
 
     def __init__(
         self,
@@ -130,7 +222,24 @@ class SerializerPresenter(Presenter):
         return self.presented(value, None)
 
     def presented(self, value: Any, context: PresentationContext | None) -> Any:
-        """One value as the serializer's ``.data``, under the context of the call it belongs to."""
+        """One value as the serializer's ``.data``, under the context of the call it belongs to.
+
+        ``None`` is presented as ``None``: it is JSON's null, and a serializer
+        handed none renders a row of blank fields indistinguishable from a real one.
+
+        A serializer refusing to render, DRF's ``ValidationError``, leaves as
+        the dual-base
+        [`DRFInvalidArguments`][django_spec_rest.service_specs.drf_invalid_arguments.DRFInvalidArguments],
+        raised from it, so a route over the kernel's ``present`` reads the
+        kernel's refusal of the arguments, a read-shaping ``fields`` naming no
+        field among them. A mapping detail is kept as it is, and a list, which
+        is all DRF makes of a message, goes under the kernel's
+        ``NON_FIELD_ERRORS``; every message keeps its code. One that is
+        already the kernel's ``InvalidArguments`` leaves as raised. A view
+        presents through the kernel's ``present``, so the refusal reaches HTTP
+        as a ``400`` whose body is the mapping
+        (``tests/service_specs/test_a_presenter_s_refusal.py``).
+        """
         if value is None:
             return None
         with _refusals_as_the_kernel_s():
@@ -141,7 +250,18 @@ class SerializerPresenter(Presenter):
     def presented_rows(
         self, values: Sequence[Any], context: PresentationContext | None
     ) -> list[Any]:
-        """A list's rows as one ``many=True`` render, its context asked for once."""
+        """A list's rows as one ``many=True`` render, its context asked for once.
+
+        A ``None`` row is presented as ``None`` in its place, and the
+        serializer renders the rest. A ``list_serializer_class`` answering
+        another count for them is refused here when a ``None`` is to be
+        placed among its answer; otherwise the kernel refuses it, comparing
+        the answer with the rows it handed over
+        (test_a_list_serializer_answering_another_count_beside_a_none_is_refused).
+
+        A serializer's refusal leaves as ``presented``'s does
+        (test_a_refusal_on_a_page_leaves_as_the_kernel_s).
+        """
         rows = [value for value in values if value is not None]
         with _refusals_as_the_kernel_s():
             rendered = list(

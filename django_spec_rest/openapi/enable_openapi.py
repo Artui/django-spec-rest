@@ -4,7 +4,49 @@ from typing import Any, cast
 
 
 def enable_openapi() -> None:
-    """Set [`ServiceAutoSchema`][django_spec_rest.openapi.service_auto_schema.ServiceAutoSchema] as the schema on every library view class."""  # noqa: E501
+    """Set
+    [`ServiceAutoSchema`][django_spec_rest.openapi.service_auto_schema.ServiceAutoSchema]
+    as the schema on every library view class.
+
+    Call once from ``AppConfig.ready()`` (or anywhere after Django apps are
+    loaded) to make ``drf-spectacular`` see a spec's request bodies, response
+    bodies, success statuses, and 422 contracts, a kernel ``ServiceSpec`` or
+    ``SelectorSpec`` read off its Validator and presenter, on:
+
+    - ``ServiceCreateView``, ``ServiceUpdateView``, ``ServiceDeleteView``
+    - ``SelectorListView``, ``SelectorRetrieveView``
+    - ``ServiceViewSet``, ``SelectorViewSet``
+    - ``ServiceCreateMixin``, ``ServiceUpdateMixin``, ``ServiceDestroyMixin``,
+      ``SelectorListMixin``, ``SelectorRetrieveMixin``
+
+    The function-local imports keep ``drf-spectacular`` an optional
+    dependency: importing
+    ``django_spec_rest.openapi`` does not require it, and only
+    this call brings in the schema-generator code.
+
+    User subclasses inherit ``schema = ServiceAutoSchema()`` automatically;
+    classes that set ``schema = ...`` explicitly keep their own choice. A
+    project's ``GenericViewSet`` composed of the mixins inherits it only where
+    a mixin comes before ``GenericViewSet`` in its bases, since DRF's
+    ``APIView`` carries a ``schema`` of its own
+    (test_the_documented_setup's
+    test_a_mixin_listed_first_documents_its_spec_with_no_schema_of_its_own).
+
+    Where a mixin does come first, its ``ServiceAutoSchema`` also wins over a
+    project's ``DEFAULT_SCHEMA_CLASS``, even a subclass of it; setting
+    ``schema = ProjectSchema()`` on the class keeps the subclass
+    (test_the_documented_setup's
+    test_a_mixin_listed_first_overrides_a_project_s_default_schema_class).
+
+    It also inserts
+    [`reserved_components_hook`][django_spec_rest.openapi.reserved_components_hook.reserved_components_hook]
+    first in drf-spectacular's ``POSTPROCESSING_HOOKS``, before the project's
+    own hooks and once however often it is called, so a component of the
+    project's under a name the package documents its refusals by is refused
+    on any view. It recognises the package's own references by the identity
+    of their ``$ref`` strings, so a project hook that rebuilds those strings
+    (a JSON round trip) must run after it, not before.
+    """
     from drf_spectacular.settings import spectacular_settings
 
     from django_spec_rest.openapi.reserved_components_hook import (

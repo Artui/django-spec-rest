@@ -213,7 +213,30 @@ def _object_permissions(view: Any, request: Request, found: Any) -> None:
 
 
 def resolve_mutation_instance(view: Any, spec: KernelServiceSpec) -> Any:
-    """Resolve the mutation target, or defer to the core."""
+    """Resolve the mutation target, or defer to the core.
+
+    A spec's target is its own target selector's, or none: the view's
+    ``get_object()`` is never asked for one, because the kernel takes a target
+    only where the spec declares the selector that would find it, and refuses
+    one handed to a spec declaring none. A standalone update or delete view
+    refuses such a spec at ``as_view()``; a caller that check never reaches (a
+    viewset's action, ``@service_action``) is handed no row
+    (test_service_update_view's test_a_kernel_spec_with_no_target_selector_is_handed_no_row).
+
+    Returns: ``None`` for a **bulk** spec (``many=True`` or a
+        ``collection_selector_spec``): there is no single instance. ``UNSET`` when
+        the spec carries an ``instance_selector_spec``: *the core resolves it*,
+        with the right kwarg pool, error label and reserved-seed strip, and the
+        view's object permissions are asked of the row it finds. ``None`` for a
+        spec with no target at all.
+
+    **``filter_backends`` do not apply**: DRF runs ``filter_queryset()`` inside
+    its own ``get_object()``, which a spec's lookup bypasses, exactly as a
+    hand-written ``get_object()`` override does. A tenant-scoping backend in
+    ``DEFAULT_FILTER_BACKENDS`` therefore does not narrow the row a PATCH or
+    DELETE may reach here, while the sibling list action stays scoped. Put the
+    scoping in the selector's own queryset.
+    """
     return UNSET if mutation_target_source(spec) == "instance_selector" else None
 
 
