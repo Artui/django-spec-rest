@@ -66,6 +66,11 @@ A `filter_set` on an update's or a delete's `instance_selector_spec` or
 the body: a body value cannot set the scope that picks the row a write
 changes.
 
+A `PATCH` or a `DELETE` reaches its row through the spec's own target selector, not
+through the view's `filter_backends`, as a retrieve does. A tenant-scoping backend in
+`DEFAULT_FILTER_BACKENDS` narrows the list and not the write, so scope the target
+selector's queryset.
+
 ## A retrieve
 
 A retrieve spec runs its own selector rather than DRF's `get_object()`, so the

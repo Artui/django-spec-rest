@@ -5,8 +5,9 @@ and its `permissions`. This page is the adapters that fill them, the DRF
 refusal classes the kernel's refusals become, and the helpers a caller off
 HTTP uses to give a serializer the context it reads.
 
-None of these is exported from the package root; import each from its leaf
-module:
+Of these, only `base_serializer_context`, `build_offline_context` and
+`renderable_serializer_class` are exported from the package root; import each from
+its leaf module:
 
 ```python
 from django_spec_rest.service_specs.drf_permission_check import DRFPermissionCheck

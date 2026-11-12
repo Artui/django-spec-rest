@@ -56,6 +56,10 @@ CREATE_SPEC = ServiceSpec(
 )
 ```
 
+The callable's keys are written last, over the request's and the view hooks' keys,
+so a key it returns for `request` or `view` replaces theirs. A key whose value is
+`UNSET` is not written, and the earlier value stands.
+
 ## What a presenter's callable receives
 
 A presenter's `serializer_context` callable declares what it reads by name:
@@ -130,8 +134,9 @@ Dispatched with no request, a seat builds its serializer over an offline
 request and view for the principal, so a serializer reading
 `self.context["request"].user` while it validates reads the principal. Off
 HTTP the kernel also describes the serializer's fields before the call, with
-no request in its context: a `get_fields()` or `__init__` reading
-`self.context["request"]` raises there, so guard such a read.
+no request in its context: `self.context["request"]` is `None` there, so a
+`get_fields()` or `__init__` that dereferences it raises `AttributeError`;
+guard such a read.
 [`base_serializer_context`][django_spec_rest.service_specs.base_serializer_context.base_serializer_context]
 and
 [`build_offline_context`][django_spec_rest.service_specs.build_offline_context.build_offline_context]

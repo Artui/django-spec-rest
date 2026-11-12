@@ -11,6 +11,16 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+### Changed
+
+- **Guides and a docs fix**: the serializer-context, extra-kwargs, selector-filtering,
+  concepts and OpenAPI pages state what the code does where they were silent (a spec's
+  context callable over the view's keys, the progress reporter, `HiddenField` and
+  `call_context` in hooks, the update that answers 200 on a `None` result, a write's
+  target outside `filter_backends`, the 422's schema as raised, a registry fragment's
+  keywords); the DRF seats page names the three helpers the root exports, and the off-HTTP
+  note says `self.context["request"]` is `None` there, not a `KeyError`.
+
 ## [0.12.0] — 2026-11-09
 
 ### Added
