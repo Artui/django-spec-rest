@@ -22,7 +22,68 @@ def build_offline_context(
     query_params: Mapping[str, Any] | None = None,
     host: str | None = None,
 ) -> OfflineContext:
-    """Build the [`OfflineContext`][django_spec_rest.types.offline_context.OfflineContext] for dispatching a spec outside an HTTP request."""  # noqa: E501
+    """Build the
+    [`OfflineContext`][django_spec_rest.types.offline_context.OfflineContext] for
+    dispatching a spec outside an HTTP request.
+
+    A spec written for the HTTP transport may read a DRF ``request`` or ``view``: a
+    ``kwargs`` provider, a request-scoped ``FilterSet``, a serializer reading its
+    context, and the DRF permission check evaluating ``permission_classes``. Off HTTP
+    there is neither, so this synthesizes both; hand them to
+    [`dispatch`][django_service_specs.dispatch.dispatch.dispatch] as
+    ``call_context={"request": context.request, "view": context.view}``, and the
+    spec keeps working when driven from an agent toolset, a management command or a
+    task runner.
+
+    Args:
+        user: Set as ``request.user``, so callables and permissions that read it behave
+            as on HTTP. ``request.auth`` is ``None``, set without running DRF's
+            authenticators, so reading it never replaces this user: a scope
+            check off DRF is the transport's to make.
+        params: Seeds ``request.data``, straight into DRF's parsed-data cache (a
+            synthetic request has no stream to parse), for a callable that reads it.
+            It is *not* what the spec validates: the kernel validates the
+            ``arguments`` handed to ``dispatch`` and never reads ``request.data``.
+        http_request: An ambient Django request to wrap, so its headers / ``META`` are
+            available (the MCP server passes its real one); otherwise an
+            [`OfflineHttpRequest`][django_spec_rest.types.offline_http_request.OfflineHttpRequest]
+            is created. Either way the method is forced to ``POST``, because mutation
+            callables often branch on it. **The caller keeps ownership: a request
+            passed here is never written to.** What gets wrapped is a shallow copy,
+            so the ``method`` / ``GET`` / ``user`` this function sets land on the copy
+            alone, while ``META``, the session, the upload handlers and any body
+            already read stay shared — headers and session writes behave as they do
+            on HTTP, and the live request keeps its own method, query string and user
+            for the rest of its cycle. Pass the request you are serving; dispatching
+            several specs from one request is safe, and neither leaks into the next.
+        action: The view action name, exposed on the
+            [`OfflineServiceView`][django_spec_rest.types.offline_service_view.OfflineServiceView].
+        kwargs: The view's ``kwargs``, the off-HTTP counterpart of a route's URL
+            captures, read by any callable that declares ``view`` and reads
+            ``view.kwargs``. Never merged into the call's arguments: a value the
+            spec validates is an ``argument`` to ``dispatch``.
+        query_params: Seeds the request's ``GET`` ``QueryDict``, the source
+            ``request.query_params`` reads — how read-shaping params that are not spec
+            inputs reach the serializer offline: a serializer branching on
+            ``query_params``, and a request-scoped ``FilterSet`` reading
+            ``self.request.query_params`` itself. Values are stringified as on
+            HTTP; a list / tuple becomes a multi-valued param. **Replaces** a wrapped
+            ``http_request``'s ``GET`` — on the copy that is wrapped, so the caller's
+            own ``GET`` still reads its real query string afterwards.
+        host: The origin the synthesized request reports, so ``build_absolute_uri`` —
+            which DRF's ``FileField`` / ``HyperlinkedIdentityField`` call whenever a
+            ``request`` is in the serializer context — returns real absolute URLs off
+            HTTP. Accepts ``"example.com"``, ``"example.com:8000"``, or a full origin
+            whose scheme decides whether links are https. There is no default: unset,
+            absolute-URI building degrades to the relative URL rather than raising (see
+            [`OfflineHttpRequest`][django_spec_rest.types.offline_http_request.OfflineHttpRequest]).
+            **Ignored when ``http_request`` is supplied**, whose own headers are
+            authoritative, so a caller can pass both unconditionally.
+
+    Returns: The
+        [`OfflineContext`][django_spec_rest.types.offline_context.OfflineContext]
+        to hand to ``dispatch``.
+    """
     base: HttpRequest = (
         _copy_request(http_request) if http_request is not None else _synthesize_request(host)
     )

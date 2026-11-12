@@ -7,7 +7,27 @@ from rest_framework.exceptions import ValidationError
 
 
 def register_drf_row_errors() -> None:
-    """Register DRF's ``ValidationError`` as a refusal the kernel re-roots under its row."""
+    """Register DRF's ``ValidationError`` as a refusal the kernel re-roots under its row.
+
+    A nested write runs a row service per related row, and one written for DRF
+    refuses its row with DRF's ``ValidationError``, which the kernel cannot
+    name, so it would otherwise escape the write naming no row. Registered,
+    it is re-addressed as the kernel's own refusals are - a collection's row
+    under its ``int`` index, a message about the row itself under
+    ``non_field_errors`` - and rebuilt as DRF's ``ValidationError``, with every
+    message's code kept, so DRF still answers it 400.
+
+    Process-wide and for the life of the process, as the kernel's registry is.
+    Running it again does nothing, because the reader is one module-level
+    function; a second registration of the class with any other reader is
+    refused by the kernel.
+
+    Not a home for this package's dual-base ``InvalidArguments``: the kernel
+    reads its own ``InvalidArguments`` before any registered class, so that
+    one leaves a nested row as the kernel's class, and reaches DRF's ladders
+    through
+    [`translate_dispatch_errors`][django_spec_rest.service_specs.translate_dispatch_errors.translate_dispatch_errors].
+    """
     register_row_error(ValidationError, _validation_error_detail)
 
 

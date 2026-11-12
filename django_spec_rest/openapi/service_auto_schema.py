@@ -81,10 +81,105 @@ from django_spec_rest.views.utils import action_answer, view_pool_seeds
 
 
 class ServiceAutoSchema(AutoSchema):
-    """``AutoSchema`` that derives its request / response from a kernel spec."""
+    """``AutoSchema`` that derives its request / response from a kernel spec.
+
+    A kernel ``ServiceSpec`` or ``SelectorSpec`` is read off its seats, as the
+    route serves it, on every surface: the standalone ``Service*View`` and
+    ``Selector*View`` classes, the ``ServiceViewSet`` and ``SelectorViewSet``
+    action mixins, and ``@service_action`` / ``@selector_action``:
+
+    - **The request body** is a ``SerializerValidator``'s serializer, built
+      partial exactly where the route dispatches the spec's partial variant
+      (``kernel_spec_variant``): an update route's ``PATCH``, unless the
+      Validator cannot take a partial call, and a spec declaring ``partial``. A
+      ``@service_action`` ``PATCH`` dispatches its spec as declared, so it is
+      validated, and documented, whole (``_dispatched``). Its component is
+      drf-spectacular's name for the author's class, except where the spec's
+      ``input_data`` reaches a field: then a subclass less the fields it fills,
+      with those it may fill not required, under a name of its own
+      (``caller_serializer_class``). A ``many`` spec takes a list of those
+      rows. Any other Validator is the kernel's
+      ``spec_caller_input_schema`` less what the body does not carry
+      (``_parameters_body``): what the server fills is not asked for, and a
+      key a provider may fill is not required. It is read under the ``rest``
+      stamp with no request, so a field a Validator declares to this transport
+      is offered and one declared to another is not (``_caller_schema``). A
+      body the wire refuses to go without says ``required``, which
+      drf-spectacular leaves off a schema given whole (``_DemandedBody``).
+      Every schema the kernel writes reaches the document through
+      ``lowered_for_the_document``, so under OpenAPI 3.0 a nullable or labelled
+      one is ``nullable`` and ``enum``, in a request body, a response body and
+      a parameter alike.
+    - **The response body** is a ``SerializerPresenter``'s serializer, or any
+      other presenter's ``output_schema``, a list of rows where the spec
+      presents rows (``_presents_rows``). A spec with no presenter documents
+      no body, at the statuses ``_kernel_responses`` lists, and a selector spec
+      with none keeps the base's reading of the view's ``serializer_class``,
+      which renders it.
+    - **The status** is the view's ``success_status`` for the action, per
+      action where one is declared, where it is an ``int``,
+      since a kernel spec declares none, over the action's default; a body is
+      documented as the ``200`` it is served as where that is ``204``, and the
+      ``204`` beside it where ``can_present_nothing``. With no presenter and no
+      ``success_status`` both the action's default and the ``204`` are listed,
+      since the service's return decides between them (a destroy's default is
+      the ``204``, so it lists that alone).
+    - **A** ``400`` is documented wherever the spec declares a Validator: its
+      refusal is DRF's field errors, whichever seat refused, so the body is the
+      ``ValidationErrors`` component. Beside it, any of what else the edge
+      sends as a 400: a ``detail`` sentence (the body is no object), and the
+      bare list of messages a service's ``ServiceValidationError`` over a
+      sentence or a list answers with.
+    - **A** ``422`` is documented where the spec declares that it can answer
+      one, ``metadata={"document_service_error": True}``
+      (``documents_service_error``): the edge answers a plain ``ServiceError``
+      422, from the service, the selector, a precondition or a provider, with
+      or without a Validator, and which specs raise one the schema cannot see.
+      A selector spec taking a parameter (a read, a shape or a filter)
+      documents the ``400`` its refusal is, with the body of a Validator's.
+    - **A** ``403`` is documented wherever the spec declares a permission
+      check, any check but ``Unrestricted``: a check's denial and a principal
+      who cannot act are both answered 403 with a ``detail``. A ``401`` beside
+      it where the view's first authenticator sends a ``WWW-Authenticate``:
+      DRF answers such a check's denial of a caller nobody authenticated 401
+      there, and 403 where the authenticator sends none (``_caller_refusals``).
+    - **A** ``DiscriminatedAction`` **is one request component**,
+      ``{View}_{action}_Request``, an ``anyOf`` over the body of each variant
+      that takes one (``_discriminated_request_body``), and its responses are
+      the variants' merged per status: one body where they agree, an inline
+      ``anyOf`` where they differ, each status any variant answers, and a
+      ``400`` always, since the discriminator may refuse
+      (``_discriminated_responses``).
+    - **A FilterSet's query parameters** are the kernel's
+      ``filter_set_parameters``, on a list operation only.
+    - **A viewset method answered 405 for want of a spec** is no operation:
+      the schema leaves out what ``Allow`` leaves out (``is_excluded``).
+
+    A refusal a service raises is the project's to declare, with
+    ``@extend_schema(responses={404: ServiceNotFoundSerializer})`` and the
+    other serializers ``django_spec_rest.openapi`` exports. A mapping of
+    statuses is added to what the spec documents, each status declared
+    replacing the spec's own at that status and any ``2xx`` declared replacing
+    every success status the spec documents; any other ``responses=`` is the
+    success body at the spec's own status (``_get_response_bodies``). Every
+    other ``@extend_schema`` argument wins whole, and
+    ``@extend_schema(parameters=...)`` merges over the filter parameters
+    exactly as it does for a view-level FilterSet.
+    """
 
     def is_excluded(self) -> bool:
-        """Whether this method is left out, as ``Allow`` or drf-spectacular leaves it out."""
+        """Whether this method is left out, as ``Allow`` leaves it out, or as drf-spectacular does.
+
+        drf-spectacular documents every method the router's action map binds,
+        so a ``ServiceViewSet`` route serving some spec documented a create,
+        update, partial update or destroy whose handler answers 405 with no
+        spec behind it. Such a method is asked of the view's own
+        ``_refuses_without_a_spec``, the predicate its ``allowed_methods``
+        reads, never of ``allowed_methods`` itself: the generator binds no
+        handler to the view it builds, so DRF's half of that list is empty
+        there (test_spec_less_actions). A view with no such predicate, a
+        standalone view or one of DRF's, is not asked.
+        """
         refuses = getattr(self.view, "_refuses_without_a_spec", None)
         if refuses is not None and refuses(self.method):
             return True
@@ -342,7 +437,24 @@ class ServiceAutoSchema(AutoSchema):
         )
 
     def documents_service_error(self, spec: KernelServiceSpec | KernelSelectorSpec) -> bool:
-        """Whether this operation documents the ``422`` a plain ``ServiceError`` gets."""
+        """Whether this operation documents the ``422`` a plain ``ServiceError`` is answered with.
+
+        Where ``spec``, the one the route serves, declares it:
+        ``metadata={"document_service_error": True}``
+        (``SERVICE_ERROR_METADATA_KEY``), on a service spec and on a selector
+        spec alike (test_service_error_declared). A spec declaring nothing, or
+        ``False``, documents none: the edge answers 422 for a plain
+        ``ServiceError`` from the service, the selector, a precondition or a
+        provider, and nothing the schema can read says which specs raise one.
+        Only the served spec's ``metadata`` is read, never that of its target
+        or re-read selector. A value other than ``True`` or ``False`` is
+        refused, naming the view, rather than read as either.
+
+        A project's subclass may override it to answer for many operations at
+        once (every spec, or a predicate over ``spec``, ``self.view`` and
+        ``self.method``), and an ``@extend_schema(responses={422: ...})``
+        documents it on one view whatever this answers.
+        """
         declared = (spec.metadata or {}).get(SERVICE_ERROR_METADATA_KEY, False)
         if not isinstance(declared, bool):
             raise ImproperlyConfigured(

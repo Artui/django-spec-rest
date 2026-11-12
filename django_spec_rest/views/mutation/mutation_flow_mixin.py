@@ -92,11 +92,21 @@ class MutationFlowMixin(_ServesRaisedSchema):
         return {}
 
     def get_input_serializer_context(self) -> dict[str, Any]:
-        """Hook for the ``context=`` dict passed to the *input* serializer."""
+        """Hook for the ``context=`` dict passed to the *input* serializer.
+
+        Defaults to ``get_serializer_context``, so overriding the
+        DRF-standard hook flows into input validation automatically; override
+        here for keys visible only during input validation.
+        """
         return self.get_serializer_context()  # ty: ignore[unresolved-attribute]
 
     def get_output_serializer_context(self) -> dict[str, Any]:
-        """Hook for the ``context=`` dict passed to the *output* serializer."""
+        """Hook for the ``context=`` dict passed to the *output* serializer.
+
+        Defaults to ``get_serializer_context``, so overriding the
+        DRF-standard hook flows into response rendering automatically; override
+        here for keys visible only during response rendering.
+        """
         return self.get_serializer_context()  # ty: ignore[unresolved-attribute]
 
     def _run_mutation(

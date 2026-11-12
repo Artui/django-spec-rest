@@ -19,7 +19,31 @@ def translating_drf_refusals(fn: Callable[..., Any]) -> Callable[..., Any]: ...
 
 
 def translating_drf_refusals(fn: Callable[..., Any] | None) -> Callable[..., Any] | None:
-    """``fn``, its DRF refusals leaving as the kernel's classes; ``None`` for no callable."""
+    """``fn``, its DRF refusals leaving as the kernel's classes; ``None`` for no callable.
+
+    What the compile hands the kernel in place of each author callable that
+    runs within a call: the service or selector, the preconditions, the
+    ``kwargs`` and ``input_data`` providers and ``extend_queryset``. ``fn`` is
+    called as it was, inside
+    [`translate_drf_refusals`][django_spec_rest.service_specs.translate_drf_refusals.translate_drf_refusals].
+
+    It keeps what a reader of the compiled spec takes from the callable: the
+    name, qualname, module, annotations and signature, and, of a function or a
+    method, the docstring and the attributes (a tool description is read off
+    the docstring). An ``async def`` stays one, since the kernel awaits it by
+    its kind (test_an_async_service_s_refusal_is_translated_too); the signature
+    is ``fn``'s, which the kernel binds the call by; the annotations are
+    ``fn``'s and ``__wrapped__`` is ``fn``, so a provider's return
+    ``TypedDict`` is resolved in its own module and still names the keys it
+    fills (``tests/service_specs/test_translating_drf_refusals.py``).
+
+    Identity is not kept: the compiled callable is a wrapper, so
+    ``inspect.unwrap`` is what reaches the author's own. A ``functools.partial``
+    or a callable object gets neither docstring nor attributes, as its
+    ``__doc__`` is its class's and a reader that tells a function from an
+    object by ``inspect.isfunction`` would otherwise be handed that class's
+    words. ``fn`` itself is never stamped, as it is the author's own function.
+    """
     if fn is None:
         return None
     if is_async(fn):

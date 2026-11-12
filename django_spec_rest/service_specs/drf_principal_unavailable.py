@@ -7,7 +7,28 @@ from rest_framework.exceptions import PermissionDenied
 
 
 class DRFPrincipalUnavailable(KernelPrincipalUnavailable, PermissionDenied):
-    """The kernel's ``PrincipalUnavailable`` and DRF's ``PermissionDenied``, for a principal."""
+    """The principal cannot act: the kernel's ``PrincipalUnavailable``, DRF's ``PermissionDenied``.
+
+    Raised for an identifier naming nobody or a deactivated account, before
+    any permission check. It reaches every published consumer's ladder as the
+    denial DRF names, answered 403 and ending the attempt, and an ``except``
+    written against the kernel's class catches it too.
+
+    Deliberately **not** a service error, which the kernel's class is not
+    either: a refused principal is terminal, never something to route around.
+
+    ``message`` is the kernel's, and ``detail`` is the same words as DRF's
+    ``ErrorDetail``, coded ``"permission_denied"`` unless ``code`` is given.
+    The default is the kernel's wording, not DRF's, since there is nobody to
+    refuse a permission to.
+
+    Both ``__init__``s run by name, as ``NotPermitted``'s do, so the order of
+    the bases is a choice no test can tell from the other. The kernel's sets
+    ``message``: ``test_the_default_is_the_kernels_message_not_a_permission_denial`` fails
+    without it. DRF's sets ``detail`` with the ``code`` given, which the
+    kernel's ``super()`` chain never passes: ``test_a_code_given_is_kept``
+    fails without it.
+    """
 
     def __init__(self, message: str | None = None, code: str | None = None) -> None:
         KernelPrincipalUnavailable.__init__(self, message)
@@ -15,5 +36,8 @@ class DRFPrincipalUnavailable(KernelPrincipalUnavailable, PermissionDenied):
 
     @classmethod
     def from_kernel(cls, exc: KernelPrincipalUnavailable) -> DRFPrincipalUnavailable:
-        """The kernel's refusal ``exc`` as this class, with its message."""
+        """The kernel's refusal ``exc`` as this class, with its message.
+
+        Shared by the kernel route's refusal map and ``translate_dispatch_errors``.
+        """
         return cls(exc.message)

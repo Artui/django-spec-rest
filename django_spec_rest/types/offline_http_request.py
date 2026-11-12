@@ -4,7 +4,35 @@ from django.http import HttpRequest
 
 
 class OfflineHttpRequest(HttpRequest):
-    """An ``HttpRequest`` with no ambient host, made safe to use."""
+    """An ``HttpRequest`` with no ambient host, made safe to use.
+
+    Built by
+    [`build_offline_context`][django_spec_rest.service_specs.build_offline_context.build_offline_context]
+    when the caller has no real request to wrap (a Pydantic-AI toolset, a management
+    command, a task runner). A bare ``HttpRequest`` has an **empty** ``META``, and
+    Django resolves the host from ``HTTP_HOST`` / ``SERVER_NAME`` — so ``get_host()``
+    raises ``KeyError: 'SERVER_NAME'`` and takes ``build_absolute_uri()`` down with it.
+    That reaches serializers through the most ordinary field there is: DRF's
+    ``FileField.to_representation`` calls ``request.build_absolute_uri(value.url)``
+    whenever a ``request`` is in the context.
+
+    Two behaviours, decided by whether the caller configured a host
+    (``build_offline_context(host=…)``, which seeds ``META`` — a configured
+    request is an ordinary one and none of this applies):
+
+    - **Host configured** — nothing here intervenes. Absolute URIs are built
+      by Django exactly as on HTTP.
+    - **No host** — ``build_absolute_uri`` returns the location unchanged, i.e.
+      the *relative* URL. There is no honest absolute URL to return: the process
+      has no idea what origin serves it, and a guess (the first
+      ``ALLOWED_HOSTS`` entry, say) would emit confidently-wrong links that look
+      valid. A relative URL is the same thing DRF's own file / hyperlinked
+      fields fall back to when there is no request in the context at all, so
+      this is the shape those serializers already handle.
+
+    ``get_host()`` still raises without a host — but with a message naming the
+    fix, rather than a bare ``KeyError`` from Django's internals.
+    """
 
     offline_host: str | None = None
     """The configured host (``"example.com"`` / ``"example.com:8000"``), or
@@ -14,7 +42,12 @@ class OfflineHttpRequest(HttpRequest):
     machinery is in charge, so nothing on this class changes behaviour."""
 
     def build_absolute_uri(self, location: str | None = None) -> str:
-        """Absolute URI when a host is configured; the location itself when not."""
+        """Absolute URI when a host is configured; the location itself when not.
+
+        Degrading beats raising: the caller is a serializer field rendering a
+        link, and a relative URL is a usable answer that its consumer can
+        resolve against whatever origin it reached the data through.
+        """
         if self.offline_host is not None:
             return super().build_absolute_uri(location)
         if location is None:
@@ -26,7 +59,16 @@ class OfflineHttpRequest(HttpRequest):
         return str(self.META.get("wsgi.url_scheme", "http"))
 
     def get_host(self) -> str:
-        """The configured host verbatim; a pointed error when there is none."""
+        """The configured host verbatim; a pointed error when there is none.
+
+        Deliberately **not** validated against ``ALLOWED_HOSTS``. That setting
+        rejects spoofed ``Host`` headers from untrusted clients; this value came
+        from the project's own code, and there is no client. Requiring it to
+        appear in ``ALLOWED_HOSTS`` would break the ordinary case of a worker or
+        management command that renders links for a site it does not itself
+        serve — and would add nothing, since a caller who can pass a host can
+        equally pass one that is on the list.
+        """
         if self.offline_host is not None:
             return self.offline_host
         raise ValueError(

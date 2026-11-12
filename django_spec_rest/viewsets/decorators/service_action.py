@@ -83,7 +83,57 @@ def service_action(
     response_finalizer: Callable[..., Response | None] | None = None,
     **action_kwargs: Any,
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
-    """Wrap a viewset method as a service-backed custom action."""
+    """Wrap a viewset method as a service-backed custom action.
+
+    The decorated method's body is *not* executed — the decorator supplies
+    the handler. The method exists so that ``@service_action`` can attach
+    DRF ``@action`` metadata and pick up the action name from ``__name__``.
+
+    Pass a [`ServiceSpec`][django_service_specs.specs.service_spec.ServiceSpec]
+    for the service wiring. ``detail``, ``methods``, ``url_path``, ``url_name``,
+    and any extra ``**action_kwargs`` are forwarded to DRF's ``@action``, a
+    ``lenient_json_body`` among them, which outranks the viewset's for this
+    action (test_a_service_action_may_declare_its_own).
+
+    The spec runs through the kernel's own ``dispatch``, as on the standalone
+    mutation views: its ``permissions`` are asked there, after the view's own
+    classes, a detail action's row is its own target selector's (never
+    ``get_object()``), and the answer is its presenter's. The spec runs as
+    declared: a ``PATCH`` here is validated whole, and documented so, unless the
+    spec declares ``partial``, which is the way to a partial call
+    (test_decorated_patch).
+
+    ``success_status`` and ``response_finalizer`` are this action's answer, in
+    the shapes the viewset's take (``MutationFlowMixin``), and outrank the
+    viewset's, an ``as_view()`` keyword included. Left ``None``, the action
+    answers with the viewset's, else ``200``. They are asked at decoration what
+    a standalone view's are, and a viewset defining a
+    ``get_<action>_success_status`` or ``get_<action>_response_finalizer``
+    hook beside one is refused at ``as_view()``: one action, one answer
+    (test_per_action_answers). The refusal is this package's viewsets'
+    ``as_view()``; on a viewset of DRF's alone the decorator's value answers
+    and the hook is never read.
+
+    An
+    [`AdditionalInputRequired`][django_service_specs.services.additional_input_required.AdditionalInputRequired]
+    answers ``422`` with its ``schema`` as raised on any viewset, DRF's own
+    included. The restore runs inside the exception handler the view asks for,
+    so the configured ``EXCEPTION_HANDLER`` runs once, and a ``handle_exception``
+    override on the viewset still has the last word on the body.
+
+    A detail action with no target selector is refused here. The spec's
+    keywords are checked when its viewset is mounted: ``as_view()`` on a
+    viewset built on this package's mixins asks the kernel's ``check_seeds``
+    against the viewset's ``pool_seeds``, unless a service-kwargs hook of the
+    viewset's may fill what it would refuse. On DRF's own ``GenericViewSet`` or
+    ``ViewSet`` nothing asks it, and a seed nobody registers is the first
+    request's ``TypeError``.
+
+    A ``DiscriminatedAction`` in place of the spec is asked its own shape here
+    and each of its variants as a spec is, and the request chooses which runs;
+    a callable ``success_status`` or ``response_finalizer`` may then declare
+    ``variant``.
+    """
     drf_kwargs: dict[str, Any] = {"detail": detail}
     if methods is not None:
         drf_kwargs["methods"] = methods

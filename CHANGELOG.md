@@ -51,6 +51,8 @@ carries; releases up to 0.62.0 are in
 - **The `django-service-specs` floor is 0.31.0.** It writes a choice filter's labels
   into the schema, an `OrderingFilter`'s included, which the document fix below
   lowers under OpenAPI 3.0.
+- **The API reference's docstrings are restored.** The classes and functions the
+  reference renders carry their full text again.
 
 ### Fixed
 

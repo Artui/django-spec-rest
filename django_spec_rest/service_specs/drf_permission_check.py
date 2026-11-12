@@ -16,7 +16,80 @@ from django_spec_rest.types.offline_context import OfflineContext
 
 
 class DRFPermissionCheck(PermissionCheck):
-    """DRF permission classes asked the kernel's three questions, off HTTP."""
+    """DRF permission classes asked the kernel's three questions, off HTTP.
+
+    The kernel asks a principal and a spec; a DRF permission class asks a
+    request and a view. So each question asks every class in order, a fresh
+    instance each time, as a DRF view's ``get_permissions`` does, against the
+    request and view the call carries, else the offline pair
+    [`build_offline_context`][django_spec_rest.service_specs.build_offline_context.build_offline_context]
+    builds for the principal. The first refusal
+    raises what DRF's view raises for it,
+    [`permission_denied`][django_spec_rest.service_specs.permission_denied.permission_denied]'s
+    answer for the request asked: the dual-base
+    [`DRFNotAuthenticated`][django_spec_rest.service_specs.drf_not_authenticated.DRFNotAuthenticated]
+    for a caller the request's authenticators did not recognise, else
+    [`DRFNotPermitted`][django_spec_rest.service_specs.drf_not_permitted.DRFNotPermitted]
+    with that class's own ``message`` and ``code``, so a client is told what
+    a DRF view would have told it; returning ``False`` instead would leave the
+    kernel to raise its own class with the generic wording. A class that
+    raises its own refusal is asked inside
+    [`translate_drf_refusals`][django_spec_rest.service_specs.translate_drf_refusals.translate_drf_refusals],
+    so DRF's ``PermissionDenied`` leaves as that ``DRFNotPermitted`` with the
+    class's message and code, and ``NotAuthenticated`` as
+    [`DRFNotAuthenticated`][django_spec_rest.service_specs.drf_not_authenticated.DRFNotAuthenticated],
+    which DRF still answers 401
+    (``tests/service_specs/test_drf_refusals_on_the_kernel_route.py``).
+
+    **The view's ``kwargs`` are filled from the call's arguments before the
+    class-level check.** A permission scoping by a route capture reads
+    ``view.kwargs["project_pk"]`` in ``has_permission``, and off HTTP there is
+    no URLconf to put it there; asked against an empty mapping it would refuse
+    every caller it means to admit. Each method opts in to the kernel's
+    ``arguments`` channel by declaring the keyword, and the names that go onto
+    ``view.kwargs`` are the ones a route would have captured: ``route_reads``,
+    the arguments the spec's row lookup reads (``pk`` of an update's instance
+    lookup, or of a retrieve). Where a transport asks with no arguments at all
+    (``None``), nothing is filled, and the classes decide what an empty route
+    means, as they would for a URL that captured nothing.
+
+    **The request and view the call carries come first.** The class-level
+    and object-level methods declare ``request`` and ``view``, so a call
+    registering either as a seed hands it over, and ``call_context``, so a
+    call that puts either in its context does: a transport running the
+    kernel's ``dispatch`` carries the request a run arrived on, or a role
+    view built for the operation, that way. Each is the seed, else the
+    context's entry, and ``None`` in either place is no value. A carried
+    view, or DRF ``Request``, is asked as it is, with nothing filled onto it. Where the call
+    carries one and not the other, the missing half is the offline pair's,
+    built as below, so no class is ever handed ``None`` for a request or a
+    view; where it carries neither, the whole offline pair is asked. The
+    offline view's ``action`` is the call's context's ``action``, where that
+    is a non-empty string, so a class branching on ``view.action`` reads the
+    operation's name; a carried view keeps its own. A carried Django
+    request that DRF has not wrapped, the request a run arrived on as the
+    kernel's call context holds it, is asked as a DRF ``Request`` around a
+    copy of it, built as the offline pair is: its ``user`` the principal and
+    its query string empty, replacing its own, which is the endpoint's the run
+    arrived on. Asked with no arguments at all, nothing is routed and its own
+    query string stays.
+
+    **``has_object_permission`` asks only about a model instance**; any other
+    target is allowed here, because a DRF class written for a row reads
+    attributes off it.
+
+    **``has_scope_permission`` allows.** The kernel asks it of a bulk call's set,
+    a collection's rows and a create's ``None``, and DRF has no such question:
+    on HTTP, a create and a collection action run the class-level check and no
+    object check, and a DRF ``has_object_permission`` handed a ``QuerySet`` or
+    ``None`` would raise ``AttributeError`` or decide on the wrong object. The
+    class-level check has already run, with the view's ``kwargs`` filled, by
+    the time the kernel asks this one.
+
+    No state is kept between questions: the compiled spec holding this check is
+    shared by every call and every thread, so each question builds its own
+    request and view.
+    """
 
     def __init__(
         self,
