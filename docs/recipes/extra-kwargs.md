@@ -114,11 +114,25 @@ class NoteViewSet(ServiceViewSet):
         return {"owner": self.request.user}
 ```
 
+A service that declares `progress` is handed a reporter from the view: the first of
+`get_<action>_progress_reporter()` and `get_progress_reporter()` that returns one,
+never a merge of the two. With neither, the service gets the kernel's `null_progress`.
+To report to two sinks, compose them with the kernel's `combine_progress`.
+
 **A hook's value outranks the client's.** Where the serializer declares a
 writable `owner`, the hook's value is what reaches the service, so a client
 sending `owner` cannot replace the hook's. A key a `validate()` derives, or a
 `source="*"` nested serializer flattens, reaches the service's keyword as the
 hook's value, while `data` keeps what the serializer validated.
+
+A `HiddenField` takes no input from the server: a value that `input_data` or a hook
+gives its key leaves the field's default in place, and a partial call leaves the
+field out of `data`.
+
+A hook is handed `call_context`, the request's dict, only when it names it as a
+parameter; a hook taking only `**kwargs` is not. `success_status` and
+`response_finalizer` are not offered it, and `as_view()` refuses either one that
+requires it.
 
 A selector view takes no keyword hook beside a kernel spec: `as_view()`
 refuses a `get_selector_kwargs` or `get_<action>_selector_kwargs` override,

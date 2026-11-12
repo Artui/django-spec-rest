@@ -165,7 +165,10 @@ neither a presenter nor affordances is rendered by the view's
 | delete | 204 |
 
 A result with nothing to present answers 204 with no body, and a body never
-goes out under 204: a value to present answers 200. `success_status` on the
+goes out under 204: a value to present answers 200. An update (`PUT` or `PATCH`)
+whose service returns `None` presents its target, as DRF's `UpdateModelMixin` does,
+when the spec has a presenter and no `output_selector_spec`, so it answers 200 and
+not 204. A spec without a presenter answers 204. `success_status` on the
 view overrides the default, with an `int` or a callable declaring any of
 `result`, `instance`, `request`, `view`; `response_finalizer` may replace the
 response built. On a viewset an action may declare its own
@@ -195,6 +198,11 @@ The refusal classes the kernel raises through this package's seats are DRF's
 as well (`DRFInvalidArguments`, `DRFNotPermitted`, ...), so a caller of the
 kernel's `dispatch` catches the kernel's class. See
 [DRF seats](reference/service-specs.md#refusals-that-are-drfs-as-well).
+
+A project's `EXCEPTION_HANDLER` is handed the 422 as DRF builds it: every leaf of
+the schema is an `ErrorDetail` string with its code, so a `False` default reads
+`"False"`. The body the client receives is the schema as raised, put back after that
+handler, so the handler cannot change the schema it sends.
 
 ## OPTIONS
 

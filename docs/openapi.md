@@ -244,6 +244,13 @@ call `enable_openapi()` again after the reload.
   `json_schema_extra` reaches the document as written, since no kernel adapter
   writes those keys: under 3.0 it must be valid 3.0 (a `{"type": "null"}`
   member or a numeric `exclusiveMinimum` is not).
+- **A registry fragment's keywords** are stated by the kernel on the field where
+  it can. The kernel states `type`, `items`, `format`, `enum`, `minimum`, `maximum`,
+  `minItems`, `maxItems` and `description` on the field, where the field accepts
+  them. Of `format` it keeps only `date-time`, `date`, `decimal` and `uuid`, and
+  drops any other. A keyword the kernel can state but the input field refuses (a
+  `minimum` on a string, say) is dropped. A keyword it cannot state at all goes to
+  `json_schema_extra` as written.
 - **A viewset method with no spec behind it** is left out where `Allow` leaves
   it out: on a route serving some spec, a `create`, `update`,
   `partial_update` or `destroy` the router maps but the viewset declares no
