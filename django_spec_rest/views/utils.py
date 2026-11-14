@@ -322,6 +322,30 @@ def presented_response(
     return response
 
 
+# PATCH and PUT share one spec unless a dedicated ``"partial_update"`` entry
+# exists. Must be applied at every resolution site (see
+# ``resolve_action_spec_entry``).
+_ACTION_SPEC_FALLBACKS: dict[str, str] = {
+    "partial_update": "update",
+}
+
+
+def resolve_action_spec_entry(
+    action_specs: Mapping[str, Any],
+    action: str | None,
+) -> Any:
+    """Return the ``action_specs`` entry for ``action``, following fallbacks."""
+    if action is None:
+        return None
+    entry = action_specs.get(action)
+    if entry is not None:
+        return entry
+    fallback = _ACTION_SPEC_FALLBACKS.get(action)
+    if fallback is not None:
+        return action_specs.get(fallback)
+    return None
+
+
 class _NegotiatesAFile:
     """Serves a spec's file under an ``Accept`` naming its type, which no renderer offers.
 
@@ -341,8 +365,6 @@ class _NegotiatesAFile:
 
 def _served_spec(view: Any) -> Any:
     """The spec ``view`` serves this request: its ``spec``, ``action_specs`` or a stamp."""
-    from django_spec_rest.viewsets.utils import resolve_action_spec_entry
-
     spec = getattr(view, "spec", None)
     action = getattr(view, "action", None)
     if spec is not None or not isinstance(action, str):
