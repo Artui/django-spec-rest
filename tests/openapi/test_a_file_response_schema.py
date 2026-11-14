@@ -84,7 +84,9 @@ class ExportOrNothing(ServiceCreateView):
 
 
 class Shapeless(ServiceCreateView):
-    spec = ServiceSpec(service=_report, permissions=_OPEN, atomic=False, presenter=_Shapeless())
+    spec = ServiceSpec(
+        service=lambda: {"rows": 1}, permissions=_OPEN, atomic=False, presenter=_Shapeless()
+    )
 
 
 class Invoice(SelectorRetrieveView):

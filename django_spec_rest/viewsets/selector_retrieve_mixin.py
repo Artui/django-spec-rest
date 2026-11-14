@@ -46,7 +46,7 @@ class SelectorRetrieveMixin(RetrieveModelMixin, _ActionSpecsMixin):
                 raise MethodNotAllowed(self.request.method)
             return super().retrieve(request, *args, **kwargs)
         row, data = present_kernel_row(self, spec)
-        return _JsonNullResponse() if row is None else presented_response(data)
+        return _JsonNullResponse() if row is None else presented_response(self, spec, data)
 
     def get_object(self) -> Any:
         """Resolve the target row through the retrieve selector, if one is wired.

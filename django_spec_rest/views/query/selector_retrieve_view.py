@@ -78,4 +78,4 @@ class SelectorRetrieveView(_ServesRaisedSchema, RetrieveModelMixin, GenericAPIVi
             return self.retrieve(request, *args, **kwargs)
         # The row and its body, presented by the spec, shared with the viewset's ``retrieve``.
         row, data = present_kernel_row(self, s)
-        return _JsonNullResponse() if row is None else presented_response(data)
+        return _JsonNullResponse() if row is None else presented_response(self, s, data)

@@ -145,7 +145,7 @@ def _validate_response_finalizer(
         return
     if not callable(finalizer):
         raise ImproperlyConfigured(
-            f"{label}: `response_finalizer` must be a callable returning a Response "
+            f"{label}: `response_finalizer` must be a callable returning a response "
             f"or None — got {type(finalizer).__name__}."
         )
     _refuse_positional_only(finalizer, label=label, seat="response_finalizer")

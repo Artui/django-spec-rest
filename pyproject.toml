@@ -83,6 +83,8 @@ dependencies = [
     # ``permission_denied`` does.
     # 0.30.0 adds ``call_context=`` to ``spec_caller_input_schema``, which the
     # OPTIONS answer and the OpenAPI body hand under the ``rest`` stamp.
+    # 0.33.0 adds ``FilePresenter`` and ``file_output``, which a file's answer
+    # reads, and a ``Presenter.output()`` that may answer ``None``.
     "django-service-specs>=0.33.0",
 ]
 

@@ -123,7 +123,7 @@ def _serve_kernel_spec(view: Any, spec: KernelSelectorSpec) -> HttpResponseBase:
     """A kernel spec's answer: its row, ``null`` under ``allow_none``, or its rows (paged)."""
     if spec.kind is SelectorKind.RETRIEVE:
         row, data = present_kernel_row(view, spec)
-        return _JsonNullResponse() if row is None else presented_response(data)
+        return _JsonNullResponse() if row is None else presented_response(view, spec, data)
     data, paginated = present_kernel_list(
         view, spec, dispatch_kernel_selector(view, spec), filtered=False
     )

@@ -195,11 +195,15 @@ or, for an iterable of bytes, a `StreamingHttpResponse`, under the same status
 as any body, with `Content-Type` from the presenter,
 `Content-Disposition: attachment` naming the file (RFC 5987 quoting for a name
 outside ASCII), and `Content-Length` wherever the size is known. DRF's
-`finalize_response` passes it through unrendered, so no renderer is asked.
+`finalize_response` passes it through unrendered, so no renderer is asked, and
+an `Accept` naming the file's type (`application/pdf`, say) is served though no
+renderer offers it; a refusal under it is JSON, and a type the file is not is
+still a 406.
 
-A `response_finalizer` receives that `FileResponse` and may change it or
-replace it; setting `Content-Disposition` to `inline` there lets a browser show
-a PDF rather than save it. A `None` under `allow_none` answers as for any spec: 204
+How a browser shows the file is the page's choice, not the call's: a view or
+viewset whose `as_attachment` is `False` answers `inline`, so a browser shows a
+PDF rather than save it. A `response_finalizer` receives the `FileResponse` and
+may change it or replace it. A `None` under `allow_none` answers as for any spec: 204
 for a write, JSON `null` for a retrieve. A file is one result, so `as_view()`, and
 `@selector_action` where it decorates, refuses one the kernel's
 [`file_output`][django_service_specs.schema.file_output.file_output] refuses: a

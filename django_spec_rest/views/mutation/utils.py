@@ -35,6 +35,7 @@ from django_spec_rest.views.mutation.map_service_error import (
 )
 from django_spec_rest.views.mutation.resolve_success_status import resolve_success_status
 from django_spec_rest.views.utils import (
+    _NegotiatesAFile,
     action_answer,
     presented_response,
     resolve_view_hooks,
@@ -105,7 +106,7 @@ def dispatch_mutation_for_spec(
             status=drf_status.HTTP_204_NO_CONTENT if success_status is None else status
         )
     else:
-        response = presented_response(presented, status=status_for_a_body(status))
+        response = presented_response(view, spec, presented, status=status_for_a_body(status))
     return apply_response_finalizer(
         action_answer(view, "response_finalizer"),
         response,
@@ -263,7 +264,7 @@ def restore_raised_schema(exc: Exception, response: Response) -> Response:
     return response
 
 
-class _ServesRaisedSchema:
+class _ServesRaisedSchema(_NegotiatesAFile):
     """Runs ``restore_raised_schema`` over every response ``handle_exception`` builds.
 
     Inherited by ``MutationFlowMixin`` (the three mutation views and the

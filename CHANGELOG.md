@@ -19,7 +19,8 @@ carries; releases up to 0.62.0 are in
   `retrieve` or a detail `@selector_action`), the response is Django's `FileResponse`,
   or a `StreamingHttpResponse` for an iterable of bytes, with `Content-Type`,
   `Content-Disposition: attachment` naming the file and `Content-Length` where the
-  size is known. A `response_finalizer` receives that `FileResponse`, so its
+  size is known; a view or viewset whose new `as_attachment` attribute is `False`
+  answers `inline`, and an `Accept` naming the file's type is served, not a 406. A `response_finalizer` receives that `FileResponse`, so its
   annotation, and the write views' and viewset handlers' return types, widen to
   Django's `HttpResponseBase`. The OpenAPI success is the presenter's content type
   carrying `{"type": "string", "format": "binary"}`. A `LIST` selector, a `many` or

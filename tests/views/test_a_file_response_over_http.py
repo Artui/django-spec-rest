@@ -10,16 +10,21 @@ from django.http import FileResponse, HttpResponseBase, StreamingHttpResponse
 from django_service_specs import (
     FilePresenter,
     FileResult,
+    Output,
     Parameter,
     Parameters,
+    Presenter,
     SelectorKind,
     SelectorSpec,
     ServiceSpec,
     Unrestricted,
 )
+from rest_framework.renderers import JSONRenderer
+from rest_framework.response import Response
 from rest_framework.test import APIRequestFactory
 
 from django_spec_rest import (
+    DiscriminatedAction,
     SelectorListView,
     SelectorRetrieveView,
     SelectorViewSet,
@@ -44,9 +49,8 @@ def _report(**_: Any) -> FileResult:
 
 def _export(**fields: Any) -> ServiceSpec:
     fields.setdefault("service", _report)
-    return ServiceSpec(
-        permissions=_OPEN, atomic=False, presenter=FilePresenter("text/csv"), **fields
-    )
+    fields.setdefault("presenter", FilePresenter("text/csv"))
+    return ServiceSpec(permissions=_OPEN, atomic=False, **fields)
 
 
 def _author(*, pk: int) -> Author | None:
@@ -77,12 +81,12 @@ def _body(response: HttpResponseBase) -> bytes:
     return b"".join(response.streaming_content)  # ty: ignore[invalid-argument-type]
 
 
-def _post(view: Any) -> HttpResponseBase:
-    return view(factory.post("/", {}, format="json"))
+def _post(view: Any, accept: str = "*/*") -> HttpResponseBase:
+    return view(factory.post("/", {}, format="json", HTTP_ACCEPT=accept))
 
 
-def _get(view: Any, pk: int) -> HttpResponseBase:
-    return view(factory.get("/"), pk=str(pk))
+def _get(view: Any, pk: int, accept: str = "*/*") -> HttpResponseBase:
+    return view(factory.get("/", HTTP_ACCEPT=accept), pk=str(pk))
 
 
 @pytest.fixture
@@ -247,3 +251,143 @@ class TestAFileOfManyIsRefusedAtAsView:
 
             @service_action(_export(returns_many=True), detail=False, methods=["post"])
             def bulk(self: Any, request: Any) -> None: ...
+
+
+def _created(**_: Any) -> Author:
+    return Author.objects.create(name="Ada")
+
+
+class TestAFileThroughTheOutputSelector:
+    def test_a_retrieve_output_selector_answers_its_file(self) -> None:
+        spec = ServiceSpec(
+            service=_created,
+            permissions=_OPEN,
+            atomic=False,
+            output_selector_spec=SelectorSpec(
+                kind=SelectorKind.RETRIEVE,
+                selector=lambda *, result: result,
+                presenter=FilePresenter("application/pdf", filename="a.pdf", render=_pdf_of),
+            ),
+        )
+        response = _post(type("_V", (ServiceCreateView,), {"spec": spec}).as_view())
+        assert isinstance(response, FileResponse)
+        assert response.status_code == 201
+        assert _body(response) == b"%PDF Ada"
+
+    def test_a_list_output_selector_is_refused_naming_the_view(self) -> None:
+        listing = _invoice(kind=SelectorKind.LIST).derive(permissions=None)
+        spec = ServiceSpec(
+            service=_created, permissions=_OPEN, atomic=False, output_selector_spec=listing
+        )
+        view = type("Rows", (ServiceCreateView,), {"spec": spec})
+        with pytest.raises(ImproperlyConfigured, match=r"^Rows: .* list of rows"):
+            view.as_view()
+
+
+class TestAFileIsTheSpecsNotTheValues:
+    def test_a_file_result_from_another_presenter_is_not_a_download(self) -> None:
+        class Passes(Presenter):
+            def output(self) -> Output | None:
+                return None
+
+            def present(self, value: Any) -> Any:
+                return value
+
+        spec = ServiceSpec(service=_report, permissions=_OPEN, atomic=False, presenter=Passes())
+        response = _post(type("_V", (ServiceCreateView,), {"spec": spec}).as_view())
+        assert isinstance(response, Response)
+        assert isinstance(response.data, FileResult)
+
+    def test_the_presenter_s_type_is_the_file_s_whatever_its_name(self) -> None:
+        spec = _export(presenter=FilePresenter("application/octet-stream"))
+        response = _post(type("_V", (ServiceCreateView,), {"spec": spec}).as_view())
+        assert response["Content-Type"] == "application/octet-stream"
+
+
+class TestAsAttachmentFalseAnswersInline:
+    def test_a_retrieve_view(self, ada: Author) -> None:
+        attrs = {"spec": _invoice(), "as_attachment": False}
+        response = _get(type("_V", (SelectorRetrieveView,), attrs).as_view(), ada.pk)
+        assert isinstance(response, FileResponse)
+        assert response["Content-Disposition"] == f'inline; filename="author-{ada.pk}.pdf"'
+
+    def test_a_streamed_file(self) -> None:
+        spec = _export(service=lambda: FileResult(iter([_CSV]), filename="report.csv"))
+        attrs = {"spec": spec, "as_attachment": False}
+        response = _post(type("_V", (ServiceCreateView,), attrs).as_view())
+        assert response["Content-Disposition"] == 'inline; filename="report.csv"'
+
+    def test_a_viewset_s_action(self, ada: Author) -> None:
+        viewset = type("_Inline", (Invoices,), {"as_attachment": False})
+        response = _get(viewset.as_view({"get": "pdf"}), ada.pk)
+        assert response["Content-Disposition"].startswith("inline; ")
+
+
+def _variants(**specs: Any) -> DiscriminatedAction:
+    return DiscriminatedAction(lambda: "csv", specs)
+
+
+class TestAnAcceptNamingTheFileIsServed:
+    @pytest.mark.parametrize(
+        ("view", "status"),
+        [
+            (type("_Export", (ServiceCreateView,), {"spec": _export()}).as_view(), 201),
+            (Exports.as_view({"post": "create"}), 201),
+            (Exports.as_view({"post": "export"}), 200),
+            (
+                type(
+                    "_Either",
+                    (ServiceViewSet,),
+                    {
+                        "action_specs": {
+                            "create": _variants(
+                                csv=_export(),
+                                json=ServiceSpec(
+                                    service=lambda: {}, permissions=_OPEN, atomic=False
+                                ),
+                            )
+                        }
+                    },
+                ).as_view({"post": "create"}),
+                201,
+            ),
+        ],
+        ids=["view", "viewset", "service-action", "a-variant"],
+    )
+    def test_a_service_spec(self, view: Any, status: int) -> None:
+        response = _post(view, accept="text/csv")
+        assert isinstance(response, FileResponse)
+        assert response.status_code == status
+
+    @pytest.mark.parametrize(
+        "view",
+        [
+            type("_Invoice", (SelectorRetrieveView,), {"spec": _invoice()}).as_view(),
+            Invoices.as_view({"get": "retrieve"}),
+            Invoices.as_view({"get": "pdf"}),
+        ],
+        ids=["view", "mixin", "selector-action"],
+    )
+    def test_a_retrieve_selector_spec(self, view: Any, ada: Author) -> None:
+        response = _get(view, ada.pk, accept="application/pdf")
+        assert isinstance(response, FileResponse)
+        assert response.status_code == 200
+
+    def test_a_refusal_under_it_is_json(self) -> None:
+        view = type("_Invoice", (SelectorRetrieveView,), {"spec": _invoice()}).as_view()
+        response = _get(view, 999, accept="application/pdf")
+        assert response.status_code == 404
+        assert isinstance(response.accepted_renderer, JSONRenderer)  # ty: ignore[unresolved-attribute]
+
+    def test_a_type_the_file_is_not_is_still_a_406(self) -> None:
+        view = type("_Export", (ServiceCreateView,), {"spec": _export()}).as_view()
+        assert _post(view, accept="application/pdf").status_code == 406
+
+    def test_a_spec_presenting_no_file_is_still_a_406(self) -> None:
+        spec = ServiceSpec(service=lambda: {}, permissions=_OPEN, atomic=False)
+        view = type("_V", (ServiceCreateView,), {"spec": spec}).as_view()
+        assert _post(view, accept="text/csv").status_code == 406
+
+    def test_a_request_serving_no_spec_is_still_a_406(self) -> None:
+        response = Exports.as_view({"post": "create"})(factory.options("/", HTTP_ACCEPT="text/csv"))
+        assert response.status_code == 406
