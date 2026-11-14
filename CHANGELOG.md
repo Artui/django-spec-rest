@@ -31,6 +31,7 @@ carries; releases up to 0.62.0 are in
 - **The kernel floor is `django-service-specs>=0.33.0`**, the release carrying
   `FilePresenter`, `file_output` and a `many` spec's `collection_selector_spec`. A
   presenter whose `output()` answers `None`, which it now may, is documented as any value.
+- **A `many` spec with a `collection_selector_spec` is pinned over HTTP**: its rows validate as one list serializer bound with no instance, however the kernel's collection target reaches `validated_many`.
 - **The bulk body's refusal of a row that is not an object is documented as kept**: `concepts.md` gives its shape, the same index nesting as any failing row.
 - **Guides and a docs fix**: the serializer-context, extra-kwargs, selector-filtering,
   concepts and OpenAPI pages state what the code does where they were silent (a spec's
