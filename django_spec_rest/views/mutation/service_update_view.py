@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, ClassVar
 
+from django.http import HttpResponseBase
 from django_service_specs.specs.service_spec import ServiceSpec
 from rest_framework import status as drf_status
 from rest_framework.generics import GenericAPIView
@@ -51,13 +52,13 @@ class ServiceUpdateView(MutationFlowMixin, GenericAPIView):
             return spec_options(self, request, {"PUT": self.spec})
         return super().options(request, *args, **kwargs)
 
-    def put(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+    def put(self, request: Request, *args: Any, **kwargs: Any) -> HttpResponseBase:
         return self._run(request, partial=False)
 
-    def patch(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+    def patch(self, request: Request, *args: Any, **kwargs: Any) -> HttpResponseBase:
         return self._run(request, partial=True)
 
-    def _run(self, request: Request, *, partial: bool) -> Response:
+    def _run(self, request: Request, *, partial: bool) -> HttpResponseBase:
         spec: ServiceSpec | None = self.spec
         if spec is None:
             raise NotImplementedError(

@@ -3,15 +3,15 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from django.http import HttpResponseBase
 from rest_framework.request import Request
-from rest_framework.response import Response
 
 from django_spec_rest.views.utils import resolve_callable_kwargs
 
 
 def apply_response_finalizer(
-    finalizer: Callable[..., Response | None] | None,
-    response: Response,
+    finalizer: Callable[..., HttpResponseBase | None] | None,
+    response: HttpResponseBase,
     *,
     request: Request,
     view: Any,
@@ -19,7 +19,7 @@ def apply_response_finalizer(
     instance: Any = None,
     data: Any = None,
     variant: str | None = None,
-) -> Response:
+) -> HttpResponseBase:
     """Apply ``ServiceSpec.response_finalizer`` to a freshly built 2xx response."""
     if finalizer is None:
         return response

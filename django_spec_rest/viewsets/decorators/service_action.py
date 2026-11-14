@@ -4,12 +4,12 @@ import functools
 from collections.abc import Callable
 from typing import Any
 
+from django.http import HttpResponseBase
 from django_service_specs.pool.pool_seeds import DEFAULT_POOL_SEEDS
 from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
 from rest_framework import status as drf_status
 from rest_framework.decorators import action
 from rest_framework.request import Request
-from rest_framework.response import Response
 
 from django_spec_rest.types.discriminated_action import DiscriminatedAction
 from django_spec_rest.views.mutation.map_service_error import (
@@ -33,7 +33,7 @@ def _validate_kernel_spec(
     label: str,
     detail: bool,
     success_status: int | Callable[..., int] | None,
-    response_finalizer: Callable[..., Response | None] | None,
+    response_finalizer: Callable[..., HttpResponseBase | None] | None,
     discriminated: bool = False,
 ) -> None:
     """Ask a kernel spec what a standalone mutation view asks of its own, with no view."""
@@ -57,7 +57,7 @@ def _validate_discriminated(
     label: str,
     detail: bool,
     success_status: int | Callable[..., int] | None,
-    response_finalizer: Callable[..., Response | None] | None,
+    response_finalizer: Callable[..., HttpResponseBase | None] | None,
 ) -> None:
     """Ask a ``DiscriminatedAction`` its own shape, then each variant as a plain spec, ``[key]``."""
     validate_discriminated_action(action, label=label)
@@ -80,7 +80,7 @@ def service_action(
     url_path: str | None = None,
     url_name: str | None = None,
     success_status: int | Callable[..., int] | None = None,
-    response_finalizer: Callable[..., Response | None] | None = None,
+    response_finalizer: Callable[..., HttpResponseBase | None] | None = None,
     **action_kwargs: Any,
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Wrap a viewset method as a service-backed custom action.
@@ -158,7 +158,7 @@ def service_action(
             _validate_kernel_spec(spec, **checks)
 
         @functools.wraps(fn)
-        def handler(self: Any, request: Request, *args: Any, **kwargs: Any) -> Response:
+        def handler(self: Any, request: Request, *args: Any, **kwargs: Any) -> HttpResponseBase:
             try:
                 if isinstance(spec, DiscriminatedAction):
                     return dispatch_discriminated_action(

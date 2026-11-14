@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import inspect
+import io
 from collections.abc import Callable, Mapping
 from typing import Any
 
+from django.http import FileResponse, HttpResponseBase, StreamingHttpResponse
+from django.utils.http import content_disposition_header
 from django_service_specs.pool.pool_seeds import DEFAULT_POOL_SEEDS, PoolSeeds
 from django_service_specs.pool.resolve_callable_kwargs import (
     resolve_callable_kwargs as bind_by_name_only,
 )
 from django_service_specs.types.build_call_context import build_call_context
+from django_service_specs.types.file_result import FileResult
 from django_service_specs.types.unset import UNSET
 from rest_framework.renderers import JSONRenderer
 from rest_framework.request import Request
@@ -284,3 +288,27 @@ class _JsonNullResponse(Response):
             renderer.media_type if charset is None else f"{renderer.media_type}; charset={charset}"
         )
         return b"null"
+
+
+def presented_response(presented: Any, *, status: int = 200) -> HttpResponseBase:
+    """DRF's ``Response`` of ``presented``, or the download a ``FilePresenter`` presented."""
+    if not isinstance(presented, FileResult):
+        return Response(presented, status=status)
+    content = presented.content
+    response: HttpResponseBase
+    if isinstance(content, bytes) or hasattr(content, "read"):
+        response = FileResponse(
+            io.BytesIO(content) if isinstance(content, bytes) else content,
+            status=status,
+            as_attachment=True,
+            filename=presented.filename,
+            content_type=presented.content_type,
+        )
+    else:
+        response = StreamingHttpResponse(
+            content, status=status, content_type=presented.content_type
+        )
+        response["Content-Disposition"] = content_disposition_header(True, presented.filename)
+    if presented.size is not None:
+        response["Content-Length"] = str(presented.size)
+    return response

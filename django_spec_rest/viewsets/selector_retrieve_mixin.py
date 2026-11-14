@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from django.http import HttpResponseBase
 from rest_framework.exceptions import MethodNotAllowed
 from rest_framework.mixins import RetrieveModelMixin
 from rest_framework.request import Request
-from rest_framework.response import Response
 
 from django_spec_rest.selectors.utils import dispatch_selector_for_spec, present_kernel_row
-from django_spec_rest.views.utils import _JsonNullResponse
+from django_spec_rest.views.utils import _JsonNullResponse, presented_response
 from django_spec_rest.viewsets.utils import (
     _ActionSpecsMixin,
     resolve_action_selector_spec,
@@ -36,14 +36,17 @@ class SelectorRetrieveMixin(RetrieveModelMixin, _ActionSpecsMixin):
     request: Any
     kwargs: dict[str, Any]
 
-    def retrieve(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+    # DRF's stubs say Response; its finalize_response passes a FileResponse through unrendered.
+    def retrieve(  # ty: ignore[invalid-method-override]
+        self, request: Request, *args: Any, **kwargs: Any
+    ) -> HttpResponseBase:
         spec = resolve_action_selector_spec(self.action_specs, "retrieve")
         if spec is None:
             if self._has_no_fallback("retrieve"):
                 raise MethodNotAllowed(self.request.method)
             return super().retrieve(request, *args, **kwargs)
         row, data = present_kernel_row(self, spec)
-        return _JsonNullResponse() if row is None else Response(data)
+        return _JsonNullResponse() if row is None else presented_response(data)
 
     def get_object(self) -> Any:
         """Resolve the target row through the retrieve selector, if one is wired.

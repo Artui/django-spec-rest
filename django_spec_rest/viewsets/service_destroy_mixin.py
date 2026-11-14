@@ -3,9 +3,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from django.http import HttpResponseBase
 from rest_framework import status as drf_status
 from rest_framework.request import Request
-from rest_framework.response import Response
 
 from django_spec_rest.types.discriminated_action import DiscriminatedAction
 from django_spec_rest.views.mutation.mutation_flow_mixin import MutationFlowMixin
@@ -32,7 +32,7 @@ class ServiceDestroyMixin(MutationFlowMixin, _ActionSpecsMixin):
     get_object: Callable[..., Any]
 
     @dispatches_action_specs
-    def destroy(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+    def destroy(self, request: Request, *args: Any, **kwargs: Any) -> HttpResponseBase:
         spec = resolve_action_service_spec(self.action_specs, "destroy", "DELETE")
         if isinstance(spec, DiscriminatedAction):
             return dispatch_discriminated_action(

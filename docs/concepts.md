@@ -182,6 +182,29 @@ response built. On a viewset an action may declare its own
 requiring a name the view cannot supply, whether or not it also takes
 `**kwargs`, which is handed the names the view has and no others.
 
+### A file
+
+A spec whose presenter is the kernel's
+[`FilePresenter`][django_service_specs.output.file_presenter.FilePresenter]
+answers its file, not JSON: a service spec over any write view, viewset action
+or `@service_action`, and a retrieve selector spec over `SelectorRetrieveView`,
+a viewset's `retrieve` or a detail `@selector_action`. The presented
+[`FileResult`][django_service_specs.types.file_result.FileResult] goes out as
+Django's `FileResponse` (bytes or a file object, closed when the response is)
+or, for an iterable of bytes, a `StreamingHttpResponse`, under the same status
+as any body, with `Content-Type` from the presenter,
+`Content-Disposition: attachment` naming the file (RFC 5987 quoting for a name
+outside ASCII), and `Content-Length` wherever the size is known. DRF's
+`finalize_response` passes it through unrendered, so no renderer is asked.
+
+A `response_finalizer` receives that `FileResponse` and may change it or
+replace it; setting `Content-Disposition` to `inline` there lets a browser show
+a PDF rather than save it. A `None` under `allow_none` answers as for any spec: 204
+for a write, JSON `null` for a retrieve. A file is one result, so `as_view()`, and
+`@selector_action` where it decorates, refuses one the kernel's
+[`file_output`][django_service_specs.schema.file_output.file_output] refuses: a
+`LIST` selector, a `many` or `returns_many` service, or presented affordances.
+
 ## Refusals
 
 Every refusal leaves as a DRF exception, so DRF's exception handler, and a

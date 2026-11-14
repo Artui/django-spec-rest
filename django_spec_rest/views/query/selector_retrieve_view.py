@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from typing import Any, ClassVar
 
+from django.http import HttpResponseBase
 from django_service_specs.pool.pool_seeds import DEFAULT_POOL_SEEDS, PoolSeeds
 from django_service_specs.specs.selector_spec import SelectorSpec
 from django_service_specs.types.selector_kind import SelectorKind
 from rest_framework.generics import GenericAPIView
 from rest_framework.mixins import RetrieveModelMixin
 from rest_framework.request import Request
-from rest_framework.response import Response
 
 from django_spec_rest.selectors.utils import dispatch_selector_for_spec, present_kernel_row
 from django_spec_rest.views.mutation.utils import _ServesRaisedSchema
@@ -17,6 +17,7 @@ from django_spec_rest.views.utils import (
     _JsonNullResponse,
     get_class_attr,
     mounted_view,
+    presented_response,
     view_pool_seeds,
 )
 
@@ -71,10 +72,10 @@ class SelectorRetrieveView(_ServesRaisedSchema, RetrieveModelMixin, GenericAPIVi
             return super().get_object()
         return dispatch_selector_for_spec(self, s)
 
-    def get(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+    def get(self, request: Request, *args: Any, **kwargs: Any) -> HttpResponseBase:
         s: SelectorSpec | None = get_class_attr(self, "spec")
         if s is None:
             return self.retrieve(request, *args, **kwargs)
         # The row and its body, presented by the spec, shared with the viewset's ``retrieve``.
         row, data = present_kernel_row(self, s)
-        return _JsonNullResponse() if row is None else Response(data)
+        return _JsonNullResponse() if row is None else presented_response(data)

@@ -11,8 +11,26 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+### Added
+
+- **A spec presenting a file answers the file.** Where the kernel's `FilePresenter`
+  presents the result (a service spec over a write view, viewset action or
+  `@service_action`; a retrieve selector spec over `SelectorRetrieveView`, a viewset's
+  `retrieve` or a detail `@selector_action`), the response is Django's `FileResponse`,
+  or a `StreamingHttpResponse` for an iterable of bytes, with `Content-Type`,
+  `Content-Disposition: attachment` naming the file and `Content-Length` where the
+  size is known. A `response_finalizer` receives that `FileResponse`, so its
+  annotation, and the write views' and viewset handlers' return types, widen to
+  Django's `HttpResponseBase`. The OpenAPI success is the presenter's content type
+  carrying `{"type": "string", "format": "binary"}`. A `LIST` selector, a `many` or
+  `returns_many` service, or presented affordances with a file presenter is refused at
+  `as_view()`, and a `LIST` `@selector_action` where it decorates.
+
 ### Changed
 
+- **The kernel floor is `django-service-specs>=0.33.0`**, the release carrying
+  `FilePresenter`, `file_output` and a `many` spec's `collection_selector_spec`. A
+  presenter whose `output()` answers `None`, which it now may, is documented as any value.
 - **The bulk body's refusal of a row that is not an object is documented as kept**: `concepts.md` gives its shape, the same index nesting as any failing row.
 - **Guides and a docs fix**: the serializer-context, extra-kwargs, selector-filtering,
   concepts and OpenAPI pages state what the code does where they were silent (a spec's

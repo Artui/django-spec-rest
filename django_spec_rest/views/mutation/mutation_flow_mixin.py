@@ -3,10 +3,10 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from typing import Any, ClassVar
 
+from django.http import HttpResponseBase
 from django_service_specs.pool.pool_seeds import DEFAULT_POOL_SEEDS, PoolSeeds
 from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
 from rest_framework.request import Request
-from rest_framework.response import Response
 
 from django_spec_rest.views.mutation.utils import (
     _ServesRaisedSchema,
@@ -58,12 +58,12 @@ class MutationFlowMixin(_ServesRaisedSchema):
     (test_callable_success_status). On a ``DiscriminatedAction`` a callable may
     also declare ``variant``, the key the discriminator chose."""
 
-    response_finalizer: ClassVar[Callable[..., Response | None] | None] = None
+    response_finalizer: ClassVar[Callable[..., HttpResponseBase | None] | None] = None
     """The post-presentation hook on a ``2xx``: declares any of
     ``response`` / ``result`` / ``request`` / ``view`` / ``instance`` / ``data``
-    and returns a ``Response`` to replace the one built, or ``None`` to keep it
-    (test_response_finalizer). On a ``DiscriminatedAction`` it may also declare
-    ``variant``, the key the discriminator chose."""
+    and returns a response to replace the one built, or ``None`` to keep it
+    (test_response_finalizer). A file spec's ``response`` is a ``FileResponse``. On a
+    ``DiscriminatedAction`` it may also declare ``variant``, the key the discriminator chose."""
 
     lenient_json_body: bool | None = None
     """Whether this view's serializer alone answers a JSON body, as it answers a
@@ -118,7 +118,7 @@ class MutationFlowMixin(_ServesRaisedSchema):
         default_status: int,
         render_instance_on_none: bool = False,
         partial: bool = False,
-    ) -> Response:
+    ) -> HttpResponseBase:
         return dispatch_mutation_for_spec(
             self,
             request,
