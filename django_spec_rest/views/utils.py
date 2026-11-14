@@ -1,19 +1,26 @@
 from __future__ import annotations
 
 import inspect
+import io
 from collections.abc import Callable, Mapping
 from typing import Any
 
+from django.http import FileResponse, HttpResponseBase, StreamingHttpResponse
+from django.utils.http import content_disposition_header
 from django_service_specs.pool.pool_seeds import DEFAULT_POOL_SEEDS, PoolSeeds
 from django_service_specs.pool.resolve_callable_kwargs import (
     resolve_callable_kwargs as bind_by_name_only,
 )
+from django_service_specs.schema.file_output import file_output
 from django_service_specs.types.build_call_context import build_call_context
 from django_service_specs.types.unset import UNSET
+from rest_framework.exceptions import NotAcceptable
 from rest_framework.renderers import JSONRenderer
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework.utils.mediatypes import media_type_matches
 
+from django_spec_rest.types.discriminated_action import DiscriminatedAction
 from django_spec_rest.types.rest_transport import REST_TRANSPORT
 from django_spec_rest.types.view_hooks import ViewHooks
 
@@ -284,3 +291,95 @@ class _JsonNullResponse(Response):
             renderer.media_type if charset is None else f"{renderer.media_type}; charset={charset}"
         )
         return b"null"
+
+
+def presented_response(
+    view: Any, spec: Any, presented: Any, *, status: int = 200
+) -> HttpResponseBase:
+    """DRF's ``Response`` of ``presented``, or the file where ``spec`` presents one."""
+    if file_output(spec) is None:
+        return Response(presented, status=status)
+    attachment = get_class_attr(view, "as_attachment") is not False
+    content = presented.content
+    response: HttpResponseBase
+    if isinstance(content, bytes) or hasattr(content, "read"):
+        response = FileResponse(
+            io.BytesIO(content) if isinstance(content, bytes) else content,
+            status=status,
+            as_attachment=attachment,
+            filename=presented.filename,
+            content_type=presented.content_type,
+        )
+    else:
+        response = StreamingHttpResponse(
+            content, status=status, content_type=presented.content_type
+        )
+        response["Content-Disposition"] = (
+            content_disposition_header(attachment, presented.filename) or "inline"
+        )
+    if presented.size is not None:
+        response["Content-Length"] = str(presented.size)
+    return response
+
+
+# PATCH and PUT share one spec unless a dedicated ``"partial_update"`` entry
+# exists. Must be applied at every resolution site (see
+# ``resolve_action_spec_entry``).
+_ACTION_SPEC_FALLBACKS: dict[str, str] = {
+    "partial_update": "update",
+}
+
+
+def resolve_action_spec_entry(
+    action_specs: Mapping[str, Any],
+    action: str | None,
+) -> Any:
+    """Return the ``action_specs`` entry for ``action``, following fallbacks."""
+    if action is None:
+        return None
+    entry = action_specs.get(action)
+    if entry is not None:
+        return entry
+    fallback = _ACTION_SPEC_FALLBACKS.get(action)
+    if fallback is not None:
+        return action_specs.get(fallback)
+    return None
+
+
+class _NegotiatesAFile:
+    """Serves a spec's file under an ``Accept`` naming its type, which no renderer offers.
+
+    ``as_attachment``: whether the file answers as a download, or ``inline`` for a browser."""
+
+    as_attachment: bool = True
+
+    def perform_content_negotiation(self, request: Request, force: bool = False) -> Any:
+        negotiate = super().perform_content_negotiation  # ty: ignore[unresolved-attribute]
+        try:
+            return negotiate(request, force)
+        except NotAcceptable:
+            if not _accepts_a_file_of(request, _served_spec(self)):
+                raise
+            return negotiate(request, force=True)
+
+
+def _served_spec(view: Any) -> Any:
+    """The spec ``view`` serves this request: its ``spec``, ``action_specs`` or a stamp."""
+    spec = getattr(view, "spec", None)
+    action = getattr(view, "action", None)
+    if spec is not None or not isinstance(action, str):
+        return spec
+    entry = resolve_action_spec_entry(getattr(view, "action_specs", {}), action)
+    handler = getattr(view, action, None)
+    stamped = getattr(handler, "_service_spec", None) or getattr(handler, "_selector_spec", None)
+    return entry if entry is not None else stamped
+
+
+def _accepts_a_file_of(request: Request, spec: Any) -> bool:
+    """Whether ``request``'s ``Accept`` admits a file ``spec`` (any variant) presents."""
+    if spec is None:
+        return False
+    variants = spec.specs.values() if isinstance(spec, DiscriminatedAction) else [spec]
+    files = [file for file in map(file_output, variants) if file is not None]
+    accepted = [part.strip() for part in request.META.get("HTTP_ACCEPT", "*/*").split(",")]
+    return any(media_type_matches(a, f.content_type) for a in accepted for f in files)

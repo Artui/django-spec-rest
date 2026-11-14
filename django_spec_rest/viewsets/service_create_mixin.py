@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from django.http import HttpResponseBase
 from rest_framework import status as drf_status
 from rest_framework.request import Request
-from rest_framework.response import Response
 
 from django_spec_rest.types.discriminated_action import DiscriminatedAction
 from django_spec_rest.views.mutation.mutation_flow_mixin import MutationFlowMixin
@@ -27,7 +27,7 @@ class ServiceCreateMixin(MutationFlowMixin, _ActionSpecsMixin):
     ``ImproperlyConfigured``."""
 
     @dispatches_action_specs
-    def create(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+    def create(self, request: Request, *args: Any, **kwargs: Any) -> HttpResponseBase:
         spec = resolve_action_service_spec(self.action_specs, "create", "POST")
         if isinstance(spec, DiscriminatedAction):
             return dispatch_discriminated_action(

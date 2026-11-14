@@ -24,7 +24,13 @@ from django_spec_rest.views.spec_validation import (
     validate_mutation_view_spec,
     validate_selector_view_spec,
 )
-from django_spec_rest.views.utils import MountedView, mounted_view, view_pool_seeds
+from django_spec_rest.views.utils import (
+    _ACTION_SPEC_FALLBACKS,
+    MountedView,
+    mounted_view,
+    resolve_action_spec_entry,
+    view_pool_seeds,
+)
 from django_spec_rest.viewsets.warn_unscoped_get_queryset import (
     _overriding_classes,
     warn_unscoped_get_queryset,
@@ -44,30 +50,6 @@ _SELECTOR_ACTION_KIND: dict[str, SelectorKind] = {
     "list": SelectorKind.LIST,
     "retrieve": SelectorKind.RETRIEVE,
 }
-
-# PATCH and PUT share one spec unless a dedicated ``"partial_update"`` entry
-# exists. Must be applied at every resolution site (see
-# ``resolve_action_spec_entry``).
-_ACTION_SPEC_FALLBACKS: dict[str, str] = {
-    "partial_update": "update",
-}
-
-
-def resolve_action_spec_entry(
-    action_specs: Mapping[str, ActionSpec],
-    action: str | None,
-) -> ActionSpec | None:
-    """Return the ``action_specs`` entry for ``action``, following fallbacks."""
-    if action is None:
-        return None
-    entry = action_specs.get(action)
-    if entry is not None:
-        return entry
-    fallback = _ACTION_SPEC_FALLBACKS.get(action)
-    if fallback is not None:
-        return action_specs.get(fallback)
-    return None
-
 
 _HandlerT = TypeVar("_HandlerT", bound=Callable[..., Any])
 

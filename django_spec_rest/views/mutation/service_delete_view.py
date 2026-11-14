@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from typing import Any, ClassVar
 
+from django.http import HttpResponseBase
 from django_service_specs.specs.service_spec import ServiceSpec
 from rest_framework import status as drf_status
 from rest_framework.generics import GenericAPIView
 from rest_framework.request import Request
-from rest_framework.response import Response
 
 from django_spec_rest.views.mutation.mutation_flow_mixin import MutationFlowMixin
 from django_spec_rest.views.mutation.utils import resolve_mutation_instance
@@ -37,7 +37,7 @@ class ServiceDeleteView(MutationFlowMixin, GenericAPIView):
         validate_mutation_view_spec(mounted, has_instance=True, pool_seeds=view_pool_seeds(mounted))
         return super().as_view(**initkwargs)
 
-    def delete(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+    def delete(self, request: Request, *args: Any, **kwargs: Any) -> HttpResponseBase:
         spec: ServiceSpec | None = self.spec
         if spec is None:
             raise NotImplementedError(

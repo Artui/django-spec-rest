@@ -5,6 +5,8 @@ from collections.abc import Callable
 from typing import Any
 
 from django.core.exceptions import ImproperlyConfigured
+from django.http import HttpResponseBase
+from django_service_specs.schema.file_output import file_output
 from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelectorSpec
 from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
 from django_service_specs.types.selector_kind import SelectorKind
@@ -22,7 +24,7 @@ from django_spec_rest.views.mutation.map_service_error import (
     _AdditionalInputAPIException,
 )
 from django_spec_rest.views.mutation.utils import restore_schema_when_handled
-from django_spec_rest.views.utils import _JsonNullResponse
+from django_spec_rest.views.utils import _JsonNullResponse, presented_response
 
 
 def selector_action(
@@ -83,7 +85,7 @@ def selector_action(
         drf_kwargs.update(action_kwargs)
 
         @functools.wraps(fn)
-        def handler(self: Any, request: Request, *args: Any, **kwargs: Any) -> Response:
+        def handler(self: Any, request: Request, *args: Any, **kwargs: Any) -> HttpResponseBase:
             try:
                 return _serve_kernel_spec(self, spec)
             except _AdditionalInputAPIException:
@@ -98,9 +100,13 @@ def selector_action(
 
 
 def _refuse_a_spec_that_is_not_a_selector(spec: Any, fn: Callable[..., Any]) -> None:
-    """``ImproperlyConfigured`` naming the action, for a ``spec`` that is not a ``SelectorSpec``."""
+    """``ImproperlyConfigured`` naming the action, for a ``spec`` it cannot serve."""
     label = f"@selector_action {getattr(fn, '__qualname__', repr(fn))}"
     if isinstance(spec, KernelSelectorSpec):
+        try:
+            file_output(spec)
+        except ImproperlyConfigured as refusal:
+            raise ImproperlyConfigured(f"{label}: {refusal}") from refusal
         return
     if isinstance(spec, (KernelServiceSpec, DiscriminatedAction)):
         raise ImproperlyConfigured(
@@ -113,11 +119,11 @@ def _refuse_a_spec_that_is_not_a_selector(spec: Any, fn: Callable[..., Any]) -> 
     )
 
 
-def _serve_kernel_spec(view: Any, spec: KernelSelectorSpec) -> Response:
+def _serve_kernel_spec(view: Any, spec: KernelSelectorSpec) -> HttpResponseBase:
     """A kernel spec's answer: its row, ``null`` under ``allow_none``, or its rows (paged)."""
     if spec.kind is SelectorKind.RETRIEVE:
         row, data = present_kernel_row(view, spec)
-        return _JsonNullResponse() if row is None else Response(data)
+        return _JsonNullResponse() if row is None else presented_response(view, spec, data)
     data, paginated = present_kernel_list(
         view, spec, dispatch_kernel_selector(view, spec), filtered=False
     )

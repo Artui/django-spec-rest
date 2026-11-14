@@ -6,7 +6,7 @@ from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelec
 from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
 
 from django_spec_rest.types.discriminated_action import DiscriminatedAction
-from django_spec_rest.viewsets.utils import resolve_action_spec_entry
+from django_spec_rest.views.utils import resolve_action_spec_entry
 
 _Served = TypeVar("_Served")
 

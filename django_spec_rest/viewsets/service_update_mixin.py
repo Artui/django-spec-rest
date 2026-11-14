@@ -3,9 +3,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from django.http import HttpResponseBase
 from rest_framework import status as drf_status
 from rest_framework.request import Request
-from rest_framework.response import Response
 
 from django_spec_rest.types.discriminated_action import DiscriminatedAction
 from django_spec_rest.views.mutation.mutation_flow_mixin import MutationFlowMixin
@@ -37,14 +37,14 @@ class ServiceUpdateMixin(MutationFlowMixin, _ActionSpecsMixin):
     get_object: Callable[..., Any]
 
     @dispatches_action_specs
-    def update(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+    def update(self, request: Request, *args: Any, **kwargs: Any) -> HttpResponseBase:
         return self._update(request, partial=False)
 
     @dispatches_action_specs
-    def partial_update(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+    def partial_update(self, request: Request, *args: Any, **kwargs: Any) -> HttpResponseBase:
         return self._update(request, partial=True)
 
-    def _update(self, request: Request, *, partial: bool) -> Response:
+    def _update(self, request: Request, *, partial: bool) -> HttpResponseBase:
         spec = resolve_action_service_spec(
             self.action_specs,
             "partial_update" if partial else "update",

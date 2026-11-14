@@ -7,9 +7,11 @@ from typing import Any, cast
 
 from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import (
+    FilePresenter,
     Presenter,
     SelectorKind,
     Unrestricted,
+    file_output,
     filter_set_parameters,
     output_schema,
     parameters_schema,
@@ -34,6 +36,7 @@ from drf_spectacular.plumbing import (
     resolve_regex_path_parameter,
 )
 from drf_spectacular.settings import spectacular_settings
+from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import (
     OpenApiParameter,
     OpenApiRequest,
@@ -357,12 +360,14 @@ class ServiceAutoSchema(AutoSchema):
 
     def _kernel_selector_responses(self, spec: KernelSelectorSpec) -> dict[Any, Any]:
         """A kernel selector spec's responses: its body, then the refusals the edge sends."""
-        body = (
-            self._kernel_rows(spec, spec.presenter)
-            if spec.presenter is not None
-            else super().get_response_serializers()
-        )
-        responses: dict[Any, Any] = {200: body}
+        file = file_output(spec)
+        responses: dict[Any, Any]
+        if file is not None:
+            responses = _file_body(200, file)
+        elif spec.presenter is not None:
+            responses = {200: self._kernel_rows(spec, spec.presenter)}
+        else:
+            responses = {200: super().get_response_serializers()}
         if spec.parameters():
             responses[400] = self._validation_errors_response()
         responses.update(self._caller_refusals(spec))
@@ -375,11 +380,14 @@ class ServiceAutoSchema(AutoSchema):
         declared = action_answer(self.view, "success_status")
         status = declared if isinstance(declared, int) else default_status(self.view)
         presenter = spec.presenter_for_output()
+        file = file_output(spec)
         rows = _presents_rows(spec)
         body = None if presenter is None else _presented(presenter, rows=rows, wrap=rows)
         no_content = HTTP_204_NO_CONTENT if declared is None else status
         responses: dict[Any, Any] = (
-            {status_for_a_body(status): body}
+            _file_body(status_for_a_body(status), file)
+            if file is not None
+            else {status_for_a_body(status): body}
             if body is not None
             else {
                 status: OpenApiResponse(description=""),
@@ -681,6 +689,8 @@ _VALIDATION_ERRORS_SCHEMA: dict[str, Any] = {
 }
 """The ``400`` body of a Validator's refusal; recursive, so no serializer can state it."""
 
+_BINARY: dict[str, Any] = {"type": "string", "format": "binary"}
+
 _EXTEND_SCHEMA_MODULE = "drf_spectacular.utils"
 
 _ROUTE_CAPTURE = re.compile(r"<(?:[^<>:]+:)?([^<>:]+)>|\(\?P<([^<>]+)>")
@@ -699,8 +709,16 @@ def _presented(presenter: Presenter, *, rows: bool, wrap: bool) -> Any:
     """What ``presenter``'s body is documented by: its serializer, or its ``output_schema``."""
     if isinstance(presenter, SerializerPresenter):
         return presenter.serializer_class(many=True) if rows else presenter.serializer_class
-    item = lowered_for_the_document(output_schema(presenter.output()))
+    output = presenter.output()
+    if output is None:
+        return OpenApiResponse(response=OpenApiTypes.ANY)
+    item = lowered_for_the_document(output_schema(output))
     return OpenApiResponse(response=build_array_type(item) if wrap else item)
+
+
+def _file_body(status: int, file: FilePresenter) -> dict[Any, Any]:
+    """A file spec's success: the presenter's content type, carrying binary."""
+    return {(status, file.content_type): OpenApiResponse(response=_BINARY)}
 
 
 def _kernel_filter_parameters(filter_set: Any) -> list[Any]:

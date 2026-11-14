@@ -7,6 +7,7 @@ from typing import Any
 from django.core.exceptions import ImproperlyConfigured
 from django_service_specs.dispatch.check_seeds import check_seeds
 from django_service_specs.pool.pool_seeds import PoolSeeds
+from django_service_specs.schema.file_output import file_output
 from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelectorSpec
 from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
 from django_service_specs.types.is_async import is_async
@@ -144,7 +145,7 @@ def _validate_response_finalizer(
         return
     if not callable(finalizer):
         raise ImproperlyConfigured(
-            f"{label}: `response_finalizer` must be a callable returning a Response "
+            f"{label}: `response_finalizer` must be a callable returning a response "
             f"or None — got {type(finalizer).__name__}."
         )
     _refuse_positional_only(finalizer, label=label, seat="response_finalizer")
@@ -276,6 +277,7 @@ def validate_mutation_view_spec(
         discriminated=discriminated,
     )
     _refuse_a_detail_spec_with_no_target(view_cls, spec, has_instance=has_instance)
+    _refuse_a_file_of_many(view_cls, spec)
     if not (hooked or _overrides_the_action_hook(view_cls, "service")):
         try:
             _check_kernel_seeds(spec, pool_seeds=pool_seeds)
@@ -296,6 +298,16 @@ def _refuse_a_detail_spec_with_no_target(
             "never asked for one. Set instance_selector_spec to the row it acts on, "
             "collection_selector_spec to a set, or many=True for a list body."
         )
+
+
+def _refuse_a_file_of_many(
+    view_cls: type | MountedView, spec: KernelServiceSpec | KernelSelectorSpec
+) -> None:
+    """Refuse, naming the view, a file the kernel's ``file_output`` says has no answer."""
+    try:
+        file_output(spec)
+    except ImproperlyConfigured as refusal:
+        raise ImproperlyConfigured(f"{view_cls.__name__}: {refusal}") from refusal
 
 
 def _refuse_selector_hooks(view_cls: type | MountedView) -> None:
@@ -334,6 +346,7 @@ def validate_selector_view_spec(
     if not isinstance(spec, KernelSelectorSpec):
         raise ImproperlyConfigured(_serves_the_other_kind(view_cls, spec, KernelSelectorSpec))
     _validate_selector_kind(spec, label=label, expected_kind=expected_kind)
+    _refuse_a_file_of_many(view_cls, spec)
     _refuse_selector_hooks(view_cls)
     _check_kernel_seeds(spec, pool_seeds=pool_seeds)
     if expected_kind is SelectorKind.LIST:

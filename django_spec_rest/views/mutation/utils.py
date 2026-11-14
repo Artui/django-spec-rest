@@ -6,6 +6,7 @@ from typing import Any, Literal
 
 from django.core.exceptions import ImproperlyConfigured, SuspiciousOperation
 from django.db.models import Model
+from django.http import HttpResponseBase
 from django.http.request import UnreadablePostError
 from django_service_specs.dispatch.present import present
 from django_service_specs.pool.resolve_callable_kwargs import resolve_callable_kwargs
@@ -34,7 +35,9 @@ from django_spec_rest.views.mutation.map_service_error import (
 )
 from django_spec_rest.views.mutation.resolve_success_status import resolve_success_status
 from django_spec_rest.views.utils import (
+    _NegotiatesAFile,
     action_answer,
+    presented_response,
     resolve_view_hooks,
     view_call_context,
     view_pool_seeds,
@@ -66,7 +69,7 @@ def dispatch_mutation_for_spec(
     render_instance_on_none: bool,
     partial: bool = False,
     variant: str | None = None,
-) -> Response:
+) -> HttpResponseBase:
     """One ``ServiceSpec`` call over HTTP: the kernel's ``dispatch``, then DRF's response."""
     resolved: Any = None if instance is UNSET else instance
     result = dispatch_kernel_spec(
@@ -103,7 +106,7 @@ def dispatch_mutation_for_spec(
             status=drf_status.HTTP_204_NO_CONTENT if success_status is None else status
         )
     else:
-        response = Response(presented, status=status_for_a_body(status))
+        response = presented_response(view, spec, presented, status=status_for_a_body(status))
     return apply_response_finalizer(
         action_answer(view, "response_finalizer"),
         response,
@@ -142,7 +145,7 @@ def dispatch_discriminated_action(
     default_status: int,
     render_instance_on_none: bool,
     partial: bool = False,
-) -> Response:
+) -> HttpResponseBase:
     """Serve a ``DiscriminatedAction`` request: refuse, choose, then run the chosen variant."""
     _refuse_a_caller_every_variant_refuses(view, request, action)
     key = _chosen_key(view, request, action)
@@ -261,7 +264,7 @@ def restore_raised_schema(exc: Exception, response: Response) -> Response:
     return response
 
 
-class _ServesRaisedSchema:
+class _ServesRaisedSchema(_NegotiatesAFile):
     """Runs ``restore_raised_schema`` over every response ``handle_exception`` builds.
 
     Inherited by ``MutationFlowMixin`` (the three mutation views and the

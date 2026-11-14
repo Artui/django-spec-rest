@@ -83,7 +83,9 @@ dependencies = [
     # ``permission_denied`` does.
     # 0.30.0 adds ``call_context=`` to ``spec_caller_input_schema``, which the
     # OPTIONS answer and the OpenAPI body hand under the ``rest`` stamp.
-    "django-service-specs>=0.31.0",
+    # 0.33.0 adds ``FilePresenter`` and ``file_output``, which a file's answer
+    # reads, and a ``Presenter.output()`` that may answer ``None``.
+    "django-service-specs>=0.33.0",
 ]
 
 [project.optional-dependencies]
@@ -230,7 +232,7 @@ root = ["./django_spec_rest"]
 # CHANGELOG [Unreleased] block under a new dated heading. Run via
 # `uvx bump-my-version` (no permanent dependency added to the project).
 [tool.bumpversion]
-current_version = "0.12.0"
+current_version = "0.13.0"
 allow_dirty = false
 commit = false
 tag = false

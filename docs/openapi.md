@@ -153,6 +153,10 @@ call `enable_openapi()` again after the reload.
   it a presenter or declare the response. A status the view sets is the one status. A declared success body replaces both and goes
   to the first, the default. A `DiscriminatedAction`
   lists each status any of its variants answers.
+- **A file spec's success**, one whose presenter is a `FilePresenter`, is its
+  presenter's content type carrying `{"type": "string", "format": "binary"}`,
+  with the `204` beside it where the spec may present nothing. Another
+  presenter whose `output()` declares no JSON shape documents any value.
 - **A 400** is documented wherever the spec declares a validator, because that
   is the status a validator's refusal gets, whichever kind refused
   (`SerializerValidator`, `DataclassValidator` or another validator raising the
