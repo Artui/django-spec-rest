@@ -2027,16 +2027,16 @@ also declare <code>variant</code>, the key the discriminator chose.</p>
   </span>
 
 <a href="#django_spec_rest.views.mutation.mutation_flow_mixin.MutationFlowMixin.response_finalizer" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">response_finalizer</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">Response</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">response_finalizer</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">HttpResponseBase</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
 
         <p>The post-presentation hook on a <code>2xx</code>: declares any of
 <code>response</code> / <code>result</code> / <code>request</code> / <code>view</code> / <code>instance</code> / <code>data</code>
-and returns a <code>Response</code> to replace the one built, or <code>None</code> to keep it
-(test_response_finalizer). On a <code>DiscriminatedAction</code> it may also declare
-<code>variant</code>, the key the discriminator chose.</p>
+and returns a response to replace the one built, or <code>None</code> to keep it
+(test_response_finalizer). A file spec's <code>response</code> is a <code>FileResponse</code>. On a
+<code>DiscriminatedAction</code> it may also declare <code>variant</code>, the key the discriminator chose.</p>
 
     </div>
 

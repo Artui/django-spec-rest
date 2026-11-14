@@ -1824,8 +1824,9 @@
 and its <code>permissions</code>. This page is the adapters that fill them, the DRF
 refusal classes the kernel's refusals become, and the helpers a caller off
 HTTP uses to give a serializer the context it reads.</p>
-<p>None of these is exported from the package root; import each from its leaf
-module:</p>
+<p>Of these, only <code>base_serializer_context</code>, <code>build_offline_context</code> and
+<code>renderable_serializer_class</code> are exported from the package root; import each from
+its leaf module:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_spec_rest.service_specs.drf_permission_check</span><span class="w"> </span><span class="kn">import</span> <span class="n">DRFPermissionCheck</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_spec_rest.service_specs.serializer_presenter</span><span class="w"> </span><span class="kn">import</span> <span class="n">SerializerPresenter</span>
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_spec_rest.service_specs.serializer_validator</span><span class="w"> </span><span class="kn">import</span> <span class="n">SerializerValidator</span>
@@ -1875,7 +1876,8 @@ rendered in the language active when it is asked for. It never queries.</p>
 <li>
 <p><strong>with the target as</strong> <code>instance</code>, so an update's uniqueness checks
   exclude the row being updated. The queryset a collection selector
-  resolves is no row, so a call over one binds as a create; the target is handed over as it is, since a
+  resolves is no row, so a call over one binds as a create; the target is handed over as
+  it is, since a
   serializer, unlike a <code>ModelForm</code>, writes nothing onto its instance
   while it validates.</p>
 </li>
@@ -1916,7 +1918,8 @@ nested list's errors in whichever shape the installed DRF writes them.</p>
 <p><code>validated()</code> hands the service <code>data</code>, the serializer's
 <code>validated_data</code> - the validated mapping, or the dataclass instance a
 <code>DataclassSerializer</code> builds - and the bound serializer is bound for the
-call as <code>serializer</code>, its <code>save()</code> the DRF one. <code>values</code> follow what <code>validated_data</code> is: a
+call as <code>serializer</code>, its <code>save()</code> the DRF one. <code>values</code> follow what
+<code>validated_data</code> is: a
 mapping's entries, keyed as DRF keys them, by each field's <code>source</code>; a dataclass
 instance's <code>__init__</code> fields, whether a dataclass was declared or a
 <code>DataclassSerializer</code> subclass was; and nothing for any other object a
@@ -1927,7 +1930,8 @@ serializer's <code>validate()</code> returns, which reaches the service only as
 <code>validated_data</code> as the serializer built it, and the service's <code>user</code>
 is the call's principal (see <code>_unseeded</code>).
 <strong>So is a key named in</strong> <code>server_owned</code>, the names the caller declares
-the server's: the client's value is the service's in <code>data</code> alone, unless the edge put the server's
+the server's: the client's value is the service's in <code>data</code> alone, unless the edge put
+the server's
 value into the field it comes from (see <code>_unowned</code>). <strong>Where the edge did,
 that field's validation of the value the edge put is the key's value</strong>,
 validated on its own once the serializer has accepted the body, never read
@@ -2112,7 +2116,7 @@ always was answered. The edge dispatches a lenient copy of a spec's Validator
 
     <div class="doc doc-contents ">
 
-        <p>The validated values, keyed by source, or <code>DRFInvalidArguments</code> carrying DRF's detail.</p>
+        <p>The validated values by source, or <code>DRFInvalidArguments</code> with DRF's detail.</p>
 
 
     </div>
@@ -2315,7 +2319,7 @@ declares no fields, so its output is empty while it still presents.</p>
 
     <div class="doc doc-contents ">
 
-        <p>The serializer's fields as an Output, with <code>field_audiences</code> layered on. Never queries.</p>
+        <p>The serializer's fields as an Output, with <code>field_audiences</code> layered on.</p>
 
 
     </div>
@@ -2539,7 +2543,7 @@ request and view.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Whether every class's <code>has_permission</code> admits <code>principal</code>, raising on the first that does not.</p>
+        <p>Whether every <code>has_permission</code> admits <code>principal</code>, raising on the first refusal.</p>
 
 
     </div>
@@ -2568,7 +2572,7 @@ request and view.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Whether every class's <code>has_object_permission</code> admits <code>principal</code> to a model <code>target</code>.</p>
+        <p>Whether every <code>has_object_permission</code> admits <code>principal</code> to the <code>target</code>.</p>
 
 
     </div>
@@ -2626,7 +2630,7 @@ handler answers it with DRF's status.</p>
 
 
 
-        <p>The arguments were refused, as both the kernel's <code>InvalidArguments</code> and DRF's <code>ValidationError</code>.</p>
+        <p>The arguments were refused: the kernel's <code>InvalidArguments</code>, DRF's <code>ValidationError</code>.</p>
 <p>Every published consumer of this package catches DRF's <code>ValidationError</code>
 by name - an MCP server answering "invalid arguments", an agent tool asking
 the model to retry - and DRF's exception handler answers it 400. None of
@@ -2721,7 +2725,7 @@ two cannot build the twin differently.</p>
 
 
 
-        <p>A permission check refused the principal, as both the kernel's <code>NotPermitted</code> and DRF's <code>PermissionDenied</code>.</p>
+        <p>A check refused the principal: the kernel's <code>NotPermitted</code>, DRF's <code>PermissionDenied</code>.</p>
 <p>Every published consumer of this package catches DRF's
 <code>PermissionDenied</code> by name and ends the attempt on it, and DRF's
 exception handler answers it 403. None of them catches the kernel's class,
@@ -2810,7 +2814,7 @@ never passes: <code>test_a_code_given_is_kept</code> fails without it.</p>
 
 
 
-        <p>No principal was authenticated, as both the kernel's <code>NotPermitted</code> and DRF's <code>NotAuthenticated</code>.</p>
+        <p>No principal authenticated: the kernel's <code>NotPermitted</code>, DRF's <code>NotAuthenticated</code>.</p>
 <p>What an author callable's or a permission class's DRF <code>NotAuthenticated</code>
 leaves the kernel route as, through
 <a class="autorefs autorefs-internal" title="translate_drf_refusals" href="#django_spec_rest.service_specs.translate_drf_refusals.translate_drf_refusals"><code>translate_drf_refusals</code></a>,
@@ -2877,7 +2881,7 @@ DRF's sets <code>detail</code> with the <code>code</code> given, which the kerne
 
 
 
-        <p>The principal cannot act, as both the kernel's <code>PrincipalUnavailable</code> and DRF's <code>PermissionDenied</code>.</p>
+        <p>The principal cannot act: the kernel's <code>PrincipalUnavailable</code>, DRF's <code>PermissionDenied</code>.</p>
 <p>Raised for an identifier naming nobody or a deactivated account, before
 any permission check. It reaches every published consumer's ladder as the
 denial DRF names, answered 403 and ending the attempt, and an <code>except</code>
@@ -2966,7 +2970,7 @@ fails without it.</p>
 
 
 
-        <p>A service refused its input, as both the kernel's <code>ServiceValidationError</code> and DRF's <code>ValidationError</code>.</p>
+        <p>Input a service refused: the kernel's <code>ServiceValidationError</code>, DRF's <code>ValidationError</code>.</p>
 <p>What an author callable's DRF <code>ValidationError</code> leaves the kernel route
 as, through
 <a class="autorefs autorefs-internal" title="translate_drf_refusals" href="#django_spec_rest.service_specs.translate_drf_refusals.translate_drf_refusals"><code>translate_drf_refusals</code></a>:
@@ -3080,7 +3084,7 @@ none, so a carried stand-in is refused as an offline request is.</p>
 
     <div class="doc doc-contents first">
 
-        <p>Re-raise the kernel's <code>DispatchError</code>s inside the block as this package's dual-base classes.</p>
+        <p>Re-raise the kernel's <code>DispatchError</code>s in the block as this package's dual-base classes.</p>
 <p>Every published consumer of this package catches DRF's
 <code>ValidationError</code> and <code>PermissionDenied</code> by name, and DRF's exception
 handler answers only those; the kernel's own refusals reach none of them,
@@ -3237,7 +3241,7 @@ words. <code>fn</code> itself is never stamped, as it is the author's own functi
 
     <div class="doc doc-contents first">
 
-        <p>Register DRF's <code>ValidationError</code> as a refusal the kernel re-roots under the row that raised it.</p>
+        <p>Register DRF's <code>ValidationError</code> as a refusal the kernel re-roots under its row.</p>
 <p>A nested write runs a row service per related row, and one written for DRF
 refuses its row with DRF's <code>ValidationError</code>, which the kernel cannot
 name, so it would otherwise escape the write naming no row. Registered,
@@ -3283,10 +3287,10 @@ through
 call layers on - the <code>serializer_context</code> a <code>SerializerValidator</code> or
 <code>SerializerPresenter</code> declares, and a view's
 <code>get_input_serializer_context</code> / <code>get_output_serializer_context</code> - is
-<em>additive</em>, not a replacement for that baseline, so off HTTP — where there is no DRF view to ask — the baseline has to be
-synthesized rather than skipped. Without it the same serializer that renders
-over HTTP raises <code>KeyError: 'request'</code> when the spec is dispatched from an
-MCP tool call, a Pydantic-AI toolset, or a management command.</p>
+<em>additive</em>, not a replacement for that baseline, so off HTTP — where there is no DRF
+view to ask — the baseline has to be synthesized rather than skipped. Without it the
+same serializer that renders over HTTP raises <code>KeyError: 'request'</code> when the spec is
+dispatched from an MCP tool call, a Pydantic-AI toolset, or a management command.</p>
 <p>Two sources, in order:</p>
 <ul>
 <li><code>view.get_serializer_context()</code> when the view has it — a real DRF view (the HTTP

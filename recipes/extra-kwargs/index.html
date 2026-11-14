@@ -1158,11 +1158,22 @@ both:</p>
 </span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">get_service_kwargs</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
 </span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;owner&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">user</span><span class="p">}</span>
 </span></code></pre></div>
+<p>A service that declares <code>progress</code> is handed a reporter from the view: the first of
+<code>get_&lt;action&gt;_progress_reporter()</code> and <code>get_progress_reporter()</code> that returns one,
+never a merge of the two. With neither, the service gets the kernel's <code>null_progress</code>.
+To report to two sinks, compose them with the kernel's <code>combine_progress</code>.</p>
 <p><strong>A hook's value outranks the client's.</strong> Where the serializer declares a
 writable <code>owner</code>, the hook's value is what reaches the service, so a client
 sending <code>owner</code> cannot replace the hook's. A key a <code>validate()</code> derives, or a
 <code>source="*"</code> nested serializer flattens, reaches the service's keyword as the
 hook's value, while <code>data</code> keeps what the serializer validated.</p>
+<p>A <code>HiddenField</code> takes no input from the server: a value that <code>input_data</code> or a hook
+gives its key leaves the field's default in place, and a partial call leaves the
+field out of <code>data</code>.</p>
+<p>A hook is handed <code>call_context</code>, the request's dict, only when it names it as a
+parameter; a hook taking only <code>**kwargs</code> is not. <code>success_status</code> and
+<code>response_finalizer</code> are not offered it, and <code>as_view()</code> refuses either one that
+requires it.</p>
 <p>A selector view takes no keyword hook beside a kernel spec: <code>as_view()</code>
 refuses a <code>get_selector_kwargs</code> or <code>get_&lt;action&gt;_selector_kwargs</code> override,
 which would never reach the spec. Return those keys from the spec's <code>kwargs</code>

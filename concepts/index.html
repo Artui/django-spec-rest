@@ -452,6 +452,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Answers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#a-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A file
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1138,6 +1155,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Answers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#a-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A file
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1352,6 +1386,11 @@ the service never runs:</p>
 array."]}</code>, and so is a list longer than the spec's <code>many_max_length</code>, else the
 kernel's <code>SERVICE_SPECS_MAX_ARRAY_LENGTH</code> (1000 by default), with a 400 under
 <code>items</code>. A view taking longer lists declares <code>many_max_length</code> on its spec.</p>
+<p>A row that is not an object is refused at its own index, as a failing row is:
+a list holding one answers
+<code>{"items": {"1": {"non_field_errors": ["Expected an object."]}}}</code>, not DRF's
+<code>Invalid data. Expected a dictionary</code> at the top level, so a client reads every
+row's refusal the same way.</p>
 <h2 id="hooks-and-providers">Hooks and providers<a class="headerlink" href="#hooks-and-providers" title="Permanent link">&para;</a></h2>
 <p>Three layers feed a write beyond the client's body, the more specific winning
 on an overlapping key:</p>
@@ -1426,13 +1465,40 @@ neither a presenter nor affordances is rendered by the view's
 </tbody>
 </table>
 <p>A result with nothing to present answers 204 with no body, and a body never
-goes out under 204: a value to present answers 200. <code>success_status</code> on the
+goes out under 204: a value to present answers 200. An update (<code>PUT</code> or <code>PATCH</code>)
+whose service returns <code>None</code> presents its target, as DRF's <code>UpdateModelMixin</code> does,
+when the spec has a presenter and no <code>output_selector_spec</code>, so it answers 200 and
+not 204. A spec without a presenter answers 204. <code>success_status</code> on the
 view overrides the default, with an <code>int</code> or a callable declaring any of
 <code>result</code>, <code>instance</code>, <code>request</code>, <code>view</code>; <code>response_finalizer</code> may replace the
 response built. On a viewset an action may declare its own
 (<a href="../reference/viewsets/#per-action-answers">Per-action answers</a>). <code>as_view()</code> refuses a callable
 requiring a name the view cannot supply, whether or not it also takes
 <code>**kwargs</code>, which is handed the names the view has and no others.</p>
+<h3 id="a-file">A file<a class="headerlink" href="#a-file" title="Permanent link">&para;</a></h3>
+<p>A spec whose presenter is the kernel's
+<a class="autorefs autorefs-external" href="https://artui.github.io/django-service-specs/reference/#django_service_specs.output.file_presenter.FilePresenter"><code>FilePresenter</code></a>
+answers its file, not JSON: a service spec over any write view, viewset action
+or <code>@service_action</code>, and a retrieve selector spec over <code>SelectorRetrieveView</code>,
+a viewset's <code>retrieve</code> or a detail <code>@selector_action</code>. The presented
+<a class="autorefs autorefs-external" href="https://artui.github.io/django-service-specs/reference/#django_service_specs.types.file_result.FileResult"><code>FileResult</code></a> goes out as
+Django's <code>FileResponse</code> (bytes or a file object, closed when the response is)
+or, for an iterable of bytes, a <code>StreamingHttpResponse</code>, under the same status
+as any body, with <code>Content-Type</code> from the presenter,
+<code>Content-Disposition: attachment</code> naming the file (RFC 5987 quoting for a name
+outside ASCII), and <code>Content-Length</code> wherever the size is known. DRF's
+<code>finalize_response</code> passes it through unrendered, so no renderer is asked, and
+an <code>Accept</code> naming the file's type (<code>application/pdf</code>, say) is served though no
+renderer offers it; a refusal under it is JSON, and a type the file is not is
+still a 406.</p>
+<p>How a browser shows the file is the page's choice, not the call's: a view or
+viewset whose <code>as_attachment</code> is <code>False</code> answers <code>inline</code>, so a browser shows a
+PDF rather than save it. A <code>response_finalizer</code> receives the <code>FileResponse</code> and
+may change it or replace it. A <code>None</code> under <code>allow_none</code> answers as for any spec: 204
+for a write, JSON <code>null</code> for a retrieve. A file is one result, so <code>as_view()</code>, and
+<code>@selector_action</code> where it decorates, refuses one the kernel's
+<a class="autorefs autorefs-external" href="https://artui.github.io/django-service-specs/reference/#django_service_specs.schema.file_output.file_output"><code>file_output</code></a> refuses: a
+<code>LIST</code> selector, a <code>many</code> or <code>returns_many</code> service, or presented affordances.</p>
 <h2 id="refusals">Refusals<a class="headerlink" href="#refusals" title="Permanent link">&para;</a></h2>
 <p>Every refusal leaves as a DRF exception, so DRF's exception handler, and a
 project's <code>EXCEPTION_HANDLER</code>, answers it as it answers DRF's own:</p>
@@ -1501,6 +1567,10 @@ project's <code>EXCEPTION_HANDLER</code>, answers it as it answers DRF's own:</p
 as well (<code>DRFInvalidArguments</code>, <code>DRFNotPermitted</code>, ...), so a caller of the
 kernel's <code>dispatch</code> catches the kernel's class. See
 <a href="../reference/service-specs/#refusals-that-are-drfs-as-well">DRF seats</a>.</p>
+<p>A project's <code>EXCEPTION_HANDLER</code> is handed the 422 as DRF builds it: every leaf of
+the schema is an <code>ErrorDetail</code> string with its code, so a <code>False</code> default reads
+<code>"False"</code>. The body the client receives is the schema as raised, put back after that
+handler, so the handler cannot change the schema it sends.</p>
 <h2 id="options">OPTIONS<a class="headerlink" href="#options" title="Permanent link">&para;</a></h2>
 <p>OPTIONS answers DRF's shape (<code>name</code>, <code>description</code>, <code>renders</code>, <code>parses</code>,
 <code>actions</code>) from the route's specs, and runs no stage of any of them: no

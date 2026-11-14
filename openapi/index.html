@@ -1285,6 +1285,10 @@ call <code>enable_openapi()</code> again after the reload.</p>
   it a presenter or declare the response. A status the view sets is the one status. A declared success body replaces both and goes
   to the first, the default. A <code>DiscriminatedAction</code>
   lists each status any of its variants answers.</li>
+<li><strong>A file spec's success</strong>, one whose presenter is a <code>FilePresenter</code>, is its
+  presenter's content type carrying <code>{"type": "string", "format": "binary"}</code>,
+  with the <code>204</code> beside it where the spec may present nothing. Another
+  presenter whose <code>output()</code> declares no JSON shape documents any value.</li>
 <li><strong>A 400</strong> is documented wherever the spec declares a validator, because that
   is the status a validator's refusal gets, whichever kind refused
   (<code>SerializerValidator</code>, <code>DataclassValidator</code> or another validator raising the
@@ -1376,6 +1380,13 @@ call <code>enable_openapi()</code> again after the reload.</p>
   <code>json_schema_extra</code> reaches the document as written, since no kernel adapter
   writes those keys: under 3.0 it must be valid 3.0 (a <code>{"type": "null"}</code>
   member or a numeric <code>exclusiveMinimum</code> is not).</li>
+<li><strong>A registry fragment's keywords</strong> are stated by the kernel on the field where
+  it can. The kernel states <code>type</code>, <code>items</code>, <code>format</code>, <code>enum</code>, <code>minimum</code>, <code>maximum</code>,
+  <code>minItems</code>, <code>maxItems</code> and <code>description</code> on the field, where the field accepts
+  them. Of <code>format</code> it keeps only <code>date-time</code>, <code>date</code>, <code>decimal</code> and <code>uuid</code>, and
+  drops any other. A keyword the kernel can state but the input field refuses (a
+  <code>minimum</code> on a string, say) is dropped. A keyword it cannot state at all goes to
+  <code>json_schema_extra</code> as written.</li>
 <li><strong>A viewset method with no spec behind it</strong> is left out where <code>Allow</code> leaves
   it out: on a route serving some spec, a <code>create</code>, <code>update</code>,
   <code>partial_update</code> or <code>destroy</code> the router maps but the viewset declares no

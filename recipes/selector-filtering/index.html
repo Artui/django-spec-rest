@@ -1138,6 +1138,10 @@ for a scope the client must not choose.</p>
 <code>collection_selector_spec</code> reads the route and the query string only, never
 the body: a body value cannot set the scope that picks the row a write
 changes.</p>
+<p>A <code>PATCH</code> or a <code>DELETE</code> reaches its row through the spec's own target selector, not
+through the view's <code>filter_backends</code>, as a retrieve does. A tenant-scoping backend in
+<code>DEFAULT_FILTER_BACKENDS</code> narrows the list and not the write, so scope the target
+selector's queryset.</p>
 <h2 id="a-retrieve">A retrieve<a class="headerlink" href="#a-retrieve" title="Permanent link">&para;</a></h2>
 <p>A retrieve spec runs its own selector rather than DRF's <code>get_object()</code>, so the
 view's <code>filter_backends</code> do not apply to it: a tenant-scoping backend in
