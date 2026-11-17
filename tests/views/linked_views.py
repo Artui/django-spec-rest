@@ -94,6 +94,14 @@ CREATE = ServiceSpec(
     reads=Parameters.of(Parameter("title", "string", required=True)),
 )
 TOUCH = _write()
+
+
+def _untyped() -> dict[str, Any]:
+    return {}
+
+
+# A provider whose return names no keys may fill any read, so ``pk`` is not required.
+LOOSE = _write().derive(instance_selector_spec=_BY_PK.derive(kwargs=_untyped))
 NOWHERE = _write()
 STRAY = _write()
 UNNAMED = _write()
@@ -109,6 +117,7 @@ ROUTES.register("posts:posts-flag", FLAG)
 ROUTES.register("by-title", BY_TITLE)
 ROUTES.register("create", CREATE)
 ROUTES.register("touch:touches-detail", TOUCH)
+ROUTES.register("loose", LOOSE)
 
 AFFORDANCES = {
     "rename": SpecLink(RENAME, arguments={"pk": "id"}),
@@ -171,6 +180,13 @@ TITLED = SelectorSpec(
         "create": CREATE,
         "touch": SpecLink(TOUCH, arguments={"pk": "id"}),
     },
+)
+LOOSELY = SelectorSpec(
+    kind=SelectorKind.LIST,
+    selector=_posts,
+    permissions=_OPEN,
+    presenter=SerializerPresenter(PostOut),
+    affordances={"loose": SpecLink(LOOSE, arguments={"pk": "id"})},
 )
 PLAIN = SelectorSpec(
     kind=SelectorKind.LIST,

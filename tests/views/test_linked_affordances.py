@@ -223,6 +223,14 @@ def test_the_href_follows_the_request_s_versioning(
     assert rows[0]["affordances"]["rename"]["href"] == f"{base}/posts/{posts[0].pk}/"
 
 
+def test_a_route_needing_a_read_the_link_does_not_require_gets_no_href(
+    posts: tuple[Post, Post],
+) -> None:
+    """An untyped provider leaves ``required`` empty; the bound ``pk`` is not passed."""
+    rows = Client().get("/loosely/").json()
+    assert rows[0]["affordances"] == {"loose": {"available": True}}
+
+
 def test_a_spec_with_no_affordances_presents_as_it_did(posts: tuple[Post, Post]) -> None:
     rows = Client().get("/plain/").json()
     assert rows == [{"id": post.pk, "title": post.title} for post in posts]

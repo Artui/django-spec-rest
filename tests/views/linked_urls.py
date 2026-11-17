@@ -8,6 +8,8 @@ from tests.views.linked_views import (
     ARCHIVE,
     BY_TITLE,
     CREATE,
+    LOOSE,
+    LOOSELY,
     PLAIN,
     SHAPED,
     TITLED,
@@ -36,4 +38,6 @@ urlpatterns = [
     path("", include((touches.urls, "touch"))),
     path("by-title/<slug:title>/", ServiceUpdateView.as_view(spec=BY_TITLE), name="by-title"),
     path("create/", ServiceCreateView.as_view(spec=CREATE), name="create"),
+    path("loose/<int:pk>/", ServiceDeleteView.as_view(spec=LOOSE), name="loose"),
+    path("loosely/", LinkedList.as_view(spec=LOOSELY), name="loosely"),
 ]
