@@ -11,6 +11,8 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+## [0.14.0] — 2026-11-17
+
 ### Added
 
 - **An affordance entry says where and how to call it.** `SelectorListView`,
@@ -1049,7 +1051,8 @@ lists each with what a project rewrites.
 - **The package is no longer a Django app.** It has no models, migrations,
   templates, static files or URLs, so it needs no `INSTALLED_APPS` entry.
 
-[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/Artui/django-spec-rest/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/Artui/django-spec-rest/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/Artui/django-spec-rest/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/Artui/django-spec-rest/compare/v0.10.0...v0.11.0
