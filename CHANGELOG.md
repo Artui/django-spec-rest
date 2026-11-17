@@ -24,9 +24,10 @@ carries; releases up to 0.62.0 are in
   serves the target under. A target it does not name, a name that does not
   reverse for the row, a view serving it under no method, or a row lacking a
   field a declared output binds leaves the entry its availability answer; with
-  no declared output, that missing field raises `ImproperlyConfigured`. `None`, the default, changes no
-  body; `as_view()` refuses a value that is not a `SpecRegistry`, and reverses
-  nothing, so the registry may be declared before the URLconf loads.
+  no declared output, that missing field raises `ImproperlyConfigured`. `None`,
+  the default, changes no body; `as_view()` refuses a value that is not a
+  `SpecRegistry`, and reverses nothing, so the registry may be declared before
+  the URLconf loads.
 - **OpenAPI documents a selector's affordances.** A selector spec whose
   presenter declares its rows documents each row as that schema plus the
   `affordances` object the kernel's `affordance_schema` describes, with optional
