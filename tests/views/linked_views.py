@@ -76,11 +76,24 @@ PUBLISH = _write(
 ARCHIVE = _write()
 FLAG = _write()
 UNFLAG = _write()
+# Its target selector requires ``title``, which the route captures; a slug refuses a space.
 BY_TITLE = ServiceSpec(
+    service=lambda *, instance: instance,
+    permissions=_OPEN,
+    instance_selector_spec=SelectorSpec(
+        kind=SelectorKind.RETRIEVE,
+        selector=lambda *, title: Post.objects.filter(title=title).first(),
+        reads=Parameters.of(Parameter("title", "string", required=True)),
+    ),
+    presenter=SerializerPresenter(PostOut),
+)
+# No target selector: no required reads, so a route with no captures.
+CREATE = ServiceSpec(
     service=lambda *, title: None,
     permissions=_OPEN,
     reads=Parameters.of(Parameter("title", "string", required=True)),
 )
+TOUCH = _write()
 NOWHERE = _write()
 STRAY = _write()
 UNNAMED = _write()
@@ -91,9 +104,11 @@ ROUTES.register("posts:posts-detail", RENAME)
 ROUTES.register("posts:posts-publish", PUBLISH)
 ROUTES.register("archive", ARCHIVE)
 ROUTES.register("nowhere", NOWHERE)
-ROUTES.register("posts:posts-list", STRAY)
+ROUTES.register("linked-detail", STRAY)
 ROUTES.register("posts:posts-flag", FLAG)
 ROUTES.register("by-title", BY_TITLE)
+ROUTES.register("create", CREATE)
+ROUTES.register("touch:touches-detail", TOUCH)
 
 AFFORDANCES = {
     "rename": SpecLink(RENAME, arguments={"pk": "id"}),
@@ -141,7 +156,7 @@ SHAPED = SelectorSpec(
     selector=_posts,
     permissions=_OPEN,
     presenter=SerializerPresenter(_IdWhenDraft),
-    affordances={"rename": SpecLink(RENAME, arguments={"pk": "id"})},
+    affordances={"rename": SpecLink(RENAME, arguments={"pk": "id"}), "create": CREATE},
 )
 
 
@@ -151,7 +166,11 @@ TITLED = SelectorSpec(
     selector=_posts,
     permissions=_OPEN,
     presenter=SerializerPresenter(PostOut),
-    affordances={"by_title": BY_TITLE},
+    affordances={
+        "by_title": BY_TITLE,
+        "create": CREATE,
+        "touch": SpecLink(TOUCH, arguments={"pk": "id"}),
+    },
 )
 PLAIN = SelectorSpec(
     kind=SelectorKind.LIST,
@@ -195,3 +214,8 @@ class PostViewSet(ServiceViewSet):
     @selector_action(LISTING, detail=False)
     def everything(self, request: Any) -> None:
         """Stubbed: the decorator serves the spec."""
+
+
+class TouchViewSet(ServiceViewSet):
+    queryset = Post.objects.all()
+    action_specs = {"partial_update": TOUCH}

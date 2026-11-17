@@ -55,13 +55,16 @@ The example project serves this as `GET /linked-invoices/`.
   the spec an affordance names, or one `replace` displaced, is found.
 - **`href`** is DRF's `reverse` of that name, run per response and never at
   import or `as_view()`, so the registry may be declared before the URLconf
-  loads. Its kwargs are the link's bound arguments (the kernel's
-  `link_bindings`: an explicit `SpecLink(arguments=...)`, a same-name field, or
-  the one handle) that the route captures; a bound read the route does not
-  capture, such as a body field, is left out. It is absolute, as DRF's
-  hyperlinked fields are, and follows the request's versioning scheme.
-- **`method`** comes from the view the route resolves to: the first of `GET`,
-  `POST`, `PUT`, `PATCH`, `DELETE` that serves the target. A router's detail
+  loads. Its kwargs are the link's required reads alone: the target's
+  selector reads a caller must supply (the kernel's `required_reads`, an
+  instance selector's `pk`, say), each with the row's value for the field it
+  binds to. A bound read that is not required, such as a body field, is left
+  out. A service with no target selector has no required reads, so its route
+  takes no kwargs. It is absolute, as DRF's hyperlinked fields are, and
+  follows the request's versioning scheme.
+- **`method`** comes from the view the route resolves to: the first of `POST`,
+  `PUT`, `PATCH`, `DELETE` that serves the target, looked up once per route
+  per response. A router's detail
   route serves an `"update"` spec under both `PUT` and `PATCH`, so it is `PUT`;
   a dedicated `"partial_update"` entry is `PATCH`. A
   `DiscriminatedAction` serves each of its variants.
@@ -72,8 +75,13 @@ The entry keeps `available`, and its `code` and `reason`, and leaves out `href`
 and `method` together, when:
 
 - the registry does not name the target;
-- the name does not reverse with the row's values;
-- the view at that route serves the target under no method.
+- the name does not reverse with the row's required reads;
+- the view at that route serves the target under no method;
+- the row lacks a field one of the row's links binds a required read to (a
+  serializer that leaves `id` out of some rows, say). The kernel refuses the
+  whole row, so every entry on it keeps its answer alone. This holds only for a
+  presenter that declares its output, whose fields `link_bindings` has checked;
+  with no output, the missing field may be a misnamed one, and it raises.
 
 An unavailable entry still carries its `href`: availability and address are
 separate answers. A binding the kernel refuses (a required read nothing binds)

@@ -18,11 +18,13 @@ carries; releases up to 0.62.0 are in
   `ServiceViewSet`, `SelectorViewSet` and a `@selector_action`) take
   `link_routes`, a kernel `SpecRegistry` whose names are URL pattern names. Each
   presented row's `affordances` entry whose target it names gains `href`, DRF's
-  `reverse` of that name run per response with the link's bound arguments the
-  route captures, and `method`, the first of `GET`, `POST`, `PUT`, `PATCH`,
-  `DELETE` the route's view serves the target under. A target it does not name,
-  a name that does not reverse for the row, or a view serving it under no method
-  leaves the entry its availability answer. `None`, the default, changes no
+  `reverse` of that name run per response with the link's required reads (the
+  target selector's reads a caller must supply, never a body field), and
+  `method`, the first of `POST`, `PUT`, `PATCH`, `DELETE` the route's view
+  serves the target under. A target it does not name, a name that does not
+  reverse for the row, a view serving it under no method, or a row lacking a
+  field a declared output binds leaves the entry its availability answer; with
+  no declared output, that missing field raises `ImproperlyConfigured`. `None`, the default, changes no
   body; `as_view()` refuses a value that is not a `SpecRegistry`, and reverses
   nothing, so the registry may be declared before the URLconf loads.
 - **OpenAPI documents a selector's affordances.** A selector spec whose
@@ -32,6 +34,10 @@ carries; releases up to 0.62.0 are in
 
 ### Changed
 
+- **A selector declaring affordances documents its rows differently.** Each
+  row is `allOf` the serializer's component (or the presenter's output) and the
+  `affordances` object, with or without `link_routes`, where it was the
+  component alone; a client generated from the document sees a composed type.
 - The `django-service-specs` floor is 0.34.0, for `row_links`, `link_bindings`
   and `SpecRegistry.name_of`.
 

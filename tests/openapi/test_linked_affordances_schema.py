@@ -56,7 +56,6 @@ def test_a_named_target_s_entry_documents_href_and_method(
     assert {name for name, entry in entries.items() if "href" in entry["properties"]} == _LINKED
     assert entries["rename"]["required"] == ["available"]
     assert entries["rename"]["properties"]["method"]["enum"] == [
-        "GET",
         "POST",
         "PUT",
         "PATCH",
@@ -109,3 +108,8 @@ def test_a_presenter_s_output_is_the_row_s_schema(presenter: Presenter, document
     first, second = answer["items"]["allOf"]
     assert first["properties"]["id"] == {"type": "integer"}
     assert second["properties"]["affordances"]["properties"]["rename"]["properties"]["href"]
+
+
+def test_a_serializer_row_references_its_component(document: dict[str, Any]) -> None:
+    item = _answer(document, "/linked/")["items"]
+    assert item["allOf"][0] == {"$ref": "#/components/schemas/PostOut"}

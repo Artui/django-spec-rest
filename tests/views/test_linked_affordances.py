@@ -8,9 +8,10 @@ import pytest
 from django.core.exceptions import ImproperlyConfigured
 from django.test import Client
 from django.urls import clear_url_caches, set_script_prefix
-from django_service_specs import SpecLink
+from django_service_specs import Output, Presenter, SpecLink
 
 from django_spec_rest import SelectorListView, ServiceViewSet
+from django_spec_rest.views import linked_affordances
 from tests.testapp.models import Post
 from tests.views import linked_views
 from tests.views.linked_views import LISTING, ROUTES
@@ -90,10 +91,32 @@ def test_the_href_carries_the_script_prefix(posts: tuple[Post, Post]) -> None:
     assert rows[0]["affordances"] == _links(posts[0], base="http://testserver/app")
 
 
-def test_a_row_missing_a_bound_field_keeps_its_answer_alone(posts: tuple[Post, Post]) -> None:
+def test_a_row_missing_a_bound_field_keeps_its_answers_alone(posts: tuple[Post, Post]) -> None:
+    """The kernel refuses the whole row, so create, which reads no ``id``, loses its href too."""
     rows = Client().get("/shaped/").json()
     assert rows[0]["affordances"]["rename"]["method"] == "PUT"
-    assert rows[1]["affordances"] == {"rename": {"available": True}}
+    assert rows[0]["affordances"]["create"]["method"] == "POST"
+    assert rows[1]["affordances"] == {"rename": {"available": True}, "create": {"available": True}}
+
+
+class _Unshaped(Presenter):
+    def output(self) -> Output | None:
+        return None
+
+    def present(self, value: Any) -> Any:
+        return {"id": value.pk}
+
+
+def test_a_misnamed_field_with_no_output_to_check_it_raises(
+    posts: tuple[Post, Post], rf: Any
+) -> None:
+    misnamed = LISTING.derive(
+        presenter=_Unshaped(),
+        affordances={"rename": SpecLink(linked_views.RENAME, arguments={"pk": "idd"})},
+    )
+    view = SelectorListView.as_view(spec=misnamed, link_routes=ROUTES)
+    with pytest.raises(ImproperlyConfigured, match="idd"):
+        view(rf.get("/"))
 
 
 def test_the_map_is_declared_before_the_urlconf_loads(posts: tuple[Post, Post]) -> None:
@@ -135,17 +158,69 @@ def test_an_unbindable_link_still_raises(posts: tuple[Post, Post], rf: Any) -> N
 
 
 def test_a_row_its_route_cannot_reverse_for_gets_no_href(db: Any) -> None:
-    """A value one row's route refuses leaves that row alone, not the rows after it."""
-    Post.objects.create(title="two words")
-    Post.objects.create(title="draft")
+    """The route captures the required ``title``; a slug refuses one row's and not the next's."""
+    first = Post.objects.create(title="two words")
+    second = Post.objects.create(title="draft")
     rows = Client().get("/titled/").json()
-    assert [row["affordances"]["by_title"] for row in rows] == [
-        {"available": True},
-        {"available": True, "href": "http://testserver/by-title/draft/", "method": "POST"},
+    create = {"available": True, "href": "http://testserver/create/", "method": "POST"}
+    assert [row["affordances"] for row in rows] == [
+        {
+            "by_title": {"available": True},
+            "create": create,
+            "touch": {
+                "available": True,
+                "href": f"http://testserver/touches/{first.pk}/",
+                "method": "PATCH",
+            },
+        },
+        {
+            "by_title": {
+                "available": True,
+                "href": "http://testserver/by-title/draft/",
+                "method": "PUT",
+            },
+            "create": create,
+            "touch": {
+                "available": True,
+                "href": f"http://testserver/touches/{second.pk}/",
+                "method": "PATCH",
+            },
+        },
     ]
-    Post.objects.filter(title="two words").update(id=99)
-    rows = Client().get("/titled/").json()
-    assert rows[1]["affordances"]["by_title"] == {"available": True}
+
+
+def test_each_route_s_method_is_found_once_a_response(
+    posts: tuple[Post, Post], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    found: list[str] = []
+    method = linked_affordances._method
+
+    def counted(href: str, route: str, routes: Any) -> str | None:
+        found.append(route)
+        return method(href, route, routes)
+
+    monkeypatch.setattr(linked_affordances, "_method", counted)
+    Client().get("/linked/")
+    assert sorted(found) == [
+        "archive",
+        "linked-detail",
+        "posts:posts-detail",
+        "posts:posts-flag",
+        "posts:posts-publish",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("url", "base"),
+    [("/v2/rows/", "http://testserver/v2"), ("/n1/rows/", "http://testserver/n1")],
+    ids=["url-path", "namespace"],
+)
+def test_the_href_follows_the_request_s_versioning(
+    url: str, base: str, posts: tuple[Post, Post], settings: Any
+) -> None:
+    settings.ROOT_URLCONF = "tests.views.versioned_urls"
+    rows = Client().get(url).json()
+    assert rows[0]["affordances"]["rename"]["href"] == f"{base}/posts/{posts[0].pk}/"
 
 
 def test_a_spec_with_no_affordances_presents_as_it_did(posts: tuple[Post, Post]) -> None:
