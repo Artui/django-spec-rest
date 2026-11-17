@@ -56,9 +56,9 @@ The example project serves this as `GET /linked-invoices/`.
 - **`href`** is DRF's `reverse` of that name, run per response and never at
   import or `as_view()`, so the registry may be declared before the URLconf
   loads. Its kwargs are the link's required reads alone: the target's
-  selector reads a caller must supply (the kernel's `required_reads`, an
-  instance selector's `pk`, say), each with the row's value for the field it
-  binds to. A bound read that is not required, such as a body field, is left
+  selector reads a caller must supply (the `required` the kernel's
+  `row_links` gives each link, an instance selector's `pk`, say), each with the
+  row's value for the field it binds to. A bound read that is not required, such as a body field, is left
   out. A service with no target selector has no required reads, so its route
   takes no kwargs. It is absolute, as DRF's hyperlinked fields are, and
   follows the request's versioning scheme.

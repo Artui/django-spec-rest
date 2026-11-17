@@ -39,8 +39,9 @@ carries; releases up to 0.62.0 are in
   row is `allOf` the serializer's component (or the presenter's output) and the
   `affordances` object, with or without `link_routes`, where it was the
   component alone; a client generated from the document sees a composed type.
-- The `django-service-specs` floor is 0.34.0, for `row_links`, `link_bindings`
-  and `SpecRegistry.name_of`.
+- The `django-service-specs` floor is 0.34.1, for `row_links` and the
+  `required` reads on each of its links, `link_bindings` and
+  `SpecRegistry.name_of`.
 
 ## [0.13.0] — 2026-11-14
 

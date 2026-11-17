@@ -9,7 +9,6 @@ from django.urls import NoReverseMatch, get_script_prefix, resolve
 from django_service_specs.affordances.utils import AFFORDANCES_KEY
 from django_service_specs.links.link_bindings import link_bindings
 from django_service_specs.links.row_links import row_links
-from django_service_specs.links.utils import required_reads
 from django_service_specs.registry.spec_registry import SpecRegistry
 from django_service_specs.specs.kernel_spec import kernel_spec
 from django_service_specs.specs.service_spec import ServiceSpec
@@ -60,8 +59,7 @@ def _call(
     view: Any, route: str, link: Mapping[str, Any], routes: SpecRegistry, methods: dict[str, Any]
 ) -> tuple[str, str] | None:
     """The href, reversed with the required reads alone, and the method, found once a response."""
-    arguments = link["arguments"]
-    kwargs = {read: arguments[read] for read in required_reads(link["spec"])}
+    kwargs = {read: link["arguments"][read] for read in link["required"]}
     try:
         href = reverse(route, kwargs=kwargs, request=view.request)
     except NoReverseMatch:
