@@ -668,6 +668,8 @@
       
         
       
+        
+      
     
     
     
@@ -879,6 +881,34 @@
     
   
     Calling a spec off HTTP
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/affordance-links/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Link affordances to their routes
   
 
     
@@ -2010,7 +2040,8 @@ over:</p>
   order, with <code>maxItems</code> 1000, a <code>MultipleChoiceFilter</code> with <code>maxItems</code>, and
   an array as a repeated key. A validator's refusal is documented as the 400 it
   answers. A selector's reads are not documented as query parameters, nor
-  the affordance envelope, nor the <code>null</code> body of an <code>allow_none</code> retrieve.</li>
+  the <code>null</code> body of an <code>allow_none</code> retrieve; a selector's own affordance
+  envelope is, on each row its presenter declares.</li>
 <li><strong>The 422 is documented only where a spec declares it.</strong> drfs documented the
   422 of a plain <code>ServiceError</code> on every spec with an <code>input_serializer</code>,
   unless <code>document_service_error=False</code>; spec-rest documents it on no spec, a

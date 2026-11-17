@@ -552,6 +552,8 @@
       
         
       
+        
+      
     
     
     
@@ -763,6 +765,34 @@
     
   
     Calling a spec off HTTP
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/affordance-links/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Link affordances to their routes
   
 
     
@@ -1600,9 +1630,11 @@ still refused. Annotate the provider's return with a <code>TypedDict</code> to d
 which fields it fills.</p>
 <h2 id="not-documented">Not documented<a class="headerlink" href="#not-documented" title="Permanent link">&para;</a></h2>
 <p>A selector spec's declared reads are not documented as query parameters, nor
-the affordance envelope a spec declaring affordances renders, nor the <code>null</code>
-body of an <code>allow_none</code> retrieve. Add them with <code>@extend_schema</code> where a
-client needs them.</p>
+the <code>null</code> body of an <code>allow_none</code> retrieve, nor the affordance envelope where
+a presenter declares no row schema or a service spec's output selector
+renders it. Add them with <code>@extend_schema</code> where a client needs them. A selector
+spec's own affordances are documented on each row
+(<a href="../recipes/affordance-links/#openapi">Link affordances to their routes</a>).</p>
 <p>A refusal a service raises is not documented unless you declare it (see
 above), nor one your project configures (below).</p>
 <h2 id="refusals-your-project-configures">Refusals your project configures<a class="headerlink" href="#refusals-your-project-configures" title="Permanent link">&para;</a></h2>

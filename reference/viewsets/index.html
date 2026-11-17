@@ -422,6 +422,8 @@
       
         
       
+        
+      
     
     
     
@@ -633,6 +635,34 @@
     
   
     Calling a spec off HTTP
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/affordance-links/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Link affordances to their routes
   
 
     
@@ -967,6 +997,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="SelectorListMixin">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_rest.viewsets.selector_list_mixin.SelectorListMixin.link_routes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        link_routes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -980,6 +1027,17 @@
   
     <nav class="md-nav" aria-label="SelectorRetrieveMixin">
       <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_rest.viewsets.selector_retrieve_mixin.SelectorRetrieveMixin.link_routes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        link_routes
+      
+    </span>
+  </a>
+  
+</li>
         
           <li class="md-nav__item">
   <a href="#django_spec_rest.viewsets.selector_retrieve_mixin.SelectorRetrieveMixin.get_object" class="md-nav__link">
@@ -1319,6 +1377,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="SelectorListMixin">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_rest.viewsets.selector_list_mixin.SelectorListMixin.link_routes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        link_routes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1332,6 +1407,17 @@
   
     <nav class="md-nav" aria-label="SelectorRetrieveMixin">
       <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_rest.viewsets.selector_retrieve_mixin.SelectorRetrieveMixin.link_routes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        link_routes
+      
+    </span>
+  </a>
+  
+</li>
         
           <li class="md-nav__item">
   <a href="#django_spec_rest.viewsets.selector_retrieve_mixin.SelectorRetrieveMixin.get_object" class="md-nav__link">
@@ -1968,6 +2054,34 @@ list spec answers as its own spec says, never the list's refusal
 
 
 
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="django_spec_rest.viewsets.selector_list_mixin.SelectorListMixin.link_routes" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">link_routes</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+  </span>
+
+<a href="#django_spec_rest.viewsets.selector_list_mixin.SelectorListMixin.link_routes" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">link_routes</span><span class="p">:</span> <span class="n">SpecRegistry</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The routes each affordance entry's <code>href</code> and <code>method</code> come from: a
+<code>SpecRegistry</code> whose names are URL pattern names (<code>"books:rename"</code>),
+reversed per response with the link's bound arguments. <code>None</code> (the
+default) leaves every entry its availability answer alone.</p>
+
+    </div>
+
+</div>
+
 
 
 
@@ -2027,6 +2141,34 @@ is its own selector's.</p>
 
 
 
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="django_spec_rest.viewsets.selector_retrieve_mixin.SelectorRetrieveMixin.link_routes" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">link_routes</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+  </span>
+
+<a href="#django_spec_rest.viewsets.selector_retrieve_mixin.SelectorRetrieveMixin.link_routes" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">link_routes</span><span class="p">:</span> <span class="n">SpecRegistry</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The routes each affordance entry's <code>href</code> and <code>method</code> come from: a
+<code>SpecRegistry</code> whose names are URL pattern names (<code>"books:rename"</code>),
+reversed per response with the link's bound arguments. <code>None</code> (the
+default) leaves every entry its availability answer alone.</p>
+
+    </div>
+
+</div>
 
 
 
