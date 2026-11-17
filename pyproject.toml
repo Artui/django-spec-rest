@@ -85,7 +85,9 @@ dependencies = [
     # OPTIONS answer and the OpenAPI body hand under the ``rest`` stamp.
     # 0.33.0 adds ``FilePresenter`` and ``file_output``, which a file's answer
     # reads, and a ``Presenter.output()`` that may answer ``None``.
-    "django-service-specs>=0.33.0",
+    # 0.34.0 adds ``row_links``, ``link_bindings`` and ``SpecRegistry.name_of``,
+    # which an affordance entry's ``href`` and ``method`` under ``link_routes`` read.
+    "django-service-specs>=0.34.0",
 ]
 
 [project.optional-dependencies]

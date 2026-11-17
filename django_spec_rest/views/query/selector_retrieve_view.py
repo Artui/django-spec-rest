@@ -4,6 +4,7 @@ from typing import Any, ClassVar
 
 from django.http import HttpResponseBase
 from django_service_specs.pool.pool_seeds import DEFAULT_POOL_SEEDS, PoolSeeds
+from django_service_specs.registry.spec_registry import SpecRegistry
 from django_service_specs.specs.selector_spec import SelectorSpec
 from django_service_specs.types.selector_kind import SelectorKind
 from rest_framework.generics import GenericAPIView
@@ -12,7 +13,10 @@ from rest_framework.request import Request
 
 from django_spec_rest.selectors.utils import dispatch_selector_for_spec, present_kernel_row
 from django_spec_rest.views.mutation.utils import _ServesRaisedSchema
-from django_spec_rest.views.spec_validation import validate_selector_view_spec
+from django_spec_rest.views.spec_validation import (
+    validate_link_routes,
+    validate_selector_view_spec,
+)
 from django_spec_rest.views.utils import (
     _JsonNullResponse,
     get_class_attr,
@@ -39,6 +43,12 @@ class SelectorRetrieveView(_ServesRaisedSchema, RetrieveModelMixin, GenericAPIVi
 
     spec: ClassVar[SelectorSpec | None] = None
 
+    link_routes: SpecRegistry | None = None
+    """The routes each affordance entry's ``href`` and ``method`` come from: a
+    ``SpecRegistry`` whose names are URL pattern names (``"books:rename"``),
+    reversed per response with the link's bound arguments. ``None`` (the
+    default) leaves every entry its availability answer alone."""
+
     pool_seeds: PoolSeeds = DEFAULT_POOL_SEEDS
     """The seeds the spec's callables are resolved with: the kernel's
     ``DEFAULT_POOL_SEEDS`` unless the view registers others, as a class
@@ -54,6 +64,7 @@ class SelectorRetrieveView(_ServesRaisedSchema, RetrieveModelMixin, GenericAPIVi
         validate_selector_view_spec(
             mounted, expected_kind=SelectorKind.RETRIEVE, pool_seeds=view_pool_seeds(mounted)
         )
+        validate_link_routes(mounted)
         return super().as_view(**initkwargs)
 
     def get_object(self) -> Any:

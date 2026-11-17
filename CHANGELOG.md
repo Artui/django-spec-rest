@@ -11,6 +11,30 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+### Added
+
+- **An affordance entry says where and how to call it.** `SelectorListView`,
+  `SelectorRetrieveView`, `SelectorListMixin` and `SelectorRetrieveMixin` (so
+  `ServiceViewSet`, `SelectorViewSet` and a `@selector_action`) take
+  `link_routes`, a kernel `SpecRegistry` whose names are URL pattern names. Each
+  presented row's `affordances` entry whose target it names gains `href`, DRF's
+  `reverse` of that name run per response with the link's bound arguments the
+  route captures, and `method`, the first of `GET`, `POST`, `PUT`, `PATCH`,
+  `DELETE` the route's view serves the target under. A target it does not name,
+  a name that does not reverse for the row, or a view serving it under no method
+  leaves the entry its availability answer. `None`, the default, changes no
+  body; `as_view()` refuses a value that is not a `SpecRegistry`, and reverses
+  nothing, so the registry may be declared before the URLconf loads.
+- **OpenAPI documents a selector's affordances.** A selector spec whose
+  presenter declares its rows documents each row as that schema plus the
+  `affordances` object the kernel's `affordance_schema` describes, with optional
+  `href` (`format: uri`) and `method` on each entry `link_routes` names.
+
+### Changed
+
+- The `django-service-specs` floor is 0.34.0, for `row_links`, `link_bindings`
+  and `SpecRegistry.name_of`.
+
 ## [0.13.0] — 2026-11-14
 
 ### Added

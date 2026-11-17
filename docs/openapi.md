@@ -434,9 +434,11 @@ which fields it fills.
 ## Not documented
 
 A selector spec's declared reads are not documented as query parameters, nor
-the affordance envelope a spec declaring affordances renders, nor the `null`
-body of an `allow_none` retrieve. Add them with `@extend_schema` where a
-client needs them.
+the `null` body of an `allow_none` retrieve, nor the affordance envelope where
+a presenter declares no row schema or a service spec's output selector
+renders it. Add them with `@extend_schema` where a client needs them. A selector
+spec's own affordances are documented on each row
+([Link affordances to their routes](recipes/affordance-links.md#openapi)).
 
 A refusal a service raises is not documented unless you declare it (see
 above), nor one your project configures (below).

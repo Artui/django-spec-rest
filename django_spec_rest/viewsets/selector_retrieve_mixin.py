@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from django.http import HttpResponseBase
+from django_service_specs.registry.spec_registry import SpecRegistry
 from rest_framework.exceptions import MethodNotAllowed
 from rest_framework.mixins import RetrieveModelMixin
 from rest_framework.request import Request
@@ -32,6 +33,12 @@ class SelectorRetrieveMixin(RetrieveModelMixin, _ActionSpecsMixin):
     ``allow_none``. A kernel write spec never asks ``get_object()``: its target
     is its own selector's.
     """
+
+    link_routes: SpecRegistry | None = None
+    """The routes each affordance entry's ``href`` and ``method`` come from: a
+    ``SpecRegistry`` whose names are URL pattern names (``"books:rename"``),
+    reversed per response with the link's bound arguments. ``None`` (the
+    default) leaves every entry its availability answer alone."""
 
     request: Any
     kwargs: dict[str, Any]

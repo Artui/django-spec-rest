@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from django_service_specs.registry.spec_registry import SpecRegistry
 from rest_framework.exceptions import MethodNotAllowed
 from rest_framework.mixins import ListModelMixin
 from rest_framework.request import Request
@@ -36,6 +37,12 @@ class SelectorListMixin(ListModelMixin, _ActionSpecsMixin):
     list spec answers as its own spec says, never the list's refusal
     (test_selector_list_mixin).
     """
+
+    link_routes: SpecRegistry | None = None
+    """The routes each affordance entry's ``href`` and ``method`` come from: a
+    ``SpecRegistry`` whose names are URL pattern names (``"books:rename"``),
+    reversed per response with the link's bound arguments. ``None`` (the
+    default) leaves every entry its availability answer alone."""
 
     request: Any
     kwargs: dict[str, Any]

@@ -48,6 +48,7 @@ from rest_framework.status import HTTP_204_NO_CONTENT
 
 from django_spec_rest.dispatch.kernel_edge import UNKNOWN_ARGUMENTS
 from django_spec_rest.openapi._caller_serializer_class import caller_serializer_class
+from django_spec_rest.openapi._documented_affordances import documented_affordances
 from django_spec_rest.openapi._lowered_for_the_document import lowered_for_the_document
 from django_spec_rest.openapi._resolve import (
     resolve_discriminated_action,
@@ -528,7 +529,19 @@ class ServiceAutoSchema(AutoSchema):
         """A kernel selector spec's body: one row, or every row for a ``LIST``."""
         rows = spec.kind is SelectorKind.LIST
         wrap = rows and not self._is_list_view(Serializer())
-        return _presented(presenter, rows=rows, wrap=wrap)
+        affordances = documented_affordances(spec, getattr(self.view, "link_routes", None))
+        row = None if affordances is None else self._row_schema(presenter)
+        if row is None:
+            return _presented(presenter, rows=rows, wrap=wrap)
+        item = {"allOf": [row, affordances]}
+        return OpenApiResponse(response=build_array_type(item) if wrap else item)
+
+    def _row_schema(self, presenter: Presenter) -> dict[str, Any] | None:
+        """One presented row's schema: the serializer's component, or the presenter's output."""
+        if isinstance(presenter, SerializerPresenter):
+            return self.resolve_serializer(presenter.serializer_class, "response").ref
+        output = presenter.output()
+        return None if output is None else lowered_for_the_document(output_schema(output))
 
     def _resolve_path_parameters(self, variables: list[str]) -> list[Any]:
         """Each path variable's parameter: drf-spectacular's, or the read a spec declares for it."""

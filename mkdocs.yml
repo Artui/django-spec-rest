@@ -89,6 +89,7 @@ nav:
       - Filter a selector with filter_set: recipes/selector-filtering.md
       - Serializer context: recipes/serializer-context.md
       - Calling a spec off HTTP: recipes/off-http-inputs.md
+      - Link affordances to their routes: recipes/affordance-links.md
   - Reference:
       - reference/index.md
       - Views: reference/views.md

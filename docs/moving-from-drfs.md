@@ -496,7 +496,8 @@ The query string is read by the kernel's flat reader:
   order, with `maxItems` 1000, a `MultipleChoiceFilter` with `maxItems`, and
   an array as a repeated key. A validator's refusal is documented as the 400 it
   answers. A selector's reads are not documented as query parameters, nor
-  the affordance envelope, nor the `null` body of an `allow_none` retrieve.
+  the `null` body of an `allow_none` retrieve; a selector's own affordance
+  envelope is, on each row its presenter declares.
 - **The 422 is documented only where a spec declares it.** drfs documented the
   422 of a plain `ServiceError` on every spec with an `input_serializer`,
   unless `document_service_error=False`; spec-rest documents it on no spec, a

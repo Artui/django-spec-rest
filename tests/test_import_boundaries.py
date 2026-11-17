@@ -35,7 +35,11 @@ ALLOWED_VIEWS_IMPORTS: dict[str, frozenset[str]] = {
     # ``map_service_error``, so the ``AdditionalInputRequired`` schema
     # ``restore_raised_schema`` recognises by class is restored.
     "dispatch/kernel_refusals.py": frozenset({"django_spec_rest.views.mutation.map_service_error"}),
-    "selectors/utils.py": frozenset({"django_spec_rest.views.utils"}),
+    # ``linked_affordances`` reverses each affordance's route, which only a DRF
+    # request can, after the one ``present`` every read path shares.
+    "selectors/utils.py": frozenset(
+        {"django_spec_rest.views.linked_affordances", "django_spec_rest.views.utils"}
+    ),
 }
 
 # Modules outside the transport that import DRF, and which of its modules.
