@@ -19,3 +19,5 @@ shared by several transports) is the
   request, and the keys a spec or a view adds.
 - **[Calling a spec off HTTP](off-http-inputs.md)**: the kernel's `dispatch`
   over a spec a route serves.
+- **[Link affordances to their routes](affordance-links.md)**: `link_routes`,
+  and the `href` and `method` each affordance entry gains.

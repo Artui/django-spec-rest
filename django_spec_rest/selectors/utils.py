@@ -17,6 +17,7 @@ from rest_framework.settings import api_settings
 from rest_framework.versioning import QueryParameterVersioning
 
 from django_spec_rest.dispatch.kernel_edge import KernelSpec, dispatch_kernel_spec
+from django_spec_rest.views.linked_affordances import linked_affordances
 from django_spec_rest.views.utils import view_call_context, view_pool_seeds
 
 
@@ -45,7 +46,8 @@ def present_kernel_selection(
 ) -> Any:
     """``rows`` of a kernel selector ``result`` as the response body: the spec's, or the view's."""
     if spec.presenter is not None or spec.affordances is not None:
-        return present(spec, dataclasses.replace(result, value=rows))
+        presented = present(spec, dataclasses.replace(result, value=rows))
+        return linked_affordances(view, spec, presented, many=many)
     return view.get_serializer(rows, many=many).data
 
 

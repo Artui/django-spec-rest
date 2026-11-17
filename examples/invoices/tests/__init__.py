@@ -125,6 +125,31 @@ class SpecOnAViewTests(APITestCase):
         self.assertEqual([row["id"] for row in response.data], [sent.pk])
 
 
+class AffordanceLinksTests(APITestCase):
+    """``LinkedInvoiceListView`` names each affordance's route and method."""
+
+    def test_each_row_carries_where_and_how_to_call_its_affordances(self) -> None:
+        invoice = _invoice(customer="Acme")
+
+        response = self.client.get("/linked-invoices/")
+
+        self.assertEqual(
+            response.data[0]["affordances"],
+            {
+                "update": {
+                    "available": True,
+                    "href": f"http://testserver/invoices/{invoice.pk}/",
+                    "method": "PUT",
+                },
+                "send": {
+                    "available": True,
+                    "href": f"http://testserver/invoices/{invoice.pk}/send/",
+                    "method": "POST",
+                },
+            },
+        )
+
+
 class FilterOffTheQueryStringTests(APITestCase):
     """The list spec's ``filter_set`` is fed from the query string."""
 

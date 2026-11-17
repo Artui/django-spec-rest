@@ -11,6 +11,40 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+## [0.14.0] — 2026-11-17
+
+### Added
+
+- **An affordance entry says where and how to call it.** `SelectorListView`,
+  `SelectorRetrieveView`, `SelectorListMixin` and `SelectorRetrieveMixin` (so
+  `ServiceViewSet`, `SelectorViewSet` and a `@selector_action`) take
+  `link_routes`, a kernel `SpecRegistry` whose names are URL pattern names. Each
+  presented row's `affordances` entry whose target it names gains `href`, DRF's
+  `reverse` of that name run per response with the link's required reads (the
+  target selector's reads a caller must supply, never a body field), and
+  `method`, the first of `POST`, `PUT`, `PATCH`, `DELETE` the route's view
+  serves the target under. A target it does not name, a name that does not
+  reverse for the row, a view serving it under no method, or a row lacking a
+  field a declared output binds leaves the entry its availability answer; with
+  no declared output, that missing field raises `ImproperlyConfigured`. `None`,
+  the default, changes no body; `as_view()` refuses a value that is not a
+  `SpecRegistry`, and reverses nothing, so the registry may be declared before
+  the URLconf loads.
+- **OpenAPI documents a selector's affordances.** A selector spec whose
+  presenter declares its rows documents each row as that schema plus the
+  `affordances` object the kernel's `affordance_schema` describes, with optional
+  `href` (`format: uri`) and `method` on each entry `link_routes` names.
+
+### Changed
+
+- **A selector declaring affordances documents its rows differently.** Each
+  row is `allOf` the serializer's component (or the presenter's output) and the
+  `affordances` object, with or without `link_routes`, where it was the
+  component alone; a client generated from the document sees a composed type.
+- The `django-service-specs` floor is 0.34.1, for `row_links` and the
+  `required` reads on each of its links, `link_bindings` and
+  `SpecRegistry.name_of`.
+
 ## [0.13.0] — 2026-11-14
 
 ### Added
@@ -1017,7 +1051,8 @@ lists each with what a project rewrites.
 - **The package is no longer a Django app.** It has no models, migrations,
   templates, static files or URLs, so it needs no `INSTALLED_APPS` entry.
 
-[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/Artui/django-spec-rest/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/Artui/django-spec-rest/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/Artui/django-spec-rest/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/Artui/django-spec-rest/compare/v0.10.0...v0.11.0

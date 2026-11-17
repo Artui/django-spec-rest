@@ -24,6 +24,8 @@ from django_service_specs import (
     SelectorKind,
     SelectorSpec,
     ServiceSpec,
+    SpecLink,
+    SpecRegistry,
     Unrestricted,
 )
 from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
@@ -256,6 +258,27 @@ SENT_SPEC = SelectorSpec(
 )
 
 
+# The routes each row's affordances lead to, named by URL pattern name: the
+# router's ``invoice-detail`` serves ``UPDATE_SPEC`` (as PUT, before PATCH) and
+# ``invoice-send`` serves ``SEND_SPEC`` (POST). Built at import, before the
+# URLconf that imports this module has any patterns: nothing reverses until a
+# response is presented.
+INVOICE_ROUTES = SpecRegistry()
+INVOICE_ROUTES.register("invoice-detail", UPDATE_SPEC)
+INVOICE_ROUTES.register("invoice-send", SEND_SPEC)
+
+LINKED_SPEC = SelectorSpec(
+    kind=SelectorKind.LIST,
+    selector=list_invoices,
+    permissions=OPEN,
+    presenter=PRESENTER,
+    affordances={
+        "update": SpecLink(UPDATE_SPEC, arguments={"pk": "id"}),
+        "send": SpecLink(SEND_SPEC, arguments={"pk": "id"}),
+    },
+)
+
+
 # ``update_invoice`` raises ``ServiceConflict`` for a sent invoice, a refusal the
 # spec cannot show, so it is declared here beside what the schema documents. It
 # is on the viewset's methods, not the class: a class decorated before
@@ -309,6 +332,14 @@ class SentInvoiceListView(SelectorListView):
     """``GET /sent-invoices/``: one selector spec on a standalone view."""
 
     spec = SENT_SPEC
+
+
+class LinkedInvoiceListView(SelectorListView):
+    """``GET /linked-invoices/``: each row's affordances carry ``href`` and ``method``."""
+
+    spec = LINKED_SPEC
+    link_routes = INVOICE_ROUTES
+    pool_seeds = SEEDS
 
 
 class SummaryInvoiceListView(SelectorListView):

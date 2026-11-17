@@ -7,6 +7,7 @@ from typing import Any
 from django.core.exceptions import ImproperlyConfigured
 from django_service_specs.dispatch.check_seeds import check_seeds
 from django_service_specs.pool.pool_seeds import PoolSeeds
+from django_service_specs.registry.spec_registry import SpecRegistry
 from django_service_specs.schema.file_output import file_output
 from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelectorSpec
 from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
@@ -351,3 +352,13 @@ def validate_selector_view_spec(
     _check_kernel_seeds(spec, pool_seeds=pool_seeds)
     if expected_kind is SelectorKind.LIST:
         validate_filter_set_no_backend_conflict(view_cls, spec, label=label)
+
+
+def validate_link_routes(view_cls: type | MountedView) -> None:
+    """Refuse a ``link_routes`` that is not a ``SpecRegistry``, without reversing anything."""
+    routes = getattr(view_cls, "link_routes", None)
+    if routes is not None and not isinstance(routes, SpecRegistry):
+        raise ImproperlyConfigured(
+            f"{view_cls.__name__}.link_routes must be a SpecRegistry named by URL pattern "
+            f"names, or None; got {type(routes).__name__}."
+        )

@@ -21,6 +21,7 @@ from django_spec_rest.views.spec_validation import (
     _validate_success_status,
     refuse_a_stray_variant,
     validate_discriminated_action,
+    validate_link_routes,
     validate_mutation_view_spec,
     validate_selector_view_spec,
 )
@@ -405,6 +406,7 @@ class _ActionSpecsMixin(_ServesRaisedSchema):
         _validate_decorated_actions(mounted, pool_seeds=pool_seeds)
         actions = args[0] if args else initkwargs.get("actions")
         _validate_lookup_captures(mounted, actions, initkwargs)
+        validate_link_routes(mounted)
         warn_unscoped_get_queryset(mounted)
         return super().as_view(*args, **initkwargs)  # ty: ignore[unresolved-attribute]
 
