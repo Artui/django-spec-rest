@@ -57,6 +57,7 @@ from invoices.serializers import (
     BlankInvoiceInput,
     InvoiceInput,
     InvoiceSerializer,
+    ReceiptChangeInput,
     ReceiptInput,
 )
 from invoices.services import (
@@ -65,6 +66,7 @@ from invoices.services import (
     send_invoice,
     sending_paused,
     set_receipt,
+    set_receipt_change,
     update_invoice,
 )
 
@@ -178,6 +180,15 @@ UPDATE_SPEC = ServiceSpec(
 RECEIPT_SPEC = ServiceSpec(
     service=set_receipt,
     validator=SerializerValidator(ReceiptInput),
+    instance_selector_spec=INVOICE_LOOKUP,
+    permissions=OPEN,
+    presenter=PRESENTER,
+)
+
+# The same clear behind a ``DataclassSerializer``: ``null`` clears, a key left out keeps the file.
+RECEIPT_CHANGE_SPEC = ServiceSpec(
+    service=set_receipt_change,
+    validator=SerializerValidator(ReceiptChangeInput),
     instance_selector_spec=INVOICE_LOOKUP,
     permissions=OPEN,
     presenter=PRESENTER,
@@ -326,6 +337,12 @@ class InvoiceReceiptView(ServiceUpdateView):
     """``PATCH /invoices/<pk>/receipt/``: a ``null`` clears the file the invoice holds."""
 
     spec = RECEIPT_SPEC
+
+
+class InvoiceReceiptChangeView(ServiceUpdateView):
+    """``PUT /invoices/<pk>/receipt-change/``: a dataclass body whose ``null`` clears the file."""
+
+    spec = RECEIPT_CHANGE_SPEC
 
 
 class SentInvoiceListView(SelectorListView):

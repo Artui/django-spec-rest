@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import dataclasses
 import operator
 from collections.abc import Callable, Iterable, Mapping, MutableMapping
@@ -14,7 +15,7 @@ from django_service_specs.validation.validated import Validated
 from django_service_specs.validation.validation_context import ValidationContext
 from django_service_specs.validation.validator import Validator
 from rest_framework import serializers
-from rest_framework.fields import get_error_detail
+from rest_framework.fields import empty, get_error_detail
 from rest_framework_dataclasses.serializers import DataclassSerializer
 
 from django_spec_rest.service_specs.drf_invalid_arguments import DRFInvalidArguments
@@ -131,15 +132,27 @@ class SerializerValidator(Validator):
     the field's ``source`` or, where that is no single key, by the field's name,
     and by the key an author named it under (see ``_handed``), and it is laid
     back over the key in a
-    mapping ``data`` (see ``_lay_back``). A dataclass instance is ``data`` as
-    built, and a ``many`` call's rows are neither validated apart nor laid back.
+    mapping ``data`` (see ``_lay_back``). Nothing is laid back over a dataclass
+    instance, and a ``many`` call's rows are neither validated apart nor laid back.
     **A validated ``None`` for a file field is ``""``,** what the model field
     stores for no file, in ``data`` and the values, where the input is no form
     (see ``_cleared``). ``save()``, ``create`` and ``update`` take it as it is and
     the kernel's ``update_from_input`` reads it as a clear, so a ``null`` a
     field's ``allow_null`` lets through clears the file however a service
-    writes it. The same holds for a field DRF fills with its ``None`` default on
-    a whole call (test_a_put_leaving_out_a_file_defaulting_to_none_clears_it).
+    writes it. In a mapping, the same holds for a field DRF fills with its
+    ``None`` default on a whole call
+    (test_a_put_leaving_out_a_file_defaulting_to_none_clears_it). **A dataclass
+    instance** (a ``DataclassSerializer``'s, frozen included, nested, a row, or
+    one a ``validate()`` returns) **is cleared where the client sent the key**,
+    read off the input at each level, never off the instance, whose ``None``
+    default for a key left out, or a DRF ``default=None``, keeps the file
+    (test_a_put_leaving_a_dataclass_s_file_out_keeps_it and
+    test_a_put_leaving_out_a_dataclass_s_file_defaulting_to_none_keeps_it), and only where it is a
+    dataclass (test_an_object_with_the_field_that_is_no_dataclass_is_as_built).
+    Dataclass rows a ``validate()`` reshaped (a count unlike the list sent) are
+    kept as built, none cleared (test_dataclass_rows_a_validate_dropped_are_kept_as_built).
+    The cleared instance is a shallow copy with only those fields set, so
+    ``__post_init__`` is not run again (see ``_cleared_at``).
 
     **A partial call over a dataclass is refused**, a ``DataclassSerializer``
     subclass included: one builds its instance from every field, and a field
@@ -328,7 +341,9 @@ class SerializerValidator(Validator):
         )
         if not serializer.is_valid():
             raise DRFInvalidArguments(_by_row(serializer.errors, indices))
-        data: list[Any] = _cleared(serializer, list(serializer.validated_data))
+        data: list[Any] = _cleared(
+            serializer, list(serializer.validated_data), serializer.initial_data
+        )
         return Validated(
             values={many_argument: [_values(row) for row in data]},
             data=data,
@@ -342,11 +357,12 @@ class SerializerValidator(Validator):
         if not serializer.is_valid():
             raise DRFInvalidArguments(serializer.errors)
         data: Any = serializer.validated_data
-        held = _server_values(serializer, server_values(self, context.principal))
+        put = server_values(self, context.principal)
+        held = _server_values(serializer, put)
         _lay_back(data, serializer, held)
         if not isinstance(serializer.initial_data, MultiValueDict):
-            data = _cleared(serializer, data)
-            held = {name: _cleared(serializer.fields[name], value) for name, value in held.items()}
+            data = _cleared(serializer, data, serializer.initial_data)
+            held = {name: _cleared(serializer.fields[name], held[name], put[name]) for name in held}
         values = _values(data)
         handed = _handed(serializer, held, author_keys(self, context.principal))
         values.update(handed)
@@ -473,30 +489,41 @@ def _lay_back(data: Any, serializer: serializers.Serializer, held: Mapping[str, 
             target[last] = value
 
 
-def _cleared(field: serializers.Field | None, value: Any) -> Any:
-    """``value`` as ``field`` validated it, each file field's ``None`` the empty file ``""``."""
+def _cleared(field: serializers.Field | None, value: Any, sent: Any) -> Any:
+    """``value`` as ``field`` validated ``sent``, each file field's ``None`` the empty file."""
     if isinstance(field, serializers.FileField):
         return "" if value is None else value
     if isinstance(field, serializers.ListSerializer):
         if not isinstance(value, list):
             return value
-        rows = [_cleared(field.child, row) for row in value]
+        sent = sent if isinstance(sent, list) and len(sent) == len(value) else [empty] * len(value)
+        rows = [_cleared(field.child, row, raw) for row, raw in zip(value, sent, strict=True)]
         return value if all(map(operator.is_, rows, value)) else rows
     if isinstance(field, serializers.Serializer):
         for child in field.fields.values():
             attrs = child.source_attrs
-            value = _cleared_at(value, attrs, child) if attrs else _cleared(child, value)
+            raw = sent.get(child.field_name, empty) if isinstance(sent, Mapping) else empty
+            value = _cleared_at(value, attrs, child, raw) if attrs else _cleared(child, value, raw)
     return value
 
 
-def _cleared_at(value: Any, attrs: list[str], field: serializers.Field) -> Any:
+def _cleared_at(value: Any, attrs: list[str], field: serializers.Field, sent: Any) -> Any:
     """``value`` with what ``field`` validated at ``attrs`` cleared, or itself if unchanged."""
-    if not isinstance(value, Mapping) or attrs[0] not in value:
-        return value
     head, *rest = attrs
-    held = value[head]
-    cleared = _cleared_at(held, rest, field) if rest else _cleared(field, held)
-    return value if cleared is held else {**value, head: cleared}
+    if isinstance(value, Mapping) and head in value:
+        held = value[head]
+    elif dataclasses.is_dataclass(type(value)) and sent is not empty:
+        held = getattr(value, head, empty)
+    else:
+        return value
+    cleared = _cleared_at(held, rest, field, sent) if rest else _cleared(field, held, sent)
+    if cleared is held:
+        return value
+    if isinstance(value, Mapping):
+        return {**value, head: cleared}
+    built = copy.copy(value)
+    object.__setattr__(built, head, cleared)
+    return built
 
 
 def _by_row(errors: Any, indices: list[int]) -> dict[Any, Any]:

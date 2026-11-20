@@ -11,6 +11,24 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+## [0.15.0] — 2026-11-20
+
+### Changed
+
+- **A JSON `null` for a file field clears the file on a dataclass input too.**
+  Behind a `DataclassSerializer` (a frozen dataclass included), a nested one, or
+  a `validate()` returning a dataclass, the instance in the service's `data` and
+  the parameter named like the field hold `""` where the client sent `null`, as
+  a mapping's already did, so `PUT {"upload": null}` clears the file. A service
+  that read the dataclass's `None` there as "keep the file" now gets `""`, "no
+  file". A key the client left out keeps the file, the instance's `None` default
+  and a DRF `default=None` field included (a mapping input's `PUT` omitting such
+  a field still clears): the clear reads what was sent, at each nesting level
+  and each row. Dataclass rows a parent `validate()` reshaped (a count unlike the
+  list sent) are kept as built, none cleared; a mapping's rows still clear. The
+  changed instance is a shallow copy with only the cleared fields set, so
+  `__post_init__` does not run again.
+
 ## [0.14.0] — 2026-11-17
 
 ### Added
@@ -1051,7 +1069,8 @@ lists each with what a project rewrites.
 - **The package is no longer a Django app.** It has no models, migrations,
   templates, static files or URLs, so it needs no `INSTALLED_APPS` entry.
 
-[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/Artui/django-spec-rest/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/Artui/django-spec-rest/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/Artui/django-spec-rest/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/Artui/django-spec-rest/compare/v0.11.0...v0.12.0
