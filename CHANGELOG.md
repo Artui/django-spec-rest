@@ -11,6 +11,19 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+### Changed
+
+- **A JSON `null` for a file field clears the file on a dataclass input too.**
+  Behind a `DataclassSerializer` (a frozen dataclass included), a nested one, or
+  a `validate()` returning a dataclass, the instance in the service's `data` and
+  the parameter named like the field hold `""` where the client sent `null`, as
+  a mapping's already did, so `PUT {"upload": null}` clears the file. A service
+  that read the dataclass's `None` there as "keep the file" now gets `""`, "no
+  file". A key the client left out keeps the file, the instance's `None` default
+  included: the clear reads what was sent, at each nesting level and each row.
+  The changed instance is a shallow copy with only the cleared fields set, so
+  `__post_init__` does not run again.
+
 ## [0.14.0] — 2026-11-17
 
 ### Added

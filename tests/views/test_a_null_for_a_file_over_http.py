@@ -365,21 +365,148 @@ def test_a_patch_leaving_out_a_file_defaulting_to_none_keeps_it(
     assert document.upload.name.startswith("documents/held")
 
 
-def test_a_dataclass_s_field_keeps_its_none(settings: Any, tmp_path: Any) -> None:
-    """A dataclass instance is as built: its field keeps ``None``, ``""`` being no value."""
+_BUILT: list[Any] = []
 
-    class _Declared(DataclassSerializer):
-        upload = serializers.FileField(allow_null=True, required=False)
 
-        class Meta:
-            dataclass = _Upload
+@dataclass(frozen=True)
+class _FrozenUpload:
+    upload: Any = None
+    label: str = ""
 
+    def __post_init__(self) -> None:
+        _BUILT.append(self.upload)
+
+
+class _Frozen(DataclassSerializer):
+    upload = serializers.FileField(allow_null=True, required=False)
+
+    class Meta:
+        dataclass = _FrozenUpload
+
+
+class _FrozenWire(DataclassSerializer):
+    wire = serializers.FileField(source="upload", allow_null=True, required=False)
+
+    class Meta:
+        dataclass = _FrozenUpload
+        fields = ["wire", "label"]
+
+
+class _NestedFrozen(serializers.Serializer):
+    child = _Frozen(required=False)
+
+
+class _NestedFrozenMany(serializers.Serializer):
+    children = _Frozen(many=True, required=False)
+
+
+class _NoRowsByDefault(serializers.Serializer):
+    children = _Child(many=True, default=list)
+
+
+@dataclass
+class _Other:
+    name: str = "built"
+
+
+class _ReturnsADataclass(serializers.Serializer):
+    upload = serializers.FileField(allow_null=True, required=False)
+
+    def validate(self, attrs: dict[str, Any]) -> Any:
+        return _Other()
+
+
+def _update_both(*, instance: Document, data: Any, upload: Any) -> Document:
+    _HANDED["data"] = data
+    _HANDED["upload"] = upload
+    return update_from_input(instance, {"upload": data.upload}).instance
+
+
+def _send(method: str, spec: ServiceSpec, document: Document, body: Any) -> Any:
+    request = getattr(_factory, method)(f"/documents/{document.pk}/", body, format="json")
+    response = ServiceUpdateView.as_view(spec=spec)(request, pk=document.pk)
+    document.refresh_from_db()
+    return response
+
+
+@pytest.mark.parametrize("method", ["put", "patch"])
+def test_a_dataclass_s_null_clears_the_file(method: str, settings: Any, tmp_path: Any) -> None:
+    """A PATCH over a dataclass validates whole, so it clears as a PUT does."""
     document = _held(settings, tmp_path)
-    request = _factory.put(f"/documents/{document.pk}/", {"upload": None}, format="json")
-    response = ServiceUpdateView.as_view(spec=_spec(_Declared, _read_both))(request, pk=document.pk)
-    assert response.status_code == 200
+    _BUILT.clear()
+    response = _send(method, _spec(_Frozen, _update_both), document, {"upload": None})
+    assert response.status_code == 200, response.data
+    assert _HANDED["data"].upload == ""
+    assert _HANDED["upload"] == ""
+    assert document.upload.name == ""
+    assert _BUILT == [None]
+
+
+def test_a_put_leaving_a_dataclass_s_file_out_keeps_it(settings: Any, tmp_path: Any) -> None:
+    """Fails with the instance's ``None`` default read as a ``null`` the client never sent."""
+    document = _held(settings, tmp_path)
+    response = _send("put", _spec(_Frozen, _update_both), document, {"label": "x"})
+    assert response.status_code == 200, response.data
     assert _HANDED["data"].upload is None
     assert _HANDED["upload"] is None
+    assert document.upload.name.startswith("documents/held")
+
+
+def test_a_dataclass_s_field_is_sent_by_its_wire_name(settings: Any, tmp_path: Any) -> None:
+    """Fails with presence read by the field's ``source`` rather than the key the client sends."""
+    document = _held(settings, tmp_path)
+    _send("put", _spec(_FrozenWire, _read_both), document, {"wire": None})
+    assert _HANDED["data"].upload == ""
+    assert _HANDED["upload"] == ""
+
+
+@pytest.mark.parametrize(
+    ("sent", "upload"), [({"upload": None, "label": "x"}, ""), ({"label": "x"}, None)]
+)
+def test_a_nested_dataclass_clears_only_a_key_sent(
+    sent: dict[str, Any], upload: Any, settings: Any, tmp_path: Any
+) -> None:
+    document = _held(settings, tmp_path)
+    _send("put", _spec(_NestedFrozen, _read_data), document, {"child": sent})
+    assert _HANDED["data"]["child"] == _FrozenUpload(upload=upload, label="x")
+
+
+def test_each_nested_dataclass_row_clears_only_a_key_sent(settings: Any, tmp_path: Any) -> None:
+    document = _held(settings, tmp_path)
+    body = {"children": [{"upload": None}, {"label": "kept"}]}
+    _send("put", _spec(_NestedFrozenMany, _read_data), document, body)
+    assert _HANDED["data"]["children"] == [
+        _FrozenUpload(upload=""),
+        _FrozenUpload(upload=None, label="kept"),
+    ]
+
+
+def test_rows_a_default_filled_are_walked_with_nothing_sent(settings: Any, tmp_path: Any) -> None:
+    """Fails with the rows read off a client's list where DRF filled the default instead."""
+    document = _held(settings, tmp_path)
+    _send("put", _spec(_NoRowsByDefault, _read_data), document, {})
+    assert _HANDED["data"] == {"children": []}
+
+
+def test_a_dataclass_a_validate_returns_without_the_field_is_as_built(
+    settings: Any, tmp_path: Any
+) -> None:
+    """Fails with the walk reading an attribute the instance does not have."""
+    document = _held(settings, tmp_path)
+    _send("put", _spec(_ReturnsADataclass, _read_data), document, {"upload": None})
+    assert _HANDED["data"] == _Other()
+
+
+def test_a_dataclass_with_nothing_to_clear_is_the_one_built(settings: Any, tmp_path: Any) -> None:
+    seen: dict[str, Any] = {}
+
+    def service(*, instance: Document, data: Any, serializer: Any) -> Document:
+        seen["same"] = data is serializer.validated_data
+        return instance
+
+    document = _held(settings, tmp_path)
+    _send("put", _spec(_Frozen, service), document, {"label": "x"})
+    assert seen == {"same": True}
 
 
 def _read_both(*, instance: Document, data: Any, upload: Any) -> Document:
@@ -467,3 +594,22 @@ def test_a_bulk_row_s_null_is_handed_the_empty_file(settings: Any, tmp_path: Any
     assert response.status_code == 201, response.data
     assert _HANDED["items"] == [{"upload": ""}, {"title": "t"}]
     assert _HANDED["data"] == [{"upload": ""}, {"title": "t"}]
+
+
+def test_a_bulk_dataclass_row_clears_only_a_key_sent(settings: Any, tmp_path: Any) -> None:
+    def create(*, items: list[dict[str, Any]], data: list[Any]) -> list[Any]:
+        _HANDED["items"] = items
+        _HANDED["data"] = data
+        return []
+
+    spec = ServiceSpec(
+        service=create,
+        validator=SerializerValidator(_Frozen),
+        many=True,
+        permissions=_OPEN,
+    )
+    request = _factory.post("/documents/", [{"upload": None}, {"label": "t"}], format="json")
+    response = ServiceCreateView.as_view(spec=spec)(request)
+    assert response.status_code == 201, response.data
+    assert _HANDED["items"] == [{"upload": "", "label": ""}, {"upload": None, "label": "t"}]
+    assert _HANDED["data"] == [_FrozenUpload(upload=""), _FrozenUpload(label="t")]

@@ -429,11 +429,14 @@ The query string is read by the kernel's flat reader:
   `qs.update(**data)` all store it. The bound serializer keeps DRF's `None`, so
   `serializer.save()` clears it too. A service reading the value itself must
   read `""` as "no file". A form body is unchanged: DRF's blank for the field
-  keeps the file, and a `FormValidator`'s clear checkbox clears it. A dataclass's
-  field stays `None`, as declared, so a service writing one keeps the file.
+  keeps the file, and a `FormValidator`'s clear checkbox clears it.
   A `PUT` omitting a file field declared `FileField(allow_null=True, default=None)`
   is the same as a `null`: DRF fills the field with its `None` default, so the
   file is cleared. A `PATCH` fills no default, so it keeps the file.
+  A dataclass input (a `DataclassSerializer`, nested or as rows) clears where the
+  client sent the `null`: its instance holds `""` for the field. A key the client
+  left out keeps the file there, even where the dataclass defaults the field to
+  `None`, since the clear reads what was sent rather than the instance.
 - **A body that is no object answers `{"detail": "The body must be an object;
   got list."}`**, where drfs answered `{"non_field_errors": ["Invalid data.
   Expected a dictionary, but got list."]}`. Both are a 400.
