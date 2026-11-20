@@ -1973,11 +1973,18 @@ over:</p>
   <code>qs.update(**data)</code> all store it. The bound serializer keeps DRF's <code>None</code>, so
   <code>serializer.save()</code> clears it too. A service reading the value itself must
   read <code>""</code> as "no file". A form body is unchanged: DRF's blank for the field
-  keeps the file, and a <code>FormValidator</code>'s clear checkbox clears it. A dataclass's
-  field stays <code>None</code>, as declared, so a service writing one keeps the file.
-  A <code>PUT</code> omitting a file field declared <code>FileField(allow_null=True, default=None)</code>
-  is the same as a <code>null</code>: DRF fills the field with its <code>None</code> default, so the
-  file is cleared. A <code>PATCH</code> fills no default, so it keeps the file.</li>
+  keeps the file, and a <code>FormValidator</code>'s clear checkbox clears it.
+  In a mapping input, a <code>PUT</code> omitting a file field declared
+  <code>FileField(allow_null=True, default=None)</code> is the same as a <code>null</code>: DRF fills
+  the field with its <code>None</code> default, so the file is cleared. A <code>PATCH</code> fills no
+  default, so it keeps the file.
+  A dataclass input (a <code>DataclassSerializer</code>, nested or as rows) clears where the
+  client sent the <code>null</code>: its instance holds <code>""</code> for the field. A key the client
+  left out keeps the file there, even where the dataclass defaults the field to
+  <code>None</code> or the DRF field declares <code>default=None</code>, since the clear reads what was
+  sent rather than the instance. Rows a parent <code>validate()</code> reshaped (a different
+  count from the list sent) are kept as built, none cleared; a mapping's rows
+  still clear.</li>
 <li><strong>A body that is no object answers <code>{"detail": "The body must be an object;
   got list."}</code></strong>, where drfs answered <code>{"non_field_errors": ["Invalid data.
   Expected a dictionary, but got list."]}</code>. Both are a 400.</li>

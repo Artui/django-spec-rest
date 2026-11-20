@@ -1972,15 +1972,27 @@ the body, and whatever a later field of the same <code>source</code>, a
 the field's <code>source</code> or, where that is no single key, by the field's name,
 and by the key an author named it under (see <code>_handed</code>), and it is laid
 back over the key in a
-mapping <code>data</code> (see <code>_lay_back</code>). A dataclass instance is <code>data</code> as
-built, and a <code>many</code> call's rows are neither validated apart nor laid back.
+mapping <code>data</code> (see <code>_lay_back</code>). Nothing is laid back over a dataclass
+instance, and a <code>many</code> call's rows are neither validated apart nor laid back.
 <strong>A validated <code>None</code> for a file field is <code>""</code>,</strong> what the model field
 stores for no file, in <code>data</code> and the values, where the input is no form
 (see <code>_cleared</code>). <code>save()</code>, <code>create</code> and <code>update</code> take it as it is and
 the kernel's <code>update_from_input</code> reads it as a clear, so a <code>null</code> a
 field's <code>allow_null</code> lets through clears the file however a service
-writes it. The same holds for a field DRF fills with its <code>None</code> default on
-a whole call (test_a_put_leaving_out_a_file_defaulting_to_none_clears_it).</p>
+writes it. In a mapping, the same holds for a field DRF fills with its
+<code>None</code> default on a whole call
+(test_a_put_leaving_out_a_file_defaulting_to_none_clears_it). <strong>A dataclass
+instance</strong> (a <code>DataclassSerializer</code>'s, frozen included, nested, a row, or
+one a <code>validate()</code> returns) <strong>is cleared where the client sent the key</strong>,
+read off the input at each level, never off the instance, whose <code>None</code>
+default for a key left out, or a DRF <code>default=None</code>, keeps the file
+(test_a_put_leaving_a_dataclass_s_file_out_keeps_it and
+test_a_put_leaving_out_a_dataclass_s_file_defaulting_to_none_keeps_it), and only where it is a
+dataclass (test_an_object_with_the_field_that_is_no_dataclass_is_as_built).
+Dataclass rows a <code>validate()</code> reshaped (a count unlike the list sent) are
+kept as built, none cleared (test_dataclass_rows_a_validate_dropped_are_kept_as_built).
+The cleared instance is a shallow copy with only those fields set, so
+<code>__post_init__</code> is not run again (see <code>_cleared_at</code>).</p>
 <p><strong>A partial call over a dataclass is refused</strong>, a <code>DataclassSerializer</code>
 subclass included: one builds its instance from every field, and a field
 a partial call left out fails as a <code>TypeError</code> from inside the library.
