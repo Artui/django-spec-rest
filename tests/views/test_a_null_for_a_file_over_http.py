@@ -380,6 +380,13 @@ class _Frozen(DataclassSerializer):
         dataclass = _FrozenUpload
 
 
+class _FrozenDefaulted(DataclassSerializer):
+    upload = serializers.FileField(allow_null=True, default=None)
+
+    class Meta:
+        dataclass = _FrozenUpload
+
+
 class _FrozenWire(DataclassSerializer):
     wire = serializers.FileField(source="upload", allow_null=True, required=False)
 
@@ -394,6 +401,13 @@ class _NestedFrozen(serializers.Serializer):
 
 class _NestedFrozenMany(serializers.Serializer):
     children = _Frozen(many=True, required=False)
+
+
+class _FrozenRowsDropped(serializers.Serializer):
+    children = _Frozen(many=True)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        return {"children": attrs["children"][:1]}
 
 
 class _NoRowsByDefault(serializers.Serializer):
@@ -469,6 +483,17 @@ def test_a_put_leaving_a_dataclass_s_file_out_keeps_it(settings: Any, tmp_path: 
     assert document.upload.name.startswith("documents/held")
 
 
+def test_a_put_leaving_out_a_dataclass_s_file_defaulting_to_none_keeps_it(
+    settings: Any, tmp_path: Any
+) -> None:
+    """Fails with DRF's ``None`` default for a field left out read as a ``null`` sent."""
+    document = _held(settings, tmp_path)
+    response = _send("put", _spec(_FrozenDefaulted, _update_both), document, {"label": "x"})
+    assert response.status_code == 200, response.data
+    assert _HANDED["data"].upload is None
+    assert document.upload.name.startswith("documents/held")
+
+
 def test_a_dataclass_s_field_is_sent_by_its_wire_name(settings: Any, tmp_path: Any) -> None:
     """Fails with presence read by the field's ``source`` rather than the key the client sends."""
     document = _held(settings, tmp_path)
@@ -535,6 +560,35 @@ def test_rows_a_validate_dropped_are_cleared_as_mappings(settings: Any, tmp_path
     body = {"children": [{"upload": None}, {"label": "x"}]}
     assert _send("put", _spec(_DropsARow, _read_data), document, body).status_code == 200
     assert _HANDED["data"] == {"children": [{"upload": ""}]}
+
+
+def test_dataclass_rows_a_validate_dropped_are_kept_as_built(settings: Any, tmp_path: Any) -> None:
+    """Fails with a reshaped list's rows paired off the client's and cleared as sent."""
+    document = _held(settings, tmp_path)
+    body = {"children": [{"upload": None}, {"label": "x"}]}
+    assert _send("put", _spec(_FrozenRowsDropped, _read_data), document, body).status_code == 200
+    assert _HANDED["data"]["children"] == [_FrozenUpload(upload=None)]
+
+
+def test_a_nested_dataclass_the_server_put_is_cleared_as_it_sent(
+    settings: Any, tmp_path: Any
+) -> None:
+    """Fails with the server's value read against nothing sent, not against what it put."""
+
+    def service(*, instance: Document, child: Any) -> Document:
+        _HANDED["child"] = child
+        return instance
+
+    spec = ServiceSpec(
+        service=service,
+        validator=SerializerValidator(_NestedFrozen),
+        instance_selector_spec=_DOCUMENT,
+        permissions=_OPEN,
+        input_data=lambda: {"child": {"upload": None}},
+    )
+    document = _held(settings, tmp_path)
+    assert _send("put", spec, document, {}).status_code == 200
+    assert _HANDED["child"].upload == ""
 
 
 def test_a_dataclass_with_nothing_to_clear_is_the_one_built(settings: Any, tmp_path: Any) -> None:

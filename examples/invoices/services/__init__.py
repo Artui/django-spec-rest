@@ -8,6 +8,7 @@ from django.conf import settings
 from django_service_specs import ServiceConflict, ServiceError, update_from_input
 
 from invoices.models import Invoice
+from invoices.serializers import ReceiptChange
 
 
 def create_invoice(*, data: dict[str, Any]) -> Invoice:
@@ -31,6 +32,10 @@ def update_invoice(*, instance: Invoice, data: dict[str, Any]) -> Invoice:
 
 def set_receipt(*, instance: Invoice, data: dict[str, Any]) -> Invoice:
     return update_from_input(instance, data).instance
+
+
+def set_receipt_change(*, instance: Invoice, data: ReceiptChange) -> Invoice:
+    return update_from_input(instance, {"receipt": data.receipt}).instance
 
 
 def sending_paused() -> bool:

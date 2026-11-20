@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 from rest_framework import serializers
+from rest_framework_dataclasses.serializers import DataclassSerializer
 
 from invoices.models import Invoice
 
@@ -37,6 +39,20 @@ class ReceiptInput(serializers.Serializer):
     """The body of a receipt's route: a file, or a ``null`` that clears the one held."""
 
     receipt = serializers.FileField(allow_null=True)
+
+
+@dataclass(frozen=True)
+class ReceiptChange:
+    receipt: Any = None
+
+
+class ReceiptChangeInput(DataclassSerializer):
+    """The receipt body as a dataclass: a ``null`` clears the file, a key left out keeps it."""
+
+    receipt = serializers.FileField(allow_null=True, required=False)
+
+    class Meta:
+        dataclass = ReceiptChange
 
 
 class InvoiceSerializer(serializers.ModelSerializer):

@@ -20,8 +20,11 @@ carries; releases up to 0.62.0 are in
   a mapping's already did, so `PUT {"upload": null}` clears the file. A service
   that read the dataclass's `None` there as "keep the file" now gets `""`, "no
   file". A key the client left out keeps the file, the instance's `None` default
-  included: the clear reads what was sent, at each nesting level and each row.
-  The changed instance is a shallow copy with only the cleared fields set, so
+  and a DRF `default=None` field included (a mapping input's `PUT` omitting such
+  a field still clears): the clear reads what was sent, at each nesting level
+  and each row. Dataclass rows a parent `validate()` reshaped (a count unlike the
+  list sent) are kept as built, none cleared; a mapping's rows still clear. The
+  changed instance is a shallow copy with only the cleared fields set, so
   `__post_init__` does not run again.
 
 ## [0.14.0] — 2026-11-17

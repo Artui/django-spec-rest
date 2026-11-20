@@ -707,3 +707,26 @@ class ANullForAFileTests(APITestCase):
             self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
             invoice.refresh_from_db()
             self.assertEqual(invoice.receipt.name, "")
+
+
+class ANullForADataclassFileTests(APITestCase):
+    """``PUT /invoices/<pk>/receipt-change/``: a dataclass body clearing only on a ``null`` sent."""
+
+    def _put(self, body: dict[str, object]) -> Invoice:
+        with tempfile.TemporaryDirectory() as media, override_settings(MEDIA_ROOT=media):
+            invoice = _invoice()
+            invoice.receipt.save("receipt.txt", ContentFile(b"paid"))
+
+            response = self.client.put(
+                f"/invoices/{invoice.pk}/receipt-change/", body, format="json"
+            )
+
+            self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+            invoice.refresh_from_db()
+            return invoice
+
+    def test_a_null_clears_the_file(self) -> None:
+        self.assertEqual(self._put({"receipt": None}).receipt.name, "")
+
+    def test_a_key_left_out_keeps_the_file(self) -> None:
+        self.assertTrue(self._put({}).receipt.name.startswith("receipts/receipt"))

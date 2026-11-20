@@ -10,6 +10,7 @@ from invoices.views import (
     DraftInvoiceViewSet,
     IntakeViewSet,
     InvoiceImportView,
+    InvoiceReceiptChangeView,
     InvoiceReceiptView,
     InvoiceViewSet,
     LinkedInvoiceListView,
@@ -27,6 +28,11 @@ router.register("drafts", DraftInvoiceViewSet, basename="draft")
 urlpatterns = [
     path("invoice-imports/", InvoiceImportView.as_view(), name="invoice-imports"),
     path("invoices/<int:pk>/receipt/", InvoiceReceiptView.as_view(), name="invoice-receipt"),
+    path(
+        "invoices/<int:pk>/receipt-change/",
+        InvoiceReceiptChangeView.as_view(),
+        name="invoice-receipt-change",
+    ),
     path("sent-invoices/", SentInvoiceListView.as_view(), name="sent-invoices"),
     path("linked-invoices/", LinkedInvoiceListView.as_view(), name="linked-invoices"),
     path("invoice-summaries/", SummaryInvoiceListView.as_view(), name="invoice-summaries"),

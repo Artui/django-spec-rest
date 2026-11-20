@@ -145,9 +145,12 @@ class SerializerValidator(Validator):
     instance** (a ``DataclassSerializer``'s, frozen included, nested, a row, or
     one a ``validate()`` returns) **is cleared where the client sent the key**,
     read off the input at each level, never off the instance, whose ``None``
-    default for a key left out keeps the file
-    (test_a_put_leaving_a_dataclass_s_file_out_keeps_it), and only where it is a
+    default for a key left out, or a DRF ``default=None``, keeps the file
+    (test_a_put_leaving_a_dataclass_s_file_out_keeps_it and
+    test_a_put_leaving_out_a_dataclass_s_file_defaulting_to_none_keeps_it), and only where it is a
     dataclass (test_an_object_with_the_field_that_is_no_dataclass_is_as_built).
+    Dataclass rows a ``validate()`` reshaped (a count unlike the list sent) are
+    kept as built, none cleared (test_dataclass_rows_a_validate_dropped_are_kept_as_built).
     The cleared instance is a shallow copy with only those fields set, so
     ``__post_init__`` is not run again (see ``_cleared_at``).
 
