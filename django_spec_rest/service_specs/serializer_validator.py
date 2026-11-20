@@ -146,9 +146,10 @@ class SerializerValidator(Validator):
     one a ``validate()`` returns) **is cleared where the client sent the key**,
     read off the input at each level, never off the instance, whose ``None``
     default for a key left out keeps the file
-    (test_a_put_leaving_a_dataclass_s_file_out_keeps_it). The cleared instance is
-    a shallow copy with only those fields set, so ``__post_init__`` is not run
-    again (see ``_cleared_at``).
+    (test_a_put_leaving_a_dataclass_s_file_out_keeps_it), and only where it is a
+    dataclass (test_an_object_with_the_field_that_is_no_dataclass_is_as_built).
+    The cleared instance is a shallow copy with only those fields set, so
+    ``__post_init__`` is not run again (see ``_cleared_at``).
 
     **A partial call over a dataclass is refused**, a ``DataclassSerializer``
     subclass included: one builds its instance from every field, and a field
@@ -492,7 +493,7 @@ def _cleared(field: serializers.Field | None, value: Any, sent: Any) -> Any:
     if isinstance(field, serializers.ListSerializer):
         if not isinstance(value, list):
             return value
-        sent = sent if isinstance(sent, list) else [empty] * len(value)
+        sent = sent if isinstance(sent, list) and len(sent) == len(value) else [empty] * len(value)
         rows = [_cleared(field.child, row, raw) for row, raw in zip(value, sent, strict=True)]
         return value if all(map(operator.is_, rows, value)) else rows
     if isinstance(field, serializers.Serializer):

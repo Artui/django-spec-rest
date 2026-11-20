@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -94,11 +95,6 @@ class _ReturnsAnObject(serializers.Serializer):
 
     def validate(self, attrs: dict[str, Any]) -> Any:
         return object()
-
-
-@dataclass
-class _Upload:
-    upload: Any = None
 
 
 class _Model(serializers.ModelSerializer):
@@ -409,6 +405,27 @@ class _Other:
     name: str = "built"
 
 
+class _ReturnsAFrozenUpload(serializers.Serializer):
+    upload = serializers.FileField(allow_null=True, required=False)
+
+    def validate(self, attrs: dict[str, Any]) -> Any:
+        return _FrozenUpload(upload=attrs.get("upload"))
+
+
+class _ReturnsANamespace(serializers.Serializer):
+    upload = serializers.FileField(allow_null=True, required=False)
+
+    def validate(self, attrs: dict[str, Any]) -> Any:
+        return SimpleNamespace(upload=attrs.get("upload"))
+
+
+class _DropsARow(serializers.Serializer):
+    children = _Child(many=True)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        return {"children": attrs["children"][:1]}
+
+
 class _ReturnsADataclass(serializers.Serializer):
     upload = serializers.FileField(allow_null=True, required=False)
 
@@ -495,6 +512,29 @@ def test_a_dataclass_a_validate_returns_without_the_field_is_as_built(
     document = _held(settings, tmp_path)
     _send("put", _spec(_ReturnsADataclass, _read_data), document, {"upload": None})
     assert _HANDED["data"] == _Other()
+
+
+def test_a_dataclass_a_validate_returns_is_cleared(settings: Any, tmp_path: Any) -> None:
+    document = _held(settings, tmp_path)
+    _send("put", _spec(_ReturnsAFrozenUpload, _read_data), document, {"upload": None})
+    assert _HANDED["data"] == _FrozenUpload(upload="")
+
+
+def test_an_object_with_the_field_that_is_no_dataclass_is_as_built(
+    settings: Any, tmp_path: Any
+) -> None:
+    """Fails with an instance written to where it is no dataclass."""
+    document = _held(settings, tmp_path)
+    _send("put", _spec(_ReturnsANamespace, _read_data), document, {"upload": None})
+    assert _HANDED["data"] == SimpleNamespace(upload=None)
+
+
+def test_rows_a_validate_dropped_are_cleared_as_mappings(settings: Any, tmp_path: Any) -> None:
+    """Fails with the rows paired off the client's list though ``validate()`` reshaped it."""
+    document = _held(settings, tmp_path)
+    body = {"children": [{"upload": None}, {"label": "x"}]}
+    assert _send("put", _spec(_DropsARow, _read_data), document, body).status_code == 200
+    assert _HANDED["data"] == {"children": [{"upload": ""}]}
 
 
 def test_a_dataclass_with_nothing_to_clear_is_the_one_built(settings: Any, tmp_path: Any) -> None:
