@@ -77,14 +77,30 @@ def test_a_provider_owning_the_wire_name_passes_the_kernel_s_mount_check() -> No
 def test_a_provider_owning_the_wire_name_mounts_at_as_view_and_splits_as_a_namesake(
     fmt: str, value: Any, keyword: str
 ) -> None:
-    """The keyword is the provider's (or its default); the field in ``data`` the client's."""
+    """The keyword is the provider's (or its default); the client's field spreads to its source."""
     seen: dict[str, Any] = {}
     view = _view(_spec(seen, owns="tenant", value=value))
 
     response = view(factory.post("/", {"tenant": "evil"}, format=fmt))
 
     assert response.status_code == 204, response.data
-    assert seen == {"org": "D-org", "tenant": keyword, "data": {"org": "evil"}}
+    assert seen == {"org": "evil", "tenant": keyword, "data": {"org": "evil"}}
+
+
+@pytest.mark.parametrize("call", [post, dispatch_live], ids=["post", "live"])
+def test_a_service_requiring_the_source_of_a_namesake_field_is_handed_the_client_s_value(
+    call: Callable[..., Any],
+) -> None:
+    seen: dict[str, Any] = {}
+
+    def service(*, data: Any, org: Any, tenant: Any) -> None:
+        seen.update(org=org, tenant=tenant)
+
+    spec = dataclasses.replace(_spec({}, owns="tenant", value="srv"), service=service)
+
+    call(spec, {"tenant": "evil"})
+
+    assert seen == {"org": "evil", "tenant": "srv"}
 
 
 def test_a_provider_owning_a_target_read_is_still_the_kernel_s_to_refuse() -> None:

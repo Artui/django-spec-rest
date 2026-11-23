@@ -277,7 +277,8 @@ def _read_call(
         state.server_values = dict(server)
         state.author_keys = {name: name for name in pinned}
         keys = provider_keys(spec.kwargs) if isinstance(spec, KernelServiceSpec) else None
-        state.provider_owned = keys.filled if keys is not None else frozenset()
+        fields = held[0].parameters(call_context=state.call_context).names()
+        state.provider_owned = keys.filled - fields if keys is not None else frozenset()
     return dispatched, extra_kwargs, arguments, held
 
 

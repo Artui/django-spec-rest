@@ -8,6 +8,7 @@ from django_service_specs import ServiceSpec
 from rest_framework import serializers
 
 from tests.views.server_value_calls import FORMATS, dispatch_live, open_spec, post
+from tests.views.test_kernel_views import _CreateView
 
 pytestmark = pytest.mark.django_db
 
@@ -76,6 +77,24 @@ def test_a_live_view_s_dispatch_splits_a_namesake_the_same_way(
     dispatch_live(_spec(seen, provider), body)
 
     assert seen == _expected(body)
+
+
+@FORMATS
+@_PROVIDERS
+@pytest.mark.parametrize(
+    ("hooked", "field"), [({"other": 1}, 5), ({"team_id": 7}, 7)], ids=["beside", "on-the-field"]
+)
+def test_a_namesake_under_a_view_hook_is_still_the_provider_s_keyword(
+    fmt: str, provider: Callable[..., Any], hooked: dict[str, Any], field: int
+) -> None:
+    """The hook's value lies beneath the provider's keyword and over the client's field."""
+    seen: dict[str, Any] = {}
+    view = type("_Hooked", (_CreateView,), {"get_service_kwargs": lambda self: dict(hooked)})
+
+    response = post(_spec(seen, provider), {"team_id": 5, "title": "x"}, fmt=fmt, view=view)
+
+    assert response.status_code == 204, response.data
+    assert seen == {"team_id": 999, "data": {"team_id": field, "title": "x"}}
 
 
 def test_a_namesake_field_the_caller_sends_is_still_validated() -> None:

@@ -31,7 +31,8 @@ CREATE_SPEC = ServiceSpec(
 A `kwargs` key named like a validator field is a namesake, not a fill, as
 the kernel's [service pool](https://artui.github.io/django-service-specs/dispatching/#the-services-pool) orders it. The
 field stays the caller's: it is still asked for, checked and validated into
-`data`. The provider's value is the service's keyword of that name, typed
+`data`, unless an `input_data=` provider fills it, whose value `data` then
+holds. The provider's value is the service's keyword of that name, typed
 (a `TypedDict` return annotation) or not, and it reaches the service
 unvalidated. So a body's `team_id=5` beside a provider answering
 `{"team_id": 999}` hands the service `team_id=999` and `data["team_id"] == 5`.

@@ -453,7 +453,8 @@ The query string is read by the kernel's flat reader:
 - **A `kwargs` provider key naming a validator field is a namesake**, as the
   kernel's [service pool](https://artui.github.io/django-service-specs/dispatching/#the-services-pool) orders it: the
   service's keyword of that name is the provider's value, unvalidated, and the
-  field stays the client's, asked for and validated into `data`. To set the
+  field stays the client's, asked for and validated into `data` (unless
+  `input_data=` fills it). To set the
   field itself, use `input_data=`. A key named like a field's `source` stays
   the provider's.
 - **A view hook's value outranks the validated value**: a key
