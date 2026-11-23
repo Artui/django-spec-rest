@@ -1097,12 +1097,20 @@ transport, and over HTTP <code>request</code> and <code>view</code> are the call
 </span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="n">permissions</span><span class="o">=</span><span class="n">OPEN</span><span class="p">,</span>
 </span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="p">)</span>
 </span></code></pre></div>
-<p>A <code>kwargs</code> provider may not return a key a validator field declares: its
-value would reach the service unvalidated. A typed provider (one whose return
-annotation is a <code>TypedDict</code>) naming such a key is refused when the view is
-built, and an untyped one on the request whose answer names it. Return the
-value from <code>input_data=</code> instead, where the serializer validates it. A key
-named like a field's <code>source</code> stays the provider's.</p>
+<p>A <code>kwargs</code> key named like a validator field is a namesake, not a fill, as
+the kernel's <a href="https://artui.github.io/django-service-specs/dispatching/#the-services-pool">service pool</a> orders it. The
+field stays the caller's: it is still asked for, checked and validated into
+<code>data</code>, unless an <code>input_data=</code> provider fills it, whose value <code>data</code> then
+holds. The provider's value is the service's keyword of that name, typed
+(a <code>TypedDict</code> return annotation) or not, and it reaches the service
+unvalidated. So a body's <code>team_id=5</code> beside a provider answering
+<code>{"team_id": 999}</code> hands the service <code>team_id=999</code> and <code>data["team_id"] == 5</code>.
+Trust the keyword for what the server decides and <code>data</code> for what the client
+sent; to have the serializer validate a server value, return it from
+<code>input_data=</code> instead. A <code>many</code> spec's row field splits the same way: each row
+keeps its own, the keyword is the provider's. What the kernel still refuses (a
+typed provider filling a target selector's read it never reaches, a shape, a
+<code>many</code> spec's list) it refuses when the spec is built.</p>
 <p>A provider is server code, and its values reach the callable as returned: a
 provider's <code>"abc"</code> for an <code>x: int</code> parameter is not coerced.</p>
 <h2 id="registering-a-seed">Registering a seed<a class="headerlink" href="#registering-a-seed" title="Permanent link">&para;</a></h2>

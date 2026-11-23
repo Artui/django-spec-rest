@@ -1638,7 +1638,7 @@ drfs field maps onto one of its seats:</p>
 </tr>
 <tr>
 <td><code>NotClientInput</code>, a hidden lookup key</td>
-<td>a typed <code>kwargs</code> provider filling the key, which the kernel then keeps out of the caller's arguments (<code>server_owned_keys</code>)</td>
+<td>a typed <code>kwargs</code> provider filling the key, which the kernel then keeps out of the caller's arguments (<code>server_owned_keys</code>); for a key a validator field declares, a typed <code>input_data=</code> provider, since a <code>kwargs</code> key named like a field is a namesake and leaves the field the caller's</td>
 </tr>
 <tr>
 <td><code>InputRequired</code>, <code>InputDescription("...")</code> on a key the selector reads</td>
@@ -1994,10 +1994,13 @@ over:</p>
 <li><strong>A target selector's filter and its reads come from the route and the query
   string, never the body.</strong> On an update or delete a body value cannot choose
   the row or set the lookup's <code>filter_set</code> scope.</li>
-<li><strong>A <code>kwargs</code> provider key naming a validator field is refused</strong>, pointing at
-  <code>input_data=</code>: a typed provider's when the view is built, an untyped one's on
-  the request whose answer names one. A key named like a field's <code>source</code>
-  stays the provider's.</li>
+<li><strong>A <code>kwargs</code> provider key naming a validator field is a namesake</strong>, as the
+  kernel's <a href="https://artui.github.io/django-service-specs/dispatching/#the-services-pool">service pool</a> orders it: the
+  service's keyword of that name is the provider's value, unvalidated, and the
+  field stays the client's, asked for and validated into <code>data</code> (unless
+  <code>input_data=</code> fills it). To set the
+  field itself, use <code>input_data=</code>. A key named like a field's <code>source</code> stays
+  the provider's.</li>
 <li><strong>A view hook's value outranks the validated value</strong>: a key
   <code>get_service_kwargs</code> returns that the serializer also declares writable
   reaches the service as the hook's value, so a client cannot overwrite a

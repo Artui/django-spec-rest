@@ -1462,8 +1462,10 @@ on an overlapping key:</p>
 </table>
 <p>A view hook's value outranks the validated value, so a hook returning
 <code>{"owner": request.user}</code> cannot be overwritten by a client sending <code>owner</code>. A
-<code>kwargs</code> provider may not return a key a validator field declares; pass such a
-value through <code>input_data=</code>, where the serializer validates it. A selector
+<code>kwargs</code> key named like a validator field is a namesake: the service's keyword
+is the provider's, unvalidated, and the field in <code>data</code> stays the client's,
+validated, unless <code>input_data=</code> fills it (the kernel's <a href="https://artui.github.io/django-service-specs/dispatching/#the-services-pool">service pool</a>); pass a
+value through <code>input_data=</code> to have the serializer validate it. A selector
 view takes no keyword hook beside a kernel spec: <code>as_view()</code> refuses a
 <code>get_selector_kwargs</code> override, and the spec's own <code>kwargs</code> provider fills its
 keywords. See <a href="../recipes/extra-kwargs/">View hooks and providers</a>.</p>
