@@ -7,7 +7,6 @@ import weakref
 from collections.abc import Callable, Mapping
 from typing import Any, cast
 
-from django.core.exceptions import ImproperlyConfigured
 from django.http import QueryDict
 from django.utils.datastructures import MultiValueDict
 from django_service_specs.pool.provider_keys import provider_keys
@@ -61,10 +60,9 @@ def recording_spec(spec: KernelSpec, *, lenient: bool = False) -> KernelSpec:
         )
         if names:
             changes["input_data"] = _recording(spec.input_data, names)
-    refusing = spec.kwargs is not None and isinstance(spec.validator, SerializerValidator)
     authored = bool(edge_call_state().author_values) and spec.validator is not None
-    if refusing or authored:
-        changes["kwargs"] = _providing(spec.kwargs, spec.validator if refusing else None)
+    if authored:
+        changes["kwargs"] = _providing(spec.kwargs)
     lenient = lenient and isinstance(spec.validator, SerializerValidator)
     if lenient:
         relaxed = copy.copy(cast(SerializerValidator, spec.validator))
@@ -86,16 +84,14 @@ def recording_spec(spec: KernelSpec, *, lenient: bool = False) -> KernelSpec:
     return twin
 
 
-def _providing(provider: Callable[..., Any] | None, validator: SerializerValidator | None) -> Any:
-    """The twin's ``kwargs`` seat: ``provider``'s answer, checked, over the view hooks' values."""
+def _providing(provider: Callable[..., Any] | None) -> Any:
+    """The twin's ``kwargs`` seat: ``provider``'s answer over the view hooks' values."""
     owned = frozenset[str]()
     if provider is not None and (keys := provider_keys(provider)) is not None:
         owned = keys.filled
 
     def providing(*args: Any, **kwargs: Any) -> Any:
         answer = {} if provider is None else provider(*args, **kwargs)
-        if validator is not None:
-            _refuse_parameters(cast(Callable[..., Any], provider), answer, validator)
         if not isinstance(answer, Mapping):
             return answer
         return {**answer, **_beneath(answer, owned)}
@@ -110,29 +106,6 @@ def _beneath(answer: Mapping[str, Any], owned: frozenset[str]) -> dict[str, Any]
         for name, value in edge_call_state().author_values.items()
         if name not in owned and answer.get(name, UNSET) is UNSET
     }
-
-
-def _refuse_parameters(
-    provider: Callable[..., Any], answer: Any, validator: SerializerValidator
-) -> None:
-    """Refuse ``answer`` where it names a parameter of ``validator``, a field's wire name."""
-    if not isinstance(answer, Mapping):
-        return
-    named = sorted(
-        name
-        for name in validator.parameters(call_context=edge_call_state().call_context)
-        .names()
-        .intersection(answer)
-        if answer[name] is not UNSET
-    )
-    if named:
-        label = getattr(provider, "__qualname__", repr(provider))
-        raise ImproperlyConfigured(
-            f"ServiceSpec.kwargs ({label}) answered {', '.join(map(repr, named))}, which "
-            f"{'names a field' if len(named) == 1 else 'name fields'} of the spec's Validator: "
-            "a kwargs value reaches the service unvalidated. Fill a Validator field from "
-            "ServiceSpec.input_data, which the Validator validates."
-        )
 
 
 def _recording(provider: Callable[..., Any], names: frozenset[str]) -> Any:

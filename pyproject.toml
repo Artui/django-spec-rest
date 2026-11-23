@@ -87,8 +87,9 @@ dependencies = [
     # reads, and a ``Presenter.output()`` that may answer ``None``.
     # 0.34.0 adds ``row_links``, ``link_bindings`` and ``SpecRegistry.name_of``,
     # which an affordance entry's ``href`` and ``method`` under ``link_routes`` read;
-    # 0.34.1 adds each link's ``required`` reads, the href's only kwargs.
-    "django-service-specs>=0.34.1",
+    # 0.34.1 adds each link's ``required`` reads, the href's only kwargs;
+    # 0.35.0 makes a kwargs key named like a Validator field a namesake, not a fill.
+    "django-service-specs>=0.35.0",
 ]
 
 [project.optional-dependencies]
@@ -235,7 +236,7 @@ root = ["./django_spec_rest"]
 # CHANGELOG [Unreleased] block under a new dated heading. Run via
 # `uvx bump-my-version` (no permanent dependency added to the project).
 [tool.bumpversion]
-current_version = "0.15.0"
+current_version = "0.15.1"
 allow_dirty = false
 commit = false
 tag = false

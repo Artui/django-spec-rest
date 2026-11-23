@@ -6,16 +6,26 @@ from typing import Any, TypedDict
 
 import pytest
 from django.core.exceptions import ImproperlyConfigured
-from django_service_specs import ServiceSpec, UnsetType
+from django_service_specs import (
+    Parameter,
+    Parameters,
+    SelectorKind,
+    SelectorSpec,
+    ServiceSpec,
+    UnsetType,
+)
 from django_service_specs.dispatch.check_seeds import check_seeds
 from django_service_specs.types.unset import UNSET
 from rest_framework import serializers
+from rest_framework.test import APIRequestFactory
 
 from django_spec_rest.service_specs.serializer_validator import SerializerValidator
 from tests.views.server_value_calls import FORMATS, OPEN, dispatch_live, post
 from tests.views.test_kernel_views import _view
 
 pytestmark = pytest.mark.django_db
+
+factory = APIRequestFactory()
 
 
 class _SourcedIn(serializers.Serializer):
@@ -45,25 +55,64 @@ def _spec(seen: dict[str, Any], *, owns: str, value: Any) -> ServiceSpec:
     )
 
 
-@pytest.mark.parametrize("value", [UNSET, "srv"], ids=["declining", "filling"])
-def test_a_provider_owning_the_wire_name_is_refused_with_the_seat_that_fills_it(
-    value: Any,
-) -> None:
+_OWNING = pytest.mark.parametrize("value", [UNSET, "srv"], ids=["declining", "filling"])
+
+
+@_OWNING
+def test_a_provider_owning_the_wire_name_leaves_the_field_asked_for(value: Any) -> None:
+    """A namesake: the wire name stays a parameter the caller sends."""
     spec = _spec({}, owns="tenant", value=value)
 
-    with pytest.raises(ImproperlyConfigured, match="Only ServiceSpec.input_data fills"):
-        spec.parameters()
+    assert spec.parameters().names() == {"tenant"}
 
 
-def test_a_provider_owning_the_wire_name_is_refused_by_the_kernel_s_mount_check() -> None:
-    """``check_seeds``, which a mount will ask of a kernel spec, refuses it in the same words."""
-    with pytest.raises(ImproperlyConfigured, match="Only ServiceSpec.input_data fills"):
-        check_seeds(_spec({}, owns="tenant", value="srv"))
+def test_a_provider_owning_the_wire_name_passes_the_kernel_s_mount_check() -> None:
+    check_seeds(_spec({}, owns="tenant", value="srv"))
 
 
-def test_a_provider_owning_the_wire_name_is_refused_at_as_view() -> None:
-    with pytest.raises(ImproperlyConfigured, match="Only ServiceSpec.input_data fills"):
-        _view(_spec({}, owns="tenant", value="srv"))
+@FORMATS
+@pytest.mark.parametrize(
+    ("value", "keyword"), [(UNSET, "D-tenant"), ("srv", "srv")], ids=["declining", "filling"]
+)
+def test_a_provider_owning_the_wire_name_mounts_at_as_view_and_splits_as_a_namesake(
+    fmt: str, value: Any, keyword: str
+) -> None:
+    """The keyword is the provider's (or its default); the client's field spreads to its source."""
+    seen: dict[str, Any] = {}
+    view = _view(_spec(seen, owns="tenant", value=value))
+
+    response = view(factory.post("/", {"tenant": "evil"}, format=fmt))
+
+    assert response.status_code == 204, response.data
+    assert seen == {"org": "evil", "tenant": keyword, "data": {"org": "evil"}}
+
+
+@pytest.mark.parametrize("call", [post, dispatch_live], ids=["post", "live"])
+def test_a_service_requiring_the_source_of_a_namesake_field_is_handed_the_client_s_value(
+    call: Callable[..., Any],
+) -> None:
+    seen: dict[str, Any] = {}
+
+    def service(*, data: Any, org: Any, tenant: Any) -> None:
+        seen.update(org=org, tenant=tenant)
+
+    spec = dataclasses.replace(_spec({}, owns="tenant", value="srv"), service=service)
+
+    call(spec, {"tenant": "evil"})
+
+    assert seen == {"org": "evil", "tenant": "srv"}
+
+
+def test_a_provider_owning_a_target_read_is_still_the_kernel_s_to_refuse() -> None:
+    """The spec's ``kwargs`` never reaches the target's read: the kernel refuses it when built."""
+    target = SelectorSpec(
+        kind=SelectorKind.RETRIEVE,
+        selector=lambda *, pk: None,
+        reads=Parameters.of(Parameter("pk", "integer", required=True)),
+    )
+
+    with pytest.raises(ImproperlyConfigured, match=r"annotated to fill \['pk'\].*never reach"):
+        dataclasses.replace(_spec({}, owns="pk", value=1), instance_selector_spec=target)
 
 
 # A provider owning the ``source``: the client's value is the service's in
