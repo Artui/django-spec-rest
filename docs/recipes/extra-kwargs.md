@@ -28,12 +28,19 @@ CREATE_SPEC = ServiceSpec(
 )
 ```
 
-A `kwargs` provider may not return a key a validator field declares: its
-value would reach the service unvalidated. A typed provider (one whose return
-annotation is a `TypedDict`) naming such a key is refused when the view is
-built, and an untyped one on the request whose answer names it. Return the
-value from `input_data=` instead, where the serializer validates it. A key
-named like a field's `source` stays the provider's.
+A `kwargs` key named like a validator field is a namesake, not a fill, as
+the kernel's [service pool](https://artui.github.io/django-service-specs/dispatching/#the-services-pool) orders it. The
+field stays the caller's: it is still asked for, checked and validated into
+`data`. The provider's value is the service's keyword of that name, typed
+(a `TypedDict` return annotation) or not, and it reaches the service
+unvalidated. So a body's `team_id=5` beside a provider answering
+`{"team_id": 999}` hands the service `team_id=999` and `data["team_id"] == 5`.
+Trust the keyword for what the server decides and `data` for what the client
+sent; to have the serializer validate a server value, return it from
+`input_data=` instead. A `many` spec's row field splits the same way: each row
+keeps its own, the keyword is the provider's. What the kernel still refuses (a
+typed provider filling a target selector's read it never reaches, a shape, a
+`many` spec's list) it refuses when the spec is built.
 
 A provider is server code, and its values reach the callable as returned: a
 provider's `"abc"` for an `x: int` parameter is not coerced.

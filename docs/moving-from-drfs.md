@@ -148,7 +148,7 @@ drfs field maps onto one of its seats:
 | `permission_classes=[...]` | `permissions=(DRFPermissionCheck([...]),)`; a spec that admits everyone says so with the kernel's `Unrestricted()` |
 | `reads=[UrlKwarg("pk")]`, `reads=[QueryParam("status")]` | `reads=Parameters.of(Parameter("pk", "integer", required=True))`: the edge reads a declared read from the route first, then the query string |
 | a `QueryParam` no callable names | `shapes=Parameters.of(...)` |
-| `NotClientInput`, a hidden lookup key | a typed `kwargs` provider filling the key, which the kernel then keeps out of the caller's arguments (`server_owned_keys`) |
+| `NotClientInput`, a hidden lookup key | a typed `kwargs` provider filling the key, which the kernel then keeps out of the caller's arguments (`server_owned_keys`); for a key a validator field declares, a typed `input_data=` provider, since a `kwargs` key named like a field is a namesake and leaves the field the caller's |
 | `InputRequired`, `InputDescription("...")` on a key the selector reads | `reads=Parameters.of(Parameter(..., required=True, help="..."))`, as [worked below](#a-nested-routes-captures) |
 | `PolymorphicServiceSpec` | one kernel spec per route or action stays the default. For an endpoint that must keep one URL, an `action_specs` entry (or `@service_action`) of `DiscriminatedAction(discriminator=, specs=)`, which is this package's alone: agents and MCP register each variant on its own. Its `{View}_{action}_Request` OpenAPI component comes back under that name, as an `anyOf` where drfs' was a `oneOf`: a body two variants accept is valid for both. A `@service_action` `PATCH` over it runs the chosen variant as declared, so it is validated whole and documented whole; a variant declaring `partial` is the way to a partial call. `permission_strategy=` is gone: the chosen variant's checks always decide. A callable `success_status` or `response_finalizer` on such an action may declare `variant`, the chosen key, to answer per variant |
 | `TargetGuard` | the kernel's preconditions and object permission, which see the row |
@@ -450,10 +450,12 @@ The query string is read by the kernel's flat reader:
 - **A target selector's filter and its reads come from the route and the query
   string, never the body.** On an update or delete a body value cannot choose
   the row or set the lookup's `filter_set` scope.
-- **A `kwargs` provider key naming a validator field is refused**, pointing at
-  `input_data=`: a typed provider's when the view is built, an untyped one's on
-  the request whose answer names one. A key named like a field's `source`
-  stays the provider's.
+- **A `kwargs` provider key naming a validator field is a namesake**, as the
+  kernel's [service pool](https://artui.github.io/django-service-specs/dispatching/#the-services-pool) orders it: the
+  service's keyword of that name is the provider's value, unvalidated, and the
+  field stays the client's, asked for and validated into `data`. To set the
+  field itself, use `input_data=`. A key named like a field's `source` stays
+  the provider's.
 - **A view hook's value outranks the validated value**: a key
   `get_service_kwargs` returns that the serializer also declares writable
   reaches the service as the hook's value, so a client cannot overwrite a

@@ -4,7 +4,6 @@ from collections.abc import Callable
 from typing import Any
 
 import pytest
-from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import ServiceSpec, Unrestricted
 from rest_framework import serializers
 from rest_framework.test import APIRequestFactory
@@ -173,24 +172,21 @@ def test_a_lists_own_checks_judge_the_rows_the_kernel_passed() -> None:
     assert ran == []
 
 
-def _refused(call: Callable[..., Any]) -> None:
+def _namesake(call: Callable[..., Any]) -> dict[str, Any]:
     seen: dict[str, Any] = {}
 
     def service(*, data: Any, title: Any = None) -> None:
-        seen.update(data=data, title=title)
+        seen.update(data=[dict(row) for row in data], title=title)
 
     spec = open_spec(service, _Row, kwargs=lambda: {"title": "from-provider"}, many=True)
-
-    with pytest.raises(ImproperlyConfigured, match=r"answered 'title'.*ServiceSpec\.input_data"):
-        call(spec, [{"title": "t"}])
-
-    assert seen == {}
+    call(spec, [{"title": "t"}])
+    return seen
 
 
-def test_a_kwargs_value_named_like_a_row_field_is_refused() -> None:
-    """A ``many`` spec's ``kwargs`` provider is held to what a single-object spec's is."""
-    _refused(post)
+def test_a_kwargs_value_named_like_a_row_field_is_the_keyword_and_each_row_keeps_its_own() -> None:
+    """A ``many`` spec's namesake splits as a single-object spec's: unvalidated, the keyword's."""
+    assert _namesake(post) == {"data": [{"title": "t"}], "title": "from-provider"}
 
 
-def test_a_live_view_s_dispatch_refuses_a_kwargs_value_named_like_a_row_field() -> None:
-    _refused(dispatch_live)
+def test_a_live_view_s_dispatch_splits_a_kwargs_value_named_like_a_row_field() -> None:
+    assert _namesake(dispatch_live) == {"data": [{"title": "t"}], "title": "from-provider"}

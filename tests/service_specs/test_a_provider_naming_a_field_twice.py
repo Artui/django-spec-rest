@@ -100,22 +100,25 @@ _FMT = pytest.mark.parametrize("fmt", ["json", "multipart"])
 
 
 @_FMT
+@_DEFAULTS
 @pytest.mark.parametrize(
-    "providers",
+    ("providers", "data"),
     [
-        {"kwargs": lambda: dict(_BOTH)},
-        {"kwargs": lambda: dict(_BOTH), "input_data": lambda: {"tenant": "A"}},
+        ({"kwargs": lambda: dict(_BOTH)}, {"org": "evil"}),
+        ({"kwargs": lambda: dict(_BOTH), "input_data": lambda: {"tenant": "A"}}, {"org": "A"}),
     ],
     ids=["kwargs-alone", "beside-input-data"],
 )
-def test_a_kwargs_value_named_like_a_field_is_refused(fmt: str, providers: Any) -> None:
-    """The wire name is a parameter of the Validator."""
+def test_a_kwargs_value_named_like_a_field_is_the_service_s_keyword(
+    fmt: str, defaults: bool, providers: Any, data: dict[str, Any]
+) -> None:
+    """A namesake: the keyword is the provider's, the field in ``data`` the caller's."""
     seen: dict[str, Any] = {}
 
-    with pytest.raises(ImproperlyConfigured, match=r"answered 'tenant'.*ServiceSpec\.input_data"):
-        _post(_spec(seen, **providers), {"tenant": "evil"}, fmt)
+    response = _post(_spec(seen, defaults=defaults, **providers), {"tenant": "evil"}, fmt)
 
-    assert seen == {}
+    assert response.status_code == 204, response.data
+    assert seen == {"tenant": "A", "org": "B", "data": data}
 
 
 @_FMT
@@ -146,9 +149,13 @@ def test_a_kwargs_value_named_like_a_source_is_the_service_s(fmt: str) -> None:
     assert seen == {"tenant": "DEFAULT", "org": "B", "data": {"org": "A"}}
 
 
-def test_a_kwargs_answer_that_is_no_mapping_is_the_kernel_s_to_refuse() -> None:
+@pytest.mark.parametrize("hooked", [False, True], ids=["plain", "under-a-view-hook"])
+def test_a_kwargs_answer_that_is_no_mapping_is_the_kernel_s_to_refuse(hooked: bool) -> None:
+    hooks = {"get_service_kwargs": lambda self: {"org": "hook"}} if hooked else {}
+    view = type("_View", (_CreateView,), {"spec": _spec({}, kwargs=lambda: ["tenant"]), **hooks})
+
     with pytest.raises(ImproperlyConfigured, match="ServiceSpec.kwargs returned list"):
-        _post(_spec({}, kwargs=lambda: ["tenant"]), {"tenant": "c"}, "json")
+        view.as_view()(_factory.post("/", {"tenant": "c"}, format="json"))
 
 
 @dataclasses.dataclass

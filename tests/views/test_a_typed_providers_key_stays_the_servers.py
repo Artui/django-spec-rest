@@ -4,7 +4,6 @@ from typing import Any, TypedDict, cast
 
 import pytest
 from django.contrib.auth.models import AnonymousUser
-from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import ServiceSpec
 from django_service_specs.dispatch.dispatch import dispatch as kernel_dispatch
 from django_service_specs.types.unset import UNSET
@@ -59,20 +58,53 @@ def _declining(key: str) -> Any:
     return provider
 
 
-@pytest.mark.parametrize(("serializer", "key"), _FIELDS.values(), ids=_FIELDS.keys())
-def test_a_provider_owning_a_fields_key_is_refused_with_the_seat_that_fills_it(
-    serializer: Any, key: str
+_SENT = {
+    "list": ["a"],
+    "nested": {"tenant": "t"},
+    "dict": {"k": "v"},
+    "many": [{"tenant": "t"}],
+    "required": "x",
+}
+
+
+@pytest.mark.parametrize(
+    ("serializer", "key", "sent"),
+    [(*_FIELDS[name], _SENT[name]) for name in _FIELDS],
+    ids=_FIELDS.keys(),
+)
+def test_a_provider_owning_a_fields_key_leaves_the_field_the_callers(
+    serializer: Any, key: str, sent: Any
 ) -> None:
+    """A namesake: the field stays asked for and the client's value is validated into ``data``."""
+    seen: dict[str, Any] = {}
     spec = ServiceSpec(
-        service=lambda *, data: None,
+        service=lambda *, data: seen.update(data=dict(data)),
         permissions=OPEN,
         validator=SerializerValidator(serializer),
         kwargs=_declining(key),
         atomic=False,
     )
 
-    with pytest.raises(ImproperlyConfigured, match=rf"annotated to fill \['{key}'\]"):
-        spec.parameters()
+    response = post(spec, {key: sent})
+
+    assert key in spec.parameters().names()
+    assert response.status_code == 204, response.data
+    assert seen == {"data": {key: sent}}
+
+
+def test_a_required_field_a_provider_owns_is_still_demanded_of_the_caller() -> None:
+    spec = ServiceSpec(
+        service=lambda *, data: None,
+        permissions=OPEN,
+        validator=SerializerValidator(_RequiredIn),
+        kwargs=_declining("title"),
+        atomic=False,
+    )
+
+    response = post(spec, {})
+
+    assert response.status_code == 400
+    assert response.data["title"][0].code == "required"
 
 
 class _SourcedIn(serializers.Serializer):

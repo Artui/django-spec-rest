@@ -5,7 +5,6 @@ from collections.abc import Callable
 from typing import Any
 
 import pytest
-from django.core.exceptions import ImproperlyConfigured
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django_service_specs import UnknownArguments
 from rest_framework import serializers
@@ -131,14 +130,13 @@ def _authored() -> dict[str, Any]:
     return {"tenant": "authored"}
 
 
-def test_a_provider_naming_the_field_input_data_fills_is_refused() -> None:
-    """``input_data`` is the seat that fills a field."""
+def test_a_provider_naming_the_field_input_data_fills_is_the_keyword_alone() -> None:
+    """``input_data`` fills the field; the namesake provider's value is the keyword's."""
     seen: dict[str, Any] = {}
 
-    with pytest.raises(ImproperlyConfigured, match="ServiceSpec.input_data"):
-        dispatch_live(open_spec(_plain(seen), _Alias, input_data=_server, kwargs=_authored), {})
+    dispatch_live(open_spec(_plain(seen), _Alias, input_data=_server, kwargs=_authored), {})
 
-    assert seen == {}
+    assert seen == {"tenant": "authored", "data": "server", "validated": "server"}
 
 
 class _Shouting(_Alias):

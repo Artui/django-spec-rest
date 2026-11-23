@@ -5,7 +5,6 @@ from typing import Any
 
 import pytest
 from django.contrib.auth.models import User
-from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import UnknownArguments
 from rest_framework import serializers
 from rest_framework.fields import empty
@@ -314,15 +313,17 @@ def _with_default(seen: dict[str, Any]) -> Callable[..., None]:
 
 
 @FORMATS
-def test_the_providers_value_by_wire_name_is_refused(fmt: str) -> None:
-    """The wire name is a parameter of the Validator."""
+def test_the_providers_value_by_wire_name_is_the_keyword_and_the_source_the_callers(
+    fmt: str,
+) -> None:
+    """A namesake of the wire name: the keyword is the provider's, ``data`` the client's."""
     seen: dict[str, Any] = {}
     spec = open_spec(_with_default(seen), _Sourced, kwargs=lambda: {"tenant": "srv"})
 
-    with pytest.raises(ImproperlyConfigured, match="ServiceSpec.input_data"):
-        post(spec, {"tenant": "evil"}, fmt=fmt)
+    response = post(spec, {"tenant": "evil"}, fmt=fmt)
 
-    assert seen == {}
+    assert response.status_code == 204, response.data
+    assert seen == {"tenant": "srv", "data": "evil"}
 
 
 @FORMATS

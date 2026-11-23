@@ -11,6 +11,22 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+### Changed
+
+- **A `kwargs` key named like a validator field is the kernel's namesake, no
+  longer refused.** Every HTTP call to a spec over a `SerializerValidator`
+  whose `kwargs` provider answered such a key was a 500 (`ImproperlyConfigured`),
+  though the kernel serves it: the field stays the caller's, asked for and
+  validated into `data`, and the provider's value is the service's keyword of
+  that name, unvalidated. A body's `team_id=5` beside a provider's `999` now
+  hands the service `team_id=999` and `data["team_id"] == 5`, typed provider or
+  untyped; a `many` spec's rows keep their own field the same way. What the
+  kernel still refuses (a typed provider filling a target selector's read, a
+  shape, a `many` spec's list) is refused when the spec is built, as before. To
+  have the serializer validate a server value, return it from `input_data=`.
+- The `django-service-specs` floor is 0.35.0, the release that makes a
+  provider's key named like a field a namesake.
+
 ## [0.15.0] — 2026-11-20
 
 ### Changed
