@@ -604,6 +604,8 @@
       
         
       
+        
+      
     
     
     
@@ -843,6 +845,34 @@
     
   
     Link affordances to their routes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/field-schema-rules/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Field schema rules
   
 
     
@@ -1348,6 +1378,15 @@ a viewset declares no <code>spec</code>, and DRF refuses that keyword with a <co
   over anything the body or the query string sends for the same name. A
   capture the spec does not declare is no argument; it stays on
   <code>view.kwargs</code> for DRF.</li>
+<li><strong>A capture named like a Validator field is no argument either</strong>: the
+  field is the caller's, sent in the body, documented as a body key by
+  OPTIONS and the OpenAPI document, and absent when the caller leaves it out.
+  A capture holds the URL converter's <code>to_python()</code> value while the field
+  reads what a caller sends, so the two never share one. A target selector
+  wanting the route's value reads <code>view.kwargs</code> through its <code>kwargs</code>
+  provider; a service wanting it in its data gets it from <code>input_data=</code>. The
+  rule is the kernel's
+  <a class="autorefs autorefs-external" href="https://artui.github.io/django-service-specs/reference/#django_service_specs.specs.route_captures.route_captures"><code>route_captures</code></a>.</li>
 <li><strong>The query string</strong> is read by the kernel's flat reader: a blank value is
   absent, a typed array or a multiple-choice filter splits on a comma, and
   each value is coerced to its parameter's type.</li>
@@ -1460,6 +1499,9 @@ on an overlapping key:</p>
 </tr>
 </tbody>
 </table>
+<p>The output row serves a read as well: a selector route layers both output
+hooks, offered the rows it renders (<code>page</code> and <code>result</code> on a list, <code>instance</code>
+and <code>result</code> on a retrieve). The other three rows feed only a write.</p>
 <p>A view hook's value outranks the validated value, so a hook returning
 <code>{"owner": request.user}</code> cannot be overwritten by a client sending <code>owner</code>. A
 <code>kwargs</code> key named like a validator field is a namesake: the service's keyword

@@ -422,6 +422,8 @@
       
         
       
+        
+      
     
     
     
@@ -661,6 +663,34 @@
     
   
     Link affordances to their routes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/field-schema-rules/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Field schema rules
   
 
     
@@ -1408,6 +1438,15 @@ action mixins, and <code>@service_action</code> / <code>@selector_action</code>:
   <code>lowered_for_the_document</code>, so under OpenAPI 3.0 a nullable or labelled
   one is <code>nullable</code> and <code>enum</code>, in a request body, a response body and
   a parameter alike.</li>
+<li><strong>A field a schema rule types</strong> is documented by that rule, in a request
+  and a response component alike: the seat's <code>json_schema_registry</code> and
+  the project's <code>SERVICE_SPECS_FIELD_SCHEMA_REGISTRY</code>, by the lookup the
+  compiled spec answers it with, so the two agree (<code>FieldRules</code>). The
+  field's own meta stands beside the fragment, a <code>$ref</code> the document has
+  no component for is dropped with a warning, and the rule wins over
+  <code>@extend_schema_field</code>. Every other field keeps drf-spectacular's
+  mapping. A serializer two seats with different rules document is one
+  component, typed by the first operation that maps it.</li>
 <li><strong>The response body</strong> is a <code>SerializerPresenter</code>'s serializer, or any
   other presenter's <code>output_schema</code>, a list of rows where the spec
   presents rows (<code>_presents_rows</code>). A spec with no presenter documents

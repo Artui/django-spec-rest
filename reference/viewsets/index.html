@@ -424,6 +424,8 @@
       
         
       
+        
+      
     
     
     
@@ -663,6 +665,34 @@
     
   
     Link affordances to their routes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/field-schema-rules/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Field schema rules
   
 
     
@@ -1549,6 +1579,12 @@ their captures come from the URLconf, which <code>as_view()</code> cannot see. A
 such as <code>path("me/", MeViewSet.as_view({"get": "retrieve"}))</code>, whose selector
 finds the caller's own row, carries no capture and needs no read; a hand-mounted
 route that does carry one must have it declared by the selector itself.</p>
+<p>A <code>many=True</code> write is asked one thing of the capture: it must not be named
+<code>many_argument</code> (<code>items</code> by default), the caller's list, which the kernel's
+<code>route_captures</code> refuses as <code>ImproperlyConfigured</code> with its message. On a
+router-mounted detail route <code>as_view()</code> raises it; on a hand-mounted route,
+whose captures <code>as_view()</code> cannot see, the first request that carries the
+capture raises it.</p>
 <p>The schema documents a declared capture with the read's type and <code>help</code> where
 drf-spectacular finds no model to type it from, as on a viewset with no
 <code>queryset</code> (see <a href="../../openapi/#what-a-route-documents">OpenAPI</a>).</p>

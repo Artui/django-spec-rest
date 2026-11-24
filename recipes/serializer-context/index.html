@@ -426,6 +426,8 @@
       
         
       
+        
+      
     
     
     
@@ -765,6 +767,34 @@
     
   
     Link affordances to their routes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../field-schema-rules/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Field schema rules
   
 
     
@@ -1231,8 +1261,8 @@ and its <code>to_representation</code> run on a list as behind a DRF view. Its a
 keeps one row per value, in order: affordances are added to each row by its
 position, and a list of another length is refused.</p>
 <h2 id="keys-a-view-adds">Keys a view adds<a class="headerlink" href="#keys-a-view-adds" title="Permanent link">&para;</a></h2>
-<p>A mutation view's hooks layer keys over DRF's context, view-wide then per
-action:</p>
+<p>A view's hooks layer keys over DRF's context, view-wide then per action, the
+per-action key winning:</p>
 <table>
 <thead>
 <tr>
@@ -1254,9 +1284,25 @@ action:</p>
 </tr>
 </tbody>
 </table>
-<p>Both view-wide hooks default to <code>get_serializer_context()</code>. A selector spec's
-presenter is not handed the per-action output hook: declare its context on its
-<code>SerializerPresenter</code>.</p>
+<p>Both view-wide hooks default to <code>get_serializer_context()</code>. A selector route
+(a viewset's <code>list</code> and <code>retrieve</code>, a <code>@selector_action</code>, <code>SelectorListView</code> and
+<code>SelectorRetrieveView</code>) layers both output hooks as a mutation does, with or
+without a presenter; a standalone view has no action, so only its view-wide
+hook runs. A selector's output hooks are offered, by name, the rows being
+rendered: <code>page</code> and <code>result</code> on a list (the served rows as one evaluated list,
+the page's rows when paginated, the same list under both names, never a
+queryset), <code>instance</code> and <code>result</code> on a
+retrieve. A presenter's own <code>serializer_context</code> stays the outermost layer.
+The input hooks and <code>get_service_kwargs</code> never reach a selector, so a
+<code>ServiceViewSet</code> hook written for its writes leaves <code>list</code> and <code>retrieve</code>
+alone, except <code>get_output_serializer_context</code>, which now adds its keys to
+their responses too.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">PostViewSet</span><span class="p">(</span><span class="n">SelectorViewSet</span><span class="p">):</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>    <span class="n">action_specs</span> <span class="o">=</span> <span class="p">{</span><span class="s2">&quot;list&quot;</span><span class="p">:</span> <span class="n">list_posts</span><span class="p">,</span> <span class="s2">&quot;retrieve&quot;</span><span class="p">:</span> <span class="n">get_post</span><span class="p">}</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">get_list_output_serializer_context</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">page</span><span class="p">):</span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>        <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;comment_counts&quot;</span><span class="p">:</span> <span class="n">count_comments</span><span class="p">([</span><span class="n">post</span><span class="o">.</span><span class="n">pk</span> <span class="k">for</span> <span class="n">post</span> <span class="ow">in</span> <span class="n">page</span><span class="p">])}</span>
+</span></code></pre></div>
 <h2 id="off-http">Off HTTP<a class="headerlink" href="#off-http" title="Permanent link">&para;</a></h2>
 <p>Dispatched with no request, a seat builds its serializer over an offline
 request and view for the principal, so a serializer reading

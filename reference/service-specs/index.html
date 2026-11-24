@@ -424,6 +424,8 @@
       
         
       
+        
+      
     
     
     
@@ -663,6 +665,34 @@
     
   
     Link affordances to their routes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/field-schema-rules/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Field schema rules
   
 
     
@@ -2015,6 +2045,14 @@ the list bound is the rows the kernel passed: where it refused a row, the
 list's own checks judge the rows left, and their refusal sits beside the
 refused row's (test_bulk_rows_over_http's
 test_a_lists_own_checks_judge_the_rows_the_kernel_passed).</p>
+<p><strong>A field's type can be a rule's.</strong> Before its own table, a field's class
+is asked of the kernel's
+<a class="autorefs autorefs-external" href="https://artui.github.io/django-service-specs/reference/#django_service_specs.schema.registered_fragment.registered_fragment"><code>registered_fragment</code></a>:
+the most specific class in its MRO with a rule in <code>json_schema_registry</code>
+or in the project's, which <code>SERVICE_SPECS_FIELD_SCHEMA_REGISTRY</code> names
+unless <code>project_registry=False</code>, the seat's answering a class both name.
+The setting is read on every declaration, so <code>override_settings</code> reaches
+a seat built before it (see <a href="../../recipes/field-schema-rules/">field schema rules</a>).</p>
 
 
 
@@ -2326,6 +2364,14 @@ asked (test_present_with_no_call_runs_no_callable).</p>
 <p>A dataclass type is read and rendered through a <code>DataclassSerializer</code>
 built for it, and a <code>BaseSerializer</code> that is not a <code>Serializer</code>
 declares no fields, so its output is empty while it still presents.</p>
+<p><strong>A field's type can be a rule's.</strong> Before its own table, a field's class
+is asked of the kernel's
+<a class="autorefs autorefs-external" href="https://artui.github.io/django-service-specs/reference/#django_service_specs.schema.registered_fragment.registered_fragment"><code>registered_fragment</code></a>:
+the most specific class in its MRO with a rule in <code>json_schema_registry</code>
+or in the project's, which <code>SERVICE_SPECS_FIELD_SCHEMA_REGISTRY</code> names
+unless <code>project_registry=False</code>, the seat's answering a class both name.
+The setting is read on every declaration, so <code>override_settings</code> reaches
+a seat built before it (see <a href="../../recipes/field-schema-rules/">field schema rules</a>).</p>
 
 
 

@@ -670,6 +670,8 @@
       
         
       
+        
+      
     
     
     
@@ -909,6 +911,34 @@
     
   
     Link affordances to their routes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/field-schema-rules/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Field schema rules
   
 
     
@@ -1873,7 +1903,12 @@ over:</p>
   selector. A viewset mounted by hand and a standalone view are not checked,
   since their captures are the URLconf's: declare each capture the route
   carries yourself
-  (<a href="../reference/viewsets/#the-lookup-capture">The lookup capture</a>).</li>
+  (<a href="../reference/viewsets/#the-lookup-capture">The lookup capture</a>).
+  A capture named like a field of the spec's Validator is never an argument:
+  the field stays the caller's, as drfs never filled a serializer field from
+  the route either. A nested create on <code>orgs/&lt;org&gt;/members/</code> whose serializer
+  has an <code>org</code> field declares <code>org</code> as a read and drops the field, or fills
+  it from <code>input_data=lambda view: {"org": view.kwargs["org"]}</code>.</li>
 <li><strong>A nested selector declares no <code>permissions</code>.</strong> On <code>instance_selector_spec</code>,
   <code>collection_selector_spec</code> and <code>output_selector_spec</code> the kernel never asks
   them, so the kernel refuses them when the <code>ServiceSpec</code> is built: declare
@@ -2082,8 +2117,12 @@ over:</p>
   (<code>page.values_list(...)</code>, <code>page.filter(...)</code>) must change to work over the
   list, for example <code>[row.pk for row in page]</code>
   (<a href="../recipes/serializer-context/#what-a-presenters-callable-receives">Serializer context</a>).</li>
-<li><strong>A kernel selector gets no <code>get_&lt;action&gt;_output_serializer_context</code></strong> hook:
-  declare the context on its <code>SerializerPresenter</code>.</li>
+<li><strong>A kernel selector layers both output hooks</strong>, <code>get_output_serializer_context</code>
+  and <code>get_&lt;action&gt;_output_serializer_context</code>, as a mutation does. drfs layered
+  only the per-action hook on a viewset's <code>list</code> and <code>retrieve</code>, and neither on
+  <code>SelectorListView</code> or <code>SelectorRetrieveView</code>; a view-wide override written for
+  writes now adds its keys to reads too
+  (<a href="../recipes/serializer-context/#keys-a-view-adds">Serializer context</a>).</li>
 </ul>
 <h2 id="permissions">Permissions<a class="headerlink" href="#permissions" title="Permanent link">&para;</a></h2>
 <ul>

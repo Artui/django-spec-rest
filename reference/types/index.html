@@ -424,6 +424,8 @@
       
         
       
+        
+      
     
     
     
@@ -663,6 +665,34 @@
     
   
     Link affordances to their routes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/field-schema-rules/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Field schema rules
   
 
     
@@ -1123,34 +1153,6 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#django_spec_rest.types.json_schema_registry.JsonSchemaRegistry" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        JsonSchemaRegistry
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="JsonSchemaRegistry">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#django_spec_rest.types.json_schema_registry.JsonSchemaRegistry.extend" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        extend
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-      
-        <li class="md-nav__item">
   <a href="#django_spec_rest.types.json_schema_registry.DEFAULT_JSON_SCHEMA_REGISTRY" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1438,34 +1440,6 @@
       
     </span>
   </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#django_spec_rest.types.json_schema_registry.JsonSchemaRegistry" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        JsonSchemaRegistry
-      
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="JsonSchemaRegistry">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#django_spec_rest.types.json_schema_registry.JsonSchemaRegistry.extend" class="md-nav__link">
-    <span class="md-ellipsis">
-      
-        extend
-      
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
       
@@ -2209,131 +2183,11 @@ rather than silently misread.</p>
 
     </div>
 
-</div>
+</div><p><code>JsonSchemaRegistry</code> is the kernel's
+<a class="autorefs autorefs-external" href="https://artui.github.io/django-service-specs/reference/#django_service_specs.types.json_schema_registry.JsonSchemaRegistry"><code>JsonSchemaRegistry</code></a>,
+re-exported from <code>django_spec_rest.types.json_schema_registry</code>; see
+<a href="../../recipes/field-schema-rules/">field schema rules</a>.</p>
 
-<div class="doc doc-object doc-class">
-
-
-
-<h2 id="django_spec_rest.types.json_schema_registry.JsonSchemaRegistry" class="doc doc-heading">
-            <span class="doc doc-object-name doc-class-name">JsonSchemaRegistry</span>
-
-
-  <span class="doc doc-labels">
-      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
-  </span>
-
-<a href="#django_spec_rest.types.json_schema_registry.JsonSchemaRegistry" class="headerlink" title="Permanent link">&para;</a></h2>
-
-
-    <div class="doc doc-contents first">
-
-
-
-        <p>Consumer-extensible <code>type → JSON Schema fragment</code> rules for the DRF seats.</p>
-<p>Rules are tried in order and the first match wins, <strong>before</strong> the built-in
-mappings — so a rule both adds support for a custom type and can override a
-built-in. The matched fragment is copied per use, so callers may freely
-mutate the returned schema.</p>
-<p>Immutable: <code>extend</code> returns a <em>new</em> registry rather than mutating, so
-there is no shared global state to leak across callers or tests. Start from
-<a class="autorefs autorefs-internal" title="DEFAULT_JSON_SCHEMA_REGISTRY
-
-
-  
-      module-attribute
-  " href="#django_spec_rest.types.json_schema_registry.DEFAULT_JSON_SCHEMA_REGISTRY"><code>DEFAULT_JSON_SCHEMA_REGISTRY</code></a>,
-the empty base, layer rules on, and hand the result to a seat as its
-<code>json_schema_registry=</code>:</p>
-<div class="language-text highlight"><pre><span></span><code>registry = DEFAULT_JSON_SCHEMA_REGISTRY.extend(
-    fields=[(MoneyField, {&quot;type&quot;: &quot;string&quot;, &quot;format&quot;: &quot;money&quot;})],
-)
-validator = SerializerValidator(MySerializer, json_schema_registry=registry)
-</code></pre></div>
-<p>That rule describes every <code>MoneyField</code> of the serializer as the kernel
-spec it serves compiles, where only what the kernel can state is kept: the
-field is a string there and <code>format: "money"</code>, which is none of the
-kernel's four formats, is dropped
-(test_registry_through_the_compiled_spec's
-test_the_kernel_s_schema_states_the_rule_but_for_the_dropped_format). A rule
-<code>extend</code> prepends wins over the registry's own
-(test_a_rule_an_extension_prepends_wins_over_the_registrys_own).</p>
-
-
-<p><span class="doc-section-title">Attributes:</span></p>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Description</th>
-        </tr>
-      </thead>
-      <tbody>
-          <tr class="doc-section-item">
-            <td><code><span title="django_spec_rest.types.json_schema_registry.JsonSchemaRegistry.fields">fields</span></code></td>
-            <td>
-                  <code><span title="tuple">tuple</span>[<span title="django_spec_rest.types.json_schema_registry._Rule">_Rule</span>, ...]</code>
-            </td>
-            <td>
-              <div class="doc-md-description">
-                <p>DRF <code>Field</code> subclasses, matched by <code>isinstance</code> when a
-<code>SerializerValidator</code> or <code>SerializerPresenter</code> walks its
-serializer.</p>
-              </div>
-            </td>
-          </tr>
-      </tbody>
-    </table>
-
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-children">
-
-
-
-
-
-
-
-
-
-
-<div class="doc doc-object doc-function">
-
-
-<h3 id="django_spec_rest.types.json_schema_registry.JsonSchemaRegistry.extend" class="doc doc-heading">
-            <span class="doc doc-object-name doc-function-name">extend</span>
-
-
-<a href="#django_spec_rest.types.json_schema_registry.JsonSchemaRegistry.extend" class="headerlink" title="Permanent link">&para;</a></h3>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">extend</span><span class="p">(</span><span class="o">*</span><span class="p">,</span> <span class="n">fields</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">_Rule</span><span class="p">]</span> <span class="o">=</span> <span class="p">())</span> <span class="o">-&gt;</span> <span class="n">JsonSchemaRegistry</span>
-</span></code></pre></div>
-
-    <div class="doc doc-contents ">
-
-        <p>Return a new registry with the given rules prepended (they win first).</p>
-
-
-    </div>
-
-</div>
-
-
-
-  </div>
-
-    </div>
-
-</div>
 
 <div class="doc doc-object doc-attribute">
 
@@ -2352,6 +2206,8 @@ serializer.</p>
 </span></code></pre></div>
 
     <div class="doc doc-contents first">
+
+        <p>The empty registry: a seat's own rules start here, and the project's stay behind them.</p>
 
     </div>
 
