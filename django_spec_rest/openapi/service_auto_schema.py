@@ -20,6 +20,7 @@ from django_service_specs import (
 )
 from django_service_specs.parameters.parameters import Parameter, Parameters
 from django_service_specs.schema.can_present_nothing import can_present_nothing
+from django_service_specs.specs.route_captures import route_captures
 from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelectorSpec
 from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
 from django_service_specs.types.build_call_context import build_call_context
@@ -237,19 +238,18 @@ class ServiceAutoSchema(AutoSchema):
     def _caller_schema(self, spec: KernelServiceSpec) -> dict[str, Any]:
         """What a caller sends ``spec`` as an object: the kernel's, less this transport's."""
         target = spec.target_selector_spec()
+        call_context = build_call_context(
+            REST_TRANSPORT, view=self.view, action=getattr(self.view, "action", None)
+        )
+        captured, _ = route_captures(spec, self._route_captures(), call_context=call_context)
         return _without(
             spec_caller_input_schema(
                 spec,
                 pool_seeds=view_pool_seeds(self.view),
                 unknown_arguments=UNKNOWN_ARGUMENTS,
-                call_context=build_call_context(
-                    REST_TRANSPORT,
-                    view=self.view,
-                    action=getattr(self.view, "action", None),
-                ),
+                call_context=call_context,
             ),
-            (target.parameters().names() if target is not None else frozenset())
-            | frozenset(self._route_captures()),
+            (target.parameters().names() if target is not None else frozenset()) | captured,
         )
 
     def _discriminated_request_body(self, action: DiscriminatedAction) -> Any:

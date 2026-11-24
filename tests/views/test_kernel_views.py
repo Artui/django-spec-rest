@@ -278,8 +278,8 @@ class TestASeedNamedFieldValidatesFromTheBody:
         assert response.status_code == 400
         assert response.data["user"][0].code == "invalid"
 
-    def test_a_declared_capture_outranks_the_body_beside_a_seed_named_field(self) -> None:
-        """Where the serializer is handed what the request sent."""
+    def test_a_capture_named_like_a_field_leaves_the_body_beside_a_seed_named_field(self) -> None:
+        """A namesake capture is no argument, so the serializer binds the caller's value."""
 
         class _Input(serializers.Serializer):
             author = serializers.IntegerField()
@@ -293,7 +293,7 @@ class TestASeedNamedFieldValidatesFromTheBody:
         )
         response = _post(_view(spec), {"author": 9, "user": 7}, author="4")
         assert response.status_code == 204, response.data
-        assert received == {"author": 4, "user": 7}
+        assert received == {"author": 9, "user": 7}
 
     def test_a_body_with_no_seed_named_field_keeps_the_input_data_provider(self) -> None:
         """The serializer binds what the kernel hands it, ``input_data``'s values merged in."""

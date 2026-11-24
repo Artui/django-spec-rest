@@ -52,6 +52,15 @@ The view turns the request into the one dict of arguments the kernel's
   over anything the body or the query string sends for the same name. A
   capture the spec does not declare is no argument; it stays on
   `view.kwargs` for DRF.
+- **A capture named like a Validator field is no argument either**: the
+  field is the caller's, sent in the body, documented as a body key by
+  OPTIONS and the OpenAPI document, and absent when the caller leaves it out.
+  A capture holds the URL converter's `to_python()` value while the field
+  reads what a caller sends, so the two never share one. A target selector
+  wanting the route's value reads `view.kwargs` through its `kwargs`
+  provider; a service wanting it in its data gets it from `input_data=`. The
+  rule is the kernel's
+  [`route_captures`][django_service_specs.specs.route_captures.route_captures].
 - **The query string** is read by the kernel's flat reader: a blank value is
   absent, a typed array or a multiple-choice filter splits on a comma, and
   each value is coerced to its parameter's type.

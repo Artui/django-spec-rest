@@ -43,7 +43,7 @@ class BIn(serializers.Serializer):
 
 
 class TenantIn(serializers.Serializer):
-    """Every field is a capture of the route, which outranks the body, so nothing is left for it."""
+    """Its one field is named like the route's capture, a namesake, so it stays a body key."""
 
     tenant = serializers.CharField()
 
@@ -162,17 +162,17 @@ ROWS = _viewset(
         rows=_spec(SerializerValidator(AIn), None, many=True), one=_spec(SerializerValidator(BIn))
     ),
 )
-# One variant's whole body is a capture of the route, which outranks the body.
+_BY_TENANT = Parameters.of(Parameter("tenant", "string", required=True))
+# One variant's whole input is a read the route captures, so it takes no body.
 READS = _viewset(
     "Reads",
     "create",
-    _action(
-        a=_spec(SerializerValidator(AIn), A_OUT),
-        b=_spec(SerializerValidator(TenantIn), B_OUT),
-    ),
+    _action(a=_spec(SerializerValidator(AIn), A_OUT), b=_spec(None, B_OUT, reads=_BY_TENANT)),
 )
-# Every variant's only body is that capture: OPTIONS then describes a body-less spec.
-ONLY_READS = _viewset("OnlyReads", "create", _action(a=_spec(SerializerValidator(TenantIn), A_OUT)))
+# Every variant's only input is that read: OPTIONS then describes a body-less spec.
+ONLY_READS = _viewset("OnlyReads", "create", _action(a=_spec(None, A_OUT, reads=_BY_TENANT)))
+# A field named like the route's capture is a namesake, the caller's body key.
+NAMESAKE = _viewset("Namesake", "create", _action(a=_spec(SerializerValidator(TenantIn), A_OUT)))
 PATCHED = _viewset(
     "Patched",
     "partial_update",
@@ -270,6 +270,7 @@ urlpatterns = [
     path("rows/", ROWS.as_view({"post": "create"})),
     path("reads/<str:tenant>/", READS.as_view({"post": "create"})),
     path("only-reads/<str:tenant>/", ONLY_READS.as_view({"post": "create"})),
+    path("namesake/<str:tenant>/", NAMESAKE.as_view({"post": "create"})),
     path("patched/<int:pk>/", PATCHED.as_view({"patch": "partial_update"})),
     path("destroyed/<int:pk>/", DESTROYED.as_view({"delete": "destroy"})),
     path("guarded/", GUARDED.as_view({"post": "create"})),
@@ -409,7 +410,7 @@ class TestOneNameForTwoBodies:
         assert len(warned) == 1
         assert "ProjectViewSet_create_Request" in warned[0]
 
-    def test_a_route_capture_named_as_a_field_changes_the_body_it_documents(
+    def test_a_route_capture_named_as_a_field_leaves_the_body_it_documents(
         self, warned: list[str]
     ) -> None:
         view = _viewset("Nested", "create", _action(a=_spec(DataclassValidator(Member))))
@@ -417,12 +418,29 @@ class TestOneNameForTwoBodies:
             path("q/", view.as_view({"post": "create"})),
             path("orgs/<str:org>/q/", view.as_view({"post": "create"})),
         )
+        held = _body(schema, "/orgs/{org}/q/", "post")
+        assert held == _body(schema, "/q/", "post") == _ref("Nested_create_Request")
+        assert [set(m["properties"]) for m in _component(schema, held)["anyOf"]] == [
+            {"org", "name"}
+        ]
+        assert warned == []
+
+    def test_a_route_capture_naming_a_read_changes_the_body_it_documents(
+        self, warned: list[str]
+    ) -> None:
+        reads = Parameters.of(Parameter("org", "string", required=True))
+        spec = _spec(DataclassValidator(Row), reads=reads)
+        view = _viewset("NestedRead", "create", _action(a=spec))
+        schema = _generate(
+            path("q/", view.as_view({"post": "create"})),
+            path("orgs/<str:org>/q/", view.as_view({"post": "create"})),
+        )
         # The route sorted first holds the component, and the other is inline.
         held, inline = _body(schema, "/orgs/{org}/q/", "post"), _body(schema, "/q/", "post")
-        assert held == _ref("Nested_create_Request")
+        assert held == _ref("NestedRead_create_Request")
         captured, bare = _component(schema, held)["anyOf"], inline["anyOf"]
-        assert [set(m["properties"]) for m in bare] == [{"org", "name"}]
-        assert [set(m["properties"]) for m in captured] == [{"name"}]
+        assert [set(m["properties"]) for m in bare] == [{"org", "sku"}]
+        assert [set(m["properties"]) for m in captured] == [{"sku"}]
         assert len(warned) == 1
 
     def test_two_operations_of_one_body_share_the_component_without_a_warning(
@@ -482,7 +500,14 @@ class TestTheRequestAgreesWithOptions:
         assert [set(m["properties"]) for m in members] == [{"alpha"}]
         assert _request(schema, "/same/")["anyOf"] == [_ref("AIn")]
 
-    def test_a_variant_whose_every_field_is_a_route_capture_is_in_neither(
+    def test_a_field_named_like_a_route_capture_is_a_body_key_in_both(
+        self, schema: dict[str, Any]
+    ) -> None:
+        described = _options(NAMESAKE.as_view({"post": "create"}), "POST", tenant="t")["anyOf"]
+        assert [set(m["properties"]) for m in described] == [{"tenant"}]
+        assert _request(schema, "/namesake/{tenant}/") == {"anyOf": [_ref("TenantIn")]}
+
+    def test_a_variant_whose_every_input_is_a_route_capture_is_in_neither(
         self, schema: dict[str, Any]
     ) -> None:
         view = READS.as_view({"post": "create"})

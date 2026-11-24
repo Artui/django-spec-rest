@@ -11,6 +11,26 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+### Changed
+
+- **A route capture named like a Validator field is no longer an argument;
+  the field is the caller's.** A nested-route host whose serializer has a
+  field of a capture's name (`orgs/<org>/members/` over a serializer with
+  `org`) had the route's value written over the body. That value is the URL
+  converter's `to_python()` output while the field reads wire input, so a
+  converter that changes the value (a hashid) answered every call with the
+  field's 400, whether or not the caller sent the key. Now the capture is the
+  kernel's namesake, by its `route_captures`: the serializer binds what the
+  caller sent, a `PATCH` without the key is a 2xx, and OPTIONS and the
+  OpenAPI request body offer the field as a body key. A host that relied on
+  the route filling the field declares the capture as a read (and drops the
+  field), or fills the field from `input_data=lambda view: {"org":
+  view.kwargs["org"]}`; a target selector reads it through its `kwargs`
+  provider. Captures declared as reads, or as a target selector's reads, are
+  arguments as before.
+- The `django-service-specs` floor is 0.36.0, the release that adds
+  `route_captures`.
+
 ## [0.15.1] — 2026-11-23
 
 ### Changed
