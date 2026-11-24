@@ -20,8 +20,11 @@ carries; releases up to 0.62.0 are in
   depth the walk reaches, including a nested serializer's fields and a `many=True` list's
   rows. A field with `allow_blank=True` states no `minLength`, because DRF accepts a blank
   before its length validator runs. A page built from the spec, such as django-spec-html's,
-  can now compare its form's lengths with the spec's. The OpenAPI document already stated
-  these lengths, from the serializer, and it agrees.
+  can now compare its form's lengths with the spec's. The lengths are advertised: DRF
+  measures a value after `trim_whitespace`, so a padded value it takes can exceed the stated
+  `maxLength`. A `ListField`'s scalar element and a field a field schema rule answers state
+  no lengths. The OpenAPI document states the same lengths, except that drf-spectacular
+  0.27 also states `minLength` on an `allow_blank` field.
 - **A recipe for serving a spec on a spec-html page.** It covers one spec served by a
   viewset and by django-spec-html's `SpecFormView`, and what a call carries on the page.
   `view` is the page, with the URL's captures as its `kwargs`. A DRF permission class is

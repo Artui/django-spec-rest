@@ -17,6 +17,7 @@ class _Outer(serializers.Serializer):
     note = serializers.CharField()
     inner = _Inner()
     rows = _Inner(many=True)
+    tags = serializers.ListField(child=serializers.CharField(max_length=5))
 
 
 def _extra(name: str) -> Any:
@@ -43,6 +44,12 @@ def test_a_nested_serializer_s_char_field_states_its_lengths() -> None:
 def test_a_list_serializer_row_s_char_field_states_its_lengths() -> None:
     rows = SerializerValidator(_Outer).parameters().get("rows").items
     assert rows.get("code").json_schema_extra == {"maxLength": 8, "minLength": 3}
+
+
+def test_a_list_field_s_char_element_states_no_lengths() -> None:
+    """A scalar element compiles to its type name alone, which has no room for a bound."""
+    tags = SerializerValidator(_Outer).parameters().get("tags")
+    assert (tags.items, tags.json_schema_extra) == ("string", None)
 
 
 class _Blank(serializers.Serializer):

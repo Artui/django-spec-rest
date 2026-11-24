@@ -91,6 +91,7 @@ dependencies = [
     # 0.35.0 makes a kwargs key named like a Validator field a namesake, not a fill.
     # 0.36.0 adds ``route_captures``, which keeps a capture named like a field off
     # the arguments, and the project field schema registry the adapters default to.
+    # 0.38.0 adds ``string_lengths``, which spells a CharField's lengths.
     "django-service-specs>=0.38.0",
 ]
 

@@ -46,10 +46,11 @@ def test_the_document_and_the_compiled_spec_state_a_char_field_s_lengths_alike()
         assert _lengths(documented[name]) == _lengths(compiled[name]), name
 
 
-def test_a_blank_the_document_states_exactly_the_compiled_spec_states_without_a_minimum() -> None:
-    """The compiled ``maxLength`` alone holds for both of the document's alternatives."""
-    alternatives = [_lengths(node) for node in _documented()["blank"]["oneOf"]]
-    assert alternatives == [{"maxLength": 10, "minLength": 2}, {"maxLength": 0}]
+def test_a_blank_field_states_the_document_s_maximum_without_a_minimum() -> None:
+    """drf-spectacular 0.27 states one node and later ones a blank alternative; both bound 10."""
+    blank = _documented()["blank"]
+    nodes = [_lengths(node) for node in blank.get("oneOf", [blank])]
+    assert {"maxLength": 10, "minLength": 2} in nodes
     assert _lengths(parameters_schema(_VALIDATOR.parameters())["properties"]["blank"]) == {
         "maxLength": 10
     }
