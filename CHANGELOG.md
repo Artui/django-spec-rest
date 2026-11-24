@@ -58,7 +58,8 @@ carries; releases up to 0.62.0 are in
   component for is dropped with a warning naming it. An unregistered field keeps drf-spectacular's mapping. A
   rule wins over `@extend_schema_field` and an `OpenApiSerializerFieldExtension` on the same
   field class. A serializer documented by two seats with different rules is one component,
-  typed by the first operation that maps it.
+  typed by the first operation that maps it. See
+  [the OpenAPI document](https://artui.github.io/django-spec-rest/recipes/field-schema-rules/#the-openapi-document).
 - The `django-service-specs` floor is 0.36.0, the release that adds
   `route_captures` and the project field schema registry.
 
