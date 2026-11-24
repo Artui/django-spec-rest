@@ -11,6 +11,20 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+### Changed
+
+- **Selector routes layer the view's output serializer context hooks, as
+  mutations do.** A viewset's `list` and `retrieve`, a `@selector_action`, and
+  `SelectorListView` / `SelectorRetrieveView` now layer
+  `get_output_serializer_context` and `get_<action>_output_serializer_context`
+  over DRF's context, with or without a `SerializerPresenter`, whose own
+  `serializer_context` stays outermost. The hooks are offered `page` and
+  `result` on a list (the rows served) and `instance` and `result` on a
+  retrieve. A `ServiceViewSet`'s view-wide `get_output_serializer_context`
+  override, written for its writes, now adds its keys to `list` and `retrieve`
+  responses too. `get_service_kwargs` and the input hooks still never reach a
+  selector.
+
 ## [0.15.1] — 2026-11-23
 
 ### Changed

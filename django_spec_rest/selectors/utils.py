@@ -18,7 +18,12 @@ from rest_framework.versioning import QueryParameterVersioning
 
 from django_spec_rest.dispatch.kernel_edge import KernelSpec, dispatch_kernel_spec
 from django_spec_rest.views.linked_affordances import linked_affordances
-from django_spec_rest.views.utils import view_call_context, view_pool_seeds
+from django_spec_rest.views.utils import (
+    layer_output_context,
+    view_call_context,
+    view_pool_seeds,
+    with_output_hooks,
+)
 
 
 def dispatch_selector_for_spec(view: Any, spec: KernelSelectorSpec) -> Any:
@@ -44,11 +49,15 @@ def dispatch_kernel_selector(view: Any, spec: KernelSpec) -> DispatchResult:
 def present_kernel_selection(
     view: Any, spec: KernelSelectorSpec, result: DispatchResult, rows: Any, *, many: bool
 ) -> Any:
-    """``rows`` of a kernel selector ``result`` as the response body: the spec's, or the view's."""
+    """``rows`` as the body; hooks layer here, as the default one calls get_serializer_context."""
+    extras = {"page": rows, "result": rows} if many else {"instance": rows, "result": rows}
     if spec.presenter is not None or spec.affordances is not None:
-        presented = present(spec, dataclasses.replace(result, value=rows))
+        presented = present(
+            spec, with_output_hooks(dataclasses.replace(result, value=rows), view, extras=extras)
+        )
         return linked_affordances(view, spec, presented, many=many)
-    return view.get_serializer(rows, many=many).data
+    context = layer_output_context(view.get_serializer_context(), view, view.request, extras=extras)
+    return view.get_serializer(rows, many=many, context=context).data
 
 
 # The attribute ``dispatch_list_once`` keeps its dispatch in, on the view.
