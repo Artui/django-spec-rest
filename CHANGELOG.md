@@ -48,6 +48,17 @@ carries; releases up to 0.62.0 are in
   rule for a base before one for its subclass answered the subclass with the base's rule; the
   subclass's own rule answers it now. A rule keyed on a tuple of classes matches nothing:
   write one rule per class. `DEFAULT_JSON_SCHEMA_REGISTRY` is the kernel's empty registry.
+- **Selector routes layer the view's output serializer context hooks, as
+  mutations do.** A viewset's `list` and `retrieve`, a `@selector_action`, and
+  `SelectorListView` / `SelectorRetrieveView` now layer
+  `get_output_serializer_context` and `get_<action>_output_serializer_context`
+  over DRF's context, with or without a `SerializerPresenter`, whose own
+  `serializer_context` stays outermost. The hooks are offered `page` and
+  `result` on a list (the rows served) and `instance` and `result` on a
+  retrieve. A `ServiceViewSet`'s view-wide `get_output_serializer_context`
+  override, written for its writes, now adds its keys to `list` and `retrieve`
+  responses too. `get_service_kwargs` and the input hooks still never reach a
+  selector.
 - The `django-service-specs` floor is 0.36.0, the release that adds
   `route_captures` and the project field schema registry.
 

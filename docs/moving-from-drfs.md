@@ -543,8 +543,12 @@ The query string is read by the kernel's flat reader:
   (`page.values_list(...)`, `page.filter(...)`) must change to work over the
   list, for example `[row.pk for row in page]`
   ([Serializer context](recipes/serializer-context.md#what-a-presenters-callable-receives)).
-- **A kernel selector gets no `get_<action>_output_serializer_context`** hook:
-  declare the context on its `SerializerPresenter`.
+- **A kernel selector layers both output hooks**, `get_output_serializer_context`
+  and `get_<action>_output_serializer_context`, as a mutation does. drfs layered
+  only the per-action hook on a viewset's `list` and `retrieve`, and neither on
+  `SelectorListView` or `SelectorRetrieveView`; a view-wide override written for
+  writes now adds its keys to reads too
+  ([Serializer context](recipes/serializer-context.md#keys-a-view-adds)).
 
 ## Permissions
 

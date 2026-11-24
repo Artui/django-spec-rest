@@ -158,6 +158,10 @@ on an overlapping key:
 | Input serializer context | `get_serializer_context()`, then `get_input_serializer_context()` | `get_<action>_input_serializer_context()` | `SerializerValidator(serializer_context=)` |
 | Output serializer context | `get_serializer_context()`, then `get_output_serializer_context()` | `get_<action>_output_serializer_context()` | `SerializerPresenter(serializer_context=)` |
 
+The output row serves a read as well: a selector route layers both output
+hooks, offered the rows it renders (`page` and `result` on a list, `instance`
+and `result` on a retrieve). The other three rows feed only a write.
+
 A view hook's value outranks the validated value, so a hook returning
 `{"owner": request.user}` cannot be overwritten by a client sending `owner`. A
 `kwargs` key named like a validator field is a namesake: the service's keyword
