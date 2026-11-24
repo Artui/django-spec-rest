@@ -177,6 +177,15 @@ class SerializerValidator(Validator):
     list's own checks judge the rows left, and their refusal sits beside the
     refused row's (test_bulk_rows_over_http's
     test_a_lists_own_checks_judge_the_rows_the_kernel_passed).
+
+    **A field's type can be a rule's.** Before its own table, a field's class
+    is asked of the kernel's
+    [`registered_fragment`][django_service_specs.schema.registered_fragment.registered_fragment]:
+    the most specific class in its MRO with a rule in ``json_schema_registry``
+    or in the project's, which ``SERVICE_SPECS_FIELD_SCHEMA_REGISTRY`` names
+    unless ``project_registry=False``, the seat's answering a class both name.
+    The setting is read on every declaration, so ``override_settings`` reaches
+    a seat built before it (see [field schema rules](../recipes/field-schema-rules.md)).
     """
 
     def __init__(
@@ -188,6 +197,7 @@ class SerializerValidator(Validator):
         excluded: frozenset[str] = frozenset(),
         server_owned: frozenset[str] = frozenset(),
         json_schema_registry: JsonSchemaRegistry | None = None,
+        project_registry: bool = True,
     ) -> None:
         # Each operand is held by its own test (test_parameters_are_the_walked_fields, et al.).
         if not (
@@ -207,6 +217,7 @@ class SerializerValidator(Validator):
         self.excluded = excluded
         self.server_owned = server_owned
         self.json_schema_registry = json_schema_registry
+        self.project_registry = project_registry
         self.supports_partial = not (
             dataclasses.is_dataclass(serializer) or issubclass(serializer, DataclassSerializer)
         )
@@ -310,6 +321,7 @@ class SerializerValidator(Validator):
         return input_parameters(
             describe_serializer(self.serializer, self, call_context=call_context),
             registry=self.json_schema_registry,
+            project_registry=self.project_registry,
         )
 
     def validate(self, arguments: Mapping[str, Any], context: ValidationContext) -> dict[str, Any]:

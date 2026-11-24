@@ -48,6 +48,7 @@ _SURFACE = {
     "DiscriminatedAction": DiscriminatedAction,
     "GetQuerysetScopeWarning": GetQuerysetScopeWarning,
     "HttpExtras": HttpExtras,
+    # The kernel's class, kept at the root where drfs and earlier releases exported it.
     "JsonSchemaRegistry": JsonSchemaRegistry,
     "MARKING": MARKING,
     "REST_TRANSPORT": REST_TRANSPORT,

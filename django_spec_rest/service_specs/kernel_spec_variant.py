@@ -79,6 +79,7 @@ def _kernel_changes(spec: KernelServiceSpec, partial: bool | None, lenient: bool
             excluded=validator.excluded,
             server_owned=validator.server_owned,
             json_schema_registry=validator.json_schema_registry,
+            project_registry=validator.project_registry,
         )
     return changes
 

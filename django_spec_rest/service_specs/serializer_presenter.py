@@ -15,6 +15,7 @@ from django_service_specs.parameters.invalid_arguments import (
     InvalidArguments as KernelInvalidArguments,
 )
 from django_service_specs.parameters.non_field_errors import NON_FIELD_ERRORS
+from django_service_specs.schema.fragment_keywords import fragment_keywords
 from rest_framework import serializers
 from rest_framework.fields import empty as _drf_empty
 
@@ -25,7 +26,6 @@ from django_spec_rest.service_specs.renderable_serializer_class import (
 )
 from django_spec_rest.service_specs.utils import (
     MAX_SERIALIZER_APPEARANCES,
-    fragment_keywords,
     output_view_layers,
     registered_fragment,
     serializer_context,
@@ -159,6 +159,15 @@ class SerializerPresenter(Presenter):
     A dataclass type is read and rendered through a ``DataclassSerializer``
     built for it, and a ``BaseSerializer`` that is not a ``Serializer``
     declares no fields, so its output is empty while it still presents.
+
+    **A field's type can be a rule's.** Before its own table, a field's class
+    is asked of the kernel's
+    [`registered_fragment`][django_service_specs.schema.registered_fragment.registered_fragment]:
+    the most specific class in its MRO with a rule in ``json_schema_registry``
+    or in the project's, which ``SERVICE_SPECS_FIELD_SCHEMA_REGISTRY`` names
+    unless ``project_registry=False``, the seat's answering a class both name.
+    The setting is read on every declaration, so ``override_settings`` reaches
+    a seat built before it (see [field schema rules](../recipes/field-schema-rules.md)).
     """
 
     def __init__(
@@ -170,6 +179,7 @@ class SerializerPresenter(Presenter):
         value_keyword: str | None = "result",
         shaped: bool = False,
         json_schema_registry: JsonSchemaRegistry | None = None,
+        project_registry: bool = True,
     ) -> None:
         # Resolved, not instantiated: specs load at import, and fields need the app registry.
         if not isinstance(serializer_class, type):
@@ -191,12 +201,18 @@ class SerializerPresenter(Presenter):
         self.value_keyword = value_keyword
         self.shaped = shaped
         self.json_schema_registry = json_schema_registry
+        self.project_registry = project_registry
 
     def output(self) -> Output:
         """The serializer's fields as an Output, with ``field_audiences`` layered on."""
         serializer = self.serializer_class(context=_context())
         output = (
-            _output(serializer, path=(), registry=self.json_schema_registry)
+            _output(
+                serializer,
+                path=(),
+                registry=self.json_schema_registry,
+                project_registry=self.project_registry,
+            )
             if isinstance(serializer, serializers.Serializer)
             else Output()
         )
@@ -335,12 +351,20 @@ def _output(
     serializer: serializers.Serializer,
     *,
     path: tuple[type, ...],
-    registry: JsonSchemaRegistry | None = None,
+    registry: JsonSchemaRegistry | None,
+    project_registry: bool,
 ) -> Output:
     path = (*path, type(serializer))
     return Output(
         tuple(
-            _output_field(name, field, serializer=serializer, path=path, registry=registry)
+            _output_field(
+                name,
+                field,
+                serializer=serializer,
+                path=path,
+                registry=registry,
+                project_registry=project_registry,
+            )
             for name, field in serializer.fields.items()
             if not field.write_only
         )
@@ -353,10 +377,11 @@ def _output_field(
     *,
     serializer: serializers.Serializer,
     path: tuple[type, ...],
-    registry: JsonSchemaRegistry | None = None,
+    registry: JsonSchemaRegistry | None,
+    project_registry: bool,
 ) -> OutputField:
     """One rendered field as an ``OutputField``."""
-    fragment = registered_fragment(registry, field)
+    fragment = registered_fragment(field, registry, project_registry=project_registry)
     if fragment is not None:
         declared = fragment_keywords(fragment, output=True)
         declared.update(
@@ -366,7 +391,7 @@ def _output_field(
             marking=_marking(field, serializer=serializer, name=name),
         )
         return OutputField(name, declared.pop("type"), **declared)
-    shape = _shape(field, path=path, registry=registry)
+    shape = _shape(field, path=path, registry=registry, project_registry=project_registry)
     return OutputField(
         name,
         shape.type or "any",
@@ -402,20 +427,24 @@ def _none_always_present(output: Output) -> Output:
 
 
 def _shape(
-    field: serializers.Field, *, path: tuple[type, ...], registry: JsonSchemaRegistry | None = None
+    field: serializers.Field,
+    *,
+    path: tuple[type, ...],
+    registry: JsonSchemaRegistry | None,
+    project_registry: bool,
 ) -> _Shape:
     """One field's type, and what it nests, with ``type=None`` where DRF names none."""
     if isinstance(field, serializers.ListSerializer | serializers.ListField):
         child: Any = field.child
         fragment = (
-            registered_fragment(registry, child)
+            registered_fragment(child, registry, project_registry=project_registry)
             if isinstance(field, serializers.ListField)
             else None
         )
         if fragment is not None:
             kind = fragment_keywords(fragment, output=True)["type"]
             return _Shape("array", items=None if kind == "any" else kind)
-        element = _shape(child, path=path, registry=registry)
+        element = _shape(child, path=path, registry=registry, project_registry=project_registry)
         items = element.fields if element.fields is not None else element.type
         return _Shape("array", items=items, items_nullable=items is not None and child.allow_null)
     if isinstance(field, serializers.ManyRelatedField):
@@ -423,7 +452,10 @@ def _shape(
     if isinstance(field, serializers.Serializer):
         if path.count(type(field)) >= MAX_SERIALIZER_APPEARANCES:
             return _Shape("object")
-        return _Shape("object", fields=_output(field, path=path, registry=registry))
+        return _Shape(
+            "object",
+            fields=_output(field, path=path, registry=registry, project_registry=project_registry),
+        )
     if isinstance(field, serializers.MultipleChoiceField):
         choices = _choices(field)
         return _Shape("array", items=_choices_type(choices), choices=choices)
