@@ -40,7 +40,11 @@ carries; releases up to 0.62.0 are in
   field), or fills the field from `input_data=lambda view: {"org":
   view.kwargs["org"]}`; a target selector reads it through its `kwargs`
   provider. Captures declared as reads, or as a target selector's reads, are
-  arguments as before.
+  arguments as before. A capture named like a `many` spec's `many_argument`
+  (the caller's list, `items` by default) is refused as
+  `ImproperlyConfigured`: at `as_view()` for a router-mounted detail route's
+  lookup capture, and on the request that carries it for a route mounted by
+  hand, whose captures `as_view()` cannot see.
 - **`JsonSchemaRegistry` is the kernel's**, re-exported from
   `django_spec_rest.types.json_schema_registry` and the package root, and its rules are matched
   through the field class's MRO: the most specific class with a rule wins, in either

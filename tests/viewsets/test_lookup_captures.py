@@ -140,6 +140,31 @@ class TestTheCaptureName:
         )
 
 
+class TestACaptureNamingAManySpecSList:
+    @staticmethod
+    def _rows(**fields: Any) -> ServiceSpec:
+        return ServiceSpec(
+            service=lambda *, data: None,
+            permissions=_OPEN,
+            validator=SerializerValidator(_NameIn),
+            many=True,
+            **fields,
+        )
+
+    def test_the_router_s_lookup_capture_is_refused_with_the_kernel_s_message(self) -> None:
+        viewset = _viewset(lookup_url_kwarg="items", action_specs={"destroy": self._rows()})
+        assert _refusal(viewset, {"delete": "destroy"}) == (
+            "The route captures items, the caller's list on a many spec. "
+            "Rename the capture, or set many_argument to another name."
+        )
+
+    def test_a_renamed_list_is_no_such_capture(self) -> None:
+        viewset = _viewset(
+            lookup_url_kwarg="items", action_specs={"destroy": self._rows(many_argument="rows")}
+        )
+        _mount(viewset, {"delete": "destroy"})
+
+
 class TestWhatIsNotAsked:
     def test_a_target_selector_reading_the_capture_mounts(self) -> None:
         _mount(
