@@ -13,6 +13,15 @@ carries; releases up to 0.62.0 are in
 
 ### Added
 
+- **`SerializerValidator` states a `CharField`'s lengths.** A `CharField`, or any subclass
+  such as `EmailField`, with `max_length` or `min_length` compiles to a parameter whose
+  `json_schema_extra` holds `maxLength` and `minLength`. The value comes from the kernel's
+  `string_lengths`, so the spelling matches every other Validator. This applies at every
+  depth the walk reaches, including a nested serializer's fields and a `many=True` list's
+  rows. A field with `allow_blank=True` states no `minLength`, because DRF accepts a blank
+  before its length validator runs. A page built from the spec, such as django-spec-html's,
+  can now compare its form's lengths with the spec's. The OpenAPI document already stated
+  these lengths, from the serializer, and it agrees.
 - **A recipe for serving a spec on a spec-html page.** It covers one spec served by a
   viewset and by django-spec-html's `SpecFormView`, and what a call carries on the page.
   `view` is the page, with the URL's captures as its `kwargs`. A DRF permission class is
@@ -23,6 +32,11 @@ carries; releases up to 0.62.0 are in
   scope as a pool seed on both mounts, and a check reading the seed. It also lists what
   stays REST-only. Each example is tested on both mounts. See
   [serving a spec on a spec-html page](https://artui.github.io/django-spec-rest/recipes/one-spec-on-a-page/).
+
+### Changed
+
+- **The kernel floor is `django-service-specs>=0.38.0`**, the release that adds
+  `string_lengths`.
 
 ## [0.16.0] — 2026-11-24
 

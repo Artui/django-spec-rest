@@ -97,7 +97,8 @@ def test_anything_but_a_serializer_class_or_a_dataclass_is_refused_when_declared
 
 def test_parameters_are_the_walked_fields() -> None:
     assert SerializerValidator(_Note).parameters() == Parameters.of(
-        Parameter("title", "string", required=True), Parameter("count", "integer")
+        Parameter("title", "string", required=True, json_schema_extra={"maxLength": 5}),
+        Parameter("count", "integer"),
     )
 
 
