@@ -288,12 +288,12 @@ def layer_output_context(
 
 
 def with_output_hooks(
-    result: DispatchResult, view: Any, *, extras: Mapping[str, Any]
+    result: DispatchResult, view: Any, *, extras: Callable[[], Mapping[str, Any]]
 ) -> DispatchResult:
-    """A selector's ``result`` carrying only the view's output hooks, bound to ``extras``."""
+    """A selector's ``result`` carrying only the view's output hooks, offered ``extras()``."""
 
     def output(_value: Any) -> dict[str, Any]:
-        return layer_output_context({}, view, view.request, extras=extras)
+        return layer_output_context({}, view, view.request, extras=extras())
 
     if result.context is None:
         return result

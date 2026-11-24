@@ -50,14 +50,28 @@ def present_kernel_selection(
     view: Any, spec: KernelSelectorSpec, result: DispatchResult, rows: Any, *, many: bool
 ) -> Any:
     """``rows`` as the body; hooks layer here, as the default one calls get_serializer_context."""
-    extras = {"page": rows, "result": rows} if many else {"instance": rows, "result": rows}
     if spec.presenter is not None or spec.affordances is not None:
         presented = present(
-            spec, with_output_hooks(dataclasses.replace(result, value=rows), view, extras=extras)
+            spec,
+            with_output_hooks(
+                dataclasses.replace(result, value=rows),
+                view,
+                extras=lambda: _offered(rows, many=many),
+            ),
         )
         return linked_affordances(view, spec, presented, many=many)
-    context = layer_output_context(view.get_serializer_context(), view, view.request, extras=extras)
+    context = layer_output_context(
+        view.get_serializer_context(), view, view.request, extras=_offered(rows, many=many)
+    )
     return view.get_serializer(rows, many=many, context=context).data
+
+
+def _offered(rows: Any, *, many: bool) -> dict[str, Any]:
+    """The rows a selector's output hooks are offered by name; a list's evaluated, as a list."""
+    if not many:
+        return {"instance": rows, "result": rows}
+    served = rows if isinstance(rows, list) else list(rows)
+    return {"page": served, "result": served}
 
 
 # The attribute ``dispatch_list_once`` keeps its dispatch in, on the view.

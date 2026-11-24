@@ -129,8 +129,9 @@ Both view-wide hooks default to `get_serializer_context()`. A selector route
 `SelectorRetrieveView`) layers both output hooks as a mutation does, with or
 without a presenter; a standalone view has no action, so only its view-wide
 hook runs. A selector's output hooks are offered, by name, the rows being
-rendered: `page` and `result` on a list (the served rows, the page's rows when
-paginated, the same list under both names), `instance` and `result` on a
+rendered: `page` and `result` on a list (the served rows as one evaluated list,
+the page's rows when paginated, the same list under both names, never a
+queryset), `instance` and `result` on a
 retrieve. A presenter's own `serializer_context` stays the outermost layer.
 The input hooks and `get_service_kwargs` never reach a selector, so a
 `ServiceViewSet` hook written for its writes leaves `list` and `retrieve`

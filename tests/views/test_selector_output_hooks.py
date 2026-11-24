@@ -269,4 +269,47 @@ class TestAServiceViewSet:
 
 def test_a_result_with_no_call_to_present_for_is_left_as_it_is() -> None:
     result = DispatchResult(kind="list", value=[])
-    assert with_output_hooks(result, object(), extras={}) is result
+    assert with_output_hooks(result, object(), extras=dict) is result
+
+
+class TestAnUnpaginatedList:
+    @pytest.mark.parametrize("presented", [True, False], ids=["presenter", "no-presenter"])
+    def test_its_hook_is_offered_a_list_at_no_extra_query(
+        self, presented: bool, django_assert_num_queries: Any
+    ) -> None:
+        Author.objects.create(name="a")
+        Author.objects.create(name="b")
+        offered: dict[str, Any] = {}
+
+        class _ViewSet(SelectorViewSet):
+            serializer_class = _CapturingOut
+            action_specs = {"list": _list_spec(presented=presented)}
+
+            def get_list_output_serializer_context(self, page: Any, result: Any) -> dict[str, Any]:
+                offered.update(page=page, result=result)
+                return {}
+
+        with django_assert_num_queries(1):
+            response = _ViewSet.as_view({"get": "list"})(factory.get("/"))
+        assert [row["name"] for row in response.data] == ["a", "b"]
+        assert isinstance(offered["page"], list)
+        assert offered["page"] is offered["result"]
+        assert [author.name for author in offered["page"]] == ["a", "b"]
+
+    def test_a_selector_action_s_hook_is_offered_a_list(self) -> None:
+        Author.objects.create(name="a")
+        offered: dict[str, Any] = {}
+
+        class _ViewSet(SelectorViewSet):
+            serializer_class = _CapturingOut
+
+            @selector_action(_list_spec(presented=True))
+            def active(self, request: Any) -> Any:
+                """Stubbed: the decorator serves the spec."""
+
+            def get_active_output_serializer_context(self, page: Any) -> dict[str, Any]:
+                offered.update(page=page)
+                return {}
+
+        _ViewSet.as_view({"get": "active"})(factory.get("/"))
+        assert isinstance(offered["page"], list)
