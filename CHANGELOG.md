@@ -48,6 +48,17 @@ carries; releases up to 0.62.0 are in
   rule for a base before one for its subclass answered the subclass with the base's rule; the
   subclass's own rule answers it now. A rule keyed on a tuple of classes matches nothing:
   write one rule per class. `DEFAULT_JSON_SCHEMA_REGISTRY` is the kernel's empty registry.
+- **The OpenAPI document follows the field schema rules.** `ServiceAutoSchema` types a field
+  the seat's or the project's rules type (the same lookup, precedence and
+  `project_registry=False` opt-out as the compiled spec) by that rule, in the request and the
+  response components, at every depth, so the `IntegerField` subclass ruled a `string` is a
+  `string` in the document as well as in the spec. The field's own meta (`readOnly`,
+  `nullable`, `description`) stands beside the fragment, a `[t, "null"]` type is
+  stated as `nullable` under OAS 3.0, and a `$ref` the document has no component for is
+  dropped with a warning naming it. An unregistered field keeps drf-spectacular's mapping. A
+  rule wins over `@extend_schema_field` and an `OpenApiSerializerFieldExtension` on the same
+  field class. A serializer documented by two seats with different rules is one component,
+  typed by the first operation that maps it.
 - The `django-service-specs` floor is 0.36.0, the release that adds
   `route_captures` and the project field schema registry.
 

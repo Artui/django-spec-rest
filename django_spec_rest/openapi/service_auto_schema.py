@@ -29,6 +29,7 @@ from drf_spectacular.extensions import OpenApiSerializerExtension
 from drf_spectacular.openapi import AutoSchema
 from drf_spectacular.plumbing import (
     ResolvedComponent,
+    append_meta,
     build_array_type,
     build_parameter_type,
     force_instance,
@@ -50,6 +51,7 @@ from rest_framework.status import HTTP_204_NO_CONTENT
 from django_spec_rest.dispatch.kernel_edge import UNKNOWN_ARGUMENTS
 from django_spec_rest.openapi._caller_serializer_class import caller_serializer_class
 from django_spec_rest.openapi._documented_affordances import documented_affordances
+from django_spec_rest.openapi._field_rules import FieldRules
 from django_spec_rest.openapi._lowered_for_the_document import lowered_for_the_document
 from django_spec_rest.openapi._resolve import (
     resolve_discriminated_action,
@@ -115,6 +117,15 @@ class ServiceAutoSchema(AutoSchema):
       ``lowered_for_the_document``, so under OpenAPI 3.0 a nullable or labelled
       one is ``nullable`` and ``enum``, in a request body, a response body and
       a parameter alike.
+    - **A field a schema rule types** is documented by that rule, in a request
+      and a response component alike: the seat's ``json_schema_registry`` and
+      the project's ``SERVICE_SPECS_FIELD_SCHEMA_REGISTRY``, by the lookup the
+      compiled spec answers it with, so the two agree (``FieldRules``). The
+      field's own meta stands beside the fragment, a ``$ref`` the document has
+      no component for is dropped with a warning, and the rule wins over
+      ``@extend_schema_field``. Every other field keeps drf-spectacular's
+      mapping. A serializer two seats with different rules document is one
+      component, typed by the first operation that maps it.
     - **The response body** is a ``SerializerPresenter``'s serializer, or any
       other presenter's ``output_schema``, a list of rows where the spec
       presents rows (``_presents_rows``). A spec with no presenter documents
@@ -215,7 +226,9 @@ class ServiceAutoSchema(AutoSchema):
                     owned=owned,
                     relaxed=reached - owned,
                 )
-            return serializer(many=variant.many, partial=variant.partial)
+            return FieldRules.of_seat(validator).on(
+                serializer(many=variant.many, partial=variant.partial)
+            )
         return self._parameters_body(variant)
 
     def _dispatched(self, spec: KernelServiceSpec) -> KernelServiceSpec:
@@ -525,6 +538,13 @@ class ServiceAutoSchema(AutoSchema):
                 )
         return resolved
 
+    def _map_serializer_field(self, field: Any, direction: Any, *args: Any, **kwargs: Any) -> Any:
+        """A field a schema rule types as the rule states it, beside the field's own meta."""
+        ruled = FieldRules.for_field(field).schema(field)
+        if ruled is None:
+            return super()._map_serializer_field(field, direction, *args, **kwargs)
+        return append_meta(ruled, self._get_serializer_field_meta(field, direction))
+
     def _kernel_rows(self, spec: KernelSelectorSpec, presenter: Presenter) -> Any:
         """A kernel selector spec's body: one row, or every row for a ``LIST``."""
         rows = spec.kind is SelectorKind.LIST
@@ -539,7 +559,8 @@ class ServiceAutoSchema(AutoSchema):
     def _row_schema(self, presenter: Presenter) -> dict[str, Any] | None:
         """One presented row's schema: the serializer's component, or the presenter's output."""
         if isinstance(presenter, SerializerPresenter):
-            return self.resolve_serializer(presenter.serializer_class, "response").ref
+            row = FieldRules.of_seat(presenter).on(presenter.serializer_class())
+            return self.resolve_serializer(row, "response").ref
         output = presenter.output()
         return None if output is None else lowered_for_the_document(output_schema(output))
 
@@ -721,7 +742,8 @@ def _presents_rows(spec: KernelServiceSpec) -> bool:
 def _presented(presenter: Presenter, *, rows: bool, wrap: bool) -> Any:
     """What ``presenter``'s body is documented by: its serializer, or its ``output_schema``."""
     if isinstance(presenter, SerializerPresenter):
-        return presenter.serializer_class(many=True) if rows else presenter.serializer_class
+        serializer = presenter.serializer_class(many=True) if rows else presenter.serializer_class()
+        return FieldRules.of_seat(presenter).on(serializer)
     output = presenter.output()
     if output is None:
         return OpenApiResponse(response=OpenApiTypes.ANY)
