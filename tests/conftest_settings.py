@@ -16,7 +16,10 @@ INSTALLED_APPS = [
     "django.contrib.auth",
     "rest_framework",
     "tests.testapp",
+    "django_spec_html",
 ]
+
+TEMPLATES = [{"BACKEND": "django.template.backends.django.DjangoTemplates", "APP_DIRS": True}]
 
 # Skip migrations for the test app — pytest-django builds the schema from models.
 MIGRATION_MODULES = {"testapp": None}

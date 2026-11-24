@@ -11,6 +11,19 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+### Added
+
+- **A recipe for serving a spec on a spec-html page.** It covers one spec served by a
+  viewset and by django-spec-html's `SpecFormView`, and what a call carries on the page.
+  `view` is the page, with the URL's captures as its `kwargs`. A DRF permission class is
+  asked a DRF `Request` around a copy of the page's request, its method `POST` and its
+  `data` empty. So a class reading `request.user` or `view.kwargs` works on both mounts,
+  and one calling a DRF view's method does not. The recipe shows a mixin that answers such
+  methods on the page, and a spec that needs none: route captures as declared reads, the
+  scope as a pool seed on both mounts, and a check reading the seed. It also lists what
+  stays REST-only. Each example is tested on both mounts. See
+  [serving a spec on a spec-html page](https://artui.github.io/django-spec-rest/recipes/one-spec-on-a-page/).
+
 ## [0.16.0] — 2026-11-24
 
 ### Added

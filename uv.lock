@@ -371,6 +371,19 @@ wheels = [
 ]
 
 [[package]]
+name = "django-spec-html"
+version = "0.15.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "django" },
+    { name = "django-service-specs" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/19/fd/5fac50e3368e18e270c670afea50c96bb39116c746ab50528e63b996cbcc/django_spec_html-0.15.0.tar.gz", hash = "sha256:e27763d50b1b9670bdcf6c35a69d0452d3a9cdaa790964321779c3841329aa66", size = 469211, upload-time = "2026-11-24T07:56:05.147Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c6/0f/3e1016de0604c18ac0df77f31089ff2466261a21ccfd1dfef5e8f3cc10a5/django_spec_html-0.15.0-py3-none-any.whl", hash = "sha256:d831d06de8f6983caad2f70d62e3326254a4c40985b56a07d289f22fdf92c975", size = 109259, upload-time = "2026-11-24T07:56:03.785Z" },
+]
+
+[[package]]
 name = "django-spec-rest"
 source = { editable = "." }
 dependencies = [
@@ -392,6 +405,7 @@ spectacular = [
 [package.dev-dependencies]
 dev = [
     { name = "django-filter" },
+    { name = "django-spec-html" },
     { name = "django-stubs" },
     { name = "djangorestframework-stubs" },
     { name = "drf-spectacular" },
@@ -426,6 +440,7 @@ provides-extras = ["filter", "spectacular"]
 [package.metadata.requires-dev]
 dev = [
     { name = "django-filter", specifier = ">=23.1" },
+    { name = "django-spec-html", specifier = ">=0.15.0" },
     { name = "django-stubs", specifier = ">=6.0.4" },
     { name = "djangorestframework-stubs", specifier = ">=3.17.0" },
     { name = "drf-spectacular", specifier = ">=0.27" },

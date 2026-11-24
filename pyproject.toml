@@ -131,6 +131,9 @@ dev = [
     # ``>=0.27``, which is exactly that: 0.27 was never once resolved.
     "drf-spectacular>=0.27",
     "django-filter>=23.1",
+    # The recipe serving one spec on a viewset and on a spec-html page tests
+    # both mounts; nothing in the package imports it.
+    "django-spec-html>=0.15.0",
 ]
 docs = [
     "mkdocs>=1.6.1",
