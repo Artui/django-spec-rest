@@ -592,6 +592,42 @@ class SharedSerializerContextTests(APITestCase):
         self.assertEqual(response.data["warnings"], [])
 
 
+class FieldSchemaRuleTests(APITestCase):
+    """The project's rule types a field in the document; one seat opts out of it."""
+
+    def _code(self, component: str) -> dict:
+        schema = SchemaGenerator().get_schema(request=None, public=True)
+        return schema["components"]["schemas"][component]["properties"]["code"]
+
+    def test_the_project_s_rule_types_the_field(self) -> None:
+        self.assertEqual(self._code("CodedInvoice")["type"], "string")
+
+    def test_a_seat_opted_out_documents_the_field_by_its_class(self) -> None:
+        self.assertEqual(self._code("PlainCodedInvoice")["type"], "integer")
+
+
+class AListHookTests(APITestCase):
+    """``get_list_output_serializer_context(page)`` hands the page's ranks to every row."""
+
+    def test_the_hook_s_key_reaches_the_rows_and_the_ruled_field_renders_its_string(self) -> None:
+        first = _invoice(customer="Acme")
+        second = _invoice(customer="Beta")
+
+        response = self.client.get("/coded-invoices/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK, response.data)
+        by_code = {row["code"]: row["rank"] for row in response.data}
+        self.assertEqual(set(by_code), {f"INV-{first.pk}", f"INV-{second.pk}"})
+        self.assertEqual(sorted(by_code.values()), [1, 2])
+
+    def test_an_action_with_no_hook_of_its_own_gets_no_ranks(self) -> None:
+        _invoice(customer="Acme")
+
+        response = self.client.get("/coded-invoices/plain/")
+
+        self.assertEqual([row["rank"] for row in response.data], [None])
+
+
 class ASeedTheViewSetRegistersTests(APITestCase):
     """``InvoiceViewSet.pool_seeds`` hands ``sending_paused`` to the send spec's condition."""
 

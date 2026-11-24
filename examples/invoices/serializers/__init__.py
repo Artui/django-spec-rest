@@ -66,3 +66,24 @@ class InvoiceSerializer(serializers.ModelSerializer):
 
     def get_warnings(self, invoice: Invoice) -> list[str]:
         return list(self.context.get("warnings", []))
+
+
+class InvoiceCodeField(serializers.IntegerField):
+    """An invoice's code, ``INV-<id>``: a string on the wire, though an ``IntegerField``."""
+
+    def to_representation(self, value: int) -> str:
+        return f"INV-{value}"
+
+
+class CodedInvoiceSerializer(serializers.Serializer):
+    """A code and the rank the list view's hook hands in for the page, one dict for the page."""
+
+    code = InvoiceCodeField(source="pk", read_only=True)
+    rank = serializers.SerializerMethodField()
+
+    def get_rank(self, invoice: Invoice) -> int | None:
+        return self.context.get("ranks", {}).get(invoice.pk)
+
+
+class PlainCodedInvoiceSerializer(CodedInvoiceSerializer):
+    """The same fields, presented by a seat that opts out of the project's field rules."""
