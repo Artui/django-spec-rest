@@ -182,9 +182,9 @@ def service_action(
                 restore_schema_when_handled(self)
                 raise
 
-        handler._service_spec = spec  # ty: ignore[unresolved-attribute]
-        handler._success_status = success_status  # ty: ignore[unresolved-attribute]
-        handler._response_finalizer = response_finalizer  # ty: ignore[unresolved-attribute]
+        handler._service_spec = spec  # ty: ignore[missing-attribute]
+        handler._success_status = success_status  # ty: ignore[missing-attribute]
+        handler._response_finalizer = response_finalizer  # ty: ignore[missing-attribute]
         return action(**drf_kwargs)(handler)
 
     return decorator

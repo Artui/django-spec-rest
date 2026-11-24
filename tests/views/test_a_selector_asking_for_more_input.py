@@ -108,6 +108,6 @@ def test_a_selector_action_serves_the_schema_as_raised_on_any_viewset(
         assert _served(viewset.as_view({"get": "ask"})) == (422, _SENT)
 
     assert len(_seen) == 1
-    leaf = _seen[0].detail["schema"]["properties"]["confirmed"]["default"]  # ty: ignore[unresolved-attribute]
+    leaf = _seen[0].detail["schema"]["properties"]["confirmed"]["default"]  # ty: ignore[missing-attribute]
     assert isinstance(leaf, ErrorDetail)
     assert leaf == "False"

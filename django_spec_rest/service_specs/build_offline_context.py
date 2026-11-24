@@ -94,8 +94,8 @@ def build_offline_context(
     drf_request: Request = cast(Request, raw)
     drf_request.user = user
     drf_request.auth = None
-    drf_request._authenticator = None  # ty: ignore[unresolved-attribute]
-    drf_request._full_data = params if params is not None else {}  # ty: ignore[unresolved-attribute]
+    drf_request._authenticator = None  # ty: ignore[missing-attribute]
+    drf_request._full_data = params if params is not None else {}  # ty: ignore[missing-attribute]
     view = OfflineServiceView(
         request=drf_request, action=action, kwargs=dict(kwargs) if kwargs is not None else {}
     )

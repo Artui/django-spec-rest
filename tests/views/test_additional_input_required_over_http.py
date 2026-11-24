@@ -100,7 +100,7 @@ class _PurgeDeleteByGetObject(ServiceDeleteView):
 
 def _respond(view: type, method: str, detail: bool) -> Any:
     kwargs = {"pk": Author.objects.create(name="a").pk} if detail else {}
-    response = view.as_view()(getattr(_factory, method)("/", {}, format="json"), **kwargs)  # ty: ignore[unresolved-attribute]
+    response = view.as_view()(getattr(_factory, method)("/", {}, format="json"), **kwargs)  # ty: ignore[missing-attribute]
     response.render()
     return response
 
@@ -149,7 +149,7 @@ def test_the_handler_runs_once_and_sees_drf_s_error_details(entry: str) -> None:
 
     assert json.loads(response.content)["schema"] == _PURGE_SCHEMA
     assert len(_seen) == 1
-    leaf = _seen[0].detail["schema"]["confirmed"]["default"]  # ty: ignore[unresolved-attribute]
+    leaf = _seen[0].detail["schema"]["confirmed"]["default"]  # ty: ignore[missing-attribute]
     assert isinstance(leaf, ErrorDetail)
     assert leaf == "False"
 
@@ -161,14 +161,14 @@ def test_the_exception_keeps_its_details_after_the_body_is_restored() -> None:
         response = _PurgeCreate.as_view()(_factory.post("/", {}, format="json"))
 
     assert response.data["schema"] == _PURGE_SCHEMA
-    assert _seen[0].detail["schema"]["confirmed"]["default"] == "False"  # ty: ignore[unresolved-attribute]
+    assert _seen[0].detail["schema"]["confirmed"]["default"] == "False"  # ty: ignore[missing-attribute]
 
 
 class _Redacting:
     """A view's own ``handle_exception``, rewriting the body it is handed."""
 
     def handle_exception(self, exc: Exception) -> Response:
-        response = super().handle_exception(exc)  # ty: ignore[unresolved-attribute]
+        response = super().handle_exception(exc)  # ty: ignore[missing-attribute]
         response.data["schema"] = {"redacted": True}
         return response
 
@@ -236,7 +236,7 @@ def test_a_handler_declining_the_error_runs_once(entry: str) -> None:
         _respond(*_VIEWS[entry])
 
     assert len(_declined) == 1
-    assert caught.value.schema == _PURGE_SCHEMA  # ty: ignore[unresolved-attribute]
+    assert caught.value.schema == _PURGE_SCHEMA  # ty: ignore[missing-attribute]
 
 
 def _flatten(detail: Any, attr: str = "") -> Iterator[dict[str, Any]]:

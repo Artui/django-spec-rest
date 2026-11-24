@@ -44,7 +44,7 @@ class SelectorRetrieveMixin(RetrieveModelMixin, _ActionSpecsMixin):
     kwargs: dict[str, Any]
 
     # DRF's stubs say Response; its finalize_response passes a FileResponse through unrendered.
-    def retrieve(  # ty: ignore[invalid-method-override]
+    def retrieve(  # ty: ignore[incompatible-method-override]
         self, request: Request, *args: Any, **kwargs: Any
     ) -> HttpResponseBase:
         spec = resolve_action_selector_spec(self.action_specs, "retrieve")
@@ -69,4 +69,4 @@ class SelectorRetrieveMixin(RetrieveModelMixin, _ActionSpecsMixin):
         the dispatcher on both paths.
         """
         spec = resolve_action_selector_spec(self.action_specs, "retrieve")
-        return super().get_object() if spec is None else dispatch_selector_for_spec(self, spec)  # ty: ignore[unresolved-attribute]
+        return super().get_object() if spec is None else dispatch_selector_for_spec(self, spec)  # ty: ignore[missing-attribute]

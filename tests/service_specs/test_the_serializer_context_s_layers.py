@@ -243,7 +243,7 @@ class _ContextHook:
         return []
 
     def get_serializer_context(self) -> dict[str, Any]:
-        return {**super().get_serializer_context(), "base": "view", "shared": "view"}  # ty: ignore[unresolved-attribute]
+        return {**super().get_serializer_context(), "base": "view", "shared": "view"}  # ty: ignore[missing-attribute]
 
 
 class TestOnASelectorView:

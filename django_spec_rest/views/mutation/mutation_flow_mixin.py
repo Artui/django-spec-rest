@@ -98,7 +98,7 @@ class MutationFlowMixin(_ServesRaisedSchema):
         DRF-standard hook flows into input validation automatically; override
         here for keys visible only during input validation.
         """
-        return self.get_serializer_context()  # ty: ignore[unresolved-attribute]
+        return self.get_serializer_context()  # ty: ignore[missing-attribute]
 
     def get_output_serializer_context(self) -> dict[str, Any]:
         """Hook for the ``context=`` dict passed to the *output* serializer.
@@ -107,7 +107,7 @@ class MutationFlowMixin(_ServesRaisedSchema):
         DRF-standard hook flows into response rendering automatically; override
         here for keys visible only during response rendering.
         """
-        return self.get_serializer_context()  # ty: ignore[unresolved-attribute]
+        return self.get_serializer_context()  # ty: ignore[missing-attribute]
 
     def _run_mutation(
         self,

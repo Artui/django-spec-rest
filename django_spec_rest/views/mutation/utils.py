@@ -288,7 +288,7 @@ class _ServesRaisedSchema(_NegotiatesAFile):
     def handle_exception(self, exc: Exception) -> Response:
         return restore_raised_schema(
             exc,
-            super().handle_exception(exc),  # ty: ignore[unresolved-attribute]
+            super().handle_exception(exc),  # ty: ignore[missing-attribute]
         )
 
 

@@ -93,7 +93,7 @@ def selector_action(
                 raise
 
         # Stash the spec so schema generators can recover it; the closure is otherwise opaque.
-        handler._selector_spec = spec  # ty: ignore[unresolved-attribute]
+        handler._selector_spec = spec  # ty: ignore[missing-attribute]
         return action(**drf_kwargs)(handler)
 
     return decorator

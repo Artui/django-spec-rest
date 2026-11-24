@@ -89,11 +89,11 @@ def test_wrapping_shares_meta_session_and_body_with_the_caller() -> None:
 def test_wrapped_request_keeps_its_own_user() -> None:
     base = HttpRequest()
     caller_user = object()
-    base.user = caller_user  # ty: ignore[unresolved-attribute]
+    base.user = caller_user  # ty: ignore[missing-attribute]
     ctx = build_offline_context(_USER, http_request=base)
     # DRF's ``Request.user`` setter writes through to the request it wraps.
     assert ctx.request.user is _USER
-    assert base.user is caller_user  # ty: ignore[unresolved-attribute]
+    assert base.user is caller_user  # ty: ignore[missing-attribute]
 
 
 def test_dispatching_twice_does_not_leak_query_params_between_calls() -> None:

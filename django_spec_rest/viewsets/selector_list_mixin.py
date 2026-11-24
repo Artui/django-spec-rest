@@ -53,7 +53,7 @@ class SelectorListMixin(ListModelMixin, _ActionSpecsMixin):
             # The dispatch a permission class's ``get_queryset()`` made, not the set it answers.
             result = dispatch_list_once(self, spec)
             data, paginated = present_kernel_list(self, spec, result, filtered=True)
-            return self.get_paginated_response(data) if paginated else Response(data)  # ty: ignore[unresolved-attribute]
+            return self.get_paginated_response(data) if paginated else Response(data)  # ty: ignore[missing-attribute]
         if self._has_no_fallback("list"):
             raise MethodNotAllowed(self.request.method)
         return super().list(request, *args, **kwargs)
@@ -61,5 +61,5 @@ class SelectorListMixin(ListModelMixin, _ActionSpecsMixin):
     def get_queryset(self) -> Any:
         spec = resolve_action_selector_spec(self.action_specs, "list")
         if spec is None or self.action != "list":
-            return super().get_queryset()  # ty: ignore[unresolved-attribute]
+            return super().get_queryset()  # ty: ignore[missing-attribute]
         return dispatch_list_once(self, spec).value
