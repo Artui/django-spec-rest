@@ -332,6 +332,11 @@ def test_the_rest_of_the_fragment_is_kept() -> None:
     assert _one(fragment)["shown"] == {**fragment, "readOnly": True}
 
 
+def test_a_properties_that_is_no_object_is_left_as_written() -> None:
+    shown = _one({"type": "object", "properties": True})["shown"]
+    assert shown == {"type": "object", "properties": True, "readOnly": True}
+
+
 class AnnotatedIn(serializers.Serializer):
     code = AnnotatedIntField()
 
