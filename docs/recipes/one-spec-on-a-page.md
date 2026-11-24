@@ -17,13 +17,17 @@ that the project's middleware puts on the request as `request.club`. The
 permission class reads the route's `club_pk`:
 
 ```python
---8 < --"tests/recipes/one_spec_on_a_page.py:spec"
+--8<--
+tests/recipes/one_spec_on_a_page.py:spec
+--8<--
 ```
 
 The viewset and the page register the same seeds:
 
 ```python
---8 < --"tests/recipes/one_spec_on_a_page.py:mounts"
+--8<--
+tests/recipes/one_spec_on_a_page.py:mounts
+--8<--
 ```
 
 ```python
@@ -68,7 +72,7 @@ So a class that reads `request.user`, `view.kwargs`, or an attribute your
 middleware sets works on both mounts. A class that treats `view` as the
 DRF view does not:
 
-- It calls a method of the DRF view: `view.has_permission`, `view.get_queryset`,
+- It calls a method of the DRF view: `view.get_permissions`, `view.get_queryset`,
   `view.filter_queryset`, `view.get_object`. `SpecFormView` defines none of
   these, so the call raises `AttributeError`.
 - It reads an attribute that a viewset or a role mixin sets, such as
@@ -84,7 +88,9 @@ mixin that reads only `self.kwargs` answers on both the viewset and the
 page:
 
 ```python
---8 < --"tests/recipes/one_spec_on_a_page.py:bridge"
+--8<--
+tests/recipes/one_spec_on_a_page.py:bridge
+--8<--
 ```
 
 Give the mixin only the methods the classes call.
@@ -107,7 +113,9 @@ A spec that reads nothing from a DRF view needs no mixin:
   `request.user` and `view.kwargs`.
 
 ```python
---8 < --"tests/recipes/one_spec_on_a_page.py:neutral"
+--8<--
+tests/recipes/one_spec_on_a_page.py:neutral
+--8<--
 ```
 
 A class-level check should not read a route capture from `arguments`. The
@@ -120,7 +128,7 @@ either mount asks, so read the capture through the seed instead.
 Some things a viewset's spec may do have no counterpart on a page:
 
 - **A provider applying the list's `filter_queryset`.** A `kwargs` provider,
-  or any other spec callable, that declares `view` gets the page, which
+  a seed's resolver, or any other spec callable that declares `view` gets the page, which
   has no `filter_queryset` or `get_queryset`. Filter in the selector, with a
   [`filter_set`](selector-filtering.md), or start from a seed.
 - **A provider writing onto the view for the serializer to read later.** A

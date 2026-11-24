@@ -7,7 +7,14 @@ import pytest
 from django.contrib.auth.models import User
 from django.core.exceptions import ImproperlyConfigured, PermissionDenied
 from django.test import RequestFactory
-from django_service_specs import FormValidator, Parameter, Parameters, PermissionCheck, ServiceSpec
+from django_service_specs import (
+    DEFAULT_POOL_SEEDS,
+    FormValidator,
+    Parameter,
+    Parameters,
+    PermissionCheck,
+    ServiceSpec,
+)
 from django_spec_html import SpecFormView
 from rest_framework.permissions import BasePermission
 from rest_framework.request import Request
@@ -96,6 +103,22 @@ def test_an_outsider_is_refused_on_the_page(pair: Any, method: str) -> None:
     assert not Post.objects.exists()
 
 
+def test_the_class_reads_the_route_s_club_not_the_request_s() -> None:
+    """The route names another club than the request carries, so only ``view.kwargs`` refuses."""
+    mine, other = _club(), Author.objects.create(name="zed")
+    member = User.objects.create(username="ana")
+    request = APIRequestFactory().post("/", {"title": "Hello"}, format="json")
+    request.club = mine
+    force_authenticate(request, user=member)
+    response = ClubPostViewSet.as_view({"post": "create"})(request, club_pk=str(other.pk))
+    assert response.status_code == 403
+    page_request = RequestFactory().post("/", {"title": "Hello"})
+    page_request.club, page_request.user = mine, member
+    with pytest.raises(PermissionDenied):
+        add_post_page(page_request, club_pk=other.pk)
+    assert not Post.objects.exists()
+
+
 def test_a_class_calling_a_viewset_method_fails_on_a_page_with_no_bridge() -> None:
     with pytest.raises(AttributeError, match="get_club"):
         _on_page(bare_owner_page, _club(), User.objects.create(username="ana"))
@@ -130,6 +153,7 @@ def test_a_class_on_a_page_is_asked_a_drf_copy_of_the_request_and_the_page(metho
         else factory.get("/?page=2")
     )
     raw.club, raw.user = club, user
+    raw.session = {"seen": True}
     page(raw, club_pk=club.pk)
     ((request, view),) = _SEEN
     assert isinstance(request, Request) and request._request is not raw
@@ -140,6 +164,7 @@ def test_a_class_on_a_page_is_asked_a_drf_copy_of_the_request_and_the_page(metho
         {},
     )
     assert request.query_params["page"] == "2"
+    assert request.META is raw.META and request.session is raw.session
     assert isinstance(view, SpecFormView) and view.kwargs == {"club_pk": club.pk}
     assert not hasattr(view, "action")
 
@@ -191,4 +216,16 @@ def test_a_provider_calling_a_viewset_method_fails_on_the_page() -> None:
     )
     page = SpecFormView.as_view(spec=spec, route_kwargs={"club_pk": None}, success_url="/p/")
     with pytest.raises(AttributeError, match="filter_queryset"):
+        _on_page(page, _club(), User.objects.create(username="ana"))
+
+
+def test_a_seed_resolver_calling_a_viewset_method_fails_on_the_page() -> None:
+    seeds = DEFAULT_POOL_SEEDS.extend(club=lambda *, view: view.get_queryset().get())
+    page = SpecFormView.as_view(
+        spec=ClubPostViewSet.action_specs["create"],
+        pool_seeds=seeds,
+        route_kwargs={"club_pk": None},
+        success_url="/p/",
+    )
+    with pytest.raises(AttributeError, match="get_queryset"):
         _on_page(page, _club(), User.objects.create(username="ana"))
