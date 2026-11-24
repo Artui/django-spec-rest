@@ -313,3 +313,40 @@ class TestAnUnpaginatedList:
 
         _ViewSet.as_view({"get": "active"})(factory.get("/"))
         assert isinstance(offered["page"], list)
+
+
+class _NameOut(serializers.Serializer):
+    name = serializers.CharField()
+
+
+def _streamed() -> Any:
+    return ({"name": name} for name in ("a", "b"))
+
+
+class TestAListOverAOneShotIterable:
+    @pytest.mark.parametrize("hooked", [True, False], ids=["hook", "no-hook"])
+    @pytest.mark.parametrize("presented", [True, False], ids=["presenter", "no-presenter"])
+    def test_its_rows_reach_the_body_and_the_hook(self, presented: bool, hooked: bool) -> None:
+        offered: dict[str, Any] = {}
+
+        class _ViewSet(SelectorViewSet):
+            serializer_class = _NameOut
+            action_specs = {
+                "list": SelectorSpec(
+                    kind=SelectorKind.LIST,
+                    selector=_streamed,
+                    permissions=_OPEN,
+                    presenter=SerializerPresenter(_NameOut) if presented else None,
+                )
+            }
+
+            if hooked:
+
+                def get_list_output_serializer_context(self, page: Any) -> dict[str, Any]:
+                    offered["page"] = page
+                    return {}
+
+        response = _ViewSet.as_view({"get": "list"})(factory.get("/"))
+        assert [row["name"] for row in response.data] == ["a", "b"]
+        if hooked:
+            assert offered["page"] == [{"name": "a"}, {"name": "b"}]

@@ -50,6 +50,8 @@ def present_kernel_selection(
     view: Any, spec: KernelSelectorSpec, result: DispatchResult, rows: Any, *, many: bool
 ) -> Any:
     """``rows`` as the body; hooks layer here, as the default one calls get_serializer_context."""
+    if many and not isinstance(rows, list):
+        rows = list(rows)
     if spec.presenter is not None or spec.affordances is not None:
         presented = present(
             spec,
@@ -67,11 +69,10 @@ def present_kernel_selection(
 
 
 def _offered(rows: Any, *, many: bool) -> dict[str, Any]:
-    """The rows a selector's output hooks are offered by name; a list's evaluated, as a list."""
+    """The rows a selector's output hooks are offered by name; a list is one evaluated list."""
     if not many:
         return {"instance": rows, "result": rows}
-    served = rows if isinstance(rows, list) else list(rows)
-    return {"page": served, "result": served}
+    return {"page": rows, "result": rows}
 
 
 # The attribute ``dispatch_list_once`` keeps its dispatch in, on the view.
