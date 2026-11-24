@@ -29,7 +29,6 @@ from drf_spectacular.extensions import OpenApiSerializerExtension
 from drf_spectacular.openapi import AutoSchema
 from drf_spectacular.plumbing import (
     ResolvedComponent,
-    append_meta,
     build_array_type,
     build_parameter_type,
     force_instance,
@@ -543,7 +542,7 @@ class ServiceAutoSchema(AutoSchema):
         ruled = FieldRules.for_field(field).schema(field)
         if ruled is None:
             return super()._map_serializer_field(field, direction, *args, **kwargs)
-        return append_meta(ruled, self._get_serializer_field_meta(field, direction))
+        return FieldRules.beside(ruled, self._get_serializer_field_meta(field, direction))
 
     def _kernel_rows(self, spec: KernelSelectorSpec, presenter: Presenter) -> Any:
         """A kernel selector spec's body: one row, or every row for a ``LIST``."""

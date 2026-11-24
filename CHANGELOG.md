@@ -53,9 +53,9 @@ carries; releases up to 0.62.0 are in
   `project_registry=False` opt-out as the compiled spec) by that rule, in the request and the
   response components, at every depth, so the `IntegerField` subclass ruled a `string` is a
   `string` in the document as well as in the spec. The field's own meta (`readOnly`,
-  `nullable`, `description`) stands beside the fragment, a `[t, "null"]` type is
-  stated as `nullable` under OAS 3.0, and a `$ref` the document has no component for is
-  dropped with a warning naming it. An unregistered field keeps drf-spectacular's mapping. A
+  `nullable`, `description`) stands beside the fragment, a `[t, "null"]` type is stated as
+  `nullable` under OAS 3.0 and keeps one `null` under 3.1, and a `$ref` the document has no
+  component for is dropped with a warning naming it. An unregistered field keeps drf-spectacular's mapping. A
   rule wins over `@extend_schema_field` and an `OpenApiSerializerFieldExtension` on the same
   field class. A serializer documented by two seats with different rules is one component,
   typed by the first operation that maps it.

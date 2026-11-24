@@ -18,8 +18,10 @@ from django_service_specs.types.unknown_arguments import UnknownArguments
 from drf_spectacular.drainage import GENERATOR_STATS
 from drf_spectacular.extensions import OpenApiSerializerFieldExtension
 from drf_spectacular.generators import SchemaGenerator
+from drf_spectacular.settings import patched_settings
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
+from drf_spectacular.validation import validate_schema
 from rest_framework import serializers
 
 from django_spec_rest import SelectorListView, ServiceCreateView, ServiceViewSet
@@ -388,3 +390,39 @@ def test_a_seat_rule_types_a_row_documented_beside_its_affordances() -> None:
     view = type("RulesLinked", (SelectorListView,), {"spec": spec}).as_view()
     document = _document(("a/", view))
     assert _types(document, "RulesOut") == dict.fromkeys(_PATHS, "string")
+
+
+class NullableIn(serializers.Serializer):
+    code = LooseIntField(allow_null=True)
+    shown = LooseIntField(read_only=True)
+    either = LooseIntField(allow_null=True, required=False)
+
+
+def _nullable(version: str, fragment: dict[str, Any], name: str) -> dict[str, Any]:
+    seat = JsonSchemaRegistry(fields=((LooseIntField, fragment),))
+    view = _created(_spec(SerializerValidator(NullableIn, json_schema_registry=seat)))
+    with patched_settings({"OAS_VERSION": version}):
+        document = _document(("n/", view))
+    validate_schema(document)
+    return _properties(document, "NullableIn")[name]
+
+
+def test_a_nullable_rule_on_a_nullable_field_states_null_once() -> None:
+    fragment = {"type": ["string", "null"]}
+    assert _nullable("3.0.3", fragment, "code") == {"type": "string", "nullable": True}
+    assert _nullable("3.1.0", fragment, "code") == {"type": ["string", "null"]}
+    assert _nullable("3.1.0", fragment, "shown") == {"type": ["string", "null"], "readOnly": True}
+
+
+def test_a_rule_of_several_types_on_a_nullable_field_states_null_once_under_3_1() -> None:
+    fragment = {"type": ["string", "integer", "null"]}
+    assert _nullable("3.1.0", fragment, "either") == {"type": ["string", "integer", "null"]}
+
+
+def test_a_rule_of_several_types_gains_null_on_a_nullable_field_alone_under_3_1() -> None:
+    fragment = {"type": ["string", "integer"]}
+    assert _nullable("3.1.0", fragment, "either") == {"type": ["string", "integer", "null"]}
+    assert _nullable("3.1.0", fragment, "shown") == {
+        "type": ["string", "integer"],
+        "readOnly": True,
+    }

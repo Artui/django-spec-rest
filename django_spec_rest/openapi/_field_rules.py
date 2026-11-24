@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Any, TypeVar
 
 from drf_spectacular.drainage import warn
+from drf_spectacular.plumbing import append_meta
 from rest_framework import serializers
 
 from django_spec_rest.openapi._lowered_for_the_document import lowered_for_the_document
@@ -49,6 +50,15 @@ class FieldRules:
         if fragment is None:
             return None
         return lowered_for_the_document(_resolvable(copy.deepcopy(fragment), field))
+
+    @staticmethod
+    def beside(schema: dict[str, Any], meta: dict[str, Any]) -> dict[str, Any]:
+        """``schema`` with ``meta``, a type list's null stated once (the nullable tests)."""
+        meta = dict(meta)
+        kinds = schema.get("type")
+        if isinstance(kinds, list) and meta.pop("nullable", False) and "null" not in kinds:
+            schema["type"] = [*kinds, "null"]
+        return append_meta(schema, meta)
 
 
 def _resolvable(node: Any, field: serializers.Field) -> Any:
