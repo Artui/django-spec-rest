@@ -377,7 +377,7 @@ class TestAnAcceptNamingTheFileIsServed:
         view = type("_Invoice", (SelectorRetrieveView,), {"spec": _invoice()}).as_view()
         response = _get(view, 999, accept="application/pdf")
         assert response.status_code == 404
-        assert isinstance(response.accepted_renderer, JSONRenderer)  # ty: ignore[unresolved-attribute]
+        assert isinstance(response.accepted_renderer, JSONRenderer)  # ty: ignore[missing-attribute]
 
     def test_a_type_the_file_is_not_is_still_a_406(self) -> None:
         view = type("_Export", (ServiceCreateView,), {"spec": _export()}).as_view()

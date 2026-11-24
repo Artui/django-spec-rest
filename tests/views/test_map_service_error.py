@@ -84,8 +84,8 @@ class TestMapServiceError:
                 "batches": {"maximum": "service_error"},
             },
         }
-        assert exc.schema == schema  # ty: ignore[unresolved-attribute]
-        assert exc.schema["confirmed"]["default"] is False  # ty: ignore[unresolved-attribute]
+        assert exc.schema == schema  # ty: ignore[missing-attribute]
+        assert exc.schema["confirmed"]["default"] is False  # ty: ignore[missing-attribute]
 
     def test_the_generic_branch_is_last(self) -> None:
         """Every member is a ``ServiceError``, so the order *is* the mapping."""

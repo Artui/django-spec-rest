@@ -187,7 +187,7 @@ def test_a_message_detail_is_kept_as_drf_gave_it(run: Any) -> None:
         )
 
     assert excinfo.value.detail == ["whole"]
-    assert excinfo.value.get_codes() == ["invalid"]  # ty: ignore[unresolved-attribute]
+    assert excinfo.value.get_codes() == ["invalid"]  # ty: ignore[missing-attribute]
 
 
 @_ROUTES
@@ -279,10 +279,10 @@ def test_a_project_subclass_keeps_its_status_and_detail(
     with pytest.raises(kernel) as excinfo:
         run(ServiceSpec(permissions=_OPEN, service=translating_drf_refusals(_raising(error))))
 
-    assert excinfo.value.status_code == status  # ty: ignore[unresolved-attribute]
-    assert excinfo.value.detail == detail  # ty: ignore[unresolved-attribute]
+    assert excinfo.value.status_code == status  # ty: ignore[missing-attribute]
+    assert excinfo.value.detail == detail  # ty: ignore[missing-attribute]
     if isinstance(error, PermissionDenied) and not isinstance(error.detail, str):
-        assert excinfo.value.message == KernelNotPermitted.default_message  # ty: ignore[unresolved-attribute]
+        assert excinfo.value.message == KernelNotPermitted.default_message  # ty: ignore[missing-attribute]
 
 
 class _BothValidationErrors(KernelServiceValidationError, ValidationError):
@@ -396,7 +396,7 @@ def test_a_permission_class_raising_permission_denied_leaves_as_not_permitted(
         run(_guarded(permission, error))
 
     assert excinfo.value.message == "nope"
-    assert excinfo.value.get_codes() == "no_entry"  # ty: ignore[unresolved-attribute]
+    assert excinfo.value.get_codes() == "no_entry"  # ty: ignore[missing-attribute]
     assert excinfo.value.__cause__ is error
 
 
@@ -410,5 +410,5 @@ def test_a_permission_class_raising_not_authenticated_leaves_as_not_permitted(
 
     assert isinstance(excinfo.value, NotAuthenticated)
     assert excinfo.value.message == "Authentication credentials were not provided."
-    assert excinfo.value.get_codes() == "not_authenticated"  # ty: ignore[unresolved-attribute]
-    assert excinfo.value.status_code == 401  # ty: ignore[unresolved-attribute]
+    assert excinfo.value.get_codes() == "not_authenticated"  # ty: ignore[missing-attribute]
+    assert excinfo.value.status_code == 401  # ty: ignore[missing-attribute]

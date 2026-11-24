@@ -96,7 +96,7 @@ def test_the_kernel_s_present_refuses_as_the_kernel_s_invalid_arguments(
         present(spec, result)
 
     assert excinfo.value.detail == detail
-    assert excinfo.value.get_codes() == codes  # ty: ignore[unresolved-attribute]
+    assert excinfo.value.get_codes() == codes  # ty: ignore[missing-attribute]
 
 
 @pytest.mark.django_db(transaction=True)

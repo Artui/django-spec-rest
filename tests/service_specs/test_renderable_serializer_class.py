@@ -40,7 +40,7 @@ class TestResolution:
     def test_a_dataclass_type_is_wrapped(self) -> None:
         cls = renderable_serializer_class(_Word)
         assert issubclass(cls, DataclassSerializer)
-        assert cls.Meta.dataclass is _Word  # ty: ignore[unresolved-attribute]
+        assert cls.Meta.dataclass is _Word  # ty: ignore[missing-attribute]
 
     def test_the_wrapper_renders_single_and_many(self) -> None:
         cls = renderable_serializer_class(_Word)
@@ -71,4 +71,4 @@ class TestIdentity:
 
         other = renderable_serializer_class(_Other)
         assert other is not renderable_serializer_class(_Word)
-        assert other.Meta.dataclass is _Other  # ty: ignore[unresolved-attribute]
+        assert other.Meta.dataclass is _Other  # ty: ignore[missing-attribute]

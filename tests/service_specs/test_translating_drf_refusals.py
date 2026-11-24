@@ -100,7 +100,7 @@ def test_a_spec_reads_the_same_with_and_without_it(build: Callable[..., Any]) ->
 def test_a_typed_provider_still_names_the_keys_it_fills() -> None:
     """Resolved in the provider's own module, where the ``TypedDict`` is."""
     assert provider_keys(translating_drf_refusals(_scope)) == provider_keys(_scope)
-    assert provider_keys(translating_drf_refusals(_scope)).filled == {"tenant"}  # ty: ignore[unresolved-attribute]
+    assert provider_keys(translating_drf_refusals(_scope)).filled == {"tenant"}  # ty: ignore[missing-attribute]
 
 
 class _Bound:
@@ -115,7 +115,7 @@ def test_it_reports_what_it_wraps(fn: Callable[..., Any]) -> None:
 
     assert is_async(wrapped) is is_async(fn)
     assert inspect.signature(wrapped) == inspect.signature(fn)
-    assert wrapped.__wrapped__ is fn  # ty: ignore[unresolved-attribute]
+    assert wrapped.__wrapped__ is fn  # ty: ignore[missing-attribute]
     assert (wrapped.__name__, wrapped.__qualname__, wrapped.__module__) == (
         fn.__name__,
         fn.__qualname__,
@@ -143,7 +143,7 @@ def _documented_service(*, title: str = "") -> None:
     """The service's own words."""
 
 
-_documented_service.audience = "staff"  # ty: ignore[unresolved-attribute]
+_documented_service.audience = "staff"  # ty: ignore[missing-attribute]
 
 
 async def _documented_aservice(*, title: str = "") -> None:
@@ -190,7 +190,7 @@ def test_the_wrapped_callable_keeps_the_author_s_docstring(
 def test_a_function_s_attributes_survive_the_wrap() -> None:
     wrapped = translating_drf_refusals(_documented_service)
 
-    assert wrapped.audience == "staff"  # ty: ignore[unresolved-attribute]
+    assert wrapped.audience == "staff"  # ty: ignore[missing-attribute]
     assert _documented_service.__dict__ == {"audience": "staff"}
 
 
@@ -204,7 +204,7 @@ def test_a_decorated_function_is_still_wrapped_by_the_translator() -> None:
 
     wrapped = translating_drf_refusals(decorated)
 
-    assert wrapped.__wrapped__ is decorated  # ty: ignore[unresolved-attribute]
+    assert wrapped.__wrapped__ is decorated  # ty: ignore[missing-attribute]
     assert inspect.unwrap(wrapped) is inner
     assert inspect.signature(wrapped) == inspect.signature(decorated)
 
@@ -220,7 +220,7 @@ class _Callable:
 
 def _a_partial_with_an_attribute() -> Callable[..., Any]:
     partial = functools.partial(_create, title="t")
-    partial.note = "kept on the partial"  # ty: ignore[unresolved-attribute]
+    partial.note = "kept on the partial"  # ty: ignore[missing-attribute]
     return partial
 
 
@@ -233,7 +233,7 @@ def test_a_partial_or_a_callable_object_gets_no_docstring_or_attributes(
     author: Callable[..., Any],
 ) -> None:
     """``inspect.isfunction`` is how a reader tells a function's words from a class's."""
-    assert author.note  # ty: ignore[unresolved-attribute]
+    assert author.note  # ty: ignore[missing-attribute]
 
     wrapped = translating_drf_refusals(author)
 

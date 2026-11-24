@@ -504,7 +504,7 @@ class _OldShapedErrors(serializers.ListSerializer):
     """A list serializer reporting item errors as DRF below 3.18: a list, a blank per valid row."""
 
     @property
-    def errors(self) -> Any:  # ty: ignore[invalid-method-override]
+    def errors(self) -> Any:  # ty: ignore[incompatible-method-override]
         return [{}, {"title": ["Bad."]}, {}, {"title": ["Worse."]}]
 
 

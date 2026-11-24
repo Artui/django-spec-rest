@@ -16,7 +16,7 @@ def _bound_action(action: str) -> Any:
     class _V: ...
 
     v = _V()
-    v.action = action  # ty: ignore[unresolved-attribute]
+    v.action = action  # ty: ignore[missing-attribute]
     return v
 
 

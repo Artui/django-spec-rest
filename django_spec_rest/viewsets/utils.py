@@ -58,7 +58,7 @@ _HandlerT = TypeVar("_HandlerT", bound=Callable[..., Any])
 
 def dispatches_action_specs(handler: _HandlerT) -> _HandlerT:
     """Mark a viewset handler as this package's own ``action_specs`` dispatcher."""
-    handler._dispatches_action_specs = True  # ty: ignore[unresolved-attribute]
+    handler._dispatches_action_specs = True  # ty: ignore[missing-attribute]
     return handler
 
 
@@ -410,7 +410,7 @@ class _ActionSpecsMixin(_ServesRaisedSchema):
         _validate_lookup_captures(mounted, actions, initkwargs)
         validate_link_routes(mounted)
         warn_unscoped_get_queryset(mounted)
-        return super().as_view(*args, **initkwargs)  # ty: ignore[unresolved-attribute]
+        return super().as_view(*args, **initkwargs)  # ty: ignore[missing-attribute]
 
     def options(self, request: Any, *args: Any, **kwargs: Any) -> Any:
         """Answer OPTIONS from the kernel specs the route serves, or as DRF does."""
@@ -418,7 +418,7 @@ class _ActionSpecsMixin(_ServesRaisedSchema):
         if served:
             return spec_options(self, request, served)
         try:
-            return super().options(request, *args, **kwargs)  # ty: ignore[unresolved-attribute]
+            return super().options(request, *args, **kwargs)  # ty: ignore[missing-attribute]
         except AssertionError:
             return spec_options(self, request, served)
 
@@ -434,7 +434,7 @@ class _ActionSpecsMixin(_ServesRaisedSchema):
     @property
     def allowed_methods(self) -> list[str]:
         """DRF's, less a method this package's own handler would refuse."""
-        methods: list[str] = super().allowed_methods  # ty: ignore[unresolved-attribute]
+        methods: list[str] = super().allowed_methods  # ty: ignore[missing-attribute]
         return [method for method in methods if not self._refuses_without_a_spec(method)]
 
     def _refuses_without_a_spec(self, method: str) -> bool:

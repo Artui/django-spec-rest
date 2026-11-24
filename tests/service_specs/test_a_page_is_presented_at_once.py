@@ -275,7 +275,7 @@ class TestTheRowsRenderAsOneManyRender:
             presenter.presented_rows(({"title": "a"},), context)
 
         assert refused.value.detail == {NON_FIELD_ERRORS: ["Nope."]}
-        assert refused.value.get_codes() == {NON_FIELD_ERRORS: ["nope"]}  # ty: ignore[unresolved-attribute]
+        assert refused.value.get_codes() == {NON_FIELD_ERRORS: ["nope"]}  # ty: ignore[missing-attribute]
 
 
 class TestAPageOfRowsAndNones:

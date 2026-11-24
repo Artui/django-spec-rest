@@ -383,7 +383,7 @@ class _NegotiatesAFile:
     as_attachment: bool = True
 
     def perform_content_negotiation(self, request: Request, force: bool = False) -> Any:
-        negotiate = super().perform_content_negotiation  # ty: ignore[unresolved-attribute]
+        negotiate = super().perform_content_negotiation  # ty: ignore[missing-attribute]
         try:
             return negotiate(request, force)
         except NotAcceptable:

@@ -36,4 +36,4 @@ class ActionSerializerResolver(_ActionSpecsMixin):
             spec = next(iter(spec.specs.values()))
         if isinstance(spec, KernelServiceSpec) and getattr(self, "serializer_class", None) is None:
             return kernel_input_serializer_class(spec)
-        return super().get_serializer_class()  # ty: ignore[unresolved-attribute]
+        return super().get_serializer_class()  # ty: ignore[missing-attribute]

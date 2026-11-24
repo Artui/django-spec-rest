@@ -393,7 +393,7 @@ def test_service_action_serves_the_schema_as_raised_on_any_viewset(bases: str) -
     assert response.status_code == 422
     assert json.loads(response.content) == {"detail": "Confirm the purge.", "schema": _PURGE_SCHEMA}
     assert len(_seen) == 1
-    leaf = _seen[0].detail["schema"]["confirmed"]["default"]  # ty: ignore[unresolved-attribute]
+    leaf = _seen[0].detail["schema"]["confirmed"]["default"]  # ty: ignore[missing-attribute]
     assert isinstance(leaf, ErrorDetail)
     assert leaf == "False"
 
@@ -412,7 +412,7 @@ class _Redacting:
     """A viewset's own ``handle_exception``, rewriting the body it is handed."""
 
     def handle_exception(self, exc: Exception) -> Response:
-        response = super().handle_exception(exc)  # ty: ignore[unresolved-attribute]
+        response = super().handle_exception(exc)  # ty: ignore[missing-attribute]
         response.data["schema"] = {"redacted": True}
         return response
 
