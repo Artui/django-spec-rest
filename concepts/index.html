@@ -606,6 +606,8 @@
       
         
       
+        
+      
     
     
     
@@ -873,6 +875,34 @@
     
   
     Field schema rules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/one-spec-on-a-page/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Serving a spec on a spec-html page
   
 
     
@@ -1412,6 +1442,20 @@ serializer validates the body it was bound to: its field validators,
 as <code>data</code>.</p>
 <p><code>PATCH</code> validates only the fields sent. A spec declaring <code>partial=True</code>
 validates <code>PUT</code> partially too.</p>
+<p>A <code>CharField</code>'s <code>max_length</code> and <code>min_length</code>, a subclass's such as
+<code>EmailField</code>'s included, are stated on its parameter as <code>maxLength</code> and
+<code>minLength</code>, at every depth. They are advertised, not checked by the kernel: the
+serializer's own validators enforce them. Three cases differ from what DRF takes:</p>
+<ul>
+<li>A field with <code>allow_blank=True</code> states no <code>minLength</code>, as DRF takes a blank
+  before its length validator runs.</li>
+<li>DRF measures a value after <code>trim_whitespace</code> strips it, so <code>"abc   "</code> passes a
+  <code>max_length</code> of 5 that the stated <code>maxLength</code> refuses. A schema client sends
+  the trimmed value.</li>
+<li>A <code>ListField</code>'s scalar element and a field a
+  <a href="../recipes/field-schema-rules/">field schema rule</a> answers state no lengths;
+  the rule's fragment states its own.</li>
+</ul>
 <h3 id="bulk-writes">Bulk writes<a class="headerlink" href="#bulk-writes" title="Permanent link">&para;</a></h3>
 <p>A spec declaring <code>many=True</code> takes a JSON list of rows, each validated by its
 <code>SerializerValidator</code>, and the service is handed the validated rows as <code>data</code>,
