@@ -4,15 +4,18 @@ import dataclasses
 import inspect
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from contextvars import ContextVar
-from typing import Any, Final
+from typing import Any
 
 from django.core.exceptions import ImproperlyConfigured
 from django.db.models import QuerySet
 from django.http import HttpRequest, QueryDict
 from django_service_specs import TRANSPORT_KEY
-from django_service_specs.output.output import OutputField
 from django_service_specs.parameters.parameters import Parameter, Parameters
 from django_service_specs.pool.resolve_callable_kwargs import resolve_callable_kwargs
+from django_service_specs.schema.fragment_keywords import fragment_keywords
+from django_service_specs.schema.registered_fragment import (
+    registered_fragment as kernel_registered_fragment,
+)
 from django_service_specs.types.unset import UNSET
 from rest_framework import ISO_8601, relations, serializers
 from rest_framework.settings import api_settings
@@ -409,13 +412,14 @@ def input_parameters(
     serializer: serializers.Serializer,
     path: tuple[type[Any], ...] = (),
     *,
-    registry: JsonSchemaRegistry | None = None,
+    registry: JsonSchemaRegistry | None,
+    project_registry: bool,
 ) -> Parameters:
     """What ``serializer`` takes, as Parameters, in field order."""
     path = (*path, type(serializer))
     return Parameters(
         tuple(
-            input_parameter(name, field, path, registry=registry)
+            input_parameter(name, field, path, registry=registry, project_registry=project_registry)
             for name, field in serializer.fields.items()
             if is_input(field)
         )
@@ -427,7 +431,8 @@ def input_parameter(
     field: serializers.Field,
     path: tuple[type[Any], ...],
     *,
-    registry: JsonSchemaRegistry | None = None,
+    registry: JsonSchemaRegistry | None,
+    project_registry: bool,
 ) -> Parameter:
     """One input field as a Parameter, named for the wire."""
     common: dict[str, Any] = {
@@ -436,9 +441,9 @@ def input_parameter(
         "default": literal_default(field),
         "help": str(field.help_text) if field.help_text else None,
     }
-    fragment = registered_fragment(registry, field)
+    fragment = registered_fragment(field, registry, project_registry=project_registry)
     if fragment is not None:
-        declared = fragment_keywords(fragment, output=False)
+        declared = fragment_keywords(fragment)
         declared.update(
             common,
             nullable=common["nullable"] or declared.get("nullable", False),
@@ -449,7 +454,7 @@ def input_parameter(
         return Parameter(
             name,
             "array",
-            items=_rows(field.child, path, registry),
+            items=_rows(field.child, path, registry, project_registry),
             **_lengths(field),
             **common,
         )
@@ -457,11 +462,20 @@ def input_parameter(
         if _truncated(field, path):
             return Parameter(name, "object", **common)
         return Parameter(
-            name, "object", fields=input_parameters(field, path, registry=registry), **common
+            name,
+            "object",
+            fields=input_parameters(
+                field, path, registry=registry, project_registry=project_registry
+            ),
+            **common,
         )
     if isinstance(field, serializers.ListField | serializers.MultipleChoiceField):
         return Parameter(
-            name, "array", **_element(field, path, registry), **_lengths(field), **common
+            name,
+            "array",
+            **_element(field, path, registry, project_registry),
+            **_lengths(field),
+            **common,
         )
     if isinstance(field, relations.ManyRelatedField):
         return Parameter(name, "array", **common)
@@ -481,84 +495,10 @@ def input_parameter(
 
 
 def registered_fragment(
-    registry: JsonSchemaRegistry | None, field: serializers.Field
-) -> Mapping[str, Any] | None:
-    """Fragment of the first ``registry.fields`` rule ``field`` is an instance of, or ``None``."""
-    if registry is None:
-        return None
-    for rule_type, fragment in registry.fields:
-        if isinstance(field, rule_type):
-            return fragment
-    return None
-
-
-_JSON_TYPES: Final = frozenset({"string", "integer", "number", "boolean", "array", "object"})
-
-
-def fragment_keywords(fragment: Mapping[str, Any], *, output: bool) -> dict[str, Any]:
-    """A registry fragment as keywords for a ``Parameter``, or an ``OutputField`` if ``output``."""
-    declared: dict[str, Any] = {}
-    kind = fragment.get("type")
-    if isinstance(kind, list) and "null" in kind and len(kind) == 2:
-        declared["nullable"] = True
-        kind = next(member for member in kind if member != "null")
-    enum = fragment.get("enum")
-    if kind is None and isinstance(enum, list):
-        kind = shared_json_type(enum)
-    declared["type"] = kind if _named(kind, _JSON_TYPES) else "any"
-    stated: list[tuple[str, Any]] = []
-    items = fragment.get("items")
-    if (
-        isinstance(items, Mapping)
-        and items.keys() == {"type"}
-        and _named(items["type"], _JSON_TYPES)
-    ):
-        stated.append(("items", items["type"]))
-    if isinstance(fragment.get("format"), str):
-        stated.append(("format", fragment["format"]))
-    if isinstance(enum, list):
-        choices = tuple((value, str(value)) for value in enum) if output else tuple(enum)
-        stated.append(("choices", choices))
-    keywords = _OUTPUT_FIELDS if output else _PARAMETER_FIELDS
-    stated.extend((name, fragment[keyword]) for keyword, name in keywords if keyword in fragment)
-    declaration = OutputField if output else Parameter
-    for name, value in stated:
-        if _states(declaration, {**declared, name: value}):
-            declared[name] = value
-    extra = {
-        key: value
-        for key, value in fragment.items()
-        if _states(declaration, {**declared, "json_schema_extra": {key: value}})
-    }
-    if extra:
-        declared["json_schema_extra"] = extra
-    return declared
-
-
-# The fragment keywords a field of each declaration spells beyond ``type``,
-# ``format``, ``enum`` and ``items``, with the field each sets.
-_PARAMETER_FIELDS: Final = (
-    ("minimum", "minimum"),
-    ("maximum", "maximum"),
-    ("minItems", "min_length"),
-    ("maxItems", "max_length"),
-    ("description", "help"),
-)
-_OUTPUT_FIELDS: Final = (("title", "label"),)
-
-
-def _states(declaration: type[Parameter] | type[OutputField], keywords: dict[str, Any]) -> bool:
-    """Whether the kernel builds ``declaration`` from ``keywords``: its own refusal is the rule."""
-    try:
-        declaration("registered", **keywords)
-    except ImproperlyConfigured:
-        return False
-    return True
-
-
-def _named(value: Any, names: frozenset[str]) -> bool:
-    """Whether ``value`` is one of ``names``, which a list or mapping never is."""
-    return isinstance(value, str) and value in names
+    field: serializers.Field, registry: JsonSchemaRegistry | None, *, project_registry: bool
+) -> dict[str, Any] | None:
+    """The kernel's rule for ``field``'s class: the seat's ``registry``, then the project's."""
+    return kernel_registered_fragment(type(field), registry, project_registry=project_registry)
 
 
 def shared_json_type(values: Iterable[Any]) -> str | None:
@@ -650,18 +590,22 @@ def _truncated(serializer: serializers.Serializer, path: tuple[type[Any], ...]) 
 
 
 def _rows(
-    child: Any, path: tuple[type[Any], ...], registry: JsonSchemaRegistry | None
+    child: Any,
+    path: tuple[type[Any], ...],
+    registry: JsonSchemaRegistry | None,
+    project_registry: bool,
 ) -> Parameters | str:
     """A list's rows: the child serializer's Parameters, or an open object past the bound."""
     if _truncated(child, path):
         return "object"
-    return input_parameters(child, path, registry=registry)
+    return input_parameters(child, path, registry=registry, project_registry=project_registry)
 
 
 def _element(
     field: serializers.ListField | serializers.MultipleChoiceField,
     path: tuple[type[Any], ...],
     registry: JsonSchemaRegistry | None,
+    project_registry: bool,
 ) -> dict[str, Any]:
     """What a list's element declares, as the array's own keywords."""
     if isinstance(field, serializers.MultipleChoiceField):
@@ -670,12 +614,12 @@ def _element(
             return {}
         return {"items": own.type, "choices": own.values, "choice_labels": own.labels}
     child: Any = field.child
-    fragment = registered_fragment(registry, child)
+    fragment = registered_fragment(child, registry, project_registry=project_registry)
     if fragment is not None:
-        element = fragment_keywords(fragment, output=False)["type"]
+        element = fragment_keywords(fragment)["type"]
         return {} if element == "any" else {"items": element}
     if isinstance(child, serializers.Serializer):
-        return {"items": _rows(child, path, registry)}
+        return {"items": _rows(child, path, registry, project_registry)}
     if isinstance(child, serializers.ListField | serializers.ListSerializer):
         return {"items": "array"}
     choices = field_choices(child)

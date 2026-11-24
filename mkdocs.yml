@@ -90,6 +90,7 @@ nav:
       - Serializer context: recipes/serializer-context.md
       - Calling a spec off HTTP: recipes/off-http-inputs.md
       - Link affordances to their routes: recipes/affordance-links.md
+      - Field schema rules: recipes/field-schema-rules.md
   - Reference:
       - reference/index.md
       - Views: reference/views.md

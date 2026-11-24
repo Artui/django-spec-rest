@@ -21,3 +21,6 @@ shared by several transports) is the
   over a spec a route serves.
 - **[Link affordances to their routes](affordance-links.md)**: `link_routes`,
   and the `href` and `method` each affordance entry gains.
+- **[Field schema rules](field-schema-rules.md)**: the project's
+  `SERVICE_SPECS_FIELD_SCHEMA_REGISTRY` behind a seat's own registry, and
+  which rule wins.

@@ -11,6 +11,29 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+### Added
+
+- **The project's field schema rules reach the DRF seats.** `SerializerValidator` and
+  `SerializerPresenter` ask the kernel's `registered_fragment` for each field's class, so the
+  registry the kernel's `SERVICE_SPECS_FIELD_SCHEMA_REGISTRY` setting names answers behind the
+  seat's own `json_schema_registry=`, at every depth. An `IntegerField` subclass that keeps a
+  string, ruled `{"type": "string"}` there, is a `string` parameter and output field, and a
+  JSON body's `"AB-12"` reaches the serializer instead of the shape check's
+  `400 "Expected an integer."`. The setting is read on every declaration, so
+  `override_settings` reaches a spec compiled before it. `project_registry=False` opts a seat
+  out; the partial and lenient variants a request dispatches keep it. See
+  [field schema rules](https://artui.github.io/django-spec-rest/recipes/field-schema-rules/).
+
+### Changed
+
+- **`JsonSchemaRegistry` is the kernel's**, re-exported from
+  `django_spec_rest.types.json_schema_registry` and the package root, and its rules are matched
+  through the field class's MRO: the most specific class with a rule wins, in either
+  registry, and for one class the seat's rule beats the project's. A seat registry listing a
+  rule for a base before one for its subclass answered the subclass with the base's rule; the
+  subclass's own rule answers it now. A rule keyed on a tuple of classes matches nothing:
+  write one rule per class. `DEFAULT_JSON_SCHEMA_REGISTRY` is the kernel's empty registry.
+
 ## [0.15.1] — 2026-11-23
 
 ### Changed

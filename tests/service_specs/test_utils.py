@@ -28,7 +28,7 @@ from tests.testapp.models import Post, Tag
 
 
 def _walk(declaration: Any) -> Parameters:
-    return input_parameters(describe_serializer(declaration))
+    return input_parameters(describe_serializer(declaration), registry=None, project_registry=True)
 
 
 def _one(field: serializers.Field) -> Parameter:

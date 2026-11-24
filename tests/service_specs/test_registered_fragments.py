@@ -37,7 +37,9 @@ def _parameter(fragment: dict[str, Any], **field_kwargs: Any) -> Parameter:
     class _In(serializers.Serializer):
         value = _Registered(**field_kwargs)
 
-    (parameter,) = input_parameters(describe_serializer(_In), registry=_registry(fragment))
+    (parameter,) = input_parameters(
+        describe_serializer(_In), project_registry=False, registry=_registry(fragment)
+    )
     return parameter
 
 
@@ -45,7 +47,9 @@ def _output_field(fragment: dict[str, Any], **field_kwargs: Any) -> OutputField:
     class _Out(serializers.Serializer):
         value = _Registered(**field_kwargs)
 
-    (field,) = _output(describe_serializer(_Out), path=(), registry=_registry(fragment))
+    (field,) = _output(
+        describe_serializer(_Out), path=(), project_registry=False, registry=_registry(fragment)
+    )
     return field
 
 
@@ -312,7 +316,10 @@ def test_a_fragment_that_admits_null_makes_an_output_field_nullable_that_the_fie
         value = _Registered(allow_null=False)
 
     output = _output(
-        describe_serializer(_Out), path=(), registry=_registry({"type": ["string", "null"]})
+        describe_serializer(_Out),
+        path=(),
+        project_registry=False,
+        registry=_registry({"type": ["string", "null"]}),
     )
 
     (field,) = output
@@ -327,12 +334,16 @@ def test_a_rule_wins_over_the_walk_of_a_nested_serializer() -> None:
         rows = _RegisteredRow(many=True)
 
     registry = JsonSchemaRegistry(fields=((_RegisteredRow, {"type": "object"}),))
-    row, rows = input_parameters(describe_serializer(_In), registry=registry)
+    row, rows = input_parameters(
+        describe_serializer(_In), project_registry=False, registry=registry
+    )
     assert (row.type, row.fields) == ("object", None)
     # ``many=True`` wraps the registered class in a ``ListSerializer``.
     assert rows.type == "array"
     assert not isinstance(rows.items, str)
-    one, many = _output(describe_serializer(_In), path=(), registry=registry)
+    one, many = _output(
+        describe_serializer(_In), path=(), project_registry=False, registry=registry
+    )
     assert (one.type, one.fields) == ("object", None)
     assert many.type == "array"
     assert not isinstance(many.items, str)
@@ -346,9 +357,13 @@ def test_a_registered_list_element_is_typed_by_its_rule() -> None:
         values = serializers.ListField(child=_Registered())
 
     registry = _registry({"type": "integer", "format": "money"})
-    (parameter,) = input_parameters(describe_serializer(_In), registry=registry)
+    (parameter,) = input_parameters(
+        describe_serializer(_In), project_registry=False, registry=registry
+    )
     assert (parameter.items, parameter.format) == ("integer", None)
-    (field,) = _output(describe_serializer(_Out), path=(), registry=registry)
+    (field,) = _output(
+        describe_serializer(_Out), path=(), project_registry=False, registry=registry
+    )
     assert field.items == "integer"
 
 
@@ -362,13 +377,13 @@ def test_a_nested_serializer_s_fields_are_matched_too() -> None:
         listed = serializers.ListField(child=_Inner())
 
     registry = _registry({"type": "integer"})
-    walked = input_parameters(describe_serializer(_In), registry=registry)
+    walked = input_parameters(describe_serializer(_In), project_registry=False, registry=registry)
     for parameter in walked:
         rows = parameter.fields if parameter.fields is not None else parameter.items
         assert not isinstance(rows, str)
         assert rows is not None
         assert rows.get("value").type == "integer", parameter.name
-    output = _output(describe_serializer(_In), path=(), registry=registry)
+    output = _output(describe_serializer(_In), path=(), project_registry=False, registry=registry)
     assert output.fields[0].fields is not None
     assert output.fields[0].fields.fields[0].type == "integer"
 
@@ -377,9 +392,9 @@ def test_without_a_registry_the_walk_is_unchanged() -> None:
     class _In(serializers.Serializer):
         value = _Registered(max_length=4)
 
-    assert input_parameters(describe_serializer(_In)) == input_parameters(
-        describe_serializer(_In), registry=None
-    )
+    assert input_parameters(
+        describe_serializer(_In), registry=None, project_registry=False
+    ) == input_parameters(describe_serializer(_In), registry=None, project_registry=True)
 
 
 # -- The split covers the kernel's tables --------------------------------------------
