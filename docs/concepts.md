@@ -90,6 +90,20 @@ as `data`.
 `PATCH` validates only the fields sent. A spec declaring `partial=True`
 validates `PUT` partially too.
 
+A `CharField`'s `max_length` and `min_length`, a subclass's such as
+`EmailField`'s included, are stated on its parameter as `maxLength` and
+`minLength`, at every depth. They are advertised, not checked by the kernel: the
+serializer's own validators enforce them. Three cases differ from what DRF takes:
+
+- A field with `allow_blank=True` states no `minLength`, as DRF takes a blank
+  before its length validator runs.
+- DRF measures a value after `trim_whitespace` strips it, so `"abc   "` passes a
+  `max_length` of 5 that the stated `maxLength` refuses. A schema client sends
+  the trimmed value.
+- A `ListField`'s scalar element and a field a
+  [field schema rule](recipes/field-schema-rules.md) answers state no lengths;
+  the rule's fragment states its own.
+
 ### Bulk writes
 
 A spec declaring `many=True` takes a JSON list of rows, each validated by its

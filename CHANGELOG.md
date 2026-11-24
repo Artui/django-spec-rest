@@ -11,6 +11,38 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+## [0.17.0] — 2026-11-24
+
+### Added
+
+- **`SerializerValidator` states a `CharField`'s lengths.** A `CharField`, or any subclass
+  such as `EmailField`, with `max_length` or `min_length` compiles to a parameter whose
+  `json_schema_extra` holds `maxLength` and `minLength`. The value comes from the kernel's
+  `string_lengths`, so the spelling matches every other Validator. This applies at every
+  depth the walk reaches, including a nested serializer's fields and a `many=True` list's
+  rows. A field with `allow_blank=True` states no `minLength`, because DRF accepts a blank
+  before its length validator runs. A page built from the spec, such as django-spec-html's,
+  can now compare its form's lengths with the spec's. The lengths are advertised: DRF
+  measures a value after `trim_whitespace`, so a padded value it takes can exceed the stated
+  `maxLength`. A `ListField`'s scalar element and a field a field schema rule answers state
+  no lengths. The OpenAPI document states the same lengths, except that drf-spectacular
+  0.27 also states `minLength` on an `allow_blank` field.
+- **A recipe for serving a spec on a spec-html page.** It covers one spec served by a
+  viewset and by django-spec-html's `SpecFormView`, and what a call carries on the page.
+  `view` is the page, with the URL's captures as its `kwargs`. A DRF permission class is
+  asked a DRF `Request` around a copy of the page's request, its method `POST` and its
+  `data` empty. So a class reading `request.user` or `view.kwargs` works on both mounts,
+  and one calling a DRF view's method does not. The recipe shows a mixin that answers such
+  methods on the page, and a spec that needs none: route captures as declared reads, the
+  scope as a pool seed on both mounts, and a check reading the seed. It also lists what
+  stays REST-only. Each example is tested on both mounts. See
+  [serving a spec on a spec-html page](https://artui.github.io/django-spec-rest/recipes/one-spec-on-a-page/).
+
+### Changed
+
+- **The kernel floor is `django-service-specs>=0.38.0`**, the release that adds
+  `string_lengths`.
+
 ## [0.16.0] — 2026-11-24
 
 ### Added
@@ -1156,7 +1188,8 @@ lists each with what a project rewrites.
 - **The package is no longer a Django app.** It has no models, migrations,
   templates, static files or URLs, so it needs no `INSTALLED_APPS` entry.
 
-[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/Artui/django-spec-rest/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/Artui/django-spec-rest/compare/v0.15.1...v0.16.0
 [0.15.1]: https://github.com/Artui/django-spec-rest/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/Artui/django-spec-rest/compare/v0.14.0...v0.15.0

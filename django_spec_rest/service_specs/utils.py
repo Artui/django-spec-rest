@@ -11,6 +11,7 @@ from django.db.models import QuerySet
 from django.http import HttpRequest, QueryDict
 from django_service_specs import TRANSPORT_KEY
 from django_service_specs.parameters.parameters import Parameter, Parameters
+from django_service_specs.parameters.string_lengths import string_lengths
 from django_service_specs.pool.resolve_callable_kwargs import resolve_callable_kwargs
 from django_service_specs.schema.fragment_keywords import fragment_keywords
 from django_service_specs.schema.registered_fragment import (
@@ -482,7 +483,9 @@ def input_parameter(
     json_type, fmt = input_type(field)
     choices = field_choices(field)
     if choices is None:
-        return Parameter(name, json_type, format=fmt, **common)
+        return Parameter(
+            name, json_type, format=fmt, json_schema_extra=_string_lengths(field), **common
+        )
     if choices.type is None:
         return Parameter(name, "any", **common)
     return Parameter(
@@ -638,6 +641,14 @@ def _element(
         "items_nullable": child.allow_null,
         "format": fmt if fmt == "decimal" else None,
     }
+
+
+def _string_lengths(field: serializers.Field) -> dict[str, int] | None:
+    """A ``CharField``'s lengths; no minimum where a blank passes, as DRF validates none then."""
+    if not isinstance(field, serializers.CharField):
+        return None
+    minimum = None if field.allow_blank else field.min_length
+    return string_lengths(min_length=minimum, max_length=field.max_length)
 
 
 def _lengths(field: Any) -> dict[str, Any]:

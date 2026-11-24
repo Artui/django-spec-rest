@@ -24,3 +24,6 @@ shared by several transports) is the
 - **[Field schema rules](field-schema-rules.md)**: the project's
   `SERVICE_SPECS_FIELD_SCHEMA_REGISTRY` behind a seat's own registry, and
   which rule wins.
+- **[Serving a spec on a spec-html page](one-spec-on-a-page.md)**: one spec on a
+  viewset and a `SpecFormView`, what a permission class is handed on the page,
+  and a spec that needs no DRF view.

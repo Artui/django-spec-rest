@@ -91,7 +91,8 @@ dependencies = [
     # 0.35.0 makes a kwargs key named like a Validator field a namesake, not a fill.
     # 0.36.0 adds ``route_captures``, which keeps a capture named like a field off
     # the arguments, and the project field schema registry the adapters default to.
-    "django-service-specs>=0.36.0",
+    # 0.38.0 adds ``string_lengths``, which spells a CharField's lengths.
+    "django-service-specs>=0.38.0",
 ]
 
 [project.optional-dependencies]
@@ -131,6 +132,9 @@ dev = [
     # ``>=0.27``, which is exactly that: 0.27 was never once resolved.
     "drf-spectacular>=0.27",
     "django-filter>=23.1",
+    # The recipe serving one spec on a viewset and on a spec-html page tests
+    # both mounts; nothing in the package imports it.
+    "django-spec-html>=0.15.0",
 ]
 docs = [
     "mkdocs>=1.6.1",
@@ -238,7 +242,7 @@ root = ["./django_spec_rest"]
 # CHANGELOG [Unreleased] block under a new dated heading. Run via
 # `uvx bump-my-version` (no permanent dependency added to the project).
 [tool.bumpversion]
-current_version = "0.16.0"
+current_version = "0.17.0"
 allow_dirty = false
 commit = false
 tag = false
