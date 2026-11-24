@@ -7,6 +7,7 @@ from django.core.exceptions import PermissionDenied
 from django_service_specs.authorization.not_permitted import NotPermitted
 from django_service_specs.authorization.principal_unavailable import PrincipalUnavailable
 from django_service_specs.schema.spec_caller_input_schema import spec_caller_input_schema
+from django_service_specs.specs.route_captures import route_captures
 from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelectorSpec
 from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
 from rest_framework import status
@@ -110,7 +111,7 @@ def _spec_described(
         )
     except (AttributeError, KeyError, TypeError):
         return None
-    return _described(spec, asked, view)
+    return _described(spec, asked, view, call_context)
 
 
 def _grants(
@@ -138,10 +139,13 @@ def _grants(
 
 
 def _described(
-    spec: KernelServiceSpec | KernelSelectorSpec, asked: dict[str, Any], view: Any
+    spec: KernelServiceSpec | KernelSelectorSpec,
+    asked: dict[str, Any],
+    view: Any,
+    call_context: dict[str, Any],
 ) -> dict[str, Any]:
     """JSON Schema of the caller's ``spec`` body: the kernel's ``asked``, less this transport's."""
-    dropped = set(view.kwargs)
+    dropped = set(route_captures(spec, view.kwargs, call_context=call_context)[0])
     target = spec.target_selector_spec() if isinstance(spec, KernelServiceSpec) else None
     if target is not None:
         dropped |= target.parameters().names()

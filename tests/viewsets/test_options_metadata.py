@@ -272,6 +272,19 @@ def test_a_route_capture_is_not_described_as_input() -> None:
     assert _described(uncaptured) == {"POST": {"name", "org"}}
 
 
+def test_a_field_named_like_a_route_capture_is_described_as_input() -> None:
+    """A namesake capture is no argument, so the field stays the caller's body key."""
+
+    class _OrgIn(serializers.Serializer):
+        org = serializers.CharField()
+        name = serializers.CharField()
+
+    spec = ServiceSpec(service=_service, permissions=_OPEN, validator=SerializerValidator(_OrgIn))
+    viewset = _viewset(action_specs={"create": spec})
+    captured = _options(viewset, {"post": "create"}, org="acme")
+    assert _described(captured) == {"POST": {"name", "org"}}
+
+
 def test_a_put_s_target_reads_are_not_described_as_input() -> None:
     """An update never reads its target's lookup from the body."""
     viewset = _viewset(action_specs={"update": _update()})

@@ -328,6 +328,11 @@ over:
   since their captures are the URLconf's: declare each capture the route
   carries yourself
   ([The lookup capture](reference/viewsets.md#the-lookup-capture)).
+  A capture named like a field of the spec's Validator is never an argument:
+  the field stays the caller's, as drfs never filled a serializer field from
+  the route either. A nested create on `orgs/<org>/members/` whose serializer
+  has an `org` field declares `org` as a read and drops the field, or fills
+  it from `input_data=lambda view: {"org": view.kwargs["org"]}`.
 - **A nested selector declares no `permissions`.** On `instance_selector_spec`,
   `collection_selector_spec` and `output_selector_spec` the kernel never asks
   them, so the kernel refuses them when the `ServiceSpec` is built: declare
@@ -538,8 +543,12 @@ The query string is read by the kernel's flat reader:
   (`page.values_list(...)`, `page.filter(...)`) must change to work over the
   list, for example `[row.pk for row in page]`
   ([Serializer context](recipes/serializer-context.md#what-a-presenters-callable-receives)).
-- **A kernel selector gets no `get_<action>_output_serializer_context`** hook:
-  declare the context on its `SerializerPresenter`.
+- **A kernel selector layers both output hooks**, `get_output_serializer_context`
+  and `get_<action>_output_serializer_context`, as a mutation does. drfs layered
+  only the per-action hook on a viewset's `list` and `retrieve`, and neither on
+  `SelectorListView` or `SelectorRetrieveView`; a view-wide override written for
+  writes now adds its keys to reads too
+  ([Serializer context](recipes/serializer-context.md#keys-a-view-adds)).
 
 ## Permissions
 

@@ -36,10 +36,12 @@ from rest_framework.viewsets import GenericViewSet
 from django_spec_rest import (
     DiscriminatedAction,
     SelectorListView,
+    SelectorViewSet,
     ServiceCreateMixin,
     ServiceCreateView,
     ServiceUpdateView,
     ServiceViewSet,
+    selector_action,
     service_action,
 )
 from django_spec_rest.openapi import (
@@ -55,8 +57,10 @@ from invoices.models import Invoice
 from invoices.selectors import InvoiceFilter, get_invoice, list_invoices, sent_invoices
 from invoices.serializers import (
     BlankInvoiceInput,
+    CodedInvoiceSerializer,
     InvoiceInput,
     InvoiceSerializer,
+    PlainCodedInvoiceSerializer,
     ReceiptChangeInput,
     ReceiptInput,
 )
@@ -268,6 +272,21 @@ SENT_SPEC = SelectorSpec(
     presenter=PRESENTER,
 )
 
+# The project's field rule types ``code`` a string; the second seat opts out of it.
+CODED_SPEC = SelectorSpec(
+    kind=SelectorKind.LIST,
+    selector=list_invoices,
+    permissions=OPEN,
+    presenter=SerializerPresenter(CodedInvoiceSerializer),
+)
+
+PLAIN_CODED_SPEC = SelectorSpec(
+    kind=SelectorKind.LIST,
+    selector=list_invoices,
+    permissions=OPEN,
+    presenter=SerializerPresenter(PlainCodedInvoiceSerializer, project_registry=False),
+)
+
 
 # The routes each row's affordances lead to, named by URL pattern name: the
 # router's ``invoice-detail`` serves ``UPDATE_SPEC`` (as PUT, before PATCH) and
@@ -415,6 +434,19 @@ class ReviewInvoiceListView(SelectorListView):
     authentication_classes = [BasicAuthentication]
     permission_classes = [IsStaffMember]
     spec = LIST_SPEC
+
+
+class CodedInvoiceViewSet(SelectorViewSet):
+    """``GET /coded-invoices/``: the page's ranks handed to the output serializer by a hook."""
+
+    action_specs = {"list": CODED_SPEC}
+
+    def get_list_output_serializer_context(self, page: list[Invoice]) -> dict[str, Any]:
+        return {"ranks": {invoice.pk: rank for rank, invoice in enumerate(page, start=1)}}
+
+    @selector_action(PLAIN_CODED_SPEC)
+    def plain(self, request: Any) -> Any:
+        """Stubbed: the decorator serves the spec."""
 
 
 class DraftInvoiceViewSet(ServiceCreateMixin, GenericViewSet):

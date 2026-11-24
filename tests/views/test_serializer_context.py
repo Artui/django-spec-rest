@@ -34,13 +34,6 @@ pytestmark = pytest.mark.django_db
 factory = APIRequestFactory()
 _OPEN = (Unrestricted(),)
 
-_A_SELECTOR_TAKES_NO_OUTPUT_HOOK = (
-    "views/utils.py resolve_view_hooks carries no output serializer context layer for the "
-    "selector chain, and selectors/utils.py dispatch_kernel_selector hands the edge no hooks, "
-    "so a view's get_<action>_output_serializer_context never reaches a kernel selector's "
-    "presenter."
-)
-
 
 class _CapturingIn(serializers.Serializer):
     """Records the context its ``validate()`` runs under, as a snapshot."""
@@ -376,7 +369,6 @@ class TestASelectorView:
         _View.as_view()(factory.get("/"), pk=str(author.pk))
         assert _CapturingOut.captured["spec_key"] == "retrieve"
 
-    @pytest.mark.xfail(strict=True, reason=_A_SELECTOR_TAKES_NO_OUTPUT_HOOK)
     def test_a_selector_action_presents_under_its_own_hook(self) -> None:
         Author.objects.create(name="x")
 

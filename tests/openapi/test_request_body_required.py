@@ -113,6 +113,15 @@ CAPTURED = _viewset(
     "create",
     _choosing("t", a=_spec(SerializerValidator(AIn)), t=_spec(SerializerValidator(TenantIn))),
 )
+CAPTURED_READ = _viewset(
+    "CapturedRead",
+    "create",
+    _choosing(
+        "t",
+        a=_spec(SerializerValidator(AIn)),
+        t=_spec(reads=Parameters.of(Parameter("tenant", "string", required=True))),
+    ),
+)
 ROUTED_PATCH = _viewset(
     "RoutedPatch",
     "partial_update",
@@ -187,6 +196,7 @@ urlpatterns = [
     path("other-validator/", OTHER_VALIDATOR.as_view(_CREATE)),
     path("rows/", ROWS.as_view(_CREATE)),
     path("captured/<str:tenant>/", CAPTURED.as_view(_CREATE)),
+    path("captured-read/<str:tenant>/", CAPTURED_READ.as_view(_CREATE)),
     path("routed-patch/<int:pk>/", ROUTED_PATCH.as_view({"patch": "partial_update"})),
     path("destroyed/<int:pk>/", DESTROYED.as_view({"delete": "destroy"})),
     path("destroyed-half/<int:pk>/", DESTROYED_HALF.as_view({"delete": "destroy"})),
@@ -233,6 +243,12 @@ class TestEveryVariantDemandsABody:
         assert _empty_post(view) == 400
         assert _request_body(schema, route)["required"] is True
 
+    def test_a_field_named_like_a_route_capture_is_still_demanded(
+        self, schema: dict[str, Any]
+    ) -> None:
+        assert _empty_post(CAPTURED.as_view(_CREATE), tenant="t") == 400
+        assert _request_body(schema, "/captured/{tenant}/")["required"] is True
+
     def test_a_decorated_patch_validated_whole_is_required(self, schema: dict[str, Any]) -> None:
         assert _request_body(schema, "/decorated/{id}/rename/", "patch")["required"] is True
 
@@ -246,9 +262,9 @@ class TestAVariantTakingNoBody:
         [
             ("/no-body/", NO_BODY.as_view(_CREATE), {}),
             ("/all-optional/", ALL_OPTIONAL.as_view(_CREATE), {}),
-            ("/captured/{tenant}/", CAPTURED.as_view(_CREATE), {"tenant": "t"}),
+            ("/captured-read/{tenant}/", CAPTURED_READ.as_view(_CREATE), {"tenant": "t"}),
         ],
-        ids=["no-validator", "no-required-field", "its-field-a-route-capture"],
+        ids=["no-validator", "no-required-field", "its-read-a-route-capture"],
     )
     def test_it_stays_absent_as_the_wire_lets_an_empty_body_through(
         self, schema: dict[str, Any], route: str, view: Any, captures: dict[str, str]

@@ -116,17 +116,35 @@ position, and a list of another length is refused.
 
 ## Keys a view adds
 
-A mutation view's hooks layer keys over DRF's context, view-wide then per
-action:
+A view's hooks layer keys over DRF's context, view-wide then per action, the
+per-action key winning:
 
 | Serializer | View-wide | Per action |
 | --- | --- | --- |
 | input | `get_input_serializer_context()` | `get_<action>_input_serializer_context()` |
 | output | `get_output_serializer_context()` | `get_<action>_output_serializer_context()` |
 
-Both view-wide hooks default to `get_serializer_context()`. A selector spec's
-presenter is not handed the per-action output hook: declare its context on its
-`SerializerPresenter`.
+Both view-wide hooks default to `get_serializer_context()`. A selector route
+(a viewset's `list` and `retrieve`, a `@selector_action`, `SelectorListView` and
+`SelectorRetrieveView`) layers both output hooks as a mutation does, with or
+without a presenter; a standalone view has no action, so only its view-wide
+hook runs. A selector's output hooks are offered, by name, the rows being
+rendered: `page` and `result` on a list (the served rows as one evaluated list,
+the page's rows when paginated, the same list under both names, never a
+queryset), `instance` and `result` on a
+retrieve. A presenter's own `serializer_context` stays the outermost layer.
+The input hooks and `get_service_kwargs` never reach a selector, so a
+`ServiceViewSet` hook written for its writes leaves `list` and `retrieve`
+alone, except `get_output_serializer_context`, which now adds its keys to
+their responses too.
+
+```python
+class PostViewSet(SelectorViewSet):
+    action_specs = {"list": list_posts, "retrieve": get_post}
+
+    def get_list_output_serializer_context(self, page):
+        return {"comment_counts": count_comments([post.pk for post in page])}
+```
 
 ## Off HTTP
 

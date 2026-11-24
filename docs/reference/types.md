@@ -38,6 +38,9 @@ kernel spec: agents and MCP register each variant on its own.
 
 ::: django_spec_rest.types.field_marking.MARKING
 
-::: django_spec_rest.types.json_schema_registry.JsonSchemaRegistry
+`JsonSchemaRegistry` is the kernel's
+[`JsonSchemaRegistry`][django_service_specs.types.json_schema_registry.JsonSchemaRegistry],
+re-exported from `django_spec_rest.types.json_schema_registry`; see
+[field schema rules](../recipes/field-schema-rules.md).
 
 ::: django_spec_rest.types.json_schema_registry.DEFAULT_JSON_SCHEMA_REGISTRY

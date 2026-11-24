@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import dataclasses
 import inspect
 import io
 from collections.abc import Callable, Mapping
+from types import MappingProxyType
 from typing import Any
 
 from django.http import FileResponse, HttpResponseBase, StreamingHttpResponse
 from django.utils.http import content_disposition_header
+from django_service_specs.dispatch.dispatch_result import DispatchResult
 from django_service_specs.pool.pool_seeds import DEFAULT_POOL_SEEDS, PoolSeeds
 from django_service_specs.pool.resolve_callable_kwargs import (
     resolve_callable_kwargs as bind_by_name_only,
@@ -20,6 +23,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.utils.mediatypes import media_type_matches
 
+from django_spec_rest.service_specs.utils import SERIALIZER_CONTEXT_SEED
 from django_spec_rest.types.discriminated_action import DiscriminatedAction
 from django_spec_rest.types.rest_transport import REST_TRANSPORT
 from django_spec_rest.types.view_hooks import ViewHooks
@@ -262,15 +266,40 @@ def resolve_view_hooks(
             direction_hook="get_input_serializer_context",
             action_hook=f"get_{action}_input_serializer_context" if action else None,
         ),
-        output_serializer_context=lambda result: layer_serializer_context(
-            {},
-            view,
-            request,
-            direction_hook="get_output_serializer_context",
-            action_hook=f"get_{action}_output_serializer_context" if action else None,
-            extras={"result": result},
+        output_serializer_context=lambda result: layer_output_context(
+            {}, view, request, extras={"result": result}
         ),
     )
+
+
+def layer_output_context(
+    base: Mapping[str, Any], view: Any, request: Request, *, extras: Mapping[str, Any]
+) -> dict[str, Any]:
+    """``base`` under the view's output context hooks: view-wide, then per-action winning."""
+    action: str | None = getattr(view, "action", None)
+    return layer_serializer_context(
+        base,
+        view,
+        request,
+        direction_hook="get_output_serializer_context",
+        action_hook=f"get_{action}_output_serializer_context" if action else None,
+        extras=extras,
+    )
+
+
+def with_output_hooks(
+    result: DispatchResult, view: Any, *, extras: Callable[[], Mapping[str, Any]]
+) -> DispatchResult:
+    """A selector's ``result`` carrying only the view's output hooks, offered ``extras()``."""
+
+    def output(_value: Any) -> dict[str, Any]:
+        return layer_output_context({}, view, view.request, extras=extras())
+
+    if result.context is None:
+        return result
+    hooks = ViewHooks(output_serializer_context=output)
+    ambient = MappingProxyType({**result.context.ambient, SERIALIZER_CONTEXT_SEED: hooks})
+    return dataclasses.replace(result, context=dataclasses.replace(result.context, ambient=ambient))
 
 
 class _JsonNullResponse(Response):

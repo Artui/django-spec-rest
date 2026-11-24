@@ -39,6 +39,13 @@ such as `path("me/", MeViewSet.as_view({"get": "retrieve"}))`, whose selector
 finds the caller's own row, carries no capture and needs no read; a hand-mounted
 route that does carry one must have it declared by the selector itself.
 
+A `many=True` write is asked one thing of the capture: it must not be named
+`many_argument` (`items` by default), the caller's list, which the kernel's
+`route_captures` refuses as `ImproperlyConfigured` with its message. On a
+router-mounted detail route `as_view()` raises it; on a hand-mounted route,
+whose captures `as_view()` cannot see, the first request that carries the
+capture raises it.
+
 The schema documents a declared capture with the read's type and `help` where
 drf-spectacular finds no model to type it from, as on a viewset with no
 `queryset` (see [OpenAPI](../openapi.md#what-a-route-documents)).

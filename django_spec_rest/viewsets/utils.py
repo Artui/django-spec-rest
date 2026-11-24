@@ -6,6 +6,7 @@ from typing import Any, ClassVar, TypeVar
 
 from django.core.exceptions import ImproperlyConfigured
 from django_service_specs.pool.pool_seeds import DEFAULT_POOL_SEEDS, PoolSeeds
+from django_service_specs.specs.route_captures import route_captures
 from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelectorSpec
 from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
 from django_service_specs.types.selector_kind import SelectorKind
@@ -325,11 +326,12 @@ def _row_lookup(spec: KernelServiceSpec | KernelSelectorSpec) -> KernelSelectorS
 def _validate_lookup_captures(
     view_cls: MountedView, actions: Mapping[str, str] | None, initkwargs: Mapping[str, Any]
 ) -> None:
-    """Refuse a detail route whose row lookup declares no parameter for the router's capture."""
+    """Refuse a detail route whose capture a spec's list is named for, or no row lookup reads."""
     if initkwargs.get("detail") is not True or not actions:
         return
     capture = _lookup_capture(view_cls)
     for action, spec in _mapped_specs(view_cls, actions):
+        route_captures(spec, [capture])
         lookup = _row_lookup(spec)
         if lookup is not None and lookup.parameters().get(capture) is None:
             raise ImproperlyConfigured(

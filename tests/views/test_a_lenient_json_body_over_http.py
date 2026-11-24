@@ -302,8 +302,8 @@ def test_a_discriminated_action_s_chosen_spec_honours_the_attribute() -> None:
     assert _call(_routed(_Discriminated, "v/"), {"title": 5}).status_code == 201
 
 
-def test_a_route_capture_outranks_the_body_under_the_switch() -> None:
-    """The route scopes the call, so a client's value still does not move it."""
+def test_a_capture_named_like_a_field_leaves_the_body_under_the_switch() -> None:
+    """A namesake capture is no argument: the field is the caller's, read leniently."""
 
     class _Scoped(serializers.Serializer):
         tenant = serializers.IntegerField()
@@ -312,7 +312,7 @@ def test_a_route_capture_outranks_the_body_under_the_switch() -> None:
     spec = ServiceSpec(service=_take, validator=SerializerValidator(_Scoped), permissions=_OPEN)
     view = _view(spec, lenient_json_body=True)
     assert _call(view, {"name": 7, "tenant": 999}, tenant="7").status_code == 201
-    assert _SEEN["data"] == {"tenant": 7, "name": "7"}
+    assert _SEEN["data"] == {"tenant": 999, "name": "7"}
 
 
 def test_a_target_lookup_reads_the_route_under_the_switch() -> None:

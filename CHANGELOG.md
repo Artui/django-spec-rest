@@ -11,6 +11,75 @@ carries; releases up to 0.62.0 are in
 
 ## [Unreleased]
 
+## [0.16.0] — 2026-11-24
+
+### Added
+
+- **The project's field schema rules reach the DRF seats.** `SerializerValidator` and
+  `SerializerPresenter` ask the kernel's `registered_fragment` for each field's class, so the
+  registry the kernel's `SERVICE_SPECS_FIELD_SCHEMA_REGISTRY` setting names answers behind the
+  seat's own `json_schema_registry=`, at every depth. An `IntegerField` subclass that keeps a
+  string, ruled `{"type": "string"}` there, is a `string` parameter and output field, and a
+  JSON body's `"AB-12"` reaches the serializer instead of the shape check's
+  `400 "Expected an integer."`. The setting is read on every declaration, so
+  `override_settings` reaches a spec compiled before it. `project_registry=False` opts a seat
+  out; the partial and lenient variants a request dispatches keep it. See
+  [field schema rules](https://artui.github.io/django-spec-rest/recipes/field-schema-rules/).
+
+### Changed
+
+- **A route capture named like a Validator field is no longer an argument;
+  the field is the caller's.** A nested-route host whose serializer has a
+  field of a capture's name (`orgs/<org>/members/` over a serializer with
+  `org`) had the route's value written over the body. That value is the URL
+  converter's `to_python()` output while the field reads wire input, so a
+  converter that changes the value (a hashid) answered every call with the
+  field's 400, whether or not the caller sent the key. Now the capture is the
+  kernel's namesake, by its `route_captures`: the serializer binds what the
+  caller sent, a `PATCH` without the key is a 2xx, and OPTIONS and the
+  OpenAPI request body offer the field as a body key. A host that relied on
+  the route filling the field declares the capture as a read (and drops the
+  field), or fills the field from `input_data=lambda view: {"org":
+  view.kwargs["org"]}`; a target selector reads it through its `kwargs`
+  provider. Captures declared as reads, or as a target selector's reads, are
+  arguments as before. A capture named like a `many` spec's `many_argument`
+  (the caller's list, `items` by default) is refused as
+  `ImproperlyConfigured`: at `as_view()` for a router-mounted detail route's
+  lookup capture, and on the request that carries it for a route mounted by
+  hand, whose captures `as_view()` cannot see.
+- **`JsonSchemaRegistry` is the kernel's**, re-exported from
+  `django_spec_rest.types.json_schema_registry` and the package root, and its rules are matched
+  through the field class's MRO: the most specific class with a rule wins, in either
+  registry, and for one class the seat's rule beats the project's. A seat registry listing a
+  rule for a base before one for its subclass answered the subclass with the base's rule; the
+  subclass's own rule answers it now. A rule keyed on a tuple of classes matches nothing:
+  write one rule per class. `DEFAULT_JSON_SCHEMA_REGISTRY` is the kernel's empty registry.
+- **Selector routes layer the view's output serializer context hooks, as
+  mutations do.** A viewset's `list` and `retrieve`, a `@selector_action`, and
+  `SelectorListView` / `SelectorRetrieveView` now layer
+  `get_output_serializer_context` and `get_<action>_output_serializer_context`
+  over DRF's context, with or without a `SerializerPresenter`, whose own
+  `serializer_context` stays outermost. The hooks are offered `page` and
+  `result` on a list (the rows served) and `instance` and `result` on a
+  retrieve. A `ServiceViewSet`'s view-wide `get_output_serializer_context`
+  override, written for its writes, now adds its keys to `list` and `retrieve`
+  responses too. `get_service_kwargs` and the input hooks still never reach a
+  selector.
+- **The OpenAPI document follows the field schema rules.** `ServiceAutoSchema` types a field
+  the seat's or the project's rules type (the same lookup, precedence and
+  `project_registry=False` opt-out as the compiled spec) by that rule, in the request and the
+  response components, at every depth, so the `IntegerField` subclass ruled a `string` is a
+  `string` in the document as well as in the spec. The field's own meta (`readOnly`,
+  `nullable`, `description`) stands beside the fragment, a `[t, "null"]` type is stated as
+  `nullable` under OAS 3.0 and keeps one `null` under 3.1, and a `$ref` the document has no
+  component for is dropped with a warning naming it. An unregistered field keeps
+  drf-spectacular's mapping. A rule wins over `@extend_schema_field` and an `OpenApiSerializerFieldExtension` on the same
+  field class. A serializer documented by two seats with different rules is one component,
+  typed by the first operation that maps it. See
+  [the OpenAPI document](https://artui.github.io/django-spec-rest/recipes/field-schema-rules/#the-openapi-document).
+- The `django-service-specs` floor is 0.36.0, the release that adds
+  `route_captures` and the project field schema registry.
+
 ## [0.15.1] — 2026-11-23
 
 ### Changed
@@ -1087,7 +1156,8 @@ lists each with what a project rewrites.
 - **The package is no longer a Django app.** It has no models, migrations,
   templates, static files or URLs, so it needs no `INSTALLED_APPS` entry.
 
-[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.15.1...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-rest/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/Artui/django-spec-rest/compare/v0.15.1...v0.16.0
 [0.15.1]: https://github.com/Artui/django-spec-rest/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/Artui/django-spec-rest/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/Artui/django-spec-rest/compare/v0.13.0...v0.14.0

@@ -24,6 +24,7 @@ from django_service_specs.parameters.invalid_arguments import InvalidArguments
 from django_service_specs.parameters.parameters import Parameters
 from django_service_specs.pool.pool_seeds import DEFAULT_POOL_SEEDS, PoolSeeds
 from django_service_specs.pool.provider_keys import provider_keys
+from django_service_specs.specs.route_captures import route_captures
 from django_service_specs.specs.selector_spec import SelectorSpec as KernelSelectorSpec
 from django_service_specs.specs.service_spec import ServiceSpec as KernelServiceSpec
 from django_service_specs.types.dispatch_error import DispatchError
@@ -76,11 +77,9 @@ def kernel_arguments(
     """The arguments a request makes for ``spec``, and the body its serializer binds, if any."""
     call_context = edge_call_state().call_context
     parameters: Parameters = spec.parameters(call_context=call_context)
-    route = {
-        name: value
-        for name, value in (getattr(view, "kwargs", None) or {}).items()
-        if parameters.get(name) is not None
-    }
+    captured = getattr(view, "kwargs", None) or {}
+    arguments_named, _ = route_captures(spec, captured, call_context=call_context)
+    route = {name: value for name, value in captured.items() if name in arguments_named}
     if isinstance(spec, KernelSelectorSpec):
         return coerce_flat(
             parameters,
@@ -121,11 +120,7 @@ def kernel_arguments(
     fields = validator.parameters(call_context=call_context).names() | seeded
     keys = provider_keys(spec.input_data)
     owned = fields.intersection(keys.filled) if keys is not None else frozenset[str]()
-    put = {
-        name: sent[name]
-        for name in fields.intersection(sent).difference(owned)
-        if name in scope or name in server
-    }
+    put = {name: sent[name] for name in fields.intersection(server).difference(owned)}
     arguments = {name: value for name, value in sent.items() if name not in seeded}
     return arguments, (validator, _validator_body(body, put, owned))
 
